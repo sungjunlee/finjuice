@@ -1,0 +1,226 @@
+{
+  "$id": "checkup.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "_meta": {
+            "properties": {
+              "privacy": {
+                "properties": {
+                  "profile": {
+                    "enum": [
+                      "raw",
+                      "redacted"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "profile"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "privacy"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "_meta"
+        ],
+        "type": "object"
+      },
+      "then": {
+        "required": [
+          "data_dir"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "_meta": {
+            "properties": {
+              "privacy": {
+                "properties": {
+                  "profile": {
+                    "enum": [
+                      "compact"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "profile"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "privacy"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "_meta"
+        ],
+        "type": "object"
+      },
+      "then": {
+        "not": {
+          "required": [
+            "data_dir"
+          ]
+        }
+      }
+    }
+  ],
+  "description": "checkup --json output. The raw and redacted privacy profiles include data_dir; compact omits that path while preserving workflow-driving summary fields.",
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "actionable": {
+      "type": "boolean"
+    },
+    "data_dir": {
+      "type": "string"
+    },
+    "domains": {
+      "additionalProperties": true,
+      "properties": {
+        "budget": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "networth": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "obligations": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "pipeline": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "review": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      "required": [
+        "pipeline",
+        "review",
+        "budget",
+        "networth",
+        "obligations"
+      ],
+      "type": "object"
+    },
+    "next_actions": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "priority": {
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "domain",
+          "priority",
+          "reason",
+          "command"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "summary": {
+      "additionalProperties": true,
+      "properties": {
+        "domains_needing_attention": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "headline": {
+          "type": "string"
+        },
+        "next_action_count": {
+          "type": "integer"
+        },
+        "priority": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "recommended_command": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "needs_attention"
+          ],
+          "type": "string"
+        },
+        "warning_count": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "status",
+        "priority",
+        "headline",
+        "recommended_command",
+        "domains_needing_attention",
+        "warning_count",
+        "next_action_count"
+      ],
+      "type": "object"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "summary",
+    "actionable",
+    "warnings",
+    "next_actions",
+    "domains"
+  ],
+  "title": "checkup --json output",
+  "type": "object"
+}

@@ -1,0 +1,191 @@
+{
+  "$id": "show.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "pagination": {
+      "$ref": "_pagination.schema.json"
+    },
+    "row_count": {
+      "type": "integer"
+    },
+    "rows": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "account": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "amount": {
+            "type": "number"
+          },
+          "category_final": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "category_rule": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confidence": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "counterparty": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "currency": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "date": {
+            "type": "string"
+          },
+          "datetime": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "file_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_transfer": {
+            "type": [
+              "boolean",
+              "integer",
+              "null"
+            ]
+          },
+          "major_raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "memo_raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "merchant_raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "minor_raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "needs_review": {
+            "type": [
+              "boolean",
+              "integer",
+              "null"
+            ]
+          },
+          "row_hash": {
+            "type": "string"
+          },
+          "source_row": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "tags_ai": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "tags_final": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "tags_manual": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "tags_rule": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "time": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "transfer_group_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type_norm": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type_raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "row_hash",
+          "date",
+          "amount"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "total_matches": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "_meta",
+    "rows",
+    "row_count",
+    "total_matches",
+    "pagination"
+  ],
+  "title": "show --json output",
+  "type": "object"
+}

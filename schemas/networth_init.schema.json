@@ -1,0 +1,27 @@
+{
+  "$id": "networth_init.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "created": {
+      "type": "boolean"
+    },
+    "path": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "path",
+    "created",
+    "message"
+  ],
+  "title": "networth init --json output",
+  "type": "object"
+}

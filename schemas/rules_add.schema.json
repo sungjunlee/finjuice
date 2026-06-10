@@ -1,0 +1,192 @@
+{
+  "$id": "rules_add.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "action": {
+      "enum": [
+        "added",
+        "updated"
+      ],
+      "type": "string"
+    },
+    "coverage_after": {
+      "type": "number"
+    },
+    "dry_run": {
+      "type": "boolean"
+    },
+    "dry_run_action": {
+      "enum": [
+        "added",
+        "updated"
+      ],
+      "type": "string"
+    },
+    "impact": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "preview_action": {
+      "enum": [
+        "would_add",
+        "would_update"
+      ],
+      "type": "string"
+    },
+    "rule": {
+      "additionalProperties": true,
+      "properties": {
+        "category": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "confidence": {
+          "type": "number"
+        },
+        "created_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "created_by": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "fields": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "match": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "notes": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "priority": {
+          "type": "integer"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "match",
+        "fields",
+        "tags",
+        "priority",
+        "enabled",
+        "category",
+        "created_by",
+        "created_at",
+        "confidence",
+        "notes"
+      ],
+      "type": "object"
+    },
+    "rules_file_modified": {
+      "type": "boolean"
+    },
+    "validation": {
+      "additionalProperties": true,
+      "properties": {
+        "errors": {
+          "type": "integer"
+        },
+        "passed": {
+          "type": "integer"
+        },
+        "problems": {
+          "items": {
+            "additionalProperties": true,
+            "properties": {
+              "message": {
+                "type": "string"
+              },
+              "rules": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "severity": {
+                "type": "string"
+              },
+              "suggestion": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "severity",
+              "type",
+              "message",
+              "rules",
+              "suggestion"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "status": {
+          "enum": [
+            "valid",
+            "issues"
+          ],
+          "type": "string"
+        },
+        "total_rules": {
+          "type": "integer"
+        },
+        "warnings": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "status",
+        "total_rules",
+        "errors",
+        "warnings",
+        "passed",
+        "problems"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "_meta",
+    "action",
+    "rule",
+    "validation"
+  ],
+  "title": "rules add --json output",
+  "type": "object"
+}

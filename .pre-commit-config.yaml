@@ -1,0 +1,68 @@
+# Pre-commit hooks for documentation quality gates
+# See https://pre-commit.com for more information
+# Installation: pip install pre-commit && pre-commit install
+
+repos:
+  # Standard hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: '\.md$'  # Allow trailing spaces in markdown (line breaks)
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: ['--unsafe']  # Allow custom YAML tags
+        exclude: 'tests/fixtures/error_cases/.*\.yaml$'  # Exclude intentionally invalid YAML test fixtures
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  # Python formatting and linting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.5
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+
+  # Custom local hooks
+  - repo: local
+    hooks:
+      # Documentation auto-generation
+      - id: generate-schema-docs
+        name: Generate schema documentation
+        entry: python scripts/generate_schema_docs.py
+        language: system
+        files: '^templates/schema\.yaml$'
+        pass_filenames: false
+
+      - id: generate-cli-docs
+        name: Generate CLI documentation
+        entry: uv run python scripts/generate_cli_docs.py
+        language: system
+        files: '^src/finjuice/pipeline/cli/.*\.py$'
+        pass_filenames: false
+
+      # Documentation quality checks
+      - id: check-pii-logging
+        name: Check logger calls for financial PII
+        entry: uv run python scripts/check_pii_logging.py
+        language: system
+        types: [python]
+        exclude: '^(data|exports|\.venv|venv|htmlcov|\.pytest_cache)/'
+
+      - id: check-claude-md-size
+        name: Check CLAUDE.md size (≤250 lines)
+        entry: bash -c 'lines=$(wc -l < CLAUDE.md); if [ "$lines" -gt 250 ]; then echo "❌ CLAUDE.md too large ($lines lines > 250 limit)"; echo "   Extract detailed sections to docs/ and use @references"; exit 1; fi; echo "✅ CLAUDE.md size OK ($lines lines)"'
+        language: system
+        files: '^CLAUDE\.md$'
+        pass_filenames: false
+
+      - id: check-doc-links
+        name: Check for broken @doc references
+        entry: python scripts/check_doc_links.py
+        language: system
+        files: '\.md$'
+        pass_filenames: false
+        exclude: '^(node_modules|\.git|\.venv|venv|htmlcov|\.pytest_cache)/'

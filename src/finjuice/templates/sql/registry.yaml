@@ -1,0 +1,305 @@
+templates:
+  monthly_spend:
+    description: Monthly total spending and count (excluding transfers)
+    sql_file: monthly_spend.sql
+    params:
+      since:
+        type: month
+        required: false
+        default: null
+      until:
+        type: month
+        required: false
+        default: null
+
+  tag_breakdown:
+    description: Spending breakdown by tag using tags_final array
+    sql_file: tag_breakdown.sql
+    params:
+      since:
+        type: month
+        required: false
+        default: null
+      until:
+        type: month
+        required: false
+        default: null
+      top_n:
+        type: int
+        required: false
+        default: 10
+        min: 1
+        max: 100
+
+  monthly_consumption_summary:
+    description: Canonical monthly consumption spend excluding transfers, savings, investments, and card-payment flows
+    sql_file: monthly_consumption_summary.sql
+    params:
+      since:
+        type: month
+        required: false
+        default: null
+      until:
+        type: month
+        required: false
+        default: null
+
+  consumption_category_breakdown:
+    description: Canonical consumption spend by category for one month
+    sql_file: consumption_category_breakdown.sql
+    params:
+      month:
+        type: month
+        required: true
+      top_n:
+        type: int
+        required: false
+        default: 10
+        min: 1
+        max: 100
+
+  merchant_top_spend:
+    description: Top merchants by canonical consumption spend for one month
+    sql_file: merchant_top_spend.sql
+    params:
+      month:
+        type: month
+        required: true
+      top_n:
+        type: int
+        required: false
+        default: 20
+        min: 1
+        max: 100
+
+  event_adjusted_spend:
+    description: Month consumption spend with selected event tags excluded from the adjusted total
+    sql_file: event_adjusted_spend.sql
+    params:
+      month:
+        type: month
+        required: true
+      event_tags:
+        type: str
+        required: false
+        default: null
+
+  recurring_candidates:
+    description: Potential recurring charges by merchant + amount
+    sql_file: recurring_candidates.sql
+    params:
+      min_occurrences:
+        type: int
+        required: false
+        default: 3
+        min: 2
+        max: 36
+      min_amount:
+        type: int
+        required: false
+        default: 5000
+        min: 1000
+        max: 5000000
+      top_n:
+        type: int
+        required: false
+        default: 20
+        min: 1
+        max: 100
+
+  anomaly_large_txn:
+    description: Large transactions above threshold
+    sql_file: anomaly_large_txn.sql
+    params:
+      threshold:
+        type: int
+        required: false
+        default: 300000
+        min: 10000
+        max: 100000000
+      since:
+        type: month
+        required: false
+        default: null
+      until:
+        type: month
+        required: false
+        default: null
+      top_n:
+        type: int
+        required: false
+        default: 20
+        min: 1
+        max: 200
+
+  card_spend_summary:
+    description: Spending summary by card/account
+    sql_file: card_spend_summary.sql
+    params:
+      since:
+        type: month
+        required: false
+        default: null
+      until:
+        type: month
+        required: false
+        default: null
+      top_n:
+        type: int
+        required: false
+        default: 20
+        min: 1
+        max: 100
+
+  merchant_monthly_trend:
+    description: Monthly spending trend for merchant keyword (ILIKE match)
+    sql_file: merchant_monthly_trend.sql
+    params:
+      merchant:
+        type: str
+        required: true
+      since:
+        type: month
+        required: false
+        default: null
+      until:
+        type: month
+        required: false
+        default: null
+      top_n:
+        type: int
+        required: false
+        default: 12
+        min: 1
+        max: 24
+
+  spend_by_weekday_hour:
+    description: Spending pattern aggregated by weekday and hour
+    sql_file: spend_by_weekday_hour.sql
+    params:
+      since:
+        type: month
+        required: false
+        default: null
+      until:
+        type: month
+        required: false
+        default: null
+
+  weekly_anomalies:
+    description: "Category-level spending anomalies: returns change_type (new/gone/changed) and change_pct"
+    sql_file: weekly_anomalies.sql
+    params:
+      period_days:
+        type: int
+        required: false
+        default: 7
+        min: 1
+        max: 365
+      threshold_pct:
+        type: int
+        required: false
+        default: 30
+        min: 0
+        max: 1000
+
+  new_merchants:
+    description: First-time merchants seen only in the recent period
+    sql_file: new_merchants.sql
+    params:
+      days:
+        type: int
+        required: false
+        default: 7
+        min: 1
+        max: 365
+
+  spending_comparison:
+    description: Period-over-period total spending comparison
+    sql_file: spending_comparison.sql
+    params:
+      period_days:
+        type: int
+        required: false
+        default: 7
+        min: 1
+        max: 365
+
+  compare:
+    description: Baseline-vs-current monthly-average comparison by category, major, or merchant
+    sql_file: compare.sql
+    params:
+      baseline_months:
+        type: month_window
+        required: true
+      current_months:
+        type: month_window
+        required: true
+      group_by:
+        type: enum
+        required: false
+        default: category_final
+        values:
+          - category_final
+          - major_raw
+          - merchant_raw
+      type_norm:
+        type: enum
+        required: false
+        default: expense
+        values:
+          - expense
+          - income
+          - all
+
+  pivot:
+    description: Dynamic pivot by row axis, column axis, and metric
+    sql_file: pivot.sql
+    params:
+      row:
+        type: enum
+        required: true
+        values:
+          - month
+          - year
+          - quarter
+          - account
+          - type_norm
+          - is_transfer
+      col:
+        type: enum
+        required: true
+        values:
+          - category_final
+          - major_raw
+          - minor_raw
+          - merchant_raw
+          - tags_final
+          - type_norm
+      value:
+        type: enum
+        required: false
+        default: amount
+        values:
+          - amount
+          - count
+      agg:
+        type: enum
+        required: false
+        default: sum
+        values:
+          - sum
+          - avg
+          - count
+          - max
+          - min
+      months:
+        type: month_range
+        required: false
+        default: null
+      top_n_cols:
+        type: int
+        required: false
+        default: 10
+        min: 1
+        max: 100

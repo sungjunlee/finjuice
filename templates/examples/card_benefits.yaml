@@ -1,0 +1,75 @@
+# Card Benefits Configuration Example
+#
+# This file defines credit card reward rules for the card_rewards.py template.
+#
+# Structure:
+#   cards:
+#     - name: "Card Name"
+#       benefits:
+#         - category: "Tag name from your transaction data"
+#           threshold: Monthly spending minimum (in KRW, 0 = no minimum)
+#           reward_rate: Percentage as decimal (0.05 = 5%)
+#
+# How to use:
+#   1. Copy this file to your data directory
+#   2. Customize with your actual cards and benefit rules
+#   3. Run: python templates/analysis/card_rewards.py --config card_benefits.yaml --months 2024-11
+#
+# Tags must match your actual tags_final values from transaction data.
+# Check available tags with: python templates/analysis/tag_breakdown.py --all
+
+cards:
+  # Example 1: Premium card with high thresholds
+  - name: "신한 Deep Dream"
+    benefits:
+      - category: "편의점"
+        threshold: 300000  # ₩300,000 monthly minimum
+        reward_rate: 0.05  # 5% cashback
+
+      - category: "카페"
+        threshold: 300000
+        reward_rate: 0.03  # 3% cashback
+
+      - category: "대중교통"
+        threshold: 200000
+        reward_rate: 0.04  # 4% cashback
+
+  # Example 2: Corporate card with no thresholds
+  - name: "삼성카드법인"
+    benefits:
+      - category: "주유"
+        threshold: 0  # No minimum spending required
+        reward_rate: 0.02  # 2% cashback
+
+      - category: "통신비"
+        threshold: 0
+        reward_rate: 0.015  # 1.5% cashback
+
+  # Example 3: General-purpose card
+  - name: "현대카드 M"
+    benefits:
+      - category: "온라인쇼핑"
+        threshold: 500000  # ₩500,000 monthly minimum
+        reward_rate: 0.025  # 2.5% cashback
+
+      - category: "식비"
+        threshold: 400000
+        reward_rate: 0.02  # 2% cashback
+
+  # Example 4: Budget card with broad coverage
+  - name: "국민카드 청춘대로"
+    benefits:
+      - category: "영화"
+        threshold: 0
+        reward_rate: 0.03  # 3% discount
+
+      - category: "쇼핑"
+        threshold: 100000
+        reward_rate: 0.015  # 1.5% cashback
+
+# Tips:
+# - List cards in priority order (optional, doesn't affect optimization)
+# - Use exact tag names from your data (case-sensitive)
+# - reward_rate is always a decimal (5% = 0.05)
+# - threshold is in Korean Won
+# - Template will automatically pick the best card per category

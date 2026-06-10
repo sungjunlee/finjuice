@@ -1,0 +1,39 @@
+{
+  "$id": "transfer.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "candidate_rows": {
+      "type": "integer"
+    },
+    "confirmed_transfer_rows": {
+      "type": "integer"
+    },
+    "pairs_found": {
+      "type": "integer"
+    },
+    "pairs_linked": {
+      "type": "integer"
+    },
+    "status": {
+      "type": "string"
+    },
+    "unconfirmed_candidate_rows": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "_meta",
+    "status",
+    "candidate_rows",
+    "pairs_found",
+    "pairs_linked",
+    "confirmed_transfer_rows",
+    "unconfirmed_candidate_rows"
+  ],
+  "title": "transfer --json output",
+  "type": "object"
+}

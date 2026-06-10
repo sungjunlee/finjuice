@@ -1,0 +1,41 @@
+{
+  "$id": "ingest.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "archive_requested": {
+      "type": "boolean"
+    },
+    "command": {
+      "type": "string"
+    },
+    "dry_run": {
+      "type": "boolean"
+    },
+    "from_archive": {
+      "type": "string"
+    },
+    "preview": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "source": {
+      "type": "string"
+    },
+    "summary": {
+      "additionalProperties": true,
+      "type": "object"
+    }
+  },
+  "required": [
+    "_meta",
+    "command",
+    "dry_run",
+    "source"
+  ],
+  "title": "ingest --json output",
+  "type": "object"
+}

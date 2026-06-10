@@ -1,0 +1,41 @@
+{
+  "$id": "import.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "dry_run": {
+      "type": "boolean"
+    },
+    "errors": {
+      "type": "integer"
+    },
+    "files_processed": {
+      "type": "integer"
+    },
+    "files_skipped": {
+      "type": "integer"
+    },
+    "pipeline_result": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "steps": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "transactions_inserted": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "_meta",
+    "files_processed",
+    "files_skipped",
+    "errors"
+  ],
+  "title": "import --json output",
+  "type": "object"
+}

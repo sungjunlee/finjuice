@@ -1,0 +1,61 @@
+{
+  "$id": "networth_forecast.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "projections": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "date": {
+            "type": "string"
+          },
+          "events_fired": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "net_worth": {
+            "type": "number"
+          },
+          "total_assets": {
+            "type": "number"
+          },
+          "total_liabilities": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "date",
+          "total_assets",
+          "total_liabilities",
+          "net_worth",
+          "events_fired"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "scenario": {
+      "type": "string"
+    },
+    "scenarios": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "summary": {
+      "additionalProperties": true,
+      "type": "object"
+    }
+  },
+  "required": [
+    "_meta"
+  ],
+  "title": "networth forecast --json output",
+  "type": "object"
+}

@@ -1,0 +1,131 @@
+name: Documentation Quality Gates
+
+on:
+  pull_request:
+    paths:
+      - 'templates/schema.yaml'
+      - 'src/finjuice/pipeline/cli/**'
+      - 'schemas/**'
+      - 'CLAUDE.md'
+      - 'docs/**'
+      - '**/*.md'
+      - 'tools/generate_schemas.py'
+      - 'tools/render_schema_md.py'
+      - '.pre-commit-config.yaml'
+      - '.github/workflows/**'
+      - 'scripts/generate_*.py'
+      - 'scripts/check_doc_links.py'
+      - 'scripts/check_workflow_permissions.py'
+  push:
+    branches:
+      - main
+    paths:
+      - 'templates/schema.yaml'
+      - 'src/finjuice/pipeline/cli/**'
+      - 'schemas/**'
+      - 'CLAUDE.md'
+      - 'docs/**'
+      - '**/*.md'
+      - 'tools/generate_schemas.py'
+      - 'tools/render_schema_md.py'
+      - '.github/workflows/**'
+      - 'scripts/check_workflow_permissions.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  documentation-checks:
+    name: Documentation Quality Checks
+    if: |
+      github.event_name != 'pull_request' ||
+      (
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        (
+          contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association) ||
+          contains(fromJSON('["sungjunlee"]'), github.event.pull_request.user.login)
+        )
+      )
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0  # Full history for accurate diffs
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: '3.11'
+          cache: 'pip'  # Cache pip dependencies
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pre-commit pyyaml typer  # Minimal deps for scripts
+
+      - name: Check CLAUDE.md size
+        run: |
+          lines=$(wc -l < CLAUDE.md)
+          echo "CLAUDE.md: $lines lines"
+          if [ "$lines" -gt 250 ]; then
+            echo "❌ CLAUDE.md exceeds 250 line limit ($lines lines)"
+            echo "   Extract detailed sections to docs/ and use @references"
+            exit 1
+          fi
+          echo "✅ CLAUDE.md size OK ($lines lines ≤ 250)"
+
+      - name: Run pre-commit hooks
+        run: |
+          pre-commit run --all-files --show-diff-on-failure
+
+      - name: Check agent asset sync (single-source policy)
+        run: |
+          python scripts/sync_agent_assets.py --check
+
+      - name: Verify generated docs are up-to-date
+        run: |
+          # Generate docs
+          python scripts/generate_schema_docs.py
+          uv run python scripts/generate_cli_docs.py
+
+          # Check if any files changed
+          if ! git diff --quiet; then
+            echo "❌ Generated documentation is out of sync!"
+            echo ""
+            echo "The following files need to be regenerated:"
+            git diff --name-only
+            echo ""
+            echo "Run locally to fix:"
+            echo "  python scripts/generate_schema_docs.py"
+            echo "  uv run python scripts/generate_cli_docs.py"
+            echo "  git add ."
+            echo "  git commit --amend --no-edit"
+            exit 1
+          fi
+          echo "✅ Generated docs are up-to-date"
+
+      - name: Check workflow trust boundaries
+        run: python scripts/check_workflow_permissions.py
+
+      - name: Verify output schemas in sync
+        run: |
+          if command -v just >/dev/null 2>&1; then
+            just docs-output-schemas
+          else
+            python -m tools.generate_schemas
+            python -m tools.render_schema_md > docs/reference/json-schemas.md
+          fi
+          git diff --exit-code schemas/ docs/reference/json-schemas.md
+
+      - name: Check for broken @doc links
+        run: |
+          python scripts/check_doc_links.py

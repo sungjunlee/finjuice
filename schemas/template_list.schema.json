@@ -1,0 +1,40 @@
+{
+  "$id": "template_list.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "templates": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": true,
+            "type": "object"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "params"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "templates"
+  ],
+  "title": "template list --json output",
+  "type": "object"
+}

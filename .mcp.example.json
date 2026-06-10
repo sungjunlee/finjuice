@@ -1,0 +1,16 @@
+{
+  "_comment": "Optional local MCP example. Copy to .mcp.json only if you explicitly want to run this MCP server in your developer environment.",
+  "mcpServers": {
+    "serena": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/oraios/serena@1d020b96069435310613d07211ced178e1fdaf78",
+        "serena",
+        "start-mcp-server"
+      ],
+      "env": {}
+    }
+  }
+}

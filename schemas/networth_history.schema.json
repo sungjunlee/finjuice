@@ -1,0 +1,35 @@
+{
+  "$id": "networth_history.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "history": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "as_of": {
+            "type": "string"
+          },
+          "net_worth": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "as_of",
+          "net_worth"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "history"
+  ],
+  "title": "networth history --json output",
+  "type": "object"
+}

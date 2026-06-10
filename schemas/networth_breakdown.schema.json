@@ -1,0 +1,30 @@
+{
+  "$id": "networth_breakdown.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "as_of": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "breakdown": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "as_of",
+    "breakdown"
+  ],
+  "title": "networth breakdown --json output",
+  "type": "object"
+}

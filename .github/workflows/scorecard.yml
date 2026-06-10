@@ -1,0 +1,88 @@
+# OpenSSF Scorecard
+# Issue: #644
+# Purpose: Repository security posture signal with SARIF artifact output.
+
+name: OpenSSF Scorecard
+
+on:
+  branch_protection_rule:
+  push:
+    branches: [main]
+  schedule:
+    # Weekly on Tuesday at 02:49 UTC, offset from CodeQL and Full CI.
+    - cron: '49 2 * * 2'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scorecard-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analysis:
+    name: Scorecard Analysis
+    if: ${{ github.event.repository.private == false }}
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+
+      - name: Run OpenSSF Scorecard
+        uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          results_file: scorecard-results.sarif
+          results_format: sarif
+          publish_results: false
+
+      - name: Upload Scorecard SARIF artifact
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: scorecard-sarif
+          path: scorecard-results.sarif
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload Scorecard SARIF to code scanning
+        if: ${{ always() && hashFiles('scorecard-results.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e
+        continue-on-error: true
+        with:
+          sarif_file: scorecard-results.sarif
+
+      - name: Summarize Scorecard output
+        if: always()
+        run: |
+          {
+            echo "## OpenSSF Scorecard summary"
+            echo ""
+            echo "Scorecard publish_results is disabled because this repository is private."
+            echo "Review the SARIF artifact from this run for details."
+            echo "If GitHub code scanning is available, uploaded SARIF also appears in the Security tab."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  private-repo-summary:
+    name: Private repository summary
+    if: ${{ github.event.repository.private == true }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Explain Scorecard skip
+        run: |
+          {
+            echo "## OpenSSF Scorecard summary"
+            echo ""
+            echo "OpenSSF Scorecard is skipped while this repository is private."
+            echo "Make the repository public or provide a token with the required repository read permissions, then rerun this workflow."
+          } >> "$GITHUB_STEP_SUMMARY"

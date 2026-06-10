@@ -1,0 +1,220 @@
+# CI/CD Lean Gate with GitHub-Hosted Runner
+# Issue: #243
+# Purpose: Keep default PR/main checks predictable and lightweight.
+#
+# Note: Heavy checks moved to ci-full.yml (weekly/manual).
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main, master]
+    # Docs-only changes are handled by Documentation Quality Gates workflow.
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'CLAUDE.md'
+  push:
+    branches: [main, master]
+    # Avoid duplicate queue pressure for docs-only pushes.
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'CLAUDE.md'
+
+permissions:
+  contents: read
+
+# Cancel stale runs on the same ref to reduce queue noise for baseline gates.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Single-interpreter baseline gate. Must match `.python-version` (3.13);
+  # otherwise `uv sync` honors `.python-version` and the label drifts from
+  # the actual runtime (see #418). Multi-version coverage lives in ci-full.yml.
+  PYTHON_VERSION: "3.13"
+
+jobs:
+  # ============================================================
+  # Job 1: Baseline test gate (single interpreter)
+  # ============================================================
+  test:
+    name: Test (Python 3.13)
+    if: |
+      github.event_name != 'pull_request' ||
+      (
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        (
+          contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association) ||
+          contains(fromJSON('["sungjunlee"]'), github.event.pull_request.user.login)
+        )
+      )
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Setup test environment
+        run: |
+          mkdir -p data/metadata
+          cp templates/schema.yaml data/metadata/schema.yaml
+
+      - name: Run tests with coverage
+        run: |
+          uv run pytest \
+            --cov=src/finjuice \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-fail-under=85 \
+            -v
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 7
+
+  # ============================================================
+  # Job 2: Code style gate
+  # ============================================================
+  lint:
+    name: Lint (Ruff)
+    if: |
+      github.event_name != 'pull_request' ||
+      (
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        (
+          contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association) ||
+          contains(fromJSON('["sungjunlee"]'), github.event.pull_request.user.login)
+        )
+      )
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run ruff check
+        run: uv run ruff check src/ tests/ --output-format=github
+
+      - name: Run mypy
+        run: uv run mypy src/
+
+      - name: Run complexity ratchet
+        run: uv run python scripts/check_complexity_ratchet.py
+
+      - name: Run ruff format check
+        run: uv run ruff format --check src/ tests/
+
+      - name: Check logger calls for financial PII
+        run: uv run python scripts/check_pii_logging.py
+
+  # ============================================================
+  # Job 3: Security baseline gate
+  # ============================================================
+  security:
+    name: Security Baselines
+    if: |
+      github.event_name != 'pull_request' ||
+      (
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        (
+          contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association) ||
+          contains(fromJSON('["sungjunlee"]'), github.event.pull_request.user.login)
+        )
+      )
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Check security scan baselines
+        run: uv run python scripts/check_security_baselines.py
+
+      - name: Upload security scan reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: security-scan-reports
+          path: |
+            bandit-report.json
+            audit-report.json
+          retention-days: 30
+
+  # ============================================================
+  # Job 4: Package artifact gate
+  # ============================================================
+  package:
+    name: Package Artifacts
+    if: |
+      github.event_name != 'pull_request' ||
+      (
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        (
+          contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association) ||
+          contains(fromJSON('["sungjunlee"]'), github.event.pull_request.user.login)
+        )
+      )
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          enable-cache: true
+
+      - name: Check package contents
+        run: python3 scripts/check_package_contents.py
+
+      - name: Smoke installed artifacts
+        run: uv run python scripts/smoke_installed_artifact.py
+
+      - name: Smoke installed CLI JSON schemas
+        run: uv run python scripts/smoke_installed_cli_json.py

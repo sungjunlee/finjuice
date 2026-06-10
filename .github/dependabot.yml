@@ -1,0 +1,86 @@
+version: 2
+
+# Version-update PRs are disabled for the initial public launch so issue/PR
+# numbering stays clean. Security alerts and Dependabot security updates remain
+# enabled in repository settings; raise these limits after the first public
+# planning issue/PR is created.
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Seoul"
+    open-pull-requests-limit: 0
+    reviewers:
+      - "sungjunlee"
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    groups:
+      github-actions-routine:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:30"
+      timezone: "Asia/Seoul"
+    open-pull-requests-limit: 0
+    reviewers:
+      - "sungjunlee"
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    groups:
+      python-dev-tooling:
+        patterns:
+          - "pytest*"
+          - "pre-commit"
+          - "ruff"
+          - "mypy"
+          - "bandit"
+          - "types-*"
+          - "jsonschema"
+        update-types:
+          - "minor"
+          - "patch"
+      python-optional-reporting:
+        patterns:
+          - "duckdb"
+          - "jinja2"
+          - "plotly"
+          - "kaleido"
+          - "matplotlib"
+          - "memory-profiler"
+        update-types:
+          - "minor"
+          - "patch"
+      python-runtime-patches:
+        patterns:
+          - "polars"
+          - "pyarrow"
+          - "openpyxl"
+          - "xlsxwriter"
+          - "typer"
+          - "pyyaml"
+          - "ruamel.yaml"
+          - "python-dateutil"
+          - "prompt-toolkit"
+          - "cryptography"
+          - "keyring"
+          - "tomli"
+          - "tomli-w"
+        update-types:
+          - "patch"

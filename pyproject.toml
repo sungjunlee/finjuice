@@ -1,0 +1,215 @@
+[project]
+name = "finjuice"
+version = "0.6.2"
+description = "Local-first personal finance tools for Banksalad data (finjuice CLI)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Sungjun Lee", email = "sungjunlee@users.noreply.github.com"}
+]
+keywords = ["finance", "banksalad", "personal-finance", "data-pipeline", "tagging"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "Topic :: Office/Business :: Financial",
+    "Topic :: Office/Business :: Financial :: Accounting",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Environment :: Console",
+    "Natural Language :: Korean",
+    "Typing :: Typed",
+]
+
+dependencies = [
+    "polars>=1.41.0", # Primary DataFrame library (pandas removed)
+    "pyarrow>=24.0.0", # Columnar format, zero-copy operations
+    "openpyxl>=3.1", # Excel read support (Polars read_excel)
+    "xlsxwriter>=3.1", # Excel write support (Polars write_excel)
+    "typer>=0.25.1",
+    "click>=8.2.1", # Directly imported by CLI command wiring and introspection
+    "pyyaml>=6.0",
+    "ruamel.yaml>=0.18",
+    "python-dateutil>=2.8",
+    "prompt-toolkit>=3.0", # Rich REPL support
+    "cryptography>=48.0.0", # Encryption at rest (Fernet + PBKDF2)
+    "keyring>=25.0.0", # Cross-platform keychain integration
+    "tomli>=2.4.1; python_version < '3.11'", # TOML read for Python 3.10
+    "tomli-w>=1.0.0", # TOML write for all versions
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
+    "pytest-asyncio>=1.3.0",  # Async test support
+    "pre-commit>=4.6.0",
+    "ruff>=0.15.14",
+    "mypy>=2.1.0",
+    "bandit>=1.9.4",  # Security linter for CI/CD
+    "pip-audit>=2.7",  # Dependency vulnerability audit for CI/CD
+]
+benchmark = [
+    "memory-profiler>=0.61",  # Memory usage tracking
+    "matplotlib>=3.10.9",        # Charts for visualization (optional)
+]
+templates = [
+    # polars managed in main dependencies (>=1.0.0)
+    "plotly>=6.7.0",         # Interactive charts for HTML reports
+    "kaleido>=1.3.0",         # Static image export for Plotly (optional)
+    "jinja2>=3.1.0",          # HTML/Markdown templating for multi-format export
+]
+analytics = [
+    "duckdb>=1.5.3",          # SQL-oriented analytics/query engine for CSV partitions
+]
+
+[project.scripts]
+finjuice = "finjuice.pipeline.cli.main:cli_entry"
+
+[project.urls]
+Homepage = "https://github.com/sungjunlee/finjuice"
+Repository = "https://github.com/sungjunlee/finjuice"
+Issues = "https://github.com/sungjunlee/finjuice/issues"
+Changelog = "https://github.com/sungjunlee/finjuice/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/sungjunlee/finjuice/tree/main/docs"
+Security = "https://github.com/sungjunlee/finjuice/blob/main/SECURITY.md"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+exclude = [
+    "/.claude",
+    "/.codex",
+    "/.serena",
+    "/.venv",
+    "/.coverage",
+    "/.mypy_cache",
+    "/.pytest_cache",
+    "/.ruff_cache",
+    "/_journal",
+    "/audit-report.json",
+    "/bandit-report.json",
+    "/data",
+    "/dist",
+    "/exports",
+    "/htmlcov",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/finjuice"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"schemas" = "finjuice/schemas"
+
+[tool.hatch.build.targets.sdist.force-include]
+"schemas" = "schemas"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+# Test function names often exceed 100 chars for readability
+"tests/test_undo_redo.py" = ["E501"]
+# Embedded Jinja2 templates have long lines for readability (Issue #117)
+"src/finjuice/pipeline/export/html_report.py" = ["E501"]
+"src/finjuice/pipeline/export/markdown_report.py" = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+
+# Incremental strictness ratchet for low-risk core packages. Keep command-heavy
+# modules on the relaxed global default until they are tightened separately.
+[[tool.mypy.overrides]]
+module = [
+    "finjuice.pipeline.transfer",
+    "finjuice.pipeline.transfer.*",
+    "finjuice.pipeline.storage",
+    "finjuice.pipeline.storage.*",
+    "finjuice.pipeline.tagging",
+    "finjuice.pipeline.tagging.*",
+    "finjuice.pipeline.analytics",
+    "finjuice.pipeline.analytics.*",
+    "finjuice.pipeline.ingest",
+    "finjuice.pipeline.ingest.*",
+    "finjuice.pipeline.export",
+    "finjuice.pipeline.export.*",
+]
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = [
+    "finjuice.pipeline.cli.commands.template_cmd",
+    "finjuice.pipeline.cli.commands.template_cmd.*",
+]
+disallow_untyped_defs = true
+
+[tool.uv]
+default-groups = ["dev"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
+    "pytest-asyncio>=1.3.0",
+    "pre-commit>=4.6.0",
+    "ruff>=0.15.14",
+    "mypy>=2.1.0",
+    "bandit>=1.9.4",
+    "pip-audit>=2.7",
+    "duckdb>=1.5.3",
+    "jinja2>=3.1.0",
+    "jsonschema>=4.0",
+    "plotly>=6.7.0",
+    "types-pyyaml>=6.0.12.20260518",
+]
+
+[tool.pytest.ini_options]
+minversion = "7.4"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+norecursedirs = ["archive", ".git", "__pycache__"]
+asyncio_mode = "auto"  # Enable async test support
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--cov=src/finjuice",
+    "--cov-report=term-missing",
+    "--cov-report=html:htmlcov",
+    "--cov-fail-under=85",  # Raised after targeted storage/invariant tests (Issue #631)
+    # Temporary: Exclude AI commands until comprehensive tests are written (Issue #116 follow-up)
+    "--cov-config=pyproject.toml",
+]
+markers = [
+    "unit: Unit tests (fast, isolated)",
+    "integration: Integration tests (slower, multi-component)",
+    "e2e: End-to-end tests with real data (slowest, full pipeline)",
+    "slow: Slow tests (large datasets, benchmarks)",
+    "idempotent: Idempotency verification tests",
+]
+filterwarnings = [
+    "ignore::ResourceWarning",
+    # Ignore deprecation warnings from external libraries
+    "ignore::DeprecationWarning:importlib",
+    "ignore::DeprecationWarning:pkg_resources",
+]
+
+[tool.coverage.run]
+# Coverage gate is enforced by pytest addopts and CI (`--cov-fail-under=85`).

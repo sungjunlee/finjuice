@@ -1,0 +1,8 @@
+version: 1
+rules:
+  - name: incomplete_rule
+    # Missing 'match', 'fields', and 'tags' - should fail validation
+    priority: 50
+  - name: another_incomplete
+    match: "test"
+    # Missing 'fields' and 'tags'

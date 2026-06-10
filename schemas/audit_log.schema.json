@@ -1,0 +1,31 @@
+{
+  "$id": "audit_log.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "count": {
+      "type": "integer"
+    },
+    "events": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "skipped_entries": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "_meta",
+    "events",
+    "count",
+    "skipped_entries"
+  ],
+  "title": "audit log --json output",
+  "type": "object"
+}

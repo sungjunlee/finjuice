@@ -1,0 +1,143 @@
+# CodeRabbit Configuration for banksalad-ai-pipeline
+# Documentation: https://docs.coderabbit.ai/
+
+# Language and communication
+language: ko  # Korean for better context understanding
+
+# Review settings
+reviews:
+  profile: assertive  # More thorough feedback
+  request_changes_workflow: true  # Request changes for critical issues
+  high_level_summary: true  # Include summary at top of review
+  poem: false  # Skip review poems
+  review_status: true  # Show review progress
+  collapse_walkthrough: false  # Keep walkthrough visible
+  auto_review:
+    enabled: true
+    drafts: false  # Skip draft PRs
+    base_branches:
+      - master
+      - main
+
+# Chat settings
+chat:
+  auto_reply: true  # Respond to questions automatically
+
+# Knowledge base
+knowledge_base:
+  learnings:
+    scope: global  # Learn from all reviews
+
+# Path-based rules
+path_instructions:
+  - path: "src/finjuice/pipeline/db/**"
+    instructions: |
+      - Check for SQL injection vulnerabilities (use parameterized queries)
+      - Verify database schema migrations are reversible
+      - Ensure proper index usage for query performance
+      - Check for proper transaction handling
+
+  - path: "src/finjuice/pipeline/ingest/**"
+    instructions: |
+      - Verify CSV/XLSX parsing handles malformed input
+      - Check for proper error handling with large files
+      - Ensure idempotency (same input = same output)
+      - Validate data type conversions
+
+  - path: "src/finjuice/pipeline/tagging/**"
+    instructions: |
+      - Check rule priority ordering is correct
+      - Verify regex patterns are safe (no ReDoS)
+      - Ensure AI API calls have proper retry logic
+      - Validate confidence thresholds
+
+  - path: "tests/**"
+    instructions: |
+      - Verify AAA pattern (Arrange-Act-Assert)
+      - Check for edge cases and boundary conditions
+      - Ensure tests are idempotent
+      - Validate fixture usage
+
+  - path: "**/*.py"
+    instructions: |
+      - Verify type hints are present and correct
+      - Check docstrings for public functions (Google style)
+      - Ensure error messages are descriptive
+      - Validate logging usage (no sensitive data)
+
+# Project-specific custom rules
+custom_rules:
+  # Security rules
+  - id: financial-data-privacy
+    pattern: '(계좌|카드번호|주민번호|비밀번호)'
+    message: |
+      🔒 Financial data detected! Ensure:
+      - No logging of sensitive data
+      - Proper masking in error messages
+      - Secure storage (encrypted if persisted)
+    severity: critical
+
+  - id: sql-injection-check
+    pattern: "execute\\s*\\(\\s*f[\"']"
+    message: |
+      🚨 Potential SQL injection! Use parameterized queries:
+      ❌ Bad: cursor.execute(f"SELECT * FROM t WHERE id={row_id}")
+      ✅ Good: cursor.execute("SELECT * FROM t WHERE id = ?", (row_id,))
+    severity: critical
+
+  - id: path-traversal-check
+    pattern: 'open\s*\([^)]*\+[^)]*\)'
+    message: |
+      🚨 Potential path traversal! Validate and sanitize file paths:
+      ✅ Use Path.resolve() and check .is_relative_to()
+    severity: critical
+
+  # Code quality rules
+  - id: bare-except
+    pattern: 'except\s*:'
+    message: |
+      ⚠️ Bare except clause! Specify exception type:
+      ❌ Bad: except:
+      ✅ Good: except ValueError:
+    severity: warning
+
+  - id: todo-in-code
+    pattern: '(TODO|FIXME|HACK)'
+    message: |
+      💡 TODO/FIXME found. Consider creating a GitHub issue for tracking.
+    severity: info
+
+  # Project-specific patterns
+  - id: test-coverage
+    pattern: 'def (test_|@pytest\.fixture)'
+    message: |
+      ✅ Test detected. Verify:
+      - AAA pattern used
+      - Edge cases covered
+      - Fixtures properly scoped
+    severity: info
+
+  - id: api-key-hardcode
+    pattern: "(api_key|API_KEY|secret|SECRET)\\s*=\\s*[\"'][^\"']+[\"']"
+    message: |
+      🔐 API key hardcoded! Use environment variables:
+      ✅ api_key = os.getenv("API_KEY")
+    severity: critical
+
+# Early access features
+early_access: true
+
+# Auto-approve settings (disabled for now)
+auto_approve:
+  enabled: false
+
+# GitHub Actions integration
+enable_free_tier: false  # Using Pro version
+
+# Review focus areas
+focus:
+  - security
+  - performance
+  - maintainability
+  - best_practices
+  - error_handling

@@ -1,0 +1,92 @@
+{
+  "$id": "audit_stats.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "executions": {
+      "additionalProperties": true,
+      "properties": {
+        "failed": {
+          "type": "integer"
+        },
+        "successful": {
+          "type": "integer"
+        },
+        "total": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "total",
+        "successful",
+        "failed"
+      ],
+      "type": "object"
+    },
+    "skipped_entries": {
+      "type": "integer"
+    },
+    "success_rate": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "suggestions": {
+      "additionalProperties": true,
+      "properties": {
+        "confirmed": {
+          "type": "integer"
+        },
+        "declined": {
+          "type": "integer"
+        },
+        "total": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "total",
+        "confirmed",
+        "declined"
+      ],
+      "type": "object"
+    },
+    "template_summary": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "top_commands": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "command",
+          "count"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "suggestions",
+    "executions",
+    "success_rate",
+    "top_commands",
+    "skipped_entries"
+  ],
+  "title": "audit stats --json output",
+  "type": "object"
+}

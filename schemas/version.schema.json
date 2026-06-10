@@ -1,0 +1,25 @@
+{
+  "$id": "version.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "finjuice_version": {
+      "type": "string",
+      "description": "Installed finjuice software version"
+    },
+    "schema_version": {
+      "type": "integer",
+      "description": "Data schema version number"
+    }
+  },
+  "required": [
+    "_meta",
+    "finjuice_version",
+    "schema_version"
+  ],
+  "title": "finjuice version output",
+  "type": "object"
+}

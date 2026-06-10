@@ -1,0 +1,29 @@
+# Gitignore for personal finance data repository
+# This file should be placed in your separate data directory
+
+# Track CSV partitions and configuration files
+!transactions/
+!transactions/**/*.csv
+!rules.yaml
+!config.toml
+!README.md
+
+# Ignore raw import files (original XLSX from Banksalad)
+imports/
+*.xlsx
+
+# Ignore generated output files
+exports/
+reports/
+
+# Ignore cache and temporary files
+cache/
+backups/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db

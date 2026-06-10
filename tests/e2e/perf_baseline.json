@@ -1,0 +1,17 @@
+{
+  "description": "Reviewed performance baseline for the synthetic E2E pipeline. The perf gate (tests/e2e/test_real_data_pipeline.py::test_performance_benchmarks) compares against total_budget_seconds instead of an arbitrary high wall-clock cap.",
+  "dataset": "tests/fixtures/e2e/synthetic_banksalad_e2e.xlsx",
+  "synthetic_pipeline": {
+    "total_budget_seconds": 30,
+    "measured_seconds": 0.23,
+    "measured_at": "2026-05-21",
+    "phases_measured_seconds": {
+      "ingest": 0.12,
+      "tag": 0.05,
+      "transfer": 0.01,
+      "export": 0.04,
+      "reports": 0.01
+    },
+    "rationale": "Cold full-pipeline run over the 93-row synthetic fixture measures ~0.2s locally. The 30s budget is ~130x that headroom, so it never flakes on a loaded CI runner, yet is ~20x tighter than the old 600s cap and still fails on a catastrophic (order-of-magnitude) regression such as per-row I/O or accidental O(n^2) work. Re-measure and update measured_seconds when the fixture or pipeline changes materially; only raise total_budget_seconds with a documented reason."
+  }
+}

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Support policy
+    url: https://github.com/sungjunlee/finjuice/blob/main/SUPPORT.md
+    about: Read what to include in support requests without sharing private financial data.
+  - name: Questions and discussion
+    url: https://github.com/sungjunlee/finjuice/discussions
+    about: Use discussions for usage questions and open-ended ideas.

@@ -1,0 +1,141 @@
+# Dependency Audit Workflow
+# Issue: #16
+# Purpose: Weekly security audit of dependencies for known vulnerabilities
+#
+# Note: Uses GitHub-hosted runners for public repository reliability
+
+name: Dependency Audit
+
+on:
+  schedule:
+    # Weekly on Sunday at 00:00 UTC
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+    inputs:
+      create_issue:
+        description: 'Create issue if vulnerabilities found'
+        required: false
+        default: 'true'
+        type: boolean
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Export requirements
+        run: |
+          uv pip compile pyproject.toml -o requirements-audit.txt
+
+      - name: Check for vulnerabilities with pip-audit
+        id: audit
+        continue-on-error: true
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements-audit.txt --format json --output audit-report.json || true
+
+          # Parse results
+          if [ -f audit-report.json ]; then
+            vulns=$(python -c 'import json; r=json.load(open("audit-report.json")); print(sum(len(dep.get("vulns", [])) for dep in r.get("dependencies", [])))')
+            echo "vulnerabilities=$vulns" >> "$GITHUB_OUTPUT"
+          else
+            echo "vulnerabilities=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload audit report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: dependency-audit-report
+          path: audit-report.json
+          retention-days: 90
+
+      - name: Create issue if vulnerabilities found
+        if: steps.audit.outputs.vulnerabilities != '0' && (github.event.inputs.create_issue == 'true' || github.event_name == 'schedule')
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          script: |
+            const fs = require('fs');
+
+            // Check for existing open issue
+            const existingIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'security,dependencies',
+              state: 'open'
+            });
+
+            if (existingIssues.data.length > 0) {
+              console.log('Security issue already exists, skipping creation');
+              return;
+            }
+
+            // Read audit report
+            let reportBody = 'Audit report not available';
+            try {
+              const report = JSON.parse(fs.readFileSync('audit-report.json', 'utf8'));
+              reportBody = '```json\n' + JSON.stringify(report, null, 2) + '\n```';
+            } catch (e) {
+              console.log('Could not read audit report:', e);
+            }
+
+            // Create issue
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '[Security] Dependency vulnerabilities detected',
+              body: `## Automated Dependency Audit
+
+            The weekly dependency audit found potential security vulnerabilities.
+
+            ### Details
+
+            ${reportBody}
+
+            ### Actions Required
+
+            1. Review the vulnerabilities listed above
+            2. Update affected packages if safe to do so
+            3. If update is not possible, document the risk assessment
+
+            ---
+            *This issue was automatically created by the dependency audit workflow.*`,
+              labels: ['security', 'dependencies', 'automated']
+            });
+
+      - name: Summary
+        run: |
+          {
+            echo "## Dependency Audit Summary"
+            echo ""
+            if [ "${{ steps.audit.outputs.vulnerabilities }}" != "0" ]; then
+              echo "⚠️ **Found ${{ steps.audit.outputs.vulnerabilities }} potential vulnerabilities**"
+              echo ""
+              echo "See the audit report artifact for details."
+            else
+              echo "✅ **No known vulnerabilities found**"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

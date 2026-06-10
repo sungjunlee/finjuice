@@ -1,0 +1,253 @@
+{
+  "$id": "budget_status.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "actionable": {
+      "type": "boolean"
+    },
+    "categories": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "actual": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "progress_pct": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "remaining": {
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "under",
+              "on-track",
+              "over"
+            ],
+            "type": "string"
+          },
+          "target": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "target",
+          "actual",
+          "remaining",
+          "progress_pct",
+          "status"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "goals_file": {
+      "additionalProperties": true,
+      "properties": {
+        "exists": {
+          "type": "boolean"
+        },
+        "notes": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "updated": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "exists"
+      ],
+      "type": "object"
+    },
+    "health": {
+      "additionalProperties": true,
+      "properties": {
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "warning",
+            "critical"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "reasons"
+      ],
+      "type": "object"
+    },
+    "month": {
+      "type": "string"
+    },
+    "next_steps": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "signal": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "signal",
+          "message",
+          "command"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "review": {
+      "additionalProperties": true,
+      "properties": {
+        "actual": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "at_risk_categories": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "month": {
+          "type": "string"
+        },
+        "over_budget_categories": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "remaining": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "target": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "unbudgeted_categories": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "month",
+        "target",
+        "actual",
+        "remaining",
+        "at_risk_categories",
+        "over_budget_categories",
+        "unbudgeted_categories"
+      ],
+      "type": "object"
+    },
+    "signals": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "summary": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "properties": {
+            "actual": {
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "progress_pct": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "remaining": {
+              "type": "integer"
+            },
+            "status": {
+              "enum": [
+                "under",
+                "on-track",
+                "over"
+              ],
+              "type": "string"
+            },
+            "target": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "name",
+            "target",
+            "actual",
+            "remaining",
+            "progress_pct",
+            "status"
+          ],
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "_meta",
+    "month",
+    "goals_file",
+    "summary",
+    "categories",
+    "health",
+    "actionable",
+    "signals",
+    "review",
+    "next_steps"
+  ],
+  "title": "budget status --json output",
+  "type": "object"
+}

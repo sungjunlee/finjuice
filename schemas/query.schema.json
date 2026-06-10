@@ -1,0 +1,31 @@
+{
+  "$id": "query.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "pagination": {
+      "$ref": "_pagination.schema.json"
+    },
+    "row_count": {
+      "type": "integer"
+    },
+    "rows": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "rows",
+    "row_count",
+    "pagination"
+  ],
+  "title": "query --json output",
+  "type": "object"
+}

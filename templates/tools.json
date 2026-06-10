@@ -1,0 +1,2218 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "name": "finjuice",
+  "version": "0.6.2",
+  "generated_at": "2026-05-31T02:13:22+00:00",
+  "tools": [
+    {
+      "name": "assets.show",
+      "description": "Show detailed holdings.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Snapshot month (YYYY-MM)",
+            "default": null
+          },
+          "account": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Filter by account ID",
+            "default": null
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max positions to show",
+            "default": 50
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "assets show --json output",
+        "top_level_keys": [
+          "_meta",
+          "error",
+          "has_data",
+          "holdings",
+          "month",
+          "snapshot_date",
+          "total_count"
+        ]
+      }
+    },
+    {
+      "name": "assets.status",
+      "description": "Show asset portfolio overview.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "assets status --json output",
+        "top_level_keys": [
+          "_meta",
+          "account_count",
+          "accounts",
+          "available_months",
+          "has_data",
+          "latest_month",
+          "position_count",
+          "snapshot_date",
+          "total_value"
+        ]
+      }
+    },
+    {
+      "name": "audit.clear",
+      "description": "Clear audit log (keep last 100 entries).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "yes": {
+            "type": "boolean",
+            "description": "Skip confirmation prompt",
+            "default": false
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "audit clear --json output",
+        "top_level_keys": [
+          "_meta",
+          "action",
+          "entries_kept",
+          "skipped_entries"
+        ]
+      }
+    },
+    {
+      "name": "audit.log",
+      "description": "Display audit log of command executions.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "last": {
+            "type": "integer",
+            "description": "Show last N events (default: 10)",
+            "default": 10
+          },
+          "type": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Filter by event type (e.g., command_suggested, command_executed)",
+            "default": null
+          },
+          "failed": {
+            "type": "boolean",
+            "description": "Show only failed executions",
+            "default": false
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "audit log --json output",
+        "top_level_keys": [
+          "_meta",
+          "count",
+          "events",
+          "skipped_entries"
+        ]
+      }
+    },
+    {
+      "name": "audit.stats",
+      "description": "Show audit log statistics.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "audit stats --json output",
+        "top_level_keys": [
+          "_meta",
+          "executions",
+          "skipped_entries",
+          "success_rate",
+          "suggestions",
+          "template_summary",
+          "top_commands"
+        ]
+      }
+    },
+    {
+      "name": "automation.run",
+      "description": "Run one one-shot automation pass using config-backed thresholds.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          },
+          "privacy": {
+            "type": "string",
+            "enum": [
+              "raw",
+              "redacted",
+              "compact"
+            ],
+            "description": "Privacy profile for JSON output: raw, redacted, or compact",
+            "default": "raw"
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "automation run --json output. The raw and redacted privacy profiles include data_dir and merchant_pressure samples; compact replaces those samples with counts.",
+        "top_level_keys": [
+          "_meta",
+          "actionable",
+          "data_dir",
+          "enabled",
+          "large_transactions",
+          "next_steps",
+          "pending_imports",
+          "tagging_pressure",
+          "thresholds",
+          "warnings"
+        ]
+      }
+    },
+    {
+      "name": "budget.edit",
+      "description": "Edit monthly budget values in goals.yaml while preserving comments.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "set": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Update one field in goals.yaml. Use total=..., categories.<name>=..., monthly_budget.categories.<name>=..., or bare category names such as 식비=700000.",
+            "default": []
+          },
+          "yes": {
+            "type": "boolean",
+            "description": "Skip the confirmation prompt",
+            "default": false
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "budget edit --json output",
+        "top_level_keys": [
+          "_meta",
+          "changes",
+          "monthly_budget",
+          "path"
+        ]
+      }
+    },
+    {
+      "name": "budget.status",
+      "description": "Show monthly budget targets vs actual spending.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Budget month (YYYY-MM)",
+            "default": null
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "budget status --json output",
+        "top_level_keys": [
+          "_meta",
+          "actionable",
+          "categories",
+          "goals_file",
+          "health",
+          "month",
+          "next_steps",
+          "signals",
+          "summary"
+        ]
+      }
+    },
+    {
+      "name": "budget.validate",
+      "description": "Validate goals.yaml against the monthly_budget schema.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "budget validate --json output",
+        "top_level_keys": [
+          "_meta",
+          "path",
+          "problems",
+          "status"
+        ]
+      }
+    },
+    {
+      "name": "checkup",
+      "description": "Emit the recommended read-only runtime snapshot for agent inspect/decide loops.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          },
+          "privacy": {
+            "type": "string",
+            "enum": [
+              "raw",
+              "redacted",
+              "compact"
+            ],
+            "description": "Privacy profile for JSON output: raw, redacted, or compact",
+            "default": "raw"
+          },
+          "stale_after": {
+            "type": "integer",
+            "description": "Days after which data is considered stale (default: 35)",
+            "default": 35
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "checkup --json output. The raw and redacted privacy profiles include data_dir; compact omits that path while preserving workflow-driving summary fields.",
+        "top_level_keys": [
+          "_meta",
+          "actionable",
+          "data_dir",
+          "domains",
+          "next_actions",
+          "summary",
+          "warnings"
+        ]
+      }
+    },
+    {
+      "name": "context",
+      "description": "Emit a read-only context bundle for external AI agents.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "journal": {
+            "type": "integer",
+            "description": "Number of newest journal entries to include (default: 3).",
+            "default": 3
+          },
+          "budget": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Token budget for the emitted context. Default: FINJUICE_CONTEXT_BUDGET if set, else 5000. --budget overrides the env var.",
+            "default": null
+          },
+          "verbose": {
+            "type": "boolean",
+            "description": "Write the section-by-section token breakdown to stderr.",
+            "default": false
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Emit structured JSON instead of the default text summary.",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "context --json output",
+        "top_level_keys": [
+          "_meta",
+          "active_goals",
+          "financial_metadata",
+          "journals",
+          "rule_notes",
+          "status_snapshot",
+          "top_patterns"
+        ]
+      }
+    },
+    {
+      "name": "doctor",
+      "description": "Diagnose environment and identify issues.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "doctor --json output",
+        "top_level_keys": [
+          "_meta",
+          "checks",
+          "install_hint",
+          "missing_extras",
+          "summary"
+        ]
+      }
+    },
+    {
+      "name": "explain",
+      "description": "Explain the classification of a transaction.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Search term to find transaction (e.g. merchant name)"
+          },
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Filter by date (YYYY-MM-DD)",
+            "default": null
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "query"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "explain --json output",
+        "top_level_keys": [
+          "_meta",
+          "candidates",
+          "classification",
+          "date_filter",
+          "match_count",
+          "matches",
+          "query",
+          "rule_trace",
+          "selected_index",
+          "transaction"
+        ]
+      }
+    },
+    {
+      "name": "export",
+      "description": "Generate master XLSX, HTML, and/or Markdown reports.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "xlsx",
+              "html",
+              "md",
+              "all"
+            ],
+            "description": "Export format: xlsx, html, md, all",
+            "default": "xlsx"
+          },
+          "period": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Period filter (YYYY-MM format, e.g., 2024-10)",
+            "default": null
+          },
+          "auto_open": {
+            "type": "boolean",
+            "description": "Auto-open report in browser/viewer (HTML only)",
+            "default": true
+          },
+          "dry_run": {
+            "type": "boolean",
+            "description": "Preview output files without writing",
+            "default": false
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          },
+          "online": {
+            "type": "boolean",
+            "description": "Load Plotly.js from CDN (default: offline/embedded for privacy)",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "export --json output",
+        "top_level_keys": [
+          "_meta",
+          "assumptions",
+          "breakdown",
+          "command",
+          "domain",
+          "dry_run",
+          "format",
+          "generated_at",
+          "output_files",
+          "period",
+          "review_items",
+          "skipped_outputs",
+          "summary",
+          "transaction_count",
+          "year"
+        ]
+      }
+    },
+    {
+      "name": "history",
+      "description": "Display import history log.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "history --json output",
+        "top_level_keys": [
+          "_meta",
+          "count",
+          "records"
+        ]
+      }
+    },
+    {
+      "name": "import",
+      "description": "Import XLSX files and run full pipeline.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "files": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string",
+              "format": "path"
+            },
+            "description": "XLSX or ZIP file(s) to import. Pass one or more paths, or use --file for a single XLSX.",
+            "default": null
+          },
+          "file": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "path",
+            "description": "XLSX file to import without prompts.",
+            "default": null
+          },
+          "force": {
+            "type": "boolean",
+            "description": "Overwrite existing files in imports/",
+            "default": false
+          },
+          "dry_run": {
+            "type": "boolean",
+            "description": "Preview what would be imported without processing",
+            "default": false
+          },
+          "no_scan": {
+            "type": "boolean",
+            "description": "Disable auto-scan of ~/Downloads for Banksalad files",
+            "default": false
+          },
+          "password": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Password for encrypted ZIP files. If not provided, prompts interactively.",
+            "default": null
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "import --json output",
+        "top_level_keys": [
+          "_meta",
+          "dry_run",
+          "errors",
+          "files_processed",
+          "files_skipped",
+          "pipeline_result",
+          "steps",
+          "transactions_inserted"
+        ]
+      }
+    },
+    {
+      "name": "index",
+      "description": "Emit an agent-friendly workspace collection catalog.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          },
+          "privacy": {
+            "type": "string",
+            "enum": [
+              "raw",
+              "redacted",
+              "compact"
+            ],
+            "description": "Privacy profile for JSON output: raw, redacted, or compact.",
+            "default": "raw"
+          },
+          "include_paths": {
+            "type": "boolean",
+            "description": "Include resolved local filesystem paths in the catalog.",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "index --json output. The raw privacy profile preserves the full catalog shape and only includes paths when --include-paths is requested. Redacted and compact profiles suppress resolved workspace and collection paths; compact also drops operational command and note detail.",
+        "top_level_keys": [
+          "_meta",
+          "collections",
+          "recommended_next",
+          "schema_ref",
+          "workspace"
+        ]
+      }
+    },
+    {
+      "name": "ingest",
+      "description": "Import XLSX files from imports/ directory into CSV partitions.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "from_archive": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Re-import from archived file by file_id (e.g., '241027_1')",
+            "default": null
+          },
+          "archive": {
+            "type": "boolean",
+            "description": "Copy source XLSX files to metadata/archives/ for reproducibility",
+            "default": false
+          },
+          "dry_run": {
+            "type": "boolean",
+            "description": "Preview changes without writing to CSV files",
+            "default": false
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "ingest --json output",
+        "top_level_keys": [
+          "_meta",
+          "archive_requested",
+          "command",
+          "dry_run",
+          "from_archive",
+          "preview",
+          "source",
+          "summary"
+        ]
+      }
+    },
+    {
+      "name": "init",
+      "description": "Initialize directory structure (advanced setup).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "with_git": {
+            "type": "boolean",
+            "description": "Initialize git repository (default: True)",
+            "default": true
+          },
+          "with_agents": {
+            "type": "boolean",
+            "description": "Include AGENTS.md for AI tool integration (Codex, Gemini, Cursor)",
+            "default": false
+          },
+          "save_config": {
+            "type": "boolean",
+            "description": "Save this location to config file (~/.finjuice/config.toml)",
+            "default": false
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "init --json output",
+        "top_level_keys": [
+          "_meta",
+          "already_initialized",
+          "data_dir",
+          "status"
+        ]
+      }
+    },
+    {
+      "name": "journal.list",
+      "description": "List journal entries sorted newest first.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "journal list --json output",
+        "top_level_keys": [
+          "_meta",
+          "count",
+          "entries"
+        ]
+      }
+    },
+    {
+      "name": "journal.new",
+      "description": "Create a journal entry with snapshot front matter.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Journal topic slug. Defaults to an auto-generated session topic.",
+            "default": null
+          },
+          "template": {
+            "type": "string",
+            "description": "Body template: diagnosis, planning, retrospective.",
+            "default": "planning"
+          },
+          "no_gitignore_check": {
+            "type": "boolean",
+            "description": "Skip the local gitignore safety prompt.",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": null
+    },
+    {
+      "name": "journal.resume",
+      "description": "Resolve the latest or matching journal entry.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "slug_or_date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Newest entry by default, or match by filename substring / exact YYYY-MM-DD.",
+            "default": null
+          },
+          "open": {
+            "type": "boolean",
+            "description": "Open the matched file in $EDITOR.",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": null
+    },
+    {
+      "name": "manifest",
+      "description": "Emit a machine-readable manifest of the finjuice CLI.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          },
+          "commands_only": {
+            "type": "boolean",
+            "description": "Emit compact command discovery data only.",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "manifest --json output",
+        "top_level_keys": [
+          "_meta",
+          "commands",
+          "error_codes",
+          "error_schema_ref",
+          "examples",
+          "exit_codes",
+          "finjuice_version",
+          "global_options",
+          "manifest_schema_version",
+          "panels",
+          "privacy_profiles",
+          "root_env"
+        ]
+      }
+    },
+    {
+      "name": "networth",
+      "description": "View aggregated net worth from asset snapshots plus assets.yaml. Use `finjuice assets` for raw snapshot rows.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Snapshot date (YYYY-MM-DD)",
+            "default": null
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "networth --json output",
+        "top_level_keys": [
+          "_meta",
+          "actionable",
+          "as_of",
+          "health",
+          "net_worth",
+          "next_steps",
+          "signals",
+          "total_assets",
+          "total_liabilities"
+        ]
+      }
+    },
+    {
+      "name": "networth.breakdown",
+      "description": "Show aggregated asset breakdown by category or asset.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "enum": [
+              "category",
+              "asset"
+            ],
+            "description": "Break down by category or asset"
+          },
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Snapshot date (YYYY-MM-DD)",
+            "default": null
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "by"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "networth breakdown --json output",
+        "top_level_keys": [
+          "_meta",
+          "as_of",
+          "breakdown"
+        ]
+      }
+    },
+    {
+      "name": "networth.forecast",
+      "description": "Project net worth under deterministic scenario assumptions.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "years": {
+            "type": "integer",
+            "description": "Forecast horizon in years",
+            "default": 5
+          },
+          "scenario": {
+            "type": "string",
+            "enum": [
+              "conservative",
+              "neutral",
+              "optimistic",
+              "all"
+            ],
+            "description": "Scenario: conservative, neutral, optimistic, all",
+            "default": "neutral"
+          },
+          "from": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Forecast start date (YYYY-MM-DD)",
+            "default": null
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "networth forecast --json output",
+        "top_level_keys": [
+          "_meta",
+          "projections",
+          "scenario",
+          "scenarios",
+          "summary"
+        ]
+      }
+    },
+    {
+      "name": "networth.history",
+      "description": "Show monthly net worth history from available snapshots.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "months": {
+            "type": "integer",
+            "description": "Max monthly points to return",
+            "default": 6
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "networth history --json output",
+        "top_level_keys": [
+          "_meta",
+          "history"
+        ]
+      }
+    },
+    {
+      "name": "networth.init",
+      "description": "Create a starter assets.yaml from the built-in template.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "networth init --json output",
+        "top_level_keys": [
+          "_meta",
+          "created",
+          "path",
+          "message"
+        ]
+      }
+    },
+    {
+      "name": "networth.validate",
+      "description": "Validate assets.yaml and report line-numbered errors.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "networth validate --json output",
+        "top_level_keys": [
+          "_meta",
+          "errors",
+          "exists",
+          "liabilities",
+          "manual_assets",
+          "path",
+          "problems",
+          "status",
+          "valid",
+          "version",
+          "warnings"
+        ]
+      }
+    },
+    {
+      "name": "open",
+      "description": "Open data directories or files in file manager/editor.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Target: . imports exports reports transactions/tx rules master",
+            "default": null
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": null
+    },
+    {
+      "name": "query",
+      "description": "Execute a SQL query on your transaction data.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "sql": {
+            "type": "string",
+            "description": "SQL query to execute (SELECT only)"
+          },
+          "output": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "table",
+              "csv",
+              "json",
+              "markdown",
+              null
+            ],
+            "description": "Output format: table, csv, json, markdown",
+            "default": null
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Alias for --output json",
+            "default": false
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum rows to return (max 10000)",
+            "default": 100
+          },
+          "cursor": {
+            "type": "string",
+            "description": "Opaque pagination cursor",
+            "default": "0"
+          },
+          "max_bytes": {
+            "type": "integer",
+            "description": "Maximum serialized JSON response size before truncating rows",
+            "default": 1048576
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "sql"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "query --json output",
+        "top_level_keys": [
+          "_meta",
+          "pagination",
+          "row_count",
+          "rows"
+        ]
+      }
+    },
+    {
+      "name": "refresh",
+      "description": "Re-process all existing data (ingest → tag → transfer → export).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "refresh --json output",
+        "top_level_keys": [
+          "_meta",
+          "command",
+          "steps"
+        ]
+      }
+    },
+    {
+      "name": "review",
+      "description": "Show transactions that need manual review.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "untagged": {
+            "type": "boolean",
+            "description": "Show only untagged transactions (tags_final=[])",
+            "default": false
+          },
+          "low_confidence": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Filter by confidence below threshold (e.g., 0.7)",
+            "default": null
+          },
+          "month": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Filter by month (YYYY-MM)",
+            "default": null
+          },
+          "all_history": {
+            "type": "boolean",
+            "description": "Review matching transactions across all available monthly partitions",
+            "default": false
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Number of transactions to show",
+            "default": 50
+          },
+          "cursor": {
+            "type": "string",
+            "description": "Opaque pagination cursor",
+            "default": "0"
+          },
+          "max_bytes": {
+            "type": "integer",
+            "description": "Maximum serialized JSON response size before truncating transactions",
+            "default": 1048576
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          },
+          "privacy": {
+            "type": "string",
+            "enum": [
+              "raw",
+              "redacted",
+              "compact"
+            ],
+            "description": "Privacy profile for JSON output: raw, redacted, or compact",
+            "default": "raw"
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "review --json output. The raw and redacted privacy profiles keep full rule note shape; compact rule notes omit merchant-derived rule names and free-text notes.",
+        "top_level_keys": [
+          "_meta",
+          "actionable",
+          "filters",
+          "health",
+          "month",
+          "next_steps",
+          "pagination",
+          "rule_notes",
+          "signals",
+          "total_count",
+          "transactions"
+        ]
+      }
+    },
+    {
+      "name": "rules.add",
+      "description": "Add or update a tagging rule programmatically.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Rule name (letters, numbers, underscores)"
+          },
+          "match": {
+            "type": "string",
+            "description": "Pipe-separated regex patterns"
+          },
+          "tags": {
+            "type": "string",
+            "description": "Comma-separated tags"
+          },
+          "category": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional category",
+            "default": null
+          },
+          "priority": {
+            "type": "integer",
+            "description": "Rule priority (0-100, higher runs first)",
+            "default": 50
+          },
+          "fields": {
+            "type": "string",
+            "description": "Comma-separated transaction fields to match",
+            "default": "merchant_raw"
+          },
+          "dry_run": {
+            "type": "boolean",
+            "description": "Preview impact without writing",
+            "default": false
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "match",
+          "tags"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "rules add --json output",
+        "top_level_keys": [
+          "_meta",
+          "action",
+          "coverage_after",
+          "dry_run",
+          "dry_run_action",
+          "impact",
+          "preview_action",
+          "rule",
+          "rules_file_modified",
+          "validation"
+        ]
+      }
+    },
+    {
+      "name": "rules.export",
+      "description": "Export tagging rules as Banksalad category mapping guide.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "yaml",
+              "banksalad",
+              "markdown"
+            ],
+            "description": "Output format: yaml, banksalad, markdown",
+            "default": "yaml"
+          },
+          "output": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "path",
+            "description": "Save output to file",
+            "default": null
+          },
+          "stats": {
+            "type": "boolean",
+            "description": "Include match statistics (default: True)",
+            "default": true
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "rules export --json output",
+        "top_level_keys": [
+          "_meta",
+          "rule_count",
+          "rules"
+        ]
+      }
+    },
+    {
+      "name": "rules.gaps",
+      "description": "Analyze gaps between tags and Banksalad categories.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "top": {
+            "type": "integer",
+            "description": "Number of items to show per category",
+            "default": 5
+          },
+          "simulate": {
+            "type": "boolean",
+            "description": "Show coverage improvement simulation (default: True)",
+            "default": true
+          },
+          "output": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "path",
+            "description": "Save report to file",
+            "default": null
+          },
+          "actionable_only": {
+            "type": "boolean",
+            "description": "Hide low-signal mismatch noise and show only actionable gaps",
+            "default": false
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "rules gaps --json output",
+        "top_level_keys": [
+          "_meta",
+          "critical_gaps",
+          "mismatches",
+          "simulations",
+          "summary"
+        ]
+      }
+    },
+    {
+      "name": "rules.list",
+      "description": "List tagging rules as structured JSON or a compact table.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "rules list --json output",
+        "top_level_keys": [
+          "_meta",
+          "rule_count",
+          "rules"
+        ]
+      }
+    },
+    {
+      "name": "rules.remove",
+      "description": "Remove a tagging rule by name.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Rule name to remove"
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "rules remove --json output",
+        "top_level_keys": [
+          "_meta",
+          "action",
+          "rule_name"
+        ]
+      }
+    },
+    {
+      "name": "rules.suggest",
+      "description": "Suggest rule patterns with rich merchant context.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "top": {
+            "type": "integer",
+            "description": "Number of suggestions to show (default: 10)",
+            "default": 10
+          },
+          "min_count": {
+            "type": "integer",
+            "description": "Minimum transaction count for a merchant (default: 1)",
+            "default": 1
+          },
+          "output": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "path",
+            "description": "Save merchant context report to file",
+            "default": null
+          },
+          "apply": {
+            "type": "boolean",
+            "description": "Interactively apply suggested rules to rules.yaml",
+            "default": false
+          },
+          "yes": {
+            "type": "boolean",
+            "description": "Apply all suggestions without prompts (use with --apply)",
+            "default": false
+          },
+          "preview": {
+            "type": "boolean",
+            "description": "Show merchant context table before next steps",
+            "default": false
+          },
+          "dry_run": {
+            "type": "boolean",
+            "description": "Preview rules that would be added without modifying rules.yaml",
+            "default": false
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          },
+          "privacy": {
+            "type": "string",
+            "enum": [
+              "raw",
+              "redacted",
+              "compact"
+            ],
+            "description": "Privacy profile for JSON output: raw, redacted, or compact",
+            "default": "raw"
+          },
+          "tag_after": {
+            "type": "boolean",
+            "description": "Re-tag transactions after applying rules (default: True)",
+            "default": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "rules suggest --json output",
+        "top_level_keys": [
+          "_meta",
+          "applied",
+          "coverage_after_pct",
+          "coverage_before_pct",
+          "dry_run",
+          "message",
+          "rules_file",
+          "rules_file_modified",
+          "skipped",
+          "suggestable_coverage_before_pct",
+          "suggestable_total_count",
+          "suggestable_untagged_count",
+          "suggestions",
+          "total_count",
+          "transfer_exclusions",
+          "untagged_count",
+          "would_apply"
+        ]
+      }
+    },
+    {
+      "name": "rules.test",
+      "description": "Dry-run a single rule against existing transactions without writing changes.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "rule_name": {
+            "type": "string",
+            "description": "Exact rule name to test"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Sample row count (default: 5)",
+            "default": 5
+          },
+          "month": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Restrict to one partition (YYYY-MM)",
+            "default": null
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "rule_name"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "rules test --json output",
+        "top_level_keys": [
+          "_meta",
+          "cross_tags_top",
+          "match_count",
+          "monthly_distribution",
+          "rule_name",
+          "sample",
+          "scope"
+        ]
+      }
+    },
+    {
+      "name": "rules.validate",
+      "description": "Validate tagging rules for conflicts and issues.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          },
+          "strict": {
+            "type": "boolean",
+            "description": "Fail fast on the first malformed rule instead of collecting all rule-load errors",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "rules validate --json output",
+        "top_level_keys": [
+          "_meta",
+          "errors",
+          "passed",
+          "problems",
+          "status",
+          "total_rules",
+          "warnings"
+        ]
+      }
+    },
+    {
+      "name": "show",
+      "description": "Show transactions with optional filters.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Filter by month (YYYY-MM)",
+            "default": null
+          },
+          "untagged": {
+            "type": "boolean",
+            "description": "Show only untagged transactions",
+            "default": false
+          },
+          "tag": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Filter by tag (exact match; scans all partitions when --month is omitted). Quote tags that contain spaces or brackets, e.g. --tag \"[테스트]LLM서비스\".",
+            "default": null
+          },
+          "merchant": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Filter by merchant (case-insensitive)",
+            "default": null
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Number of transactions to show",
+            "default": 20
+          },
+          "cursor": {
+            "type": "string",
+            "description": "Opaque pagination cursor",
+            "default": "0"
+          },
+          "max_bytes": {
+            "type": "integer",
+            "description": "Maximum serialized JSON response size before truncating rows",
+            "default": 1048576
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "show --json output",
+        "top_level_keys": [
+          "_meta",
+          "pagination",
+          "row_count",
+          "rows",
+          "total_matches"
+        ]
+      }
+    },
+    {
+      "name": "status",
+      "description": "Show current data status.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "detailed": {
+            "type": "boolean",
+            "description": "상세 통계 포함 (태그별/가맹점별 지출)",
+            "default": false
+          },
+          "top": {
+            "type": "integer",
+            "description": "상세 통계에서 보여줄 상위 항목 수",
+            "default": 5
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "status --json output",
+        "top_level_keys": [
+          "_meta",
+          "actionable",
+          "data_directory",
+          "detailed_stats",
+          "detailed_stats_warning",
+          "health",
+          "last_import",
+          "next_steps",
+          "rules_file",
+          "signals",
+          "tagging",
+          "terminology",
+          "transactions"
+        ]
+      }
+    },
+    {
+      "name": "tag",
+      "description": "Apply tagging rules to all transactions in CSV partitions.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "edit": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Inspect or edit a transaction's manual tags by row_hash",
+            "default": null
+          },
+          "add_tag": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Add one or more manual tags (repeatable)",
+            "default": null
+          },
+          "remove_tag": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Remove one or more manual tags (repeatable)",
+            "default": null
+          },
+          "set_category": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Persist a manual category override for category_final",
+            "default": null
+          },
+          "dry_run": {
+            "type": "boolean",
+            "description": "Preview changes without writing to CSV files",
+            "default": false
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "tag --json output",
+        "top_level_keys": [
+          "_meta",
+          "coverage_pct",
+          "dry_run",
+          "operation",
+          "partition",
+          "row_hash",
+          "status",
+          "tagged",
+          "total",
+          "transaction",
+          "untagged",
+          "updated"
+        ]
+      }
+    },
+    {
+      "name": "template.list",
+      "description": "List available query templates.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "template list --json output",
+        "top_level_keys": [
+          "_meta",
+          "templates"
+        ]
+      }
+    },
+    {
+      "name": "template.run",
+      "description": "Run a SQL template with validated parameters.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Template name"
+          },
+          "param": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Template parameter in key=value format. Repeat for multiple parameters.",
+            "default": []
+          },
+          "output": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "table",
+              "csv",
+              "json",
+              "markdown",
+              "xlsx",
+              null
+            ],
+            "description": "Output format: table, csv, json, markdown, xlsx",
+            "default": null
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          },
+          "file": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "path",
+            "description": "Save output to file. Required when --output xlsx.",
+            "default": null
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum rows to return (max 10000)",
+            "default": 100
+          },
+          "cursor": {
+            "type": "string",
+            "description": "Opaque pagination cursor",
+            "default": "0"
+          },
+          "max_bytes": {
+            "type": "integer",
+            "description": "Maximum serialized JSON response size before truncating rows",
+            "default": 1048576
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "template run --json output",
+        "top_level_keys": [
+          "_meta",
+          "pagination",
+          "row_count",
+          "rows",
+          "template_name"
+        ]
+      }
+    },
+    {
+      "name": "template.show",
+      "description": "Show template metadata and SQL definition.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Template name"
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "template show --json output",
+        "top_level_keys": [
+          "_meta",
+          "description",
+          "name",
+          "parameters",
+          "sql"
+        ]
+      }
+    },
+    {
+      "name": "transfer",
+      "description": "Detect and pair internal transfers.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "transfer --json output",
+        "top_level_keys": [
+          "_meta",
+          "candidate_rows",
+          "confirmed_transfer_rows",
+          "pairs_found",
+          "pairs_linked",
+          "status",
+          "unconfirmed_candidate_rows"
+        ]
+      }
+    },
+    {
+      "name": "update-agents",
+      "description": "Update AGENTS.md to the latest template version.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "output_schema": null
+    },
+    {
+      "name": "validate",
+      "description": "Validate CSV partition files against the schema.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "fix": {
+            "type": "boolean",
+            "description": "Automatically fix malformed rows",
+            "default": false
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "validate --json output",
+        "top_level_keys": [
+          "valid",
+          "partitions_checked",
+          "valid_count",
+          "invalid_count",
+          "results"
+        ]
+      }
+    },
+    {
+      "name": "version",
+      "description": "Show finjuice CLI version and data schema version.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "finjuice version output",
+        "top_level_keys": [
+          "_meta",
+          "finjuice_version",
+          "schema_version"
+        ]
+      }
+    },
+    {
+      "name": "workspace.create",
+      "description": "Create a new workspace directory with symlinks.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "format": "path",
+            "description": "Path to create workspace"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "path"
+        ]
+      },
+      "output_schema": null
+    },
+    {
+      "name": "workspace.list",
+      "description": "List all active workspaces.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "output_schema": null
+    },
+    {
+      "name": "workspace.open",
+      "description": "Open workspace in file manager.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "format": "path",
+            "description": "Workspace path to open"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "path"
+        ]
+      },
+      "output_schema": null
+    },
+    {
+      "name": "workspace.remove",
+      "description": "Remove a workspace directory (data remains safe).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "format": "path",
+            "description": "Workspace path to remove"
+          },
+          "force": {
+            "type": "boolean",
+            "description": "Skip confirmation",
+            "default": false
+          },
+          "yes": {
+            "type": "boolean",
+            "description": "Skip confirmation",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "path"
+        ]
+      },
+      "output_schema": null
+    },
+    {
+      "name": "workspace.verify",
+      "description": "Verify workspace symlinks are valid.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "format": "path",
+            "description": "Workspace path to verify"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "path"
+        ]
+      },
+      "output_schema": null
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "$id": "all.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "command": {
+      "type": "string"
+    },
+    "steps": {
+      "additionalProperties": true,
+      "properties": {
+        "export": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "ingest": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "tag": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "transfer": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      "required": [
+        "ingest",
+        "tag",
+        "transfer",
+        "export"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "_meta",
+    "command",
+    "steps"
+  ],
+  "title": "all --json output",
+  "type": "object"
+}

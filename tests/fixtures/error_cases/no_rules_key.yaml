@@ -1,0 +1,3 @@
+version: 1
+# Missing 'rules' key entirely
+some_other_key: value

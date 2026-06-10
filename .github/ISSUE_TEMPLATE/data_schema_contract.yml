@@ -1,0 +1,62 @@
+name: Data or schema contract issue
+description: Report a Banksalad import, storage schema, or CLI JSON contract issue.
+title: "Contract: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for data-shape or contract problems. Do not upload raw exports,
+        real transaction rows, account numbers, or private financial files.
+        Share only synthetic or redacted structure.
+  - type: dropdown
+    id: contract_type
+    attributes:
+      label: Contract area
+      options:
+        - Banksalad XLSX columns
+        - Transaction storage schema
+        - CLI JSON output
+        - Generated reference docs
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: observed_shape
+    attributes:
+      label: Observed shape
+      description: Paste only redacted column names, synthetic JSON keys, or minimal schema structure.
+      placeholder: |
+        Synthetic example:
+        {
+          "field_name": "example",
+          "amount": 1234
+        }
+    validations:
+      required: true
+  - type: textarea
+    id: expected_contract
+    attributes:
+      label: Expected contract
+      description: Link the relevant docs or describe the expected fields.
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command or workflow
+      description: Include the command that exposed the mismatch, with private paths redacted.
+      placeholder: uv run finjuice ... --json
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility notes
+      description: Who might be affected by changing this contract?
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I used synthetic or redacted data only.
+          required: true
+        - label: I did not attach private exports, databases, or screenshots with financial details.
+          required: true

@@ -1,0 +1,35 @@
+{
+  "$id": "budget_validate.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "path": {
+      "type": "string"
+    },
+    "problems": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "status": {
+      "enum": [
+        "valid",
+        "invalid"
+      ],
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "status",
+    "path",
+    "problems"
+  ],
+  "title": "budget validate --json output",
+  "type": "object"
+}

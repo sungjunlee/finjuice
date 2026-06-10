@@ -1,0 +1,308 @@
+{
+  "$defs": {
+    "tagging_review_terms": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Canonical tagging/review terminology for this JSON contract.",
+      "properties": {
+        "needs_review": {
+          "description": "The explicit row flag needs_review == 1, not every row shown by review.",
+          "type": "string"
+        },
+        "rule_matched": {
+          "description": "A transaction with rule-derived output: non-empty tags_rule or non-empty category_rule.",
+          "type": "string"
+        },
+        "suggestable_untagged": {
+          "description": "An untagged transaction eligible for rules suggest after excluding confirmed internal transfer pairs.",
+          "type": "string"
+        },
+        "uncategorized": {
+          "description": "A transaction whose category_final is the fallback category 미분류.",
+          "type": "string"
+        },
+        "untagged": {
+          "description": "A transaction whose tags_final is null or an empty tag array.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$id": "automation_run.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "_meta": {
+            "properties": {
+              "privacy": {
+                "properties": {
+                  "profile": {
+                    "enum": [
+                      "raw",
+                      "redacted"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "profile"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "privacy"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "_meta"
+        ],
+        "type": "object"
+      },
+      "then": {
+        "properties": {
+          "tagging_pressure": {
+            "required": [
+              "merchant_pressure"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "data_dir"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "_meta": {
+            "properties": {
+              "privacy": {
+                "properties": {
+                  "profile": {
+                    "enum": [
+                      "compact"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "profile"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "privacy"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "_meta"
+        ],
+        "type": "object"
+      },
+      "then": {
+        "not": {
+          "required": [
+            "data_dir"
+          ]
+        },
+        "properties": {
+          "tagging_pressure": {
+            "not": {
+              "required": [
+                "merchant_pressure"
+              ]
+            },
+            "required": [
+              "merchant_pressure_count"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    }
+  ],
+  "description": "automation run --json output. The raw and redacted privacy profiles include data_dir and merchant_pressure samples; compact replaces those samples with counts.",
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "actionable": {
+      "type": "boolean"
+    },
+    "data_dir": {
+      "type": "string"
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "large_transactions": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "next_steps": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "signal": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "signal",
+          "message",
+          "command"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "pending_imports": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "tagging_pressure": {
+      "additionalProperties": true,
+      "properties": {
+        "coverage_pct": {
+          "type": "number"
+        },
+        "merchant_pressure": {
+          "items": {
+            "additionalProperties": true,
+            "properties": {
+              "avg_amount": {
+                "type": "number"
+              },
+              "merchant": {
+                "type": "string"
+              },
+              "sample_memos": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "total_amount": {
+                "type": "number"
+              },
+              "transaction_count": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "merchant",
+              "transaction_count",
+              "total_amount",
+              "avg_amount",
+              "sample_memos"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "merchant_pressure_count": {
+          "type": "integer"
+        },
+        "status": {
+          "type": "string"
+        },
+        "suggestable_coverage_pct": {
+          "type": "number"
+        },
+        "suggestable_untagged_transactions": {
+          "type": "integer"
+        },
+        "threshold": {
+          "type": "integer"
+        },
+        "threshold_basis": {
+          "type": "string"
+        },
+        "threshold_exceeded": {
+          "type": "boolean"
+        },
+        "total_transactions": {
+          "type": "integer"
+        },
+        "transfer_excluded_untagged_transactions": {
+          "type": "integer"
+        },
+        "untagged_transactions": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "status",
+        "total_transactions",
+        "untagged_transactions",
+        "coverage_pct",
+        "suggestable_untagged_transactions",
+        "suggestable_coverage_pct",
+        "transfer_excluded_untagged_transactions",
+        "threshold",
+        "threshold_basis",
+        "threshold_exceeded"
+      ],
+      "type": "object"
+    },
+    "thresholds": {
+      "additionalProperties": true,
+      "properties": {
+        "large_transaction": {
+          "type": "number"
+        },
+        "untagged_count": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "untagged_count",
+        "large_transaction"
+      ],
+      "type": "object"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "enabled",
+    "actionable",
+    "thresholds",
+    "pending_imports",
+    "tagging_pressure",
+    "large_transactions",
+    "next_steps",
+    "warnings"
+  ],
+  "title": "automation run --json output",
+  "type": "object",
+  "x-finjuice-field-definitions": {
+    "tagging_pressure.suggestable_untagged_transactions": "suggestable_untagged",
+    "tagging_pressure.threshold_basis": "automation.thresholds.untagged_count is evaluated against suggestable_untagged_transactions",
+    "tagging_pressure.transfer_excluded_untagged_transactions": "untagged rows excluded from rule suggestions because they are confirmed transfer pairs",
+    "tagging_pressure.untagged_transactions": "untagged"
+  }
+}

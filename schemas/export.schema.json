@@ -1,0 +1,133 @@
+{
+  "$id": "export.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "assumptions": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "breakdown": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "command": {
+      "type": "string"
+    },
+    "domain": {
+      "type": "string"
+    },
+    "dry_run": {
+      "type": "boolean"
+    },
+    "format": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "output_files": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "estimated_size_bytes": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "row_count": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "period": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "review_items": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "skipped_outputs": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "estimated_size_bytes": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "row_count": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "summary": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "transaction_count": {
+      "type": "integer"
+    },
+    "year": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "_meta"
+  ],
+  "title": "export --json output",
+  "type": "object"
+}

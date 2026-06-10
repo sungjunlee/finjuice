@@ -1,0 +1,69 @@
+{
+  "$id": "https://github.com/sungjunlee/finjuice/schemas/_error.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "error": {
+      "additionalProperties": true,
+      "properties": {
+        "code": {
+          "enum": [
+            "GENERAL_ERROR",
+            "DATA_DIR_NOT_INITIALIZED",
+            "NO_DATA",
+            "RULES_FILE_NOT_FOUND",
+            "RULE_NOT_FOUND",
+            "FILE_NOT_FOUND",
+            "FILE_ACCESS_ERROR",
+            "VALIDATION_FAILED",
+            "INVALID_ARGS",
+            "TAGGING_FAILED",
+            "TRANSFER_FAILED",
+            "EXPORT_FAILED",
+            "QUERY_ERROR",
+            "SIMULATION_FAILED",
+            "INSPECTION_FAILED",
+            "USER_CANCELLED",
+            "UNEXPECTED_ERROR"
+          ],
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "suggestion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "type": "object"
+    },
+    "exit_code": {
+      "enum": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        130
+      ],
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "_meta",
+    "error",
+    "exit_code"
+  ],
+  "title": "Error envelope",
+  "type": "object"
+}

@@ -1,0 +1,77 @@
+{
+  "$id": "rules_validate.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "errors": {
+      "type": "integer"
+    },
+    "passed": {
+      "type": "integer"
+    },
+    "problems": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "rules": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "severity": {
+            "type": "string"
+          },
+          "suggestion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "severity",
+          "type",
+          "message",
+          "rules",
+          "suggestion"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "status": {
+      "enum": [
+        "valid",
+        "issues"
+      ],
+      "type": "string"
+    },
+    "total_rules": {
+      "type": "integer"
+    },
+    "warnings": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "_meta",
+    "status",
+    "total_rules",
+    "errors",
+    "warnings",
+    "passed",
+    "problems"
+  ],
+  "title": "rules validate --json output",
+  "type": "object"
+}

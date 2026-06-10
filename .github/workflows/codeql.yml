@@ -1,0 +1,81 @@
+# CodeQL Code Scanning
+# Issue: #644
+# Purpose: Baseline Python static analysis through GitHub code scanning.
+#
+# Note: Private repositories need GitHub Advanced Security for CodeQL upload.
+
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly on Tuesday at 02:17 UTC.
+    - cron: '17 2 * * 2'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (Python)
+    if: ${{ github.event.repository.private == false }}
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+      packages: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@8aad20d150bbac5944a9f9d289da16a4b0d87c1e
+        with:
+          languages: python
+
+      - name: Perform CodeQL analysis
+        id: analyze
+        uses: github/codeql-action/analyze@8aad20d150bbac5944a9f9d289da16a4b0d87c1e
+        continue-on-error: true
+
+      - name: Summarize CodeQL status
+        if: always()
+        run: |
+          {
+            echo "## CodeQL summary"
+            echo ""
+            if [ "${{ steps.analyze.outcome }}" = "success" ]; then
+              echo "CodeQL analysis completed and uploaded where code scanning is available."
+            else
+              echo "CodeQL analysis did not complete successfully."
+              echo ""
+              echo "Private repositories require GitHub Advanced Security for CodeQL code scanning."
+              echo "Enable GHAS or make the repository public, then rerun this workflow."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  private-repo-summary:
+    name: Private repository summary
+    if: ${{ github.event.repository.private == true }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Explain CodeQL skip
+        run: |
+          {
+            echo "## CodeQL summary"
+            echo ""
+            echo "CodeQL code scanning is skipped while this repository is private."
+            echo "Make the repository public or enable GitHub Advanced Security, then rerun this workflow."
+          } >> "$GITHUB_STEP_SUMMARY"

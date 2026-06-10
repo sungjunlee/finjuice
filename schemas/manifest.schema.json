@@ -1,0 +1,342 @@
+{
+  "$id": "manifest.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "commands": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "arguments": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {
+                "default": {},
+                "help": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "type": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "type",
+                "required"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "error_schema_ref": {
+            "type": "string"
+          },
+          "examples": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "help": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "help_oneline": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mutates_data": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "options": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {
+                "default": {},
+                "envvar": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "help": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "is_flag": {
+                  "type": "boolean"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "short": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "type": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "type",
+                "is_flag"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "output_schema_ref": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "path": {
+            "type": "string"
+          },
+          "privacy_profile": {
+            "type": "string"
+          },
+          "requires_confirmation": {
+            "type": "boolean"
+          },
+          "rich_help_panel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "safe_readonly": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path",
+          "output_schema_ref"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "error_codes": {
+      "items": {
+        "enum": [
+          "GENERAL_ERROR",
+          "DATA_DIR_NOT_INITIALIZED",
+          "NO_DATA",
+          "RULES_FILE_NOT_FOUND",
+          "RULE_NOT_FOUND",
+          "FILE_NOT_FOUND",
+          "FILE_ACCESS_ERROR",
+          "VALIDATION_FAILED",
+          "INVALID_ARGS",
+          "TAGGING_FAILED",
+          "TRANSFER_FAILED",
+          "EXPORT_FAILED",
+          "QUERY_ERROR",
+          "SIMULATION_FAILED",
+          "INSPECTION_FAILED",
+          "USER_CANCELLED",
+          "UNEXPECTED_ERROR"
+        ],
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "error_schema_ref": {
+      "type": "string"
+    },
+    "examples": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "description",
+          "command"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "exit_codes": {
+      "additionalProperties": false,
+      "properties": {
+        "GENERAL_ERROR": {
+          "const": 1,
+          "type": "integer"
+        },
+        "NO_DATA": {
+          "const": 4,
+          "type": "integer"
+        },
+        "OK": {
+          "const": 0,
+          "type": "integer"
+        },
+        "SUCCESS": {
+          "const": 0,
+          "type": "integer"
+        },
+        "USAGE_ERROR": {
+          "const": 2,
+          "type": "integer"
+        },
+        "USER_CANCELLED": {
+          "const": 130,
+          "type": "integer"
+        },
+        "VALIDATION_ERROR": {
+          "const": 3,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "SUCCESS",
+        "OK",
+        "GENERAL_ERROR",
+        "USAGE_ERROR",
+        "VALIDATION_ERROR",
+        "NO_DATA",
+        "USER_CANCELLED"
+      ],
+      "type": "object"
+    },
+    "finjuice_version": {
+      "type": "string"
+    },
+    "global_options": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "default": {},
+          "envvar": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "help": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_flag": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "short": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "is_flag"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "manifest_schema_version": {
+      "type": "string"
+    },
+    "panels": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "privacy_profiles": {
+      "additionalProperties": {
+        "additionalProperties": true,
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "external_disclosure": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "description",
+          "external_disclosure"
+        ],
+        "type": "object"
+      },
+      "type": "object"
+    },
+    "root_env": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "help": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "option": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "option"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "manifest_schema_version",
+    "finjuice_version",
+    "commands"
+  ],
+  "title": "manifest --json output",
+  "type": "object"
+}

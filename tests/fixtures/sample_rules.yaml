@@ -1,0 +1,148 @@
+version: 1
+rules:
+  # High priority - Financial services
+  - name: insurance_metlife
+    match: "METLIFE|메트라이프|TEST_INSURANCE"
+    fields: [merchant_raw, memo_raw]
+    tags: ["보험", "정기지출"]
+    priority: 95
+    enabled: true
+    created_by: manual
+
+  - name: insurance_samsung
+    match: "삼성화재|SAMSUNG FIRE|TEST_INSURANCE"
+    fields: [merchant_raw, memo_raw]
+    tags: ["보험", "정기지출"]
+    priority: 95
+    enabled: true
+    created_by: manual
+
+  # Housing & Utilities
+  - name: apartment_fees
+    match: "관리비|아파트관리비|아파트 관리비"
+    fields: [merchant_raw, memo_raw]
+    tags: ["공과금", "주거", "정기지출"]
+    priority: 90
+    enabled: true
+    created_by: manual
+
+  - name: utilities_electricity
+    match: "한국전력|전기요금"
+    fields: [merchant_raw, memo_raw]
+    tags: ["공과금", "전기"]
+    priority: 90
+    enabled: true
+    created_by: manual
+
+  - name: utilities_gas
+    match: "도시가스|가스요금"
+    fields: [merchant_raw, memo_raw]
+    tags: ["공과금", "가스"]
+    priority: 90
+    enabled: true
+    created_by: manual
+
+  # Transportation
+  - name: transport_subway
+    match: "지하철|메트로|METRO"
+    fields: [merchant_raw, memo_raw]
+    tags: ["교통", "지하철"]
+    priority: 85
+    enabled: true
+    created_by: manual
+
+  - name: transport_taxi
+    match: "카카오택시|택시|TAXI"
+    fields: [merchant_raw, memo_raw]
+    tags: ["교통", "택시"]
+    priority: 85
+    enabled: true
+    created_by: manual
+
+  # Convenience stores
+  - name: convenience_stores
+    match: "GS25|세븐일레븐|CU|이마트24|SEVEN ELEVEN|EMART24|TEST_CONVENIENCE"
+    fields: [merchant_raw]
+    tags: ["편의점", "소액지출"]
+    priority: 80
+    enabled: true
+    created_by: manual
+
+  # Coffee shops
+  - name: cafe_starbucks
+    match: "스타벅스|STARBUCKS|TEST_CAFE"
+    fields: [merchant_raw]
+    tags: ["카페", "커피", "외식"]
+    priority: 80
+    enabled: true
+    created_by: manual
+
+  - name: cafe_ediya
+    match: "이디야|EDIYA|TEST_CAFE"
+    fields: [merchant_raw]
+    tags: ["카페", "커피", "외식"]
+    priority: 80
+    enabled: true
+    created_by: manual
+
+  # Healthcare
+  - name: medical_hospital
+    match: "병원|의원|HOSPITAL|CLINIC"
+    fields: [merchant_raw, memo_raw]
+    tags: ["의료", "건강"]
+    priority: 75
+    enabled: true
+    created_by: manual
+
+  - name: medical_pharmacy
+    match: "약국|PHARMACY"
+    fields: [merchant_raw]
+    tags: ["의료", "약"]
+    priority: 75
+    enabled: true
+    created_by: manual
+
+  # Subscriptions
+  - name: subscription_netflix
+    match: "넷플릭스|NETFLIX"
+    fields: [merchant_raw, memo_raw]
+    tags: ["구독", "엔터테인먼트", "정기지출"]
+    priority: 70
+    enabled: true
+    created_by: manual
+
+  - name: subscription_spotify
+    match: "스포티파이|SPOTIFY"
+    fields: [merchant_raw, memo_raw]
+    tags: ["구독", "음악", "정기지출"]
+    priority: 70
+    enabled: true
+    created_by: manual
+
+  # Lower priority - Generic categories
+  - name: food_general
+    match: "식당|레스토랑|RESTAURANT|TEST_FASTFOOD"
+    fields: [merchant_raw]
+    tags: ["외식", "식비"]
+    priority: 50
+    enabled: true
+    created_by: manual
+
+  # Generic test merchants
+  - name: test_merchants
+    match: "TEST_MERCHANT|TEST_BANK|TEST_CARD|TEST_ACCOUNT"
+    fields: [merchant_raw, account]
+    tags: ["테스트", "일반"]
+    priority: 40
+    enabled: true
+    created_by: manual
+
+  # Test rule (disabled)
+  - name: test_disabled_rule
+    match: "DISABLED_PATTERN"
+    fields: [merchant_raw]
+    tags: ["비활성화"]
+    priority: 100
+    enabled: false
+    created_by: manual
+    notes: "This rule is disabled for testing purposes"

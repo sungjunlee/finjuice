@@ -1,0 +1,1 @@
+"""Packaged journal body templates."""

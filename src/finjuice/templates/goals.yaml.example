@@ -1,0 +1,73 @@
+# Monthly budget targets for `finjuice budget`.
+version: 1
+
+# Optional long-term target for `finjuice networth forecast`.
+# net_worth_target: 150000000
+
+monthly_budget:
+  # Total monthly spending cap.
+  total: 2000000
+
+  # Category targets are optional and can cover only the categories you track.
+  categories:
+    식비: 700000
+    교통: 150000
+    카페: 120000
+
+  # Optional metadata for your own review flow.
+  updated: "2026-04-15"
+  notes: "April budget after rent reset"
+
+# Optional high-level context used by `finjuice context --json`.
+# Keep this aggregated and user-confirmed; do not paste raw transaction rows here.
+financial_context:
+  income:
+    monthly_estimate: 5000000
+    source: "user"
+    as_of: "2026-04-15"
+    notes: "Net household income estimate"
+  family:
+    household_size: 3
+    dependents_count: 1
+    source: "user"
+    as_of: "2026-04-15"
+    notes: "Childcare and family-support obligations affect runway"
+  housing:
+    status: "rent"
+    monthly_payment: 900000
+    deposit: 50000000
+    source: "user"
+    as_of: "2026-04-15"
+    notes: "Monthly housing payment to treat as fixed"
+
+# Optional confirmed large obligations. Checkup may suggest candidates for this
+# list when it sees high monthly recurring outflows.
+known_obligations:
+  - label: "전세대출 이자"
+    kind: "loan"
+    amount: 450000
+    frequency: monthly
+    source: "user"
+    as_of: "2026-04-15"
+    notes: "Confirmed housing loan interest"
+
+# Optional confirmed recurring savings plan for `finjuice status --detailed`.
+# These entries are additive to tag-inferred structural savings. `savings_rate_3mo`
+# remains the legacy residual cashflow formula; use the new residual/consumption
+# fields in detailed status JSON when you need the split view.
+recurring_savings:
+  - label: "IRP"
+    amount: 300000
+    frequency: monthly
+    tags: ["IRP", "정기저축"]
+    start_month: "2026-01"
+    source: "goals.yaml"
+    notes: "Retirement account auto-transfer"
+  - label: "연금저축"
+    amount: 2400000
+    frequency: yearly
+    tags: ["연금"]
+    start_date: "2026-01-01"
+
+  # 메모용 자유 텍스트 (CLI는 사용하지 않음).
+  notes: "근로소득 + 사업소득 합계 추정. 매년 update."

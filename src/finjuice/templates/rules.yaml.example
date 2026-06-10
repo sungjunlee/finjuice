@@ -1,0 +1,123 @@
+# Banksalad AI Pipeline - Tagging Rules Example
+#
+# This file demonstrates how to create tagging rules for automatic transaction categorization.
+# Copy this file to your data directory as 'rules.yaml' and customize it with your own patterns.
+#
+# Rule Structure:
+#   - name: Unique identifier for the rule
+#   - match: Regex pattern to match (case-insensitive)
+#   - fields: List of fields to search [merchant_raw, memo_raw, major_raw, minor_raw]
+#   - tags: List of tags to apply when matched
+#   - priority: Higher priority rules are checked first (0-100)
+#
+# Tips:
+#   - Use "|" for OR matching: "STARBUCKS|스타벅스"
+#   - Higher priority (90-100) for specific, high-confidence matches
+#   - Medium priority (70-89) for general merchant patterns
+#   - Lower priority (50-69) for broad category matching
+#   - Tags help you analyze spending beyond Banksalad's built-in categories
+#
+# See docs/specs/v0_initial.md for detailed rule syntax and examples.
+
+version: 1
+
+# Optional report-level exclusions.
+# These filters are applied on read only for reporting/analysis commands;
+# transaction CSVs on disk are never modified.
+# Commands that honor them: status, template run, show, export, query.
+# Use the root `finjuice --no-filter ...` flag to compare the full audit view.
+#
+# report_filters:
+#   excluded_merchants:
+#     - pattern: "예전구독서비스"
+#       match_type: "contains"  # contains | exact | regex
+#       reason: "해지한 구독이라 이후 리포트에서 제외"
+#       since: "2026-02-01"
+#   excluded_categories:
+#     - name: "이체:투자"
+#       reason: "이체는 지출 아님"
+#   excluded_date_ranges:
+#     - start: "2025-12-20"
+#       end: "2025-12-31"
+#       reason: "이사 관련 일회성 지출"
+
+rules:
+  # 정기지출 - 보험
+  - name: insurance_metlife
+    match: "METLIFE|메트라이프"
+    fields: [merchant_raw, memo_raw]
+    tags: ["보험", "정기지출"]
+    priority: 95
+
+  # 쇼핑 - 온라인
+  - name: shopping_tmon
+    match: "티몬"
+    fields: [merchant_raw]
+    tags: ["쇼핑", "온라인쇼핑"]
+    priority: 80
+
+  - name: shopping_coupang
+    match: "쿠팡"
+    fields: [merchant_raw]
+    tags: ["쇼핑", "온라인쇼핑"]
+    priority: 80
+
+  # 편의점
+  - name: convenience_gs25
+    match: "GS25|GS리테일"
+    fields: [merchant_raw]
+    tags: ["편의점", "식비"]
+    priority: 75
+
+  - name: convenience_cu
+    match: "CU|씨유"
+    fields: [merchant_raw]
+    tags: ["편의점", "식비"]
+    priority: 75
+
+  # 카페
+  - name: cafe_starbucks
+    match: "스타벅스|STARBUCKS"
+    fields: [merchant_raw]
+    tags: ["카페", "커피"]
+    priority: 80
+
+  # 온라인 서비스
+  - name: tech_apple
+    match: "Apple|APPLE"
+    fields: [merchant_raw]
+    tags: ["디지털구독", "IT"]
+    priority: 85
+
+  - name: tech_amazon
+    match: "Amazon|AMAZON"
+    fields: [merchant_raw]
+    tags: ["쇼핑", "온라인쇼핑", "해외결제"]
+    priority: 85
+
+  - name: tech_anthropic
+    match: "ANTHROPIC|Anthropic"
+    fields: [merchant_raw]
+    tags: ["디지털구독", "AI", "개발도구"]
+    priority: 90
+
+  # 교통
+  - name: transport_subway
+    match: "지하철|한국철도공사|코레일"
+    fields: [merchant_raw, memo_raw]
+    tags: ["교통", "대중교통"]
+    priority: 75
+
+  # 카카오 서비스
+  - name: service_kakao
+    match: "카카오|KAKAO"
+    fields: [merchant_raw]
+    tags: ["디지털서비스", "카카오"]
+    priority: 80
+
+  # 외식
+  - name: dining_restaurant
+    match: "맛집|음식점|레스토랑|식당"
+    fields: [merchant_raw, minor_raw]
+    tags: ["외식", "식비"]
+    priority: 70

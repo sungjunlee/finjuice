@@ -1,0 +1,131 @@
+{
+  "$id": "context.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "active_goals": {
+      "items": {},
+      "type": "array"
+    },
+    "financial_metadata": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "journals": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "created": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "data_range": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "filename": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "snapshot": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "summary_200": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "filename",
+          "topic",
+          "created",
+          "data_range",
+          "snapshot",
+          "summary_200"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "rule_notes": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "rule_name": {
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "rule_name",
+          "notes",
+          "tags"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "status_snapshot": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "top_patterns": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "delta_krw": {
+            "type": "integer"
+          },
+          "direction": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "delta_krw",
+          "direction"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "journals",
+    "status_snapshot",
+    "active_goals",
+    "financial_metadata",
+    "rule_notes",
+    "top_patterns"
+  ],
+  "title": "context --json output",
+  "type": "object"
+}

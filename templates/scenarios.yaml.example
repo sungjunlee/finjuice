@@ -1,0 +1,46 @@
+# Deterministic scenarios for `finjuice networth forecast`.
+version: 1
+assumptions:
+  # Monthly savings added after each monthly compounding step.
+  default_savings_per_month: 1000000
+
+  # Annual return assumptions by scenario and asset category.
+  asset_returns:
+    real_estate:
+      conservative: 0.03
+      neutral: 0.05
+      optimistic: 0.07
+    financial:
+      conservative: 0.05
+      neutral: 0.08
+      optimistic: 0.12
+    deposit:
+      conservative: 0.0
+      neutral: 0.0
+      optimistic: 0.0
+    cash:
+      conservative: 0.025
+      neutral: 0.03
+      optimistic: 0.035
+
+  # Optional delta applied to each liability rate.
+  liability_rate_delta: -0.005
+
+lifecycle_events:
+  - name: "이사 준비 비용"
+    date: "2026-11-01"
+    one_time_expense: 2000000
+
+  - name: "정기 생활비 증가"
+    start: "2026-12-01"
+    end: "2032-03-01"
+    monthly_net_expense: 300000
+
+  - name: "거주지 매각"
+    date: "2027-06-01"
+    asset_swap:
+      remove: "거주 부동산"
+      add:
+        name: "매도 현금"
+        category: financial
+        value: 50000000

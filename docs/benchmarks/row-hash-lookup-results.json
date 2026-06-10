@@ -1,0 +1,654 @@
+{
+  "metadata": {
+    "generated_at": "2026-05-12T00:07:25+0900",
+    "runtime_versions": {
+      "python": "3.13.11",
+      "polars": "1.35.2",
+      "duckdb": "1.4.2"
+    },
+    "platform": "macOS-15.6.1-arm64-arm-64bit-Mach-O",
+    "warm_iterations": 3,
+    "random_seed": 597,
+    "probe_count": 10000,
+    "data_policy": "Synthetic partitions only; the harness creates a TemporaryDirectory and does not read user transaction data.",
+    "measurement_model": {
+      "cold": "First measured execution after synthetic dataset generation.",
+      "warm": "Repeated executions in the same Python process with OS page cache effects."
+    }
+  },
+  "benchmarks": {
+    "personal_6k": {
+      "dataset": {
+        "partitions": 24,
+        "rows_per_partition": 250,
+        "total_rows": 6000,
+        "schema_columns": 26,
+        "schema_source": "finjuice.pipeline.storage.csv_partition_polars.CSV_COLUMNS",
+        "distinct_months": 24,
+        "month_range": {
+          "start": "2024-01",
+          "end": "2025-12"
+        }
+      },
+      "operations": {
+        "find_transaction_by_hash": {
+          "measured_path": "csv_partition_polars.find_transaction_by_hash(); scans sorted YYYY/MM partitions and loads full partition DataFrames.",
+          "targets": {
+            "first_partition": {
+              "target": {
+                "row_hash": "0000000000000000",
+                "expected_found": true,
+                "description": "Best-case hit in the first scanned partition."
+              },
+              "measurement": {
+                "cold_seconds": 0.08327308297157288,
+                "warm": {
+                  "mean": 0.03500898601487279,
+                  "median": 0.03487554099410772,
+                  "min": 0.03438512503635138,
+                  "max": 0.03576629201415926,
+                  "p95": 0.03576629201415926,
+                  "std_dev": 0.0007001865717949607
+                },
+                "cold_result": {
+                  "found": true,
+                  "row_hash": "0000000000000000",
+                  "partition": "2024-01",
+                  "partition_rows": 250
+                },
+                "last_warm_result": {
+                  "found": true,
+                  "row_hash": "0000000000000000",
+                  "partition": "2024-01",
+                  "partition_rows": 250
+                }
+              }
+            },
+            "middle_partition": {
+              "target": {
+                "row_hash": "0000000c0000007d",
+                "expected_found": true,
+                "description": "Representative hit after scanning about half the partitions."
+              },
+              "measurement": {
+                "cold_seconds": 0.03378716600127518,
+                "warm": {
+                  "mean": 0.034481888986192644,
+                  "median": 0.03429287497419864,
+                  "min": 0.034244082984514534,
+                  "max": 0.03490870899986476,
+                  "p95": 0.03490870899986476,
+                  "std_dev": 0.0003704411662027194
+                },
+                "cold_result": {
+                  "found": true,
+                  "row_hash": "0000000c0000007d",
+                  "partition": "2025-01",
+                  "partition_rows": 250
+                },
+                "last_warm_result": {
+                  "found": true,
+                  "row_hash": "0000000c0000007d",
+                  "partition": "2025-01",
+                  "partition_rows": 250
+                }
+              }
+            },
+            "last_partition": {
+              "target": {
+                "row_hash": "00000017000000f9",
+                "expected_found": true,
+                "description": "Worst-case hit in the final scanned partition."
+              },
+              "measurement": {
+                "cold_seconds": 0.03447258297819644,
+                "warm": {
+                  "mean": 0.035423652618192136,
+                  "median": 0.034463917021639645,
+                  "min": 0.03418041591066867,
+                  "max": 0.03762662492226809,
+                  "p95": 0.03762662492226809,
+                  "std_dev": 0.001913088719682059
+                },
+                "cold_result": {
+                  "found": true,
+                  "row_hash": "00000017000000f9",
+                  "partition": "2025-12",
+                  "partition_rows": 250
+                },
+                "last_warm_result": {
+                  "found": true,
+                  "row_hash": "00000017000000f9",
+                  "partition": "2025-12",
+                  "partition_rows": 250
+                }
+              }
+            },
+            "missing_hash": {
+              "target": {
+                "row_hash": "ffffffffffffffff",
+                "expected_found": false,
+                "description": "Worst-case miss after scanning all partitions."
+              },
+              "measurement": {
+                "cold_seconds": 0.03765758406370878,
+                "warm": {
+                  "mean": 0.03592179203405976,
+                  "median": 0.035172792035155,
+                  "min": 0.034091959008947015,
+                  "max": 0.038500625058077276,
+                  "p95": 0.038500625058077276,
+                  "std_dev": 0.0022977891182521426
+                },
+                "cold_result": {
+                  "found": false,
+                  "row_hash": "ffffffffffffffff"
+                },
+                "last_warm_result": {
+                  "found": false,
+                  "row_hash": "ffffffffffffffff"
+                }
+              }
+            }
+          }
+        },
+        "manual_edit_round_trip": {
+          "measured_path": "find_transaction_by_hash() plus rewriting the matching monthly partition with write_month().",
+          "target": {
+            "row_hash": "00000017000000f9",
+            "description": "Worst-case manual edit target in the final partition."
+          },
+          "measurement": {
+            "cold_seconds": 0.06238291703630239,
+            "warm": {
+              "mean": 0.043885402691860996,
+              "median": 0.044196082977578044,
+              "min": 0.04222300008405,
+              "max": 0.04523712501395494,
+              "p95": 0.04523712501395494,
+              "std_dev": 0.0015308915550157473
+            },
+            "cold_result": {
+              "row_hash": "00000017000000f9",
+              "partition": "2025-12",
+              "partition_rows": 250,
+              "file_size_bytes": 44547
+            },
+            "last_warm_result": {
+              "row_hash": "00000017000000f9",
+              "partition": "2025-12",
+              "partition_rows": 250,
+              "file_size_bytes": 44547
+            }
+          }
+        },
+        "ephemeral_row_hash_map": {
+          "measured_path": "Experimental in-memory row_hash -> YYYY-MM map built from synthetic partitions. This is not a production artifact.",
+          "build": {
+            "cold_seconds": 0.011668874998576939,
+            "warm": {
+              "mean": 0.009627666984063884,
+              "median": 0.009684333926998079,
+              "min": 0.009432084043510258,
+              "max": 0.009766582981683314,
+              "p95": 0.009766582981683314,
+              "std_dev": 0.00017430072210365604
+            },
+            "cold_result": {
+              "entries": 6000,
+              "partitions": 24
+            },
+            "last_warm_result": {
+              "entries": 6000,
+              "partitions": 24
+            }
+          },
+          "probe": {
+            "cold_seconds": 0.0005405000410974026,
+            "warm": {
+              "mean": 0.0005158192943781614,
+              "median": 0.0005198749713599682,
+              "min": 0.0005067919846624136,
+              "max": 0.0005207909271121025,
+              "p95": 0.0005207909271121025,
+              "std_dev": 7.831282414968407e-06,
+              "mean_per_lookup_seconds": 5.158192943781614e-08
+            },
+            "cold_result": {
+              "probe_count": 10000,
+              "found": 7500,
+              "missing": 2500
+            },
+            "last_warm_result": {
+              "probe_count": 10000,
+              "found": 7500,
+              "missing": 2500
+            }
+          }
+        }
+      }
+    },
+    "power_60k": {
+      "dataset": {
+        "partitions": 60,
+        "rows_per_partition": 1000,
+        "total_rows": 60000,
+        "schema_columns": 26,
+        "schema_source": "finjuice.pipeline.storage.csv_partition_polars.CSV_COLUMNS",
+        "distinct_months": 60,
+        "month_range": {
+          "start": "2024-01",
+          "end": "2028-12"
+        }
+      },
+      "operations": {
+        "find_transaction_by_hash": {
+          "measured_path": "csv_partition_polars.find_transaction_by_hash(); scans sorted YYYY/MM partitions and loads full partition DataFrames.",
+          "targets": {
+            "first_partition": {
+              "target": {
+                "row_hash": "0000000000000000",
+                "expected_found": true,
+                "description": "Best-case hit in the first scanned partition."
+              },
+              "measurement": {
+                "cold_seconds": 0.18625587492715567,
+                "warm": {
+                  "mean": 0.1837484163309758,
+                  "median": 0.1820366659667343,
+                  "min": 0.1803463330725208,
+                  "max": 0.1888622499536723,
+                  "p95": 0.1888622499536723,
+                  "std_dev": 0.0045086336138325704
+                },
+                "cold_result": {
+                  "found": true,
+                  "row_hash": "0000000000000000",
+                  "partition": "2024-01",
+                  "partition_rows": 1000
+                },
+                "last_warm_result": {
+                  "found": true,
+                  "row_hash": "0000000000000000",
+                  "partition": "2024-01",
+                  "partition_rows": 1000
+                }
+              }
+            },
+            "middle_partition": {
+              "target": {
+                "row_hash": "0000001e000001f4",
+                "expected_found": true,
+                "description": "Representative hit after scanning about half the partitions."
+              },
+              "measurement": {
+                "cold_seconds": 0.18253608304075897,
+                "warm": {
+                  "mean": 0.18191849999129772,
+                  "median": 0.18198674998711795,
+                  "min": 0.18163412506692111,
+                  "max": 0.1821346249198541,
+                  "p95": 0.1821346249198541,
+                  "std_dev": 0.00025713531874011695
+                },
+                "cold_result": {
+                  "found": true,
+                  "row_hash": "0000001e000001f4",
+                  "partition": "2026-07",
+                  "partition_rows": 1000
+                },
+                "last_warm_result": {
+                  "found": true,
+                  "row_hash": "0000001e000001f4",
+                  "partition": "2026-07",
+                  "partition_rows": 1000
+                }
+              }
+            },
+            "last_partition": {
+              "target": {
+                "row_hash": "0000003b000003e7",
+                "expected_found": true,
+                "description": "Worst-case hit in the final scanned partition."
+              },
+              "measurement": {
+                "cold_seconds": 0.18225474993232638,
+                "warm": {
+                  "mean": 0.22238448607580116,
+                  "median": 0.19286245806142688,
+                  "min": 0.18293712509330362,
+                  "max": 0.29135387507267296,
+                  "p95": 0.29135387507267296,
+                  "std_dev": 0.05993505253675344
+                },
+                "cold_result": {
+                  "found": true,
+                  "row_hash": "0000003b000003e7",
+                  "partition": "2028-12",
+                  "partition_rows": 1000
+                },
+                "last_warm_result": {
+                  "found": true,
+                  "row_hash": "0000003b000003e7",
+                  "partition": "2028-12",
+                  "partition_rows": 1000
+                }
+              }
+            },
+            "missing_hash": {
+              "target": {
+                "row_hash": "ffffffffffffffff",
+                "expected_found": false,
+                "description": "Worst-case miss after scanning all partitions."
+              },
+              "measurement": {
+                "cold_seconds": 0.2225938750198111,
+                "warm": {
+                  "mean": 0.1963740549981594,
+                  "median": 0.19813733303453773,
+                  "min": 0.18893091601785272,
+                  "max": 0.20205391594208777,
+                  "p95": 0.20205391594208777,
+                  "std_dev": 0.006736849696115307
+                },
+                "cold_result": {
+                  "found": false,
+                  "row_hash": "ffffffffffffffff"
+                },
+                "last_warm_result": {
+                  "found": false,
+                  "row_hash": "ffffffffffffffff"
+                }
+              }
+            }
+          }
+        },
+        "manual_edit_round_trip": {
+          "measured_path": "find_transaction_by_hash() plus rewriting the matching monthly partition with write_month().",
+          "target": {
+            "row_hash": "0000003b000003e7",
+            "description": "Worst-case manual edit target in the final partition."
+          },
+          "measurement": {
+            "cold_seconds": 0.21251591690815985,
+            "warm": {
+              "mean": 0.21798526398682347,
+              "median": 0.22037549992091954,
+              "min": 0.21195879206061363,
+              "max": 0.2216214999789372,
+              "p95": 0.2216214999789372,
+              "std_dev": 0.005256129939812314
+            },
+            "cold_result": {
+              "row_hash": "0000003b000003e7",
+              "partition": "2028-12",
+              "partition_rows": 1000,
+              "file_size_bytes": 177949
+            },
+            "last_warm_result": {
+              "row_hash": "0000003b000003e7",
+              "partition": "2028-12",
+              "partition_rows": 1000,
+              "file_size_bytes": 177949
+            }
+          }
+        },
+        "ephemeral_row_hash_map": {
+          "measured_path": "Experimental in-memory row_hash -> YYYY-MM map built from synthetic partitions. This is not a production artifact.",
+          "build": {
+            "cold_seconds": 0.03994020796380937,
+            "warm": {
+              "mean": 0.041996014304459095,
+              "median": 0.04063170903827995,
+              "min": 0.03893679194152355,
+              "max": 0.04641954193357378,
+              "p95": 0.04641954193357378,
+              "std_dev": 0.00392350398309662
+            },
+            "cold_result": {
+              "entries": 60000,
+              "partitions": 60
+            },
+            "last_warm_result": {
+              "entries": 60000,
+              "partitions": 60
+            }
+          },
+          "probe": {
+            "cold_seconds": 0.0005329999839887023,
+            "warm": {
+              "mean": 0.0005339302976305286,
+              "median": 0.0005287079839035869,
+              "min": 0.0005279579199850559,
+              "max": 0.000545124989002943,
+              "p95": 0.000545124989002943,
+              "std_dev": 9.702138174813738e-06,
+              "mean_per_lookup_seconds": 5.339302976305286e-08
+            },
+            "cold_result": {
+              "probe_count": 10000,
+              "found": 7500,
+              "missing": 2500
+            },
+            "last_warm_result": {
+              "probe_count": 10000,
+              "found": 7500,
+              "missing": 2500
+            }
+          }
+        }
+      }
+    },
+    "stress_120k": {
+      "dataset": {
+        "partitions": 120,
+        "rows_per_partition": 1000,
+        "total_rows": 120000,
+        "schema_columns": 26,
+        "schema_source": "finjuice.pipeline.storage.csv_partition_polars.CSV_COLUMNS",
+        "distinct_months": 120,
+        "month_range": {
+          "start": "2024-01",
+          "end": "2033-12"
+        }
+      },
+      "operations": {
+        "find_transaction_by_hash": {
+          "measured_path": "csv_partition_polars.find_transaction_by_hash(); scans sorted YYYY/MM partitions and loads full partition DataFrames.",
+          "targets": {
+            "first_partition": {
+              "target": {
+                "row_hash": "0000000000000000",
+                "expected_found": true,
+                "description": "Best-case hit in the first scanned partition."
+              },
+              "measurement": {
+                "cold_seconds": 0.3627797500230372,
+                "warm": {
+                  "mean": 0.37076668029961485,
+                  "median": 0.36473375000059605,
+                  "min": 0.35921999998390675,
+                  "max": 0.3883462909143418,
+                  "p95": 0.3883462909143418,
+                  "std_dev": 0.01547198732663973
+                },
+                "cold_result": {
+                  "found": true,
+                  "row_hash": "0000000000000000",
+                  "partition": "2024-01",
+                  "partition_rows": 1000
+                },
+                "last_warm_result": {
+                  "found": true,
+                  "row_hash": "0000000000000000",
+                  "partition": "2024-01",
+                  "partition_rows": 1000
+                }
+              }
+            },
+            "middle_partition": {
+              "target": {
+                "row_hash": "0000003c000001f4",
+                "expected_found": true,
+                "description": "Representative hit after scanning about half the partitions."
+              },
+              "measurement": {
+                "cold_seconds": 0.37978554191067815,
+                "warm": {
+                  "mean": 0.389579347295997,
+                  "median": 0.3889167089946568,
+                  "min": 0.38672195794060826,
+                  "max": 0.39309937495272607,
+                  "p95": 0.39309937495272607,
+                  "std_dev": 0.0032399350418511022
+                },
+                "cold_result": {
+                  "found": true,
+                  "row_hash": "0000003c000001f4",
+                  "partition": "2029-01",
+                  "partition_rows": 1000
+                },
+                "last_warm_result": {
+                  "found": true,
+                  "row_hash": "0000003c000001f4",
+                  "partition": "2029-01",
+                  "partition_rows": 1000
+                }
+              }
+            },
+            "last_partition": {
+              "target": {
+                "row_hash": "00000077000003e7",
+                "expected_found": true,
+                "description": "Worst-case hit in the final scanned partition."
+              },
+              "measurement": {
+                "cold_seconds": 0.3840775419957936,
+                "warm": {
+                  "mean": 0.36272258299868554,
+                  "median": 0.36208758293651044,
+                  "min": 0.36157287505920976,
+                  "max": 0.3645072910003364,
+                  "p95": 0.3645072910003364,
+                  "std_dev": 0.0015668816286198279
+                },
+                "cold_result": {
+                  "found": true,
+                  "row_hash": "00000077000003e7",
+                  "partition": "2033-12",
+                  "partition_rows": 1000
+                },
+                "last_warm_result": {
+                  "found": true,
+                  "row_hash": "00000077000003e7",
+                  "partition": "2033-12",
+                  "partition_rows": 1000
+                }
+              }
+            },
+            "missing_hash": {
+              "target": {
+                "row_hash": "ffffffffffffffff",
+                "expected_found": false,
+                "description": "Worst-case miss after scanning all partitions."
+              },
+              "measurement": {
+                "cold_seconds": 0.3634841670282185,
+                "warm": {
+                  "mean": 0.36103363866762567,
+                  "median": 0.36086662497837096,
+                  "min": 0.3594875830458477,
+                  "max": 0.3627467079786584,
+                  "p95": 0.3627467079786584,
+                  "std_dev": 0.0016359688295367622
+                },
+                "cold_result": {
+                  "found": false,
+                  "row_hash": "ffffffffffffffff"
+                },
+                "last_warm_result": {
+                  "found": false,
+                  "row_hash": "ffffffffffffffff"
+                }
+              }
+            }
+          }
+        },
+        "manual_edit_round_trip": {
+          "measured_path": "find_transaction_by_hash() plus rewriting the matching monthly partition with write_month().",
+          "target": {
+            "row_hash": "00000077000003e7",
+            "description": "Worst-case manual edit target in the final partition."
+          },
+          "measurement": {
+            "cold_seconds": 0.3800783329643309,
+            "warm": {
+              "mean": 0.39932944466515136,
+              "median": 0.4037462919950485,
+              "min": 0.3808385420124978,
+              "max": 0.4134034999879077,
+              "p95": 0.4134034999879077,
+              "std_dev": 0.01672574444491989
+            },
+            "cold_result": {
+              "row_hash": "00000077000003e7",
+              "partition": "2033-12",
+              "partition_rows": 1000,
+              "file_size_bytes": 177425
+            },
+            "last_warm_result": {
+              "row_hash": "00000077000003e7",
+              "partition": "2033-12",
+              "partition_rows": 1000,
+              "file_size_bytes": 177425
+            }
+          }
+        },
+        "ephemeral_row_hash_map": {
+          "measured_path": "Experimental in-memory row_hash -> YYYY-MM map built from synthetic partitions. This is not a production artifact.",
+          "build": {
+            "cold_seconds": 0.07630670897196978,
+            "warm": {
+              "mean": 0.07576013864794125,
+              "median": 0.07588133297394961,
+              "min": 0.07548650004900992,
+              "max": 0.07591258292086422,
+              "p95": 0.07591258292086422,
+              "std_dev": 0.00023749253022857053
+            },
+            "cold_result": {
+              "entries": 120000,
+              "partitions": 120
+            },
+            "last_warm_result": {
+              "entries": 120000,
+              "partitions": 120
+            }
+          },
+          "probe": {
+            "cold_seconds": 0.0005296249873936176,
+            "warm": {
+              "mean": 0.0005402083819111189,
+              "median": 0.000530916964635253,
+              "min": 0.000526708085089922,
+              "max": 0.0005630000960081816,
+              "p95": 0.0005630000960081816,
+              "std_dev": 1.9850071545676177e-05,
+              "mean_per_lookup_seconds": 5.402083819111189e-08
+            },
+            "cold_result": {
+              "probe_count": 10000,
+              "found": 7500,
+              "missing": 2500
+            },
+            "last_warm_result": {
+              "probe_count": 10000,
+              "found": 7500,
+              "missing": 2500
+            }
+          }
+        }
+      }
+    }
+  }
+}

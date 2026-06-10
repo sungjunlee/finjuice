@@ -1,0 +1,124 @@
+{
+  "$defs": {
+    "tagging_review_terms": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Canonical tagging/review terminology for this JSON contract.",
+      "properties": {
+        "needs_review": {
+          "description": "The explicit row flag needs_review == 1, not every row shown by review.",
+          "type": "string"
+        },
+        "rule_matched": {
+          "description": "A transaction with rule-derived output: non-empty tags_rule or non-empty category_rule.",
+          "type": "string"
+        },
+        "suggestable_untagged": {
+          "description": "An untagged transaction eligible for rules suggest after excluding confirmed internal transfer pairs.",
+          "type": "string"
+        },
+        "uncategorized": {
+          "description": "A transaction whose category_final is the fallback category 미분류.",
+          "type": "string"
+        },
+        "untagged": {
+          "description": "A transaction whose tags_final is null or an empty tag array.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$id": "rules_suggest.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "applied": {
+      "type": "integer"
+    },
+    "coverage_after_pct": {
+      "type": "number"
+    },
+    "coverage_before_pct": {
+      "type": "number"
+    },
+    "dry_run": {
+      "type": "boolean"
+    },
+    "message": {
+      "type": "string"
+    },
+    "rules_file": {
+      "type": "string"
+    },
+    "rules_file_modified": {
+      "type": "boolean"
+    },
+    "skipped": {
+      "type": "integer"
+    },
+    "suggestable_coverage_before_pct": {
+      "type": "number"
+    },
+    "suggestable_total_count": {
+      "type": "integer"
+    },
+    "suggestable_untagged_count": {
+      "type": "integer"
+    },
+    "suggestions": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "total_count": {
+      "type": "integer"
+    },
+    "transfer_exclusions": {
+      "additionalProperties": true,
+      "properties": {
+        "definition": {
+          "type": "string"
+        },
+        "excluded_count": {
+          "type": "integer"
+        },
+        "excluded_untagged_count": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "excluded_count",
+        "excluded_untagged_count",
+        "definition"
+      ],
+      "type": "object"
+    },
+    "untagged_count": {
+      "type": "integer"
+    },
+    "would_apply": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta"
+  ],
+  "title": "rules suggest --json output",
+  "type": "object",
+  "x-finjuice-field-definitions": {
+    "suggestable_untagged_count": "suggestable_untagged",
+    "transfer_exclusions.excluded_untagged_count": "untagged rows excluded from rule suggestions because they are confirmed transfer pairs",
+    "untagged_count": "untagged"
+  }
+}

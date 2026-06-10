@@ -1,0 +1,76 @@
+{
+  "$id": "rules_test.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "cross_tags_top": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "tag": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tag",
+          "count"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "match_count": {
+      "type": "integer"
+    },
+    "monthly_distribution": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "rule_name": {
+      "type": "string"
+    },
+    "sample": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "scope": {
+      "additionalProperties": true,
+      "properties": {
+        "month": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "total_rows_scanned": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "month",
+        "total_rows_scanned"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "_meta",
+    "rule_name",
+    "scope",
+    "match_count",
+    "sample",
+    "monthly_distribution",
+    "cross_tags_top"
+  ],
+  "title": "rules test --json output",
+  "type": "object"
+}

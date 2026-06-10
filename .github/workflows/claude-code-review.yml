@@ -1,0 +1,99 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    # Optional: Only run on specific file changes
+    # paths:
+    #   - "src/**/*.ts"
+    #   - "src/**/*.tsx"
+    #   - "src/**/*.js"
+    #   - "src/**/*.jsx"
+
+permissions:
+  contents: read
+
+jobs:
+  public-feedback:
+    name: Public Claude Review Feedback
+    if: |
+      github.event_name == 'pull_request' &&
+      !(
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        (
+          contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association) ||
+          contains(fromJSON('["sungjunlee"]'), github.event.pull_request.user.login)
+        )
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Summarize public PR AI policy
+        run: |
+          {
+            echo "## Claude Code Review"
+            echo ""
+            echo "Secret-backed Claude review is skipped for public or fork pull requests."
+            echo "Use the Public PR CI gate for fork-safe feedback."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  claude-review:
+    if: |
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association) ||
+        contains(fromJSON('["sungjunlee"]'), github.event.pull_request.user.login)
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 1
+
+      - name: Detect Claude review credentials
+        id: creds
+        run: |
+          if [ -n "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}" ] || [ -n "${{ secrets.ANTHROPIC_API_KEY }}" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "Claude review credentials detected."
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Skipping Claude Code Review because CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY is not configured."
+          fi
+
+      - name: Run Claude Code Review
+        id: claude-review
+        if: steps.creds.outputs.enabled == 'true'
+        uses: anthropics/claude-code-action@11ba60486e4aec9ddfeafcf4bb3f00b028ac2c16
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Please review this pull request and provide feedback on:
+            - Code quality and best practices
+            - Potential bugs or issues
+            - Performance considerations
+            - Security concerns
+            - Test coverage
+
+            Use the repository's CLAUDE.md for guidance on style and conventions. Be constructive and helpful in your feedback.
+
+            Use `gh pr comment` with your Bash tool to leave your review as a comment on the PR.
+
+          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
+          # or https://docs.claude.com/en/docs/claude-code/cli-reference for available options
+          claude_args: '--allowed-tools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'

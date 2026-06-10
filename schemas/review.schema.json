@@ -1,0 +1,330 @@
+{
+  "$defs": {
+    "tagging_review_terms": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Canonical tagging/review terminology for this JSON contract.",
+      "properties": {
+        "needs_review": {
+          "description": "The explicit row flag needs_review == 1, not every row shown by review.",
+          "type": "string"
+        },
+        "rule_matched": {
+          "description": "A transaction with rule-derived output: non-empty tags_rule or non-empty category_rule.",
+          "type": "string"
+        },
+        "suggestable_untagged": {
+          "description": "An untagged transaction eligible for rules suggest after excluding confirmed internal transfer pairs.",
+          "type": "string"
+        },
+        "uncategorized": {
+          "description": "A transaction whose category_final is the fallback category 미분류.",
+          "type": "string"
+        },
+        "untagged": {
+          "description": "A transaction whose tags_final is null or an empty tag array.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$id": "review.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "_meta": {
+            "properties": {
+              "privacy": {
+                "properties": {
+                  "profile": {
+                    "enum": [
+                      "raw",
+                      "redacted"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "profile"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "privacy"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "_meta"
+        ],
+        "type": "object"
+      },
+      "then": {
+        "properties": {
+          "rule_notes": {
+            "items": {
+              "required": [
+                "rule_name",
+                "notes",
+                "tags"
+              ]
+            },
+            "type": "array"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "_meta": {
+            "properties": {
+              "privacy": {
+                "properties": {
+                  "profile": {
+                    "enum": [
+                      "compact"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "profile"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "privacy"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "_meta"
+        ],
+        "type": "object"
+      },
+      "then": {
+        "properties": {
+          "rule_notes": {
+            "items": {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "rule_name"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "notes"
+                    ]
+                  }
+                ]
+              }
+            },
+            "type": "array"
+          }
+        }
+      }
+    }
+  ],
+  "description": "review --json output. The raw and redacted privacy profiles keep full rule note shape; compact rule notes omit merchant-derived rule names and free-text notes.",
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "actionable": {
+      "type": "boolean"
+    },
+    "filters": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "health": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "month": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "next_steps": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "signal": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "signal",
+          "message",
+          "command"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "pagination": {
+      "$ref": "_pagination.schema.json"
+    },
+    "rule_notes": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "rule_name": {
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "signals": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "total_count": {
+      "type": "integer"
+    },
+    "transactions": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "amount": {
+            "type": [
+              "integer",
+              "number",
+              "null"
+            ]
+          },
+          "category_final": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confidence": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "merchant_raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "needs_review": {
+            "type": [
+              "boolean",
+              "integer",
+              "null"
+            ]
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "row_hash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rule_matched": {
+            "type": "boolean"
+          },
+          "severity": {
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "type": "string"
+          },
+          "tags_final": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "row_hash",
+          "needs_review",
+          "rule_matched",
+          "reasons",
+          "severity"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "transactions",
+    "total_count",
+    "filters",
+    "month",
+    "health",
+    "actionable",
+    "signals",
+    "rule_notes",
+    "next_steps",
+    "pagination"
+  ],
+  "title": "review --json output",
+  "type": "object",
+  "x-finjuice-field-definitions": {
+    "signals.needs_review_count": "needs_review",
+    "signals.needs_review_flag_count": "needs_review",
+    "signals.rule_matched_count": "rule_matched",
+    "signals.uncategorized_count": "uncategorized",
+    "signals.unclassified_count": "uncategorized",
+    "signals.untagged_count": "untagged",
+    "transactions[].needs_review": "needs_review",
+    "transactions[].reasons": "review reason labels",
+    "transactions[].rule_matched": "rule_matched",
+    "transactions[].severity": "highest severity derived from review reasons"
+  }
+}

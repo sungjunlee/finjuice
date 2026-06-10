@@ -1,0 +1,12 @@
+version: 1
+rules:
+  - name: invalid_priority_string
+    match: "test"
+    fields: [merchant_raw]
+    tags: ["test"]
+    priority: "not_a_number"  # Should be int
+  - name: invalid_priority_negative
+    match: "test2"
+    fields: [merchant_raw]
+    tags: ["test2"]
+    priority: -100  # Negative priority

@@ -1,0 +1,70 @@
+{
+  "$id": "history.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "count": {
+      "type": "integer"
+    },
+    "records": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "archived": {
+            "type": [
+              "boolean",
+              "string",
+              "null"
+            ]
+          },
+          "archived_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "file_id": {
+            "type": "string"
+          },
+          "imported_at": {
+            "type": "string"
+          },
+          "imported_from": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "original_filename": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_rows": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "file_id",
+          "imported_at"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "records",
+    "count"
+  ],
+  "title": "history --json output",
+  "type": "object"
+}

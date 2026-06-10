@@ -1,0 +1,54 @@
+{
+  "$id": "journal_list.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "count": {
+      "type": "integer"
+    },
+    "entries": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "created": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "filename": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "size_bytes": {
+            "type": "integer"
+          },
+          "topic": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "filename",
+          "topic",
+          "created",
+          "size_bytes"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "entries",
+    "count"
+  ],
+  "title": "journal list --json output",
+  "type": "object"
+}

@@ -1,0 +1,71 @@
+{
+  "$id": "budget_edit.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "changes": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "new": {},
+          "old": {},
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "old",
+          "new"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "monthly_budget": {
+      "additionalProperties": true,
+      "properties": {
+        "categories": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "notes": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "total": {
+          "type": "integer"
+        },
+        "updated": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "total",
+        "categories",
+        "updated",
+        "notes"
+      ],
+      "type": "object"
+    },
+    "path": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "path",
+    "changes",
+    "monthly_budget"
+  ],
+  "title": "budget edit --json output",
+  "type": "object"
+}

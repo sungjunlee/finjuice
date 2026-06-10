@@ -1,0 +1,65 @@
+{
+  "$id": "explain.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "candidates": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "classification": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "date_filter": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "match_count": {
+      "type": "integer"
+    },
+    "matches": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "query": {
+      "type": "string"
+    },
+    "rule_trace": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "selected_index": {
+      "type": "integer"
+    },
+    "transaction": {
+      "type": [
+        "object",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "_meta",
+    "query",
+    "date_filter"
+  ],
+  "title": "explain --json output",
+  "type": "object"
+}

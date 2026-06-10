@@ -1,0 +1,51 @@
+{
+  "$id": "tag.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "coverage_pct": {
+      "type": "number"
+    },
+    "dry_run": {
+      "type": "boolean"
+    },
+    "operation": {
+      "type": "string"
+    },
+    "partition": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "row_hash": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string"
+    },
+    "tagged": {
+      "type": "integer"
+    },
+    "total": {
+      "type": "integer"
+    },
+    "transaction": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "untagged": {
+      "type": "integer"
+    },
+    "updated": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "_meta",
+    "status"
+  ],
+  "title": "tag --json output",
+  "type": "object"
+}

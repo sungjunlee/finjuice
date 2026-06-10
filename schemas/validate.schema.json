@@ -1,0 +1,65 @@
+{
+  "$id": "validate.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "valid": {
+      "type": "boolean"
+    },
+    "partitions_checked": {
+      "type": "integer"
+    },
+    "valid_count": {
+      "type": "integer"
+    },
+    "invalid_count": {
+      "type": "integer"
+    },
+    "results": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "compatibility_state": {
+            "type": "string"
+          },
+          "detected_version": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "path": {
+            "type": "string"
+          },
+          "valid": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "valid",
+          "errors",
+          "detected_version",
+          "compatibility_state",
+          "path"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "valid",
+    "partitions_checked",
+    "valid_count",
+    "invalid_count",
+    "results"
+  ],
+  "title": "validate --json output",
+  "type": "object"
+}

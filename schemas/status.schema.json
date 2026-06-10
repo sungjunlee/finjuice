@@ -1,0 +1,405 @@
+{
+  "$defs": {
+    "tagging_review_terms": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Canonical tagging/review terminology for this JSON contract.",
+      "properties": {
+        "needs_review": {
+          "description": "The explicit row flag needs_review == 1, not every row shown by review.",
+          "type": "string"
+        },
+        "rule_matched": {
+          "description": "A transaction with rule-derived output: non-empty tags_rule or non-empty category_rule.",
+          "type": "string"
+        },
+        "suggestable_untagged": {
+          "description": "An untagged transaction eligible for rules suggest after excluding confirmed internal transfer pairs.",
+          "type": "string"
+        },
+        "uncategorized": {
+          "description": "A transaction whose category_final is the fallback category 미분류.",
+          "type": "string"
+        },
+        "untagged": {
+          "description": "A transaction whose tags_final is null or an empty tag array.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$id": "status.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "actionable": {
+      "type": "boolean"
+    },
+    "data_directory": {
+      "additionalProperties": true,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "source"
+      ],
+      "type": "object"
+    },
+    "detailed_stats": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "detailed_stats_warning": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "health": {
+      "additionalProperties": true,
+      "properties": {
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "warning",
+            "critical"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "reasons"
+      ],
+      "type": "object"
+    },
+    "last_import": {
+      "additionalProperties": true,
+      "properties": {
+        "file_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "imported_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "imported_at",
+        "file_id"
+      ],
+      "type": "object"
+    },
+    "next_steps": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "signal": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "signal",
+          "message",
+          "command"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "rules_file": {
+      "additionalProperties": true,
+      "properties": {
+        "exists": {
+          "type": "boolean"
+        },
+        "modified_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "exists",
+        "modified_at"
+      ],
+      "type": "object"
+    },
+    "signals": {
+      "additionalProperties": true,
+      "properties": {
+        "detailed_requested": {
+          "type": "boolean"
+        },
+        "filters_applied": {
+          "type": "integer"
+        },
+        "rules_file_exists": {
+          "type": "boolean"
+        },
+        "tagging_rate": {
+          "type": "number"
+        },
+        "untagged_count": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "rules_file_exists",
+        "tagging_rate",
+        "untagged_count",
+        "filters_applied",
+        "detailed_requested"
+      ],
+      "type": "object"
+    },
+    "tagging": {
+      "additionalProperties": true,
+      "properties": {
+        "suggestable_tagged_count": {
+          "type": "integer"
+        },
+        "suggestable_tagging_rate": {
+          "type": "number"
+        },
+        "suggestable_transaction_count": {
+          "type": "integer"
+        },
+        "suggestable_untagged_count": {
+          "type": "integer"
+        },
+        "tagged_count": {
+          "type": "integer"
+        },
+        "tagging_rate": {
+          "type": "number"
+        },
+        "transfer_candidate_count": {
+          "type": "integer"
+        },
+        "transfer_excluded_count": {
+          "type": "integer"
+        },
+        "transfer_excluded_untagged_count": {
+          "type": "integer"
+        },
+        "transfer_exclusions": {
+          "additionalProperties": true,
+          "properties": {
+            "candidate_count": {
+              "type": "integer"
+            },
+            "confirmed_count": {
+              "type": "integer"
+            },
+            "definition": {
+              "type": "string"
+            },
+            "excluded_count": {
+              "type": "integer"
+            },
+            "excluded_untagged_count": {
+              "type": "integer"
+            },
+            "unconfirmed_candidate_count": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "excluded_count",
+            "confirmed_count",
+            "candidate_count",
+            "unconfirmed_candidate_count",
+            "excluded_untagged_count",
+            "definition"
+          ],
+          "type": "object"
+        },
+        "unconfirmed_transfer_candidate_count": {
+          "type": "integer"
+        },
+        "untagged_count": {
+          "type": "integer"
+        },
+        "untagged_merchants": {
+          "items": {
+            "additionalProperties": true,
+            "properties": {
+              "count": {
+                "type": "integer"
+              },
+              "merchant": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "merchant",
+              "count"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "untagged_merchants_total": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "tagged_count",
+        "untagged_count",
+        "tagging_rate",
+        "suggestable_transaction_count",
+        "suggestable_tagged_count",
+        "suggestable_untagged_count",
+        "suggestable_tagging_rate",
+        "transfer_candidate_count",
+        "transfer_excluded_count",
+        "transfer_excluded_untagged_count",
+        "unconfirmed_transfer_candidate_count",
+        "transfer_exclusions",
+        "untagged_merchants",
+        "untagged_merchants_total"
+      ],
+      "type": "object"
+    },
+    "terminology": {
+      "additionalProperties": true,
+      "properties": {
+        "definitions": {
+          "additionalProperties": true,
+          "properties": {
+            "needs_review": {
+              "type": "string"
+            },
+            "rule_matched": {
+              "type": "string"
+            },
+            "suggestable_untagged": {
+              "type": "string"
+            },
+            "uncategorized": {
+              "type": "string"
+            },
+            "untagged": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "untagged",
+            "uncategorized",
+            "rule_matched",
+            "needs_review",
+            "suggestable_untagged"
+          ],
+          "type": "object"
+        },
+        "reference": {
+          "type": "string"
+        },
+        "schema": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "reference",
+        "schema",
+        "definitions"
+      ],
+      "type": "object"
+    },
+    "transactions": {
+      "additionalProperties": true,
+      "properties": {
+        "count": {
+          "type": "integer"
+        },
+        "date_range": {
+          "additionalProperties": true,
+          "properties": {
+            "end": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "start": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "start",
+            "end"
+          ],
+          "type": "object"
+        },
+        "partition_count": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "count",
+        "date_range",
+        "partition_count"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "_meta",
+    "data_directory",
+    "transactions",
+    "last_import",
+    "terminology",
+    "tagging",
+    "rules_file",
+    "health",
+    "actionable",
+    "signals",
+    "next_steps"
+  ],
+  "title": "status --json output",
+  "type": "object",
+  "x-finjuice-field-definitions": {
+    "health.reasons.low_untagged_remainder": "non-alarming health cue when suggestable_untagged is small and coverage is >= 99%",
+    "tagging.suggestable_untagged_count": "suggestable_untagged",
+    "tagging.transfer_excluded_untagged_count": "untagged rows excluded from suggestable_untagged because they are confirmed transfer pairs",
+    "tagging.untagged_count": "untagged",
+    "terminology.reference": "schema documentation link for tagging/review terms"
+  }
+}

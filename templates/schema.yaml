@@ -1,0 +1,877 @@
+# Schema Registry for CSV Partition Storage
+# Tracks schema versions, column definitions, and migration history
+# This file serves as the source of truth for data schema evolution
+
+# Schema File Format Version
+schema_file_version: 1
+
+# Current Active Schema
+current_version: 4
+minimum_compatible_version: 2
+
+# Registry Metadata
+metadata:
+  created_at: "2025-11-04"
+  updated_at: "2026-06-09"
+  project: "finjuice"
+  storage_type: "csv_partition"
+  partition_pattern: "data/transactions/YYYY/MM/transactions.csv"
+  description: "Personal finance transaction data partitioned by year/month"
+
+# Schema Definitions
+schemas:
+  v4:
+    active: true
+    introduced: "2026-06-09"
+    issue: "#14"
+    description: "Row-level manual notes plus category system for accurate report aggregation"
+    read_compatible_missing_columns:
+      ["category_rule", "category_final", "is_transfer_candidate", "notes_manual"]
+
+    # Performance Metrics
+    metrics:
+      csv_columns: 28
+      new_columns: ["notes_manual"]
+      category_priority_chain: "manual category override > category_rule > minor_raw > major_raw > '미분류'"
+      aggregation_accuracy: "100% (no duplicate counting)"
+      note: "Separates category (single, for aggregation), tags (multiple, for filtering), and transfer candidate vs confirmed state"
+
+    # Partition Configuration
+    partition_schema:
+      location_pattern: "data/transactions/YYYY/MM/transactions.csv"
+      format: "CSV"
+      encoding: "utf-8"
+      delimiter: ","
+      header: true
+      sort_by: "datetime"
+      line_terminator: "\n"
+
+      # Column Definitions (28 columns - v3 plus notes_manual)
+      columns:
+        # ========================================
+        # Identity & Deduplication
+        # ========================================
+        - name: row_hash
+          type: string
+          length: 16
+          nullable: false
+          description: "SHA256[:16] transaction hash for deduplication"
+          pattern: "^[0-9a-f]{16}$"
+          example: "ac875c7391d4e2f8"
+          note: "Increased from 10 to 16 chars (Issue #81) for negligible collision risk"
+
+        # ========================================
+        # Temporal Fields
+        # ========================================
+        - name: date
+          type: date
+          format: "YYYY-MM-DD"
+          nullable: false
+          description: "Transaction date"
+          example: "2025-07-23"
+
+        - name: time
+          type: time
+          format: "HH:MM"
+          nullable: false
+          description: "Transaction time (24-hour format)"
+          example: "08:33"
+
+        # ========================================
+        # Transaction Type
+        # ========================================
+        - name: type_raw
+          type: string
+          nullable: true
+          description: "Raw transaction type from Banksalad export"
+          example: "지출"
+          values: ["지출", "수입", "이체"]
+
+        - name: type_norm
+          type: string
+          nullable: false
+          enum: ["expense", "income", "transfer", "other"]
+          description: "Normalized transaction type for analytics"
+          mapping:
+            expense: "Expenses (negative amount)"
+            income: "Income (positive amount)"
+            transfer: "Internal transfers (excluded from reports)"
+            other: "Unclassified transactions"
+
+        # ========================================
+        # Categories (Banksalad Native)
+        # ========================================
+        - name: major_raw
+          type: string
+          nullable: true
+          description: "Major category from Banksalad (대분류)"
+          example: "식비"
+          note: "Preserved as-is from Banksalad, used as category fallback"
+
+        - name: minor_raw
+          type: string
+          nullable: true
+          description: "Minor category from Banksalad (소분류)"
+          example: "카페"
+          note: "Preserved as-is from Banksalad, used as category fallback (priority over major_raw)"
+
+        # ========================================
+        # Transaction Details
+        # ========================================
+        - name: merchant_raw
+          type: string
+          nullable: true
+          description: "Merchant name from Banksalad export"
+          example: "(주)카카오"
+          note: "Used for rule matching and transfer detection"
+
+        - name: memo_raw
+          type: string
+          nullable: true
+          description: "User memo field from Banksalad export"
+          note: "Excluded from row_hash calculation"
+
+        - name: notes_manual
+          type: string
+          nullable: true
+          default: ""
+          description: "Manual row-level explanatory note controlled by finjuice users or agents"
+          example: "3개월 할부"
+          note: "Excluded from row_hash, tag aggregation, category aggregation, and audit content"
+
+        - name: amount
+          type: float
+          nullable: false
+          description: "Transaction amount (negative for expenses, positive for income)"
+          example: "152129.0"
+          convention: "Expenses are negative, income is positive"
+
+        - name: account
+          type: string
+          nullable: false
+          description: "Account or card name"
+          example: "삼성카드법인"
+          note: "Used for transfer pairing and account-level reports"
+
+        - name: currency
+          type: string
+          nullable: false
+          default: "KRW"
+          description: "Currency code (ISO 4217)"
+          example: "KRW"
+          note: "Currently only KRW supported"
+
+        - name: counterparty
+          type: string
+          nullable: true
+          description: "Counterparty account for transfer transactions"
+          example: "우리은행"
+          note: "Used for transfer detection"
+
+        - name: datetime
+          type: datetime
+          format: "ISO8601"
+          nullable: false
+          description: "Combined datetime for sorting and time-based matching"
+          example: "2025-07-23T08:33:00"
+          note: "Generated from date + time fields"
+
+        # ========================================
+        # Category System (NEW in v3 - Issue #166)
+        # ========================================
+        - name: category_rule
+          type: string
+          nullable: true
+          description: "Category assigned by rules.yaml (single value for aggregation)"
+          example: "온라인쇼핑"
+          note: "Set by the highest-priority matching enabled rule that has a non-empty category"
+
+        - name: category_final
+          type: string
+          nullable: false
+          default: "미분류"
+          description: "Final category for report aggregation (no duplicates)"
+          example: "온라인쇼핑"
+          calculation: "manual category override, then COALESCE(category_rule, minor_raw, major_raw, '미분류')"
+          note: "Manual category override wins; otherwise a single category value is used for spending reports"
+
+        # ========================================
+        # Tagging System (Attribute Tags for Filtering)
+        # ========================================
+        - name: tags_rule
+          type: json_array
+          nullable: false
+          default: "[]"
+          description: "Attribute tags applied by all matching enabled rules"
+          example: '["정기지출", "해외결제"]'
+          note: "Rules are evaluated by priority; matching rule tags are deduplicated while preserving first-seen order"
+
+        - name: tags_ai
+          type: json_array
+          nullable: false
+          default: "[]"
+          description: "AI-generated tags (optional, Phase 2+)"
+          example: '["업무식대"]'
+          note: "Not yet implemented"
+
+        - name: tags_manual
+          type: json_array
+          nullable: false
+          default: "[]"
+          description: "User-added tags via review queue"
+          example: '["의료"]'
+          note: "Visible manual tags merge into tags_final; an internal marker may persist a category_final override"
+
+        - name: tags_final
+          type: json_array
+          nullable: false
+          default: "[]"
+          description: "Final merged attribute tag list (rule + AI + manual)"
+          example: '["정기지출", "해외결제", "의료"]'
+          note: "Merges rule tags, AI tags, and visible manual tags with stable deduplication; not used for spending aggregation"
+
+        - name: confidence
+          type: float
+          nullable: true
+          range: [0.0, 1.0]
+          description: "Binary tagging coverage confidence, not model confidence"
+          example: 1.0
+          note: "Currently 1.0 when tags_final is non-empty, otherwise 0.0; below 0.7 triggers needs_review"
+
+        - name: needs_review
+          type: integer
+          nullable: true
+          enum: [0, 1]
+          description: "Flag derived from coverage confidence (1 when confidence < 0.7)"
+          default: 0
+
+        # ========================================
+        # Transfer Detection
+        # ========================================
+        - name: is_transfer_candidate
+          type: integer
+          nullable: true
+          enum: [0, 1]
+          description: "Transfer-like candidate flag from raw transaction type (1=candidate, not necessarily excluded)"
+          default: 0
+          detection: "Set when type_raw contains transfer-like text such as 이체"
+          note: "Candidates without a confirmed pair remain reportable spend"
+
+        - name: is_transfer
+          type: integer
+          nullable: true
+          enum: [0, 1]
+          description: "Confirmed internal transfer flag (1=confirmed paired transfer, excluded from expense reports)"
+          detection: "Matched by amount, time window (±5min), opposite signs, category, and currency"
+
+        - name: transfer_group_id
+          type: string
+          nullable: true
+          description: "Groups paired transfers (debit/credit)"
+          example: "transfer_20250723_152129"
+          note: "Same ID for both sides of a confirmed transfer; null for unconfirmed candidates"
+
+        # ========================================
+        # Source Tracking (Issue #59 Optimization)
+        # ========================================
+        - name: file_id
+          type: string
+          min_length: 8
+          common_length: 8
+          nullable: false
+          pattern: "^(?:\\d{6}_\\d+|[0-9a-f]{8})$"
+          description: "Compact source file identifier (YYMMDD_N or 8-char hash fallback)"
+          example: "241027_1"
+          examples: ["241027_1", "241027_100", "89dc2f27"]
+          references: "data/metadata/import_history.csv"
+          note: "Dated Banksalad filenames use YYMMDD_N; non-standard filenames use SHA256[:8]. Sequence suffixes may grow beyond one digit."
+
+        - name: source_row
+          type: integer
+          nullable: false
+          description: "Row number in source XLSX file (1-indexed)"
+          example: 597
+          note: "Enables traceability back to original import file"
+
+  v2:
+    active: false
+    introduced: "2025-11-03"
+    issue: "#59"
+    description: "CSV partition with optimized metadata (89% token reduction)"
+
+    # Performance Metrics
+    metrics:
+      csv_columns: 24
+      token_efficiency: "+89% metadata reduction"
+      row_hash_length: 16
+      file_id_common_length: 8
+      char_savings_per_row: 146
+      token_savings_estimate: "40-50% overall"
+      note: "Updated row_hash 10→16 chars (Issue #81): +6 chars per row; file_id is usually 8 chars but YYMMDD_N suffixes can grow"
+
+    # Partition Configuration
+    partition_schema:
+      location_pattern: "data/transactions/YYYY/MM/transactions.csv"
+      format: "CSV"
+      encoding: "utf-8"
+      delimiter: ","
+      header: true
+      sort_by: "datetime"
+      line_terminator: "\n"
+
+      # Column Definitions (24 columns)
+      columns:
+        # ========================================
+        # Identity & Deduplication
+        # ========================================
+        - name: row_hash
+          type: string
+          length: 16
+          nullable: false
+          description: "SHA256[:16] transaction hash for deduplication"
+          pattern: "^[0-9a-f]{16}$"
+          example: "ac875c7391d4e2f8"
+          note: "Increased from 10 to 16 chars (Issue #81) for negligible collision risk"
+
+        # ========================================
+        # Temporal Fields
+        # ========================================
+        - name: date
+          type: date
+          format: "YYYY-MM-DD"
+          nullable: false
+          description: "Transaction date"
+          example: "2025-07-23"
+
+        - name: time
+          type: time
+          format: "HH:MM"
+          nullable: false
+          description: "Transaction time (24-hour format)"
+          example: "08:33"
+
+        # ========================================
+        # Transaction Type
+        # ========================================
+        - name: type_raw
+          type: string
+          nullable: true
+          description: "Raw transaction type from Banksalad export"
+          example: "지출"
+          values: ["지출", "수입", "이체"]
+
+        - name: type_norm
+          type: string
+          nullable: false
+          enum: ["expense", "income", "transfer", "other"]
+          description: "Normalized transaction type for analytics"
+          mapping:
+            expense: "Expenses (negative amount)"
+            income: "Income (positive amount)"
+            transfer: "Internal transfers (excluded from reports)"
+            other: "Unclassified transactions"
+
+        # ========================================
+        # Categories (Banksalad Native)
+        # ========================================
+        - name: major_raw
+          type: string
+          nullable: true
+          description: "Major category from Banksalad (대분류)"
+          example: "식비"
+          note: "Preserved as-is from Banksalad, not overridden"
+
+        - name: minor_raw
+          type: string
+          nullable: true
+          description: "Minor category from Banksalad (소분류)"
+          example: "카페"
+          note: "Preserved as-is from Banksalad, not overridden"
+
+        # ========================================
+        # Transaction Details
+        # ========================================
+        - name: merchant_raw
+          type: string
+          nullable: true
+          description: "Merchant name from Banksalad export"
+          example: "(주)카카오"
+          note: "Used for rule matching and transfer detection"
+
+        - name: memo_raw
+          type: string
+          nullable: true
+          description: "User memo field from Banksalad export"
+          note: "Excluded from row_hash calculation"
+
+        - name: amount
+          type: float
+          nullable: false
+          description: "Transaction amount (negative for expenses, positive for income)"
+          example: "152129.0"
+          convention: "Expenses are negative, income is positive"
+
+        - name: account
+          type: string
+          nullable: false
+          description: "Account or card name"
+          example: "삼성카드법인"
+          note: "Used for transfer pairing and account-level reports"
+
+        - name: currency
+          type: string
+          nullable: false
+          default: "KRW"
+          description: "Currency code (ISO 4217)"
+          example: "KRW"
+          note: "Currently only KRW supported"
+
+        - name: counterparty
+          type: string
+          nullable: true
+          description: "Counterparty account for transfer transactions"
+          example: "우리은행"
+          note: "Used for transfer detection"
+
+        - name: datetime
+          type: datetime
+          format: "ISO8601"
+          nullable: false
+          description: "Combined datetime for sorting and time-based matching"
+          example: "2025-07-23T08:33:00"
+          note: "Generated from date + time fields"
+
+        # ========================================
+        # Tagging System (Hybrid: Rules + AI + Manual)
+        # ========================================
+        - name: tags_rule
+          type: json_array
+          nullable: false
+          default: "[]"
+          description: "Tags applied by matching rules.yaml rules"
+          example: '["보험", "정기지출"]'
+          note: "All matching enabled rules contribute tags in priority order"
+
+        - name: tags_ai
+          type: json_array
+          nullable: false
+          default: "[]"
+          description: "AI-generated tags (optional, Phase 2+)"
+          example: '["업무식대"]'
+          note: "Not yet implemented"
+
+        - name: tags_manual
+          type: json_array
+          nullable: false
+          default: "[]"
+          description: "User-added tags via review queue"
+          example: '["의료"]'
+          note: "Visible manual tags merge into tags_final"
+
+        - name: tags_final
+          type: json_array
+          nullable: false
+          default: "[]"
+          description: "Final merged tag list (rule + AI + manual)"
+          example: '["보험", "정기지출", "의료"]'
+          note: "Merges rule tags, AI tags, and visible manual tags with stable deduplication"
+
+        - name: confidence
+          type: float
+          nullable: true
+          range: [0.0, 1.0]
+          description: "Binary tagging coverage confidence, not model confidence"
+          example: 1.0
+          note: "Currently 1.0 when tags_final is non-empty, otherwise 0.0; below 0.7 triggers needs_review"
+
+        - name: needs_review
+          type: integer
+          nullable: true
+          enum: [0, 1]
+          description: "Flag derived from coverage confidence (1 when confidence < 0.7)"
+          default: 0
+
+        # ========================================
+        # Transfer Detection
+        # ========================================
+        - name: is_transfer
+          type: integer
+          nullable: true
+          enum: [0, 1]
+          description: "Internal transfer flag (1=transfer, excludes from expense reports)"
+          detection: "Matched by amount, time window (±5min), and accounts"
+
+        - name: transfer_group_id
+          type: string
+          nullable: true
+          description: "Groups paired transfers (debit/credit)"
+          example: "transfer_20250723_152129"
+          note: "Same ID for both sides of transfer"
+
+        # ========================================
+        # Source Tracking (Issue #59 Optimization)
+        # ========================================
+        - name: file_id
+          type: string
+          min_length: 8
+          common_length: 8
+          nullable: false
+          pattern: "^(?:\\d{6}_\\d+|[0-9a-f]{8})$"
+          description: "Compact source file identifier (YYMMDD_N or 8-char hash fallback)"
+          example: "241027_1"
+          examples: ["241027_1", "241027_100", "89dc2f27"]
+          references: "data/metadata/import_history.csv"
+          note: "Dated Banksalad filenames use YYMMDD_N; non-standard filenames use SHA256[:8]. Sequence suffixes may grow beyond one digit."
+
+        - name: source_row
+          type: integer
+          nullable: false
+          description: "Row number in source XLSX file (1-indexed)"
+          example: 597
+          note: "Enables traceability back to original import file"
+
+# Asset Snapshot Schema (Issue #223)
+asset_schemas:
+  snapshot_v0:
+    active: true
+    introduced: "2026-02-24"
+    issue: "#223"
+    description: "Snapshot-first asset SSOT separated from transaction domain"
+    partition_schema:
+      location_pattern: "data/assets/snapshots/YYYY/MM/snapshots.csv"
+      format: "CSV"
+      encoding: "utf-8"
+      delimiter: ","
+      header: true
+      sort_by: "snapshot_date,account_id,instrument_id"
+      line_terminator: "\n"
+    required_columns:
+      - snapshot_date
+      - account_id
+      - instrument_id
+      - quantity
+      - market_value
+      - currency
+      - file_id
+      - source_row
+    key_policy:
+      dedup_grain: "daily"
+      dedup_key: ["snapshot_date", "account_id", "instrument_id"]
+      account_id:
+        source_priority: ["account_id", "account_name"]
+        fallback: "acc_<sha256(normalized_source)[:12]>"
+      instrument_id:
+        source_priority: ["instrument_id", "instrument_name"]
+        fallback: "ins_<sha256(normalized_source)[:12]>"
+      snapshot_date:
+        source_priority: ["sheet_snapshot_date", "file_mtime_local_date"]
+    columns:
+      - name: snapshot_date
+        type: date
+        format: "YYYY-MM-DD"
+        nullable: false
+        description: "Snapshot 기준일"
+      - name: account_id
+        type: string
+        nullable: false
+        description: "계좌 식별자 (원본 우선, 없으면 파생 ID)"
+      - name: instrument_id
+        type: string
+        nullable: false
+        description: "종목 식별자 (원본 우선, 없으면 파생 ID)"
+      - name: quantity
+        type: float
+        nullable: false
+        description: "보유 수량"
+      - name: market_value
+        type: float
+        nullable: false
+        description: "평가 금액"
+      - name: currency
+        type: string
+        nullable: false
+        default: "KRW"
+        description: "통화 코드 (ISO 4217)"
+      - name: file_id
+        type: string
+        min_length: 8
+        common_length: 8
+        nullable: false
+        pattern: "^(?:\\d{6}_\\d+|[0-9a-f]{8})$"
+        description: "import_history.csv 연계 파일 식별자 (YYMMDD_N 또는 8-char hash fallback)"
+      - name: source_row
+        type: integer
+        nullable: false
+        description: "원본 시트 행 번호 (1-indexed)"
+
+# Migration History
+migrations:
+  - version: 3
+    from_version: 2
+    issue: "#166"
+    title: "Category System for Accurate Aggregation"
+    description: "Add category_rule and category_final fields to eliminate duplicate counting in reports"
+    script: "scripts/migrate_schema_v3.py"
+    author: "Claude Code"
+
+    # Detailed Changes
+    changes:
+      - type: "add"
+        field: "category_rule"
+        change: "New nullable string field for rule-based category"
+        impact: "+15 chars per row (average)"
+        purpose: "Single category from rules.yaml for spending aggregation"
+
+      - type: "add"
+        field: "category_final"
+        change: "Calculated category for aggregation (COALESCE chain)"
+        impact: "+15 chars per row (average)"
+        purpose: "Final category = manual override ?? category_rule ?? minor_raw ?? major_raw ?? '미분류'"
+
+      - type: "add"
+        field: "is_transfer_candidate"
+        change: "Added nullable integer flag for transfer-like raw rows before pair confirmation"
+        impact: "+2 chars per row (average)"
+        purpose: "Keep unpaired transfer-like spending reportable while still auditing candidates"
+
+      - type: "modify"
+        field: "is_transfer"
+        change: "Clarified as confirmed paired-transfer flag; report filters also require transfer_group_id"
+        impact: "Legacy unpaired rows with is_transfer=1 and blank transfer_group_id are no longer excluded"
+        purpose: "Separate candidate review state from report-exclusion state"
+
+      - type: "modify"
+        field: "tags_final"
+        change: "Role changed from aggregation to filtering only"
+        impact: "No structural change"
+        purpose: "Tags are now for attribute filtering, not spending aggregation"
+
+    # Migration Strategy
+    migration_strategy:
+      auto_migration: true
+      category_final_calculation: "manual category override, then COALESCE(category_rule, minor_raw, major_raw, '미분류')"
+      backward_compatible: true
+      runtime_path: "finjuice refresh runs transaction writer paths that backfill category_rule/category_final and is_transfer_candidate, even when rules.yaml is missing and tagging is skipped"
+      manual_script: "scripts/migrate_schema_v3.py is optional for dry-run or eager one-time partition rewrite; it is not required for ordinary refresh upgrades"
+      note: "v3 readers can read v2-shaped partitions; append/tag/transfer/write_month writes persist the v3 columns; reports exclude only confirmed transfer pairs"
+
+  - version: 2
+    from_version: 1
+    issue: "#59"
+    title: "CSV Metadata Optimization"
+    description: "Reduced token consumption by 89% through hash truncation and file_id system"
+    script: "scripts/migrate_csv_metadata.py"
+    executed_at: "2025-11-03T20:45:30Z"
+    author: "Claude Code"
+
+    # Detailed Changes
+    changes:
+      - type: "optimize"
+        field: "row_hash"
+        change: "Truncated from 64 chars (full SHA256 hex) to 16 chars"
+        impact: "-54 chars per row"
+        collision_probability: "<0.001% for 100K transactions"
+
+      - type: "add"
+        field: "file_id"
+        change: "Added compact identifier (YYMMDD_N for dated filenames, SHA256[:8] fallback for non-standard filenames)"
+        impact: "+8 chars per row in the common case; longer when YYMMDD_N sequence suffix exceeds one digit"
+        purpose: "Replace verbose file path + mtime with compact reference"
+
+      - type: "remove"
+        field: "source_file_path"
+        change: "Removed ~80 char absolute file path"
+        impact: "-80 chars per row"
+        replacement: "Moved to data/metadata/import_history.csv"
+
+      - type: "remove"
+        field: "source_file_mtime"
+        change: "Removed 26-char ISO timestamp"
+        impact: "-26 chars per row"
+        replacement: "Moved to data/metadata/import_history.csv"
+
+      - type: "add_metadata"
+        file: "data/metadata/import_history.csv"
+        change: "Centralized file_id → import history tracking"
+        schema: "file_id, original_filename, imported_from, archived, archived_path, imported_at, source_rows"
+
+    # Migration Results
+    results:
+      partitions_migrated: 13
+      rows_migrated: 2269
+      status: "completed"
+      net_savings: "152 chars per row = 89% metadata reduction"
+      token_efficiency: "40-50% overall improvement"
+      file_id_registry_rows: 1
+
+# Schema Compatibility Matrix
+compatibility:
+  v4:
+    compatibility_status: "active"
+    migration_status: "Active read/write schema; older readable partitions are upgraded on write."
+    can_read: [2, 3, 4]  # v4 readers can read compatible v2/v3/v4 files
+    can_write: [4]  # v4 writers write v4 format
+    breaking_changes_from_v3:
+      - "notes_manual field added (nullable string)"
+    breaking_changes_from_v2:
+      - "category_rule field added (nullable string)"
+      - "category_final field added (calculated, not null)"
+      - "is_transfer_candidate field added (nullable integer)"
+      - "tags_final role changed (filtering only, not aggregation)"
+    migration_required: false  # Auto-migration via COALESCE
+    runtime_migration: "Run finjuice refresh to process existing partitions; transaction writers backfill notes_manual, category_rule/category_final, and is_transfer_candidate even if rules.yaml is missing and tagging is skipped."
+    manual_migration: "No eager migration required; write paths persist v4 columns after normal mutations. scripts/migrate_schema_v3.py remains optional only for eager v2→v3 category rewrites."
+    note: "v4 is backward compatible: runtime readers tolerate compatible older partitions, append/tag/transfer/write_month writes persist v4 columns, and notes_manual remains outside row_hash and aggregation."
+
+  v2:
+    compatibility_status: "compatible-legacy"
+    migration_status: "Readable by v3 as an inactive legacy schema; run finjuice refresh to rewrite partitions to v3 when convenient."
+    can_read: [2]  # Only v2 readers can read v2 files
+    can_write: [2]  # Only v2 writers can write v2 files
+    breaking_changes_from_v1:
+      - "row_hash field length changed (64 → 16 chars)"
+      - "source_file_path removed (replaced by file_id)"
+      - "source_file_mtime removed (moved to import_history.csv)"
+      - "file_id field added (requires lookup in import_history.csv)"
+    migration_required: true
+
+# Validation Rules
+validation_rules:
+  - rule: "row_hash must be exactly 16 lowercase hex characters"
+    field: "row_hash"
+    regex: "^[0-9a-f]{16}$"
+    severity: "error"
+
+  - rule: "file_id must follow YYMMDD_N or 8-char lowercase hex hash fallback pattern"
+    field: "file_id"
+    regex: "^(?:\\d{6}_\\d+|[0-9a-f]{8})$"
+    severity: "error"
+
+  - rule: "date must be valid ISO date"
+    field: "date"
+    format: "YYYY-MM-DD"
+    severity: "error"
+
+  - rule: "type_norm must be one of: expense, income, transfer, other"
+    field: "type_norm"
+    enum: ["expense", "income", "transfer", "other"]
+    severity: "error"
+
+  - rule: "tags fields must be valid JSON arrays"
+    fields: ["tags_rule", "tags_ai", "tags_manual", "tags_final"]
+    format: "json_array"
+    severity: "error"
+
+  - rule: "transfer/review flags must be 0 or 1 (or null)"
+    fields: ["is_transfer_candidate", "is_transfer", "needs_review"]
+    enum: [0, 1, null]
+    severity: "error"
+
+  - rule: "confidence must be between 0.0 and 1.0"
+    field: "confidence"
+    range: [0.0, 1.0]
+    severity: "warning"
+
+  - rule: "amount cannot be zero"
+    field: "amount"
+    constraint: "!= 0"
+    severity: "warning"
+    note: "Zero-amount transactions are unusual"
+
+  - rule: "category_final must not be empty"
+    field: "category_final"
+    constraint: "NOT NULL AND != ''"
+    severity: "error"
+    note: "category_final is required for report aggregation"
+
+  - rule: "category_rule should be single value (no comma/array)"
+    field: "category_rule"
+    regex: "^[^,\\[\\]]*$"
+    severity: "warning"
+    note: "category is for single-value aggregation, not multi-value like tags"
+
+# Data Quality Guidelines
+quality_guidelines:
+  deduplication:
+    method: "row_hash"
+    collision_handling: "First occurrence wins"
+    note: "16-char hash provides negligible collision risk for personal finance scale"
+
+  transfer_detection:
+    time_window: "±5 minutes"
+    amount_tolerance: "0.01 (1%)"
+    pairing_strategy: "Greedy matching by amount and time"
+
+  tagging:
+    rule_priority: "Descending (highest first)"
+    rule_matching: "All matching enabled rules contribute tags; highest-priority matching category wins"
+    confidence_threshold: 0.7
+    review_queue: "confidence < 0.7; confidence is currently 0.0 when tags_final is empty"
+
+  token_efficiency:
+    target: "8K tokens per month partition (~200 rows)"
+    baseline: "170K tokens for full dataset"
+    achieved: "21x efficiency through partitioning + 50% through metadata optimization"
+
+# Future Schema Evolution (Planned)
+future_enhancements:
+  - version: 4
+    potential_changes:
+      - "Add merchant_category field (normalized merchant classification)"
+      - "Add merchant_normalized (clean merchant names)"
+      - "Add geolocation fields (lat, lon) for location-based analysis"
+      - "Add receipt_url for digital receipt storage"
+    compatibility: "Breaking (requires migration)"
+    estimated: "Q2 2026"
+
+  - version: 5
+    potential_changes:
+      - "Add multi-currency support (exchange_rate field)"
+      - "Add split_transaction support (parent_hash field)"
+      - "Add recurring_pattern_id for subscription tracking"
+    compatibility: "Breaking (requires migration)"
+    estimated: "Q3 2026"
+
+# Notes for AI Assistants
+ai_guidelines:
+  token_optimization:
+    - "Use read_month() to load single partition (~8K tokens vs 170K for full dataset)"
+    - "Only load needed columns via columns parameter"
+    - "Prefer CSV partition operations over loading full dataset"
+
+  schema_evolution:
+    - "Before adding columns, check current_version and plan migration"
+    - "Record all changes in migrations list with clear rationale"
+    - "Update validation_rules when adding new fields"
+    - "Consider token efficiency impact of schema changes"
+
+  data_integrity:
+    - "row_hash uniqueness is critical for deduplication"
+    - "file_id must have corresponding entry in import_history.csv"
+    - "Maintain sort_by: datetime for stable diffs"
+    - "Preserve JSON array format for tag fields"
+
+# References
+references:
+  code:
+    - "src/finjuice/pipeline/storage/csv_schema.py (CSV_COLUMNS definition)"
+    - "src/finjuice/pipeline/metadata/import_history.py (file_id registry)"
+    - "src/finjuice/pipeline/tagging/pipeline.py (category_final calculation)"
+    - "scripts/migrate_csv_metadata.py (v1→v2 migration script)"
+    - "scripts/migrate_schema_v3.py (v2→v3 migration script)"
+
+  docs:
+    - "docs/specs/v0_initial.md (Full design specification)"
+    - "docs/tasks/issue-61-schema-registry-implementation.md (Implementation plan)"
+    - "docs/workflows/rule-editing-with-claude.md (Category vs Tags guide)"
+    - "CLAUDE.md (Project guide for AI assistants)"
+
+  data:
+    - "data/metadata/import_history.csv (file_id → import history with optional archiving)"
+    - "data/transactions/YYYY/MM/transactions.csv (Partitioned data)"
+
+  issues:
+    - "#59 - CSV Metadata Optimization"
+    - "#61 - Data Schema Registry and Versioning System"
+    - "#156 - Tag Duplicate Counting Problem (resolved by v3)"
+    - "#166 - Epic: Category System Redesign"

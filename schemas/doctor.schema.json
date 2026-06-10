@@ -1,0 +1,97 @@
+{
+  "$id": "doctor.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "checks": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "detail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pass",
+              "warn",
+              "fail"
+            ],
+            "type": "string"
+          },
+          "suggestion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "status",
+          "message",
+          "detail",
+          "suggestion"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "install_hint": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "missing_extras": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "summary": {
+      "additionalProperties": true,
+      "properties": {
+        "errors": {
+          "type": "integer"
+        },
+        "passed": {
+          "type": "integer"
+        },
+        "total": {
+          "type": "integer"
+        },
+        "warnings": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "total",
+        "passed",
+        "warnings",
+        "errors"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "_meta",
+    "checks",
+    "summary",
+    "missing_extras",
+    "install_hint"
+  ],
+  "title": "doctor --json output",
+  "type": "object"
+}

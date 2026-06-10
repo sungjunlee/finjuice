@@ -1,0 +1,34 @@
+# Card Benefits Configuration Example
+# Copy this file and customize for your cards
+
+cards:
+  - name: "삼성카드 taptap O"
+    benefits:
+      - category: "편의점"
+        discount_rate: 0.05  # 5% cashback
+        min_amount: 300000   # Monthly minimum (KRW)
+
+      - category: "카페"
+        discount_rate: 0.03  # 3% cashback
+        min_amount: 0
+
+  - name: "현대카드 M Edition2"
+    benefits:
+      - category: "주유"
+        discount_rate: 0.07  # 7% discount
+        min_amount: 500000
+
+      - category: "온라인쇼핑"
+        discount_rate: 0.02
+        min_amount: 300000
+
+  - name: "신한카드 Deep Oil"
+    benefits:
+      - category: "주유"
+        discount_rate: 0.10  # 10% discount (best for gas)
+        min_amount: 300000
+
+# Notes:
+# - category: Matches tags_final or major_raw in transactions
+# - discount_rate: Decimal (0.05 = 5%)
+# - min_amount: Monthly spending threshold to earn benefits

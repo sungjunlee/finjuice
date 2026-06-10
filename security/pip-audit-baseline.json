@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "tool": "pip-audit",
+  "generated_at": "2026-05-22T07:15:59Z",
+  "audit_scope": "--all-extras (CI install profile)",
+  "identity_fields": ["id", "package", "affected_versions"],
+  "findings": []
+}

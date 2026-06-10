@@ -1,0 +1,104 @@
+{
+  "$id": "networth_validate.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "errors": {
+      "type": "integer"
+    },
+    "exists": {
+      "type": "boolean"
+    },
+    "liabilities": {
+      "type": "integer"
+    },
+    "manual_assets": {
+      "type": "integer"
+    },
+    "path": {
+      "type": "string"
+    },
+    "problems": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "column": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "formatted": {
+            "type": "string"
+          },
+          "line": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "severity",
+          "type",
+          "path",
+          "message",
+          "line",
+          "column",
+          "formatted"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "status": {
+      "enum": [
+        "valid",
+        "issues"
+      ],
+      "type": "string"
+    },
+    "valid": {
+      "type": "boolean"
+    },
+    "version": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "warnings": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "_meta",
+    "path",
+    "exists",
+    "valid",
+    "status",
+    "version",
+    "manual_assets",
+    "liabilities",
+    "errors",
+    "warnings",
+    "problems"
+  ],
+  "title": "networth validate --json output",
+  "type": "object"
+}

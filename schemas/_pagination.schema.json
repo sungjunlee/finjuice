@@ -1,0 +1,41 @@
+{
+  "$id": "_pagination.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "cursor": {
+      "type": "string"
+    },
+    "has_more": {
+      "type": "boolean"
+    },
+    "limit": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "next_cursor": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "total_estimate": {
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "truncated_by_bytes": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "limit",
+    "cursor",
+    "next_cursor",
+    "has_more"
+  ],
+  "title": "Pagination envelope",
+  "type": "object"
+}

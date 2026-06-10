@@ -1,0 +1,31 @@
+# Optional manual assets and liabilities for `finjuice networth`.
+# Snapshot imports remain the raw source for brokerage holdings.
+# Manual entries are useful for assets that do not exist in imported snapshots.
+#
+# Dedup rule:
+# - If a manual asset name matches a snapshot asset name, the manual entry wins.
+
+version: 1
+
+manual_assets:
+  # Residential or commercial real estate.
+  - name: 거주 부동산
+    category: real_estate
+    value: 100000000
+
+  # Bank deposit or savings product.
+  - name: 정기예금
+    category: deposit
+    value: 20000000
+
+  # Cash-like balances that are tracked manually.
+  - name: 현금 비상금
+    category: cash
+    value: 5000000
+
+liabilities:
+  # Principal is used in current net worth totals.
+  - name: 담보대출
+    principal: 30000000
+    rate: 3.6
+    type: mortgage

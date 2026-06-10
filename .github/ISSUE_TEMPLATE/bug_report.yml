@@ -1,0 +1,70 @@
+name: Bug report
+description: Report reproducible behavior without sharing private financial data.
+title: "Bug: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Do not paste real transaction rows, account
+        numbers, raw Banksalad exports, or private financial files. Use synthetic
+        or redacted examples only.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - CLI
+        - Import / ingest
+        - Tagging rules
+        - Transfer detection
+        - Export / reports
+        - Skills / agent workflow
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: What happened?
+      description: Describe the observed behavior and include redacted command output if useful.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Use synthetic or redacted files and values.
+      placeholder: |
+        1. Run `uv run finjuice ...`
+        2. Use a synthetic fixture with columns ...
+        3. See ...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include versions and install method. Do not include private paths if they reveal sensitive information.
+      placeholder: |
+        - finjuice version:
+        - Python version:
+        - OS:
+        - Install method:
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I removed or replaced all private financial data.
+          required: true
+        - label: I can reproduce this with synthetic or redacted data.
+          required: true

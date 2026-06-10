@@ -1,0 +1,32 @@
+{
+  "$id": "template_show.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "description": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "parameters": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "sql": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "name",
+    "description",
+    "parameters",
+    "sql"
+  ],
+  "title": "template show --json output",
+  "type": "object"
+}

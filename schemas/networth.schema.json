@@ -1,0 +1,92 @@
+{
+  "$id": "networth.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "actionable": {
+      "type": "boolean"
+    },
+    "as_of": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "health": {
+      "additionalProperties": true,
+      "properties": {
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "warning",
+            "critical"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "reasons"
+      ],
+      "type": "object"
+    },
+    "net_worth": {
+      "type": "number"
+    },
+    "next_steps": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "signal": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "signal",
+          "message",
+          "command"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "signals": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "total_assets": {
+      "type": "number"
+    },
+    "total_liabilities": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "_meta",
+    "as_of",
+    "total_assets",
+    "total_liabilities",
+    "net_worth",
+    "health",
+    "actionable",
+    "signals",
+    "next_steps"
+  ],
+  "title": "networth --json output",
+  "type": "object"
+}

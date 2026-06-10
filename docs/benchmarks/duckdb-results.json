@@ -1,0 +1,187 @@
+{
+  "metadata": {
+    "generated_at": "2026-03-26T22:21:58+0900",
+    "runtime_versions": {
+      "python": "3.13.11",
+      "polars": "1.35.2",
+      "duckdb": "1.4.2"
+    },
+    "platform": "macOS-15.6.1-arm64-arm-64bit-Mach-O",
+    "warm_iterations": 3,
+    "random_seed": 42,
+    "measurement_model": {
+      "cold": "First execution on a fresh engine state. DuckDB cold includes connection creation and transactions view registration.",
+      "warm": "Subsequent executions in the same Python process. DuckDB warm reuses one DuckDBAnalytics connection and transactions view."
+    }
+  },
+  "benchmarks": {
+    "6k_rows": {
+      "dataset": {
+        "partitions": 24,
+        "rows_per_partition": 250,
+        "total_rows": 6000,
+        "schema_columns": 26,
+        "schema_source": "finjuice.pipeline.storage.csv_partition_polars.CSV_COLUMNS",
+        "distinct_months": 24,
+        "month_range": {
+          "start": "2024-01",
+          "end": "2025-12"
+        }
+      },
+      "operations": {
+        "monthly_spend": {
+          "measured_paths": {
+            "polars": "Pure Polars CSV read + group_by aggregation.",
+            "duckdb_analytics": "DuckDBAnalytics.monthly_spend() with DuckDB view-backed SQL aggregation."
+          },
+          "polars": {
+            "cold_seconds": 1.560227582929656,
+            "warm": {
+              "mean": 0.28767015303795535,
+              "median": 0.20928537496365607,
+              "min": 0.1447570421732962,
+              "max": 0.5089680419769138,
+              "p95": 0.5089680419769138,
+              "std_dev": 0.19434645139493942
+            },
+            "result_rows": 24
+          },
+          "duckdb_analytics": {
+            "cold_seconds": 4.7348493328318,
+            "warm": {
+              "mean": 1.486992416670546,
+              "median": 0.9403857500292361,
+              "min": 0.921199917094782,
+              "max": 2.5993915828876197,
+              "p95": 2.5993915828876197,
+              "std_dev": 0.96341369763808
+            },
+            "result_rows": 24
+          },
+          "speedup": {
+            "cold": 0.33,
+            "warm_mean": 0.19
+          }
+        },
+        "tag_breakdown": {
+          "measured_paths": {
+            "polars": "Pure Polars CSV read + JSON explode + aggregation.",
+            "duckdb_analytics": "DuckDBAnalytics.tag_breakdown(): DuckDB view read plus Polars JSON explode/aggregation fallback."
+          },
+          "polars": {
+            "cold_seconds": 0.9050714578479528,
+            "warm": {
+              "mean": 0.47670840301240486,
+              "median": 0.49973575002513826,
+              "min": 0.42058608401566744,
+              "max": 0.5098033749964088,
+              "p95": 0.5098033749964088,
+              "std_dev": 0.04886333272832709
+            },
+            "result_rows": 6
+          },
+          "duckdb_analytics": {
+            "cold_seconds": 2.258190833032131,
+            "warm": {
+              "mean": 3.7239965276482203,
+              "median": 4.397505667060614,
+              "min": 2.256325874943286,
+              "max": 4.518158040940762,
+              "p95": 4.518158040940762,
+              "std_dev": 1.2724708670296638
+            },
+            "result_rows": 6
+          },
+          "speedup": {
+            "cold": 0.4,
+            "warm_mean": 0.13
+          }
+        }
+      }
+    },
+    "120k_rows": {
+      "dataset": {
+        "partitions": 24,
+        "rows_per_partition": 5000,
+        "total_rows": 120000,
+        "schema_columns": 26,
+        "schema_source": "finjuice.pipeline.storage.csv_partition_polars.CSV_COLUMNS",
+        "distinct_months": 24,
+        "month_range": {
+          "start": "2024-01",
+          "end": "2025-12"
+        }
+      },
+      "operations": {
+        "monthly_spend": {
+          "measured_paths": {
+            "polars": "Pure Polars CSV read + group_by aggregation.",
+            "duckdb_analytics": "DuckDBAnalytics.monthly_spend() with DuckDB view-backed SQL aggregation."
+          },
+          "polars": {
+            "cold_seconds": 2.8969952079933137,
+            "warm": {
+              "mean": 0.8865681109794726,
+              "median": 1.0892304158769548,
+              "min": 0.3703382918611169,
+              "max": 1.2001356252003461,
+              "p95": 1.2001356252003461,
+              "std_dev": 0.45049407429398447
+            },
+            "result_rows": 24
+          },
+          "duckdb_analytics": {
+            "cold_seconds": 4.969261874910444,
+            "warm": {
+              "mean": 2.7656529722735286,
+              "median": 2.7072779168374836,
+              "min": 1.333520249929279,
+              "max": 4.256160750053823,
+              "p95": 4.256160750053823,
+              "std_dev": 1.4621944496423627
+            },
+            "result_rows": 24
+          },
+          "speedup": {
+            "cold": 0.58,
+            "warm_mean": 0.32
+          }
+        },
+        "tag_breakdown": {
+          "measured_paths": {
+            "polars": "Pure Polars CSV read + JSON explode + aggregation.",
+            "duckdb_analytics": "DuckDBAnalytics.tag_breakdown(): DuckDB view read plus Polars JSON explode/aggregation fallback."
+          },
+          "polars": {
+            "cold_seconds": 4.835584167158231,
+            "warm": {
+              "mean": 3.6992377779291323,
+              "median": 4.313988582929596,
+              "min": 2.2342493338510394,
+              "max": 4.549475417006761,
+              "p95": 4.549475417006761,
+              "std_dev": 1.2741690893353539
+            },
+            "result_rows": 6
+          },
+          "duckdb_analytics": {
+            "cold_seconds": 24.23615916701965,
+            "warm": {
+              "mean": 1.8787681109582384,
+              "median": 1.1036295839585364,
+              "min": 0.8250722079537809,
+              "max": 3.707602540962398,
+              "p95": 3.707602540962398,
+              "std_dev": 1.5899292695614302
+            },
+            "result_rows": 6
+          },
+          "speedup": {
+            "cold": 0.2,
+            "warm_mean": 1.97
+          }
+        }
+      }
+    }
+  }
+}

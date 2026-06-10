@@ -1,0 +1,41 @@
+{
+  "$id": "assets_show.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "error": {
+      "type": "string"
+    },
+    "has_data": {
+      "type": "boolean"
+    },
+    "holdings": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "month": {
+      "type": "string"
+    },
+    "snapshot_date": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "total_count": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "_meta",
+    "has_data"
+  ],
+  "title": "assets show --json output",
+  "type": "object"
+}

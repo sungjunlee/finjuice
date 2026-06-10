@@ -1,0 +1,7 @@
+version: 1
+rules:
+  - name: test_rule
+    match: "test"
+    fields: [merchant_raw
+    tags: ["test"]  # Missing closing bracket above - invalid YAML
+    priority: 50

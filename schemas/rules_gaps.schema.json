@@ -1,0 +1,196 @@
+{
+  "$id": "rules_gaps.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "critical_gaps": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "actionable": {
+            "type": "boolean"
+          },
+          "banksalad_category": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "current_tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "expected_category": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "gap_type": {
+            "type": "string"
+          },
+          "merchant": {
+            "type": "string"
+          },
+          "mismatch_severity": {
+            "type": "string"
+          },
+          "mismatch_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "suggested_action": {
+            "type": "string"
+          },
+          "total_amount": {
+            "type": "number"
+          },
+          "transaction_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "merchant",
+          "transaction_count",
+          "total_amount",
+          "banksalad_category",
+          "current_tags",
+          "gap_type",
+          "suggested_action"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "mismatches": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "actionable": {
+            "type": "boolean"
+          },
+          "banksalad_category": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "current_tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "expected_category": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "gap_type": {
+            "type": "string"
+          },
+          "merchant": {
+            "type": "string"
+          },
+          "mismatch_severity": {
+            "type": "string"
+          },
+          "mismatch_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "suggested_action": {
+            "type": "string"
+          },
+          "total_amount": {
+            "type": "number"
+          },
+          "transaction_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "merchant",
+          "transaction_count",
+          "total_amount",
+          "banksalad_category",
+          "current_tags",
+          "gap_type",
+          "suggested_action"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "simulations": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "summary": {
+      "additionalProperties": true,
+      "properties": {
+        "actionable_mismatch_count": {
+          "type": "integer"
+        },
+        "actionable_only": {
+          "type": "boolean"
+        },
+        "category_mismatch_count": {
+          "type": "integer"
+        },
+        "complete_count": {
+          "type": "integer"
+        },
+        "conflict_count": {
+          "type": "integer"
+        },
+        "critical_count": {
+          "type": "integer"
+        },
+        "filtered_mismatch_count": {
+          "type": "integer"
+        },
+        "filtered_out_mismatch_count": {
+          "type": "integer"
+        },
+        "mismatch_count": {
+          "type": "integer"
+        },
+        "multi_tag_noise_count": {
+          "type": "integer"
+        },
+        "total_mismatch_count": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "critical_count",
+        "mismatch_count",
+        "complete_count"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "_meta",
+    "summary",
+    "critical_gaps",
+    "mismatches",
+    "simulations"
+  ],
+  "title": "rules gaps --json output",
+  "type": "object"
+}

@@ -1,0 +1,253 @@
+{
+  "$id": "index.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "_meta": {
+            "properties": {
+              "privacy": {
+                "properties": {
+                  "profile": {
+                    "enum": [
+                      "redacted",
+                      "compact"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "profile"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "privacy"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "_meta"
+        ],
+        "type": "object"
+      },
+      "then": {
+        "properties": {
+          "collections": {
+            "items": {
+              "properties": {
+                "path": {
+                  "type": "null"
+                },
+                "path_included": {
+                  "const": false
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "workspace": {
+            "properties": {
+              "path": {
+                "type": "null"
+              },
+              "path_included": {
+                "const": false
+              }
+            },
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "_meta": {
+            "properties": {
+              "privacy": {
+                "properties": {
+                  "profile": {
+                    "enum": [
+                      "compact"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "profile"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "privacy"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "_meta"
+        ],
+        "type": "object"
+      },
+      "then": {
+        "properties": {
+          "collections": {
+            "items": {
+              "properties": {
+                "latest_modified": {
+                  "type": "null"
+                },
+                "notes": {
+                  "maxItems": 0,
+                  "type": "array"
+                },
+                "recommended_commands": {
+                  "maxItems": 0,
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "recommended_next": {
+            "maxItems": 0,
+            "type": "array"
+          }
+        }
+      }
+    }
+  ],
+  "description": "index --json output. The raw privacy profile preserves the full catalog shape and only includes paths when --include-paths is requested. Redacted and compact profiles suppress resolved workspace and collection paths; compact also drops operational command and note detail.",
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "collections": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "count": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "count_label": {
+            "type": "string"
+          },
+          "exists": {
+            "type": "boolean"
+          },
+          "latest_modified": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "path_included": {
+            "type": "boolean"
+          },
+          "privacy_level": {
+            "type": "string"
+          },
+          "recommended_commands": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "status",
+          "exists",
+          "count",
+          "count_label",
+          "latest_modified",
+          "privacy_level",
+          "path",
+          "path_included",
+          "recommended_commands",
+          "notes"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "recommended_next": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "schema_ref": {
+      "type": "string"
+    },
+    "workspace": {
+      "additionalProperties": true,
+      "properties": {
+        "data_dir_source": {
+          "type": "string"
+        },
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path_included": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "data_dir_source",
+        "path",
+        "path_included"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "_meta",
+    "workspace",
+    "collections",
+    "recommended_next",
+    "schema_ref"
+  ],
+  "title": "index --json output",
+  "type": "object"
+}

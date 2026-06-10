@@ -1,0 +1,28 @@
+{
+  "$id": "init.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "already_initialized": {
+      "type": "boolean"
+    },
+    "data_dir": {
+      "type": "string"
+    },
+    "status": {
+      "enum": ["ok"],
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "status",
+    "data_dir",
+    "already_initialized"
+  ],
+  "title": "init --json output",
+  "type": "object"
+}

@@ -1,0 +1,53 @@
+{
+  "$id": "assets_status.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "account_count": {
+      "type": "integer"
+    },
+    "accounts": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "available_months": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "has_data": {
+      "type": "boolean"
+    },
+    "latest_month": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "position_count": {
+      "type": "integer"
+    },
+    "snapshot_date": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "total_value": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "_meta",
+    "has_data"
+  ],
+  "title": "assets status --json output",
+  "type": "object"
+}

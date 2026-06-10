@@ -1,0 +1,35 @@
+{
+  "$id": "template_run.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "pagination": {
+      "$ref": "_pagination.schema.json"
+    },
+    "row_count": {
+      "type": "integer"
+    },
+    "rows": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "template_name": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "template_name",
+    "row_count",
+    "rows",
+    "pagination"
+  ],
+  "title": "template run --json output",
+  "type": "object"
+}

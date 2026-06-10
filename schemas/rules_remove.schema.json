@@ -1,0 +1,26 @@
+{
+  "$id": "rules_remove.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "action": {
+      "enum": [
+        "removed"
+      ],
+      "type": "string"
+    },
+    "rule_name": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "action",
+    "rule_name"
+  ],
+  "title": "rules remove --json output",
+  "type": "object"
+}

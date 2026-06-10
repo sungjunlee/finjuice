@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "tool": "bandit",
+  "generated_at": "2026-05-12T15:36:26Z",
+  "severity_threshold": "MEDIUM",
+  "identity_fields": ["test_id", "filename", "function"],
+  "findings": [
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/analytics/duckdb_layer.py",
+      "function": "DuckDBAnalytics.monthly_spend",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Static DuckDB aggregation over the internal transactions view; dynamic WHERE fragments are internal booleans plus exclude_transfers_sql(); see src/finjuice/pipeline/analytics/duckdb_layer.py:DuckDBAnalytics.monthly_spend."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/analytics/duckdb_layer.py",
+      "function": "DuckDBAnalytics.read_partitions",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "DuckDB read patterns are resolved under transactions/ with quote_duckdb_path_pattern; selected columns are quoted with quote_duckdb_identifier; see src/finjuice/pipeline/analytics/duckdb_layer.py:DuckDBAnalytics.read_partitions."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/analytics/duckdb_layer.py",
+      "function": "DuckDBAnalytics.register_transactions_view",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "The fixed partition glob is contained and quoted with quote_duckdb_path_pattern; introspected CSV columns are quoted with quote_duckdb_identifier and report filters use shared literal quoting; see src/finjuice/pipeline/analytics/duckdb_layer.py:DuckDBAnalytics.register_transactions_view."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/analytics/query_builder.py",
+      "function": "build_account_summary_query",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Legacy analytics builder contains read_csv patterns under the current workspace with quote_duckdb_path_pattern and assembles only static transfer filter SQL; see src/finjuice/pipeline/analytics/query_builder.py:build_account_summary_query."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/analytics/query_builder.py",
+      "function": "build_date_range_filter_query",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Legacy analytics builder contains read_csv patterns with quote_duckdb_path_pattern, quotes date literals with quote_duckdb_string_literal, and quotes requested column identifiers with quote_duckdb_identifier; see src/finjuice/pipeline/analytics/query_builder.py:build_date_range_filter_query."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/analytics/query_builder.py",
+      "function": "build_monthly_spend_query",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Legacy analytics builder contains read_csv patterns under the current workspace with quote_duckdb_path_pattern and adds only static transfer/income predicates; see src/finjuice/pipeline/analytics/query_builder.py:build_monthly_spend_query."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/analytics/query_builder.py",
+      "function": "build_recent_spend_movers_query",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Recent-mover SQL is static over the internal transactions view; top_n is cast to a non-negative integer before LIMIT interpolation; see src/finjuice/pipeline/analytics/query_builder.py:build_recent_spend_movers_query."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/analytics/query_builder.py",
+      "function": "build_tag_breakdown_query",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Legacy analytics builder contains read_csv patterns under the current workspace with quote_duckdb_path_pattern; top_n is cast to a non-negative integer before LIMIT interpolation; see src/finjuice/pipeline/analytics/query_builder.py:build_tag_breakdown_query."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/analytics/query_builder.py",
+      "function": "build_top_merchants_query",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Legacy analytics builder contains read_csv patterns under the current workspace with quote_duckdb_path_pattern; top_n is cast to a non-negative integer before LIMIT interpolation; see src/finjuice/pipeline/analytics/query_builder.py:build_top_merchants_query."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/cli/commands/explain.py",
+      "function": "_search_transactions",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "DuckDB query uses placeholders for user search/date inputs; WHERE text is assembled from fixed predicates chosen by CLI options; see src/finjuice/pipeline/cli/commands/explain.py:_search_transactions."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/cli/commands/query.py",
+      "function": "query_command",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Validated read-only SQL is intentionally wrapped for count and pagination; validate_readonly_sql rejects non-SELECT, multi-statement, and restricted DuckDB file-reading functions; pagination limits are numeric CLI values; see src/finjuice/pipeline/cli/commands/query.py:query_command."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/cli/commands/query.py",
+      "function": "query_command",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Validated read-only SQL is intentionally wrapped for count and pagination; validate_readonly_sql rejects non-SELECT, multi-statement, and restricted DuckDB file-reading functions; pagination limits are numeric CLI values; see src/finjuice/pipeline/cli/commands/query.py:query_command."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/cli/commands/query.py",
+      "function": "query_command",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Validated read-only SQL is intentionally wrapped for count and pagination; validate_readonly_sql rejects non-SELECT, multi-statement, and restricted DuckDB file-reading functions; pagination limits are numeric CLI values; see src/finjuice/pipeline/cli/commands/query.py:query_command."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/cli/commands/rules_cmd/mutations.py",
+      "function": "_compute_rule_impact_preview",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "DuckDB query uses placeholders for user rule patterns; field names are already schema-validated and quoted with quote_duckdb_identifier before predicate assembly; see src/finjuice/pipeline/cli/commands/rules_cmd/mutations.py:_compute_rule_impact_preview."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/cli/commands/template_cmd/execution.py",
+      "function": "_build_pivot_base_rows_sql",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Pivot SQL uses allowlisted axis expressions and month literals built through the shared quote_duckdb_string_literal helper before assembly; see src/finjuice/pipeline/cli/commands/template_cmd/execution.py:_build_pivot_base_rows_sql."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/cli/commands/template_cmd/execution.py",
+      "function": "_build_pivot_base_rows_sql",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Pivot SQL uses allowlisted axis expressions and month literals built through the shared quote_duckdb_string_literal helper before assembly; see src/finjuice/pipeline/cli/commands/template_cmd/execution.py:_build_pivot_base_rows_sql."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/cli/commands/template_cmd/execution.py",
+      "function": "_discover_pivot_columns",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Pivot discovery wraps SQL generated by allowlisted pivot builders; top-N and aggregate choices are validated, and dynamic pivot literals/aliases use shared DuckDB quoting helpers; see src/finjuice/pipeline/cli/commands/template_cmd/execution.py:_discover_pivot_columns."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/tagging/suggestions.py",
+      "function": "_merchant_context_query",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "DuckDB suggestion query contains static SQL plus internal transfer predicate builder; caller-supplied thresholds are placeholders for HAVING/LIMIT; see src/finjuice/pipeline/tagging/suggestions.py:_merchant_context_query."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/tagging/suggestions.py",
+      "function": "_similar_merchants_query",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "DuckDB suggestion query contains static SQL plus internal transfer predicate builder; no user input is concatenated; see src/finjuice/pipeline/tagging/suggestions.py:_similar_merchants_query."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/tagging/suggestions.py",
+      "function": "get_suggestion_coverage_stats",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "DuckDB coverage query assembles only static SQL fragments and internal transfer predicates; no user input is concatenated; see src/finjuice/pipeline/tagging/suggestions.py:get_suggestion_coverage_stats."
+    }
+  ]
+}

@@ -1,0 +1,358 @@
+# Pre-defined report prompts for finjuice ask --report
+# These prompts are used to generate structured analysis reports
+version: 1
+
+reports:
+  monthly:
+    name: "월별 지출 분석"
+    description: "Monthly spending analysis with MoM comparison"
+    prompt: |
+      최근 3개월 월별 지출을 분석해줘.
+      전월 대비 증감, 주요 지출 카테고리, 이상 패턴을 포함해서.
+      한국어로 간결하게 답변해줘.
+
+  summary:
+    name: "전체 요약"
+    description: "Overall spending summary and trends"
+    prompt: |
+      전체 기간의 지출 패턴을 요약해줘.
+      총 지출, 월평균, 주요 지출처, 추세를 포함해서.
+      한국어로 간결하게 답변해줘.
+
+  tags:
+    name: "태그별 분석"
+    description: "Spending breakdown by tags"
+    prompt: |
+      태그별 지출 비중을 분석해줘.
+      상위 10개 태그, 각 태그별 금액과 비율을 포함해서.
+      한국어로 간결하게 답변해줘.
+
+  merchants:
+    name: "가맹점별 분석"
+    description: "Top merchants by spending"
+    prompt: |
+      가맹점별 지출을 분석해줘.
+      상위 20개 가맹점, 각 가맹점별 금액과 빈도를 포함해서.
+      한국어로 간결하게 답변해줘.
+
+  subscriptions:
+    name: "구독/정기결제 분석"
+    description: "Detect recurring payments and subscriptions"
+    prompt: |
+      정기 결제/구독 서비스를 분석해줘.
+      매월 반복되는 결제를 찾아서:
+      - 가맹점명, 월 결제액, 결제 주기 (매월/매년)
+      - 총 구독 비용, 불필요해 보이는 구독 추천
+      한국어로 간결하게 답변해줘.
+
+  anomalies:
+    name: "이상 거래 감지"
+    description: "Detect unusual spending patterns"
+    prompt: |
+      이상 지출 패턴을 분석해줘.
+      - 평소보다 큰 거래 (상위 5개)
+      - 새로운 가맹점에서의 첫 결제
+      - 평소와 다른 시간대/요일 거래
+      - 중복 결제 가능성 (동일 금액 연속)
+      한국어로 간결하게 답변해줘.
+
+  transfers:
+    name: "이체 현황"
+    description: "Internal transfer summary"
+    prompt: |
+      계좌 간 이체 현황을 분석해줘.
+      - 총 이체 건수와 금액
+      - 주요 이체 경로 (계좌A → 계좌B)
+      - 정기 이체 패턴
+      한국어로 간결하게 답변해줘.
+
+  asset_overview:
+    name: "자산 스냅샷 개요"
+    description: "Latest snapshot overview by account and total value"
+    prompt: |
+      최신 자산 스냅샷을 요약해줘.
+      - 기준일 총자산, 계좌 수, 보유 종목 수
+      - 계좌별 평가금액 비중
+      - 확인이 필요한 데이터 품질 이슈(누락/급변)
+      한국어로 간결하게 답변해줘.
+
+  asset_allocation:
+    name: "자산 배분 분석"
+    description: "Allocation concentration by instrument/account"
+    prompt: |
+      최신 자산 스냅샷 기준으로 자산 배분을 분석해줘.
+      - 종목별 비중 상위 항목
+      - 계좌별 비중
+      - 집중도(상위 보유 종목 쏠림)와 리밸런싱 관찰 포인트
+      한국어로 간결하게 답변해줘.
+
+  asset_top_holdings:
+    name: "상위 보유종목"
+    description: "Top holdings by market value"
+    prompt: |
+      최신 자산 스냅샷에서 평가금액 기준 상위 보유 종목을 분석해줘.
+      - 상위 10개 종목과 비중
+      - 상위 종목의 계좌 분포
+      - 포트폴리오 관점의 집중 리스크 포인트
+      한국어로 간결하게 답변해줘.
+
+  # === TREND ANALYSIS (5 reports) ===
+  trend_analysis:
+    name: "트렌드 분석"
+    description: "Time-series spending trend analysis"
+    prompt: |
+      지출 트렌드를 시계열로 분석해줘.
+      - 최근 6개월 월별 추이 (선 그래프 형태로 설명)
+      - 증가/감소 추세, 변곡점 식별
+      - 계절성 패턴 (주말/공휴일 지출)
+      한국어로 간결하게 답변해줘.
+
+  yoy_comparison:
+    name: "전년 동기 대비"
+    description: "Year-over-Year comparison"
+    prompt: |
+      작년 같은 기간과 비교 분석해줘.
+      - 월별 YoY 증감률
+      - 카테고리별 YoY 변화
+      - 주요 차이점과 원인 추정
+      한국어로 간결하게 답변해줘.
+
+  mom_comparison:
+    name: "전월 대비"
+    description: "Month-over-Month comparison"
+    prompt: |
+      전월 대비 변화를 분석해줘.
+      - MoM 증감액/률
+      - 신규/중단된 지출
+      - 변화가 큰 카테고리 TOP 5
+      한국어로 간결하게 답변해줘.
+
+  quarterly_review:
+    name: "분기별 리뷰"
+    description: "Quarterly spending review"
+    prompt: |
+      분기별 지출을 비교 분석해줘.
+      - 분기별 총 지출 및 증감
+      - 주요 지출 카테고리 변화
+      - 분기별 특성 (예: Q4 연말 지출 증가)
+      한국어로 간결하게 답변해줘.
+
+  seasonal_patterns:
+    name: "계절성 패턴"
+    description: "Seasonal spending patterns"
+    prompt: |
+      계절별 지출 패턴을 분석해줘.
+      - 월별 패턴 (1-12월 특성)
+      - 계절 이벤트 영향 (명절, 휴가 등)
+      - 반복되는 계절성 지출
+      한국어로 간결하게 답변해줘.
+
+  # === RANKINGS (4 reports) ===
+  top_merchants:
+    name: "상위 가맹점"
+    description: "Top 20 merchants by spending"
+    prompt: |
+      지출 상위 가맹점을 분석해줘 (TOP 20).
+      - 가맹점별 총 지출액 및 거래 건수
+      - 주요 결제 시기
+      - 지출 비중
+      한국어로 간결하게 답변해줘.
+
+  top_categories:
+    name: "상위 카테고리"
+    description: "Top categories by spending"
+    prompt: |
+      지출 상위 카테고리를 분석해줘 (TOP 10).
+      - 카테고리별 금액 및 비율
+      - 필수/선택 지출 분류
+      - 절약 가능 카테고리
+      한국어로 간결하게 답변해줘.
+
+  frequent_merchants:
+    name: "빈도 높은 가맹점"
+    description: "Most frequently visited merchants"
+    prompt: |
+      방문 빈도가 높은 가맹점을 분석해줘.
+      - 방문 횟수 TOP 10
+      - 평균 결제액
+      - 주기성 (매일/주간/월간)
+      한국어로 간결하게 답변해줘.
+
+  expensive_transactions:
+    name: "고액 거래"
+    description: "High-value transactions (>500K KRW)"
+    prompt: |
+      고액 거래 내역을 분석해줘 (₩50만 이상).
+      - 거래 내역 (일시, 가맹점, 금액)
+      - 지출 목적 추정
+      - 향후 예산 계획 권장사항
+      한국어로 간결하게 답변해줘.
+
+  # === PATTERNS (5 reports) ===
+  recurring_charges:
+    name: "정기 결제"
+    description: "Recurring payment detection"
+    prompt: |
+      매월 반복되는 결제를 감지해줘.
+      - 매월 동일 가맹점, 유사 금액 거래
+      - 예상 다음 결제일
+      - 총 정기 결제 비용
+      한국어로 간결하게 답변해줘.
+
+  weekend_spending:
+    name: "주말 지출"
+    description: "Weekday vs Weekend spending patterns"
+    prompt: |
+      평일 vs 주말 지출 패턴을 비교해줘.
+      - 평일/주말 총 지출 및 평균
+      - 지출 카테고리 차이
+      - 주말 특성 (외식, 여가 등)
+      한국어로 간결하게 답변해줘.
+
+  time_of_day:
+    name: "시간대별 지출"
+    description: "Spending by time of day"
+    prompt: |
+      시간대별 (아침/점심/저녁/야간) 지출 패턴을 분석해줘.
+      - 시간대별 거래 건수 및 금액
+      - 주요 지출 항목 (예: 점심 외식)
+      - 늦은 시간 충동 소비 여부
+      한국어로 간결하게 답변해줘.
+
+  merchant_frequency:
+    name: "가맹점 방문 주기"
+    description: "Merchant visit frequency analysis"
+    prompt: |
+      자주 방문하는 가맹점의 방문 주기를 분석해줘.
+      - 정기적 방문 (주 1회, 월 2회 등)
+      - 평균 방문 간격
+      - 불규칙/일회성 방문
+      한국어로 간결하게 답변해줘.
+
+  payment_method:
+    name: "결제 수단별"
+    description: "Spending by payment method (card/account)"
+    prompt: |
+      카드/계좌별 사용 패턴을 분석해줘.
+      - 결제 수단별 총 지출 및 거래 건수
+      - 주요 사용처 (예: 특정 카드는 주로 온라인 쇼핑)
+      - 혜택 활용 권장사항
+      한국어로 간결하게 답변해줘.
+
+  # === COMPARISONS (3 reports) ===
+  category_vs_category:
+    name: "카테고리 비교"
+    description: "Compare two spending categories"
+    prompt: |
+      두 카테고리를 비교 분석해줘 (예: 식비 vs 교통비).
+      - 각 카테고리별 총 지출 및 추이
+      - 비율 변화
+      - 균형 조정 권장사항
+      한국어로 간결하게 답변해줘. 비교할 카테고리는 사용자 질문에서 추출해줘.
+
+  account_vs_account:
+    name: "계정 비교"
+    description: "Compare spending across accounts/cards"
+    prompt: |
+      두 계정/카드를 비교 분석해줘.
+      - 각 계정별 총 지출 및 거래 건수
+      - 주요 사용처 차이
+      - 효율적인 카드 사용 전략
+      한국어로 간결하게 답변해줘. 비교할 계정은 사용자 질문에서 추출해줘.
+
+  period_vs_period:
+    name: "기간 비교"
+    description: "Compare spending across time periods"
+    prompt: |
+      두 기간을 비교 분석해줘.
+      - 각 기간별 총 지출 및 카테고리 분포
+      - 주요 차이점
+      - 변화 원인 추정
+      한국어로 간결하게 답변해줘. 비교 기간은 사용자 질문에서 추출해줘.
+
+  # === INSIGHTS (5 reports) ===
+  spending_habits:
+    name: "소비 습관"
+    description: "Overall spending habits analysis"
+    prompt: |
+      소비 습관과 패턴을 종합 분석해줘.
+      - 주요 지출 습관 (매일 커피, 주말 외식 등)
+      - 충동 구매 패턴
+      - 건전한 소비 vs 개선 필요 영역
+      한국어로 간결하게 답변해줘.
+
+  savings_opportunities:
+    name: "절약 기회"
+    description: "Identify potential savings opportunities"
+    prompt: |
+      절약 가능한 항목을 찾아서 추천해줘.
+      - 불필요한 구독 서비스
+      - 과다 지출 카테고리
+      - 대체 가능한 저렴한 옵션
+      - 예상 절감액
+      한국어로 간결하게 답변해줘.
+
+  budget_review:
+    name: "예산 리뷰"
+    description: "Budget recommendation based on spending"
+    prompt: |
+      현재 지출을 기반으로 적정 예산을 추천해줘.
+      - 카테고리별 월평균 지출
+      - 권장 예산 (현재 지출 + 10% 여유)
+      - 고정비/변동비 구분
+      한국어로 간결하게 답변해줘.
+
+  lifestyle_analysis:
+    name: "라이프스타일 분석"
+    description: "Lifestyle analysis from spending patterns"
+    prompt: |
+      소비 패턴으로 라이프스타일을 분석해줘.
+      - 주요 관심사 (외식, 여행, 취미 등)
+      - 생활 패턴 (집순이/외출형)
+      - 가치관 반영 (건강, 교육, 문화 등)
+      한국어로 간결하게 답변해줘.
+
+  financial_health:
+    name: "재정 건전성"
+    description: "Financial health check (income vs spending)"
+    prompt: |
+      수입 대비 지출, 저축률을 분석해줘.
+      - 월평균 지출
+      - 저축 가능 금액 (수입이 있다면)
+      - 재정 건전성 평가
+      - 개선 권장사항
+      한국어로 간결하게 답변해줘.
+
+  # === SPECIFIC ANALYSIS (3 reports) ===
+  restaurant_analysis:
+    name: "외식 분석"
+    description: "Detailed restaurant/dining spending analysis"
+    prompt: |
+      외식 지출을 상세 분석해줘.
+      - 총 외식 비용 (카페 포함)
+      - 주요 외식 장소 (한식, 카페, 패스트푸드 등)
+      - 빈도 및 평균 단가
+      - 건강/절약 권장사항
+      한국어로 간결하게 답변해줘.
+
+  transport_analysis:
+    name: "교통비 분석"
+    description: "Transportation cost analysis"
+    prompt: |
+      교통비 지출을 상세 분석해줘.
+      - 총 교통비 (대중교통, 택시, 주유 등)
+      - 교통 수단별 비중
+      - 출퇴근 vs 여가 이동
+      - 절약 방안 (대중교통 활용 등)
+      한국어로 간결하게 답변해줘.
+
+  subscription_audit:
+    name: "구독 서비스 감사"
+    description: "Audit all subscription services"
+    prompt: |
+      모든 구독 서비스를 감사하고 불필요한 항목을 찾아줘.
+      - 활성 구독 목록 및 월 비용
+      - 장기 미사용 구독 (3개월 이상)
+      - 중복 구독 (비슷한 서비스)
+      - 해지 권장 구독 및 예상 절감액
+      한국어로 간결하게 답변해줘.

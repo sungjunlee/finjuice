@@ -1,0 +1,27 @@
+{
+  "$id": "audit_clear.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "action": {
+      "type": "string"
+    },
+    "entries_kept": {
+      "type": "integer"
+    },
+    "skipped_entries": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "_meta",
+    "entries_kept",
+    "action",
+    "skipped_entries"
+  ],
+  "title": "audit clear --json output",
+  "type": "object"
+}

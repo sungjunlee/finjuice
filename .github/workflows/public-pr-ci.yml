@@ -1,0 +1,73 @@
+# Public PR CI gate for fork-safe contributor feedback.
+# Full reliability checks run in the scheduled and trusted workflows.
+
+name: Public PR CI
+
+on:
+  pull_request:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.13"
+  UV_PYTHON: "3.13"
+
+jobs:
+  public-pr-gate:
+    name: Public PR Gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run ruff check
+        run: uv run ruff check .
+
+      - name: Run complexity ratchet
+        run: uv run python scripts/check_complexity_ratchet.py
+
+      - name: Run mypy
+        run: uv run mypy src/
+
+      - name: Run ruff format check
+        run: uv run ruff format --check .
+
+      - name: Check logger calls for financial PII
+        run: uv run python scripts/check_pii_logging.py
+
+      - name: Run core test gate
+        # Representative coverage of the ingest -> tag -> export pipeline plus
+        # config, schema, and tooling guards. Fast (~5s) and fork-safe; the full
+        # suite, coverage, and security gates stay in the full CI workflows.
+        run: |
+          uv run pytest --no-cov \
+            tests/scripts/test_check_pii_logging.py \
+            tests/scripts/test_check_complexity_ratchet.py \
+            tests/test_config.py \
+            tests/test_schema_registry.py \
+            tests/test_ingest_pipeline.py \
+            tests/test_tagging_pipeline.py \
+            tests/test_master_export.py \
+            tests/test_json_schemas.py \
+            tests/cli/test_version.py
