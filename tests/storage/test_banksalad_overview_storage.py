@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import polars as pl
+import pytest
 import yaml
 
 from finjuice.pipeline.storage.csv_partition import (
@@ -91,22 +92,28 @@ def test_banksalad_empty_reads_return_typed_dataframes(tmp_path: Path) -> None:
 
 
 def test_banksalad_dedup_keys_match_schema_yaml() -> None:
-    schema_path = Path(__file__).resolve().parents[2] / "templates" / "schema.yaml"
-    schema = yaml.safe_load(schema_path.read_text(encoding="utf-8"))
-    workbook_schemas = schema["banksalad_workbook_schemas"]
+    repo_root = Path(__file__).resolve().parents[2]
+    schema_paths = [
+        repo_root / "templates" / "schema.yaml",
+        repo_root / "src" / "finjuice" / "templates" / "schema.yaml",
+    ]
 
-    assert (
-        workbook_schemas["overview_facts_v0"]["key_policy"]["dedup_key"]
-        == BANKSALAD_OVERVIEW_FACT_DEDUP_KEY
-    )
-    assert (
-        workbook_schemas["balance_projection_v0"]["key_policy"]["dedup_key"]
-        == BANKSALAD_BALANCE_DEDUP_KEY
-    )
-    assert (
-        workbook_schemas["cashflow_projection_v0"]["key_policy"]["dedup_key"]
-        == BANKSALAD_CASHFLOW_DEDUP_KEY
-    )
+    for schema_path in schema_paths:
+        schema = yaml.safe_load(schema_path.read_text(encoding="utf-8"))
+        workbook_schemas = schema["banksalad_workbook_schemas"]
+
+        assert (
+            workbook_schemas["overview_facts_v0"]["key_policy"]["dedup_key"]
+            == BANKSALAD_OVERVIEW_FACT_DEDUP_KEY
+        )
+        assert (
+            workbook_schemas["balance_projection_v0"]["key_policy"]["dedup_key"]
+            == BANKSALAD_BALANCE_DEDUP_KEY
+        )
+        assert (
+            workbook_schemas["cashflow_projection_v0"]["key_policy"]["dedup_key"]
+            == BANKSALAD_CASHFLOW_DEDUP_KEY
+        )
 
 
 def test_banksalad_overview_facts_append_dedups_and_sorts_partitions(tmp_path: Path) -> None:
@@ -188,6 +195,23 @@ def test_banksalad_cashflow_uses_period_month_when_available(tmp_path: Path) -> 
         (None, "net"),
     ]
     assert list(july.select(["period_month", "category"]).iter_rows()) == [("2026-07", "expense")]
+
+
+def test_banksalad_cashflow_requires_valid_partition_source(tmp_path: Path) -> None:
+    base_dir = tmp_path / "banksalad" / "cashflow"
+    invalid_rows = pl.DataFrame(
+        {
+            "snapshot_date": [None, None],
+            "period_month": [None, "2026/06"],
+            "category": ["net", "income"],
+            "amount": [40.0, 120.0],
+        }
+    )
+
+    with pytest.raises(ValueError, match="Cashflow partition source must be populated as YYYY-MM"):
+        append_banksalad_cashflow(base_dir, invalid_rows)
+
+    assert not base_dir.exists()
 
 
 def test_banksalad_append_empty_batches_are_noops(tmp_path: Path) -> None:

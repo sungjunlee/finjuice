@@ -213,6 +213,7 @@ def append_banksalad_cashflow(
 
     df = _ensure_columns(df=df, spec=_CASHFLOW_SPEC)
     df = df.with_columns(_cashflow_partition_source_expr().alias("_partition_source"))
+    _validate_cashflow_partition_source(df)
 
     return _append_partitioned(
         spec=_CASHFLOW_SPEC,
@@ -380,6 +381,18 @@ def _cashflow_partition_source_expr() -> pl.Expr:
         .then(period_month)
         .otherwise(snapshot_month)
     )
+
+
+def _validate_cashflow_partition_source(df: pl.DataFrame) -> None:
+    valid_source = (
+        pl.col("_partition_source")
+        .cast(pl.Utf8, strict=False)
+        .str.contains(r"^\d{4}-\d{2}$")
+        .fill_null(False)
+    )
+    invalid_count = df.select((~valid_source).sum().alias("invalid_count")).item()
+    if invalid_count:
+        raise ValueError("Cashflow partition source must be populated as YYYY-MM")
 
 
 def _empty_append_result() -> dict[str, Any]:

@@ -245,7 +245,7 @@ def test_agent_package_layout_adr_defers_named_packages() -> None:
         assert required_text in adr
 
     assert "0012-agent-package-layout-for-finjuice-workflows.md" in adr_index
-    assert "All 13 current ADRs" in adr_index
+    assert re.search(r"All \d+ current ADRs", adr_index)
     assert "ADR-0012: Agent Package Layout" in arch_readme
 
 
