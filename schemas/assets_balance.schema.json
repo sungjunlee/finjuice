@@ -1,0 +1,97 @@
+{
+  "$id": "assets_balance.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "assets": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "amount": {
+            "type": "number"
+          },
+          "category": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "item_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "category",
+          "item_name",
+          "amount",
+          "currency"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "has_data": {
+      "type": "boolean"
+    },
+    "latest_month": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "liabilities": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "amount": {
+            "type": "number"
+          },
+          "category": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "item_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "category",
+          "item_name",
+          "amount",
+          "currency"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "snapshot_date": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "total_assets": {
+      "type": "number"
+    },
+    "total_liabilities": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "_meta",
+    "has_data",
+    "latest_month",
+    "snapshot_date",
+    "total_assets",
+    "total_liabilities",
+    "assets",
+    "liabilities"
+  ],
+  "title": "assets balance --json output",
+  "type": "object"
+}

@@ -2,8 +2,37 @@
   "$schema": "https://json-schema.org/draft-07/schema#",
   "name": "finjuice",
   "version": "0.6.2",
-  "generated_at": "2026-05-31T02:13:22+00:00",
+  "generated_at": "2026-06-15T13:53:04+00:00",
   "tools": [
+    {
+      "name": "assets.balance",
+      "description": "Show latest Banksalad overview balance rows.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "assets balance --json output",
+        "top_level_keys": [
+          "_meta",
+          "assets",
+          "has_data",
+          "latest_month",
+          "liabilities",
+          "snapshot_date",
+          "total_assets",
+          "total_liabilities"
+        ]
+      }
+    },
     {
       "name": "assets.show",
       "description": "Show detailed holdings.",
@@ -296,6 +325,7 @@
           "health",
           "month",
           "next_steps",
+          "review",
           "signals",
           "summary"
         ]
@@ -779,6 +809,39 @@
           "already_initialized",
           "data_dir",
           "status"
+        ]
+      }
+    },
+    {
+      "name": "inspect.xlsx",
+      "description": "Inspect workbook structure without exposing raw financial cell values.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "format": "path",
+            "description": "XLSX workbook to inspect"
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "file_path"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "inspect xlsx --json output",
+        "top_level_keys": [
+          "_meta",
+          "file",
+          "summary",
+          "worksheets"
         ]
       }
     },
@@ -1570,6 +1633,14 @@
             "description": "Preview rules that would be added without modifying rules.yaml",
             "default": false
           },
+          "file_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Limit suggestions to transactions imported from a specific file_id",
+            "default": null
+          },
           "json": {
             "type": "boolean",
             "description": "Output as JSON",
@@ -1854,6 +1925,14 @@
               "null"
             ],
             "description": "Persist a manual category override for category_final",
+            "default": null
+          },
+          "set_note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Persist a row-level manual note without changing analysis tags",
             "default": null
           },
           "dry_run": {

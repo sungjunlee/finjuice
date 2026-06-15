@@ -151,6 +151,36 @@ def test_overview_dry_run_reports_counts_without_writing(tmp_path: Path) -> None
     assert not (data_dir / "banksalad").exists()
 
 
+def test_overview_dry_run_after_write_reports_dedup_without_transaction_drift(
+    tmp_path: Path,
+) -> None:
+    """Preview and write paths agree on overview idempotency and transaction row counts."""
+    # Arrange
+    data_dir = _data_dir_with_overview_export(tmp_path)
+    file_path = data_dir / "imports" / "overview_export.xlsx"
+
+    # Act
+    before_write = preview_ingest_paths([file_path], data_dir / "transactions")
+    write_result = ingest_file_detailed(file_path, data_dir / "transactions")
+    after_write = preview_ingest_paths([file_path], data_dir / "transactions")
+
+    # Assert
+    assert before_write["files"][0]["source_rows"] == 1
+    assert after_write["files"][0]["source_rows"] == 1
+    assert (
+        before_write["transactions"]["estimated_new_rows"]
+        == write_result["transactions"]["inserted"]
+    )
+    assert after_write["transactions"]["estimated_new_rows"] == 0
+    assert after_write["transactions"]["estimated_dedup_skips"] == 1
+    assert after_write["banksalad_overview"]["overview_facts"]["estimated_new_rows"] == 0
+    assert after_write["banksalad_overview"]["balance"]["estimated_new_rows"] == 0
+    assert after_write["banksalad_overview"]["cashflow"]["estimated_new_rows"] == 0
+    assert after_write["banksalad_overview"]["overview_facts"]["estimated_dedup_skips"] > 0
+    assert after_write["banksalad_overview"]["balance"]["estimated_dedup_skips"] == 2
+    assert after_write["banksalad_overview"]["cashflow"]["estimated_dedup_skips"] == 1
+
+
 def test_ingest_json_includes_overview_counts_without_private_values(tmp_path: Path) -> None:
     """CLI JSON includes overview count summaries but not raw overview labels or values."""
     # Arrange
