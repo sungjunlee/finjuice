@@ -81,7 +81,7 @@ def _write_cashflow_block(
     cashflow_header_as_excel_dates: bool,
 ) -> None:
     """Write the synthetic cashflow block."""
-    sheet.write(row, 1, "현금흐름현황")
+    sheet.write(row, 1, "2.현금흐름현황")
     row += 1
     sheet.write(row, 1, "분류")
     if ambiguous_cashflow:

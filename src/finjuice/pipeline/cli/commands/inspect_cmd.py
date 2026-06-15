@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 from zipfile import BadZipFile
@@ -24,6 +25,13 @@ inspect_app = typer.Typer(
 )
 
 _OVERVIEW_SHEET = normalize_sheet_name("뱅샐현황")
+_CASHFLOW_ANCHORS = {
+    normalize_sheet_name("현금흐름현황"),
+    normalize_sheet_name("현금흐름"),
+    normalize_sheet_name("월별현금흐름"),
+    normalize_sheet_name("수입지출현황"),
+}
+_SECTION_NUMBER_PREFIX_RE = re.compile(r"^\d+[\.)．。]?")
 _ANCHOR_LABELS = {
     normalize_sheet_name("기준일"): "snapshot_date",
     normalize_sheet_name("자산"): "asset_anchor",
@@ -93,6 +101,8 @@ def _collect_allowlisted_anchors(sheet: Any) -> list[dict[str, Any]]:
         for cell in row:
             normalized = normalize_sheet_name(str(cell.value)) if cell.value is not None else ""
             anchor = _ANCHOR_LABELS.get(normalized)
+            if anchor is None and _is_cashflow_anchor(normalized):
+                anchor = "cashflow_anchor"
             if anchor is None:
                 continue
 
@@ -109,6 +119,12 @@ def _collect_allowlisted_anchors(sheet: Any) -> list[dict[str, Any]]:
             )
 
     return anchors
+
+
+def _is_cashflow_anchor(normalized: str) -> bool:
+    if normalized in _CASHFLOW_ANCHORS:
+        return True
+    return _SECTION_NUMBER_PREFIX_RE.sub("", normalized) in _CASHFLOW_ANCHORS
 
 
 def _detect_roles(sheet_name: str, anchor_names: set[str]) -> list[str]:
