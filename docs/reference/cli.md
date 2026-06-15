@@ -54,6 +54,7 @@ finjuice --version
 │ review          Show transactions that need manual review.                                                           │
 │ show            Show transactions with optional filters.                                                             │
 │ template        Run curated SQL query templates, including dynamic pivot tables                                      │
+│ inspect         Privacy-safe source file inspection.                                                                 │
 │ assets          View raw asset snapshot rows and per-position holdings                                               │
 │ networth        View aggregated net worth from asset snapshots plus assets.yaml. Use `finjuice assets` for raw       │
 │                 snapshot rows.                                                                                       │
@@ -638,8 +639,9 @@ finjuice --version
 │ --help          Show this message and exit.                                                                          │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ status   Show asset portfolio overview.                                                                              │
-│ show     Show detailed holdings.                                                                                     │
+│ status    Show asset portfolio overview.                                                                             │
+│ balance   Show latest Banksalad overview balance rows.                                                               │
+│ show      Show detailed holdings.                                                                                    │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```

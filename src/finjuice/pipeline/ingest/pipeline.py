@@ -8,6 +8,7 @@ Public API: preview_ingest_paths, preview_ingest_all_files, ingest_file, ingest_
 """
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from zipfile import BadZipFile
@@ -18,8 +19,12 @@ from ..metadata.import_history import archive_source_file, record_import
 from ..storage import csv_partition
 from ..validation import ValidationError
 from ._asset_processor import _build_asset_snapshot_dataframe, ingest_asset_snapshots
+from ._overview_processor import parse_banksalad_overview
 from ._partition_preview import (
+    _OverviewPreviewSpec,
     _preview_append_asset_snapshots,
+    _preview_append_banksalad_cashflow,
+    _preview_append_banksalad_overview_table,
     _preview_append_transactions,
 )
 from ._transaction_processor import (
@@ -30,6 +35,33 @@ from ._transaction_processor import (
 logger = logging.getLogger(__name__)
 
 _PREVIEW_FILE_ID = "dry_run_preview"
+_OVERVIEW_TABLE_NAMES = ("overview_facts", "balance", "cashflow")
+
+
+@dataclass
+class _OverviewPreviewCaches:
+    overview_facts: dict[tuple[int, int], set[tuple[object, ...]]]
+    balance: dict[tuple[int, int], set[tuple[object, ...]]]
+    cashflow: dict[tuple[int, int], set[tuple[object, ...]]]
+
+
+@dataclass
+class _PreviewContext:
+    csv_base_dir: Path
+    asset_base_dir: Path
+    banksalad_base_dir: Path
+    archive: bool
+    transaction_cache: dict[tuple[int, int], set[str]]
+    asset_cache: dict[tuple[int, int], set[tuple[str, str, str]]]
+    overview_caches: _OverviewPreviewCaches
+
+
+@dataclass(frozen=True)
+class _OverviewPreviewFrames:
+    overview_facts: pl.DataFrame
+    balance: pl.DataFrame
+    cashflow: pl.DataFrame
+    warnings: list[str]
 
 
 def preview_ingest_paths(
@@ -58,14 +90,13 @@ def preview_ingest_paths(
                 "affected_partitions": [],
                 "warnings": [],
             },
+            "banksalad_overview": _empty_overview_preview_summary(),
             "failed": 0,
             "failed_files": [],
             "files": [],
         }
 
-    asset_base_dir = csv_base_dir.parent / "assets" / "snapshots"
-    transaction_cache: dict[tuple[int, int], set[str]] = {}
-    asset_cache: dict[tuple[int, int], set[tuple[str, str, str]]] = {}
+    context = _build_preview_context(csv_base_dir, archive)
     file_summaries: list[dict[str, Any]] = []
     failed_files: list[tuple[str, str]] = []
     total_tx_inserted = 0
@@ -73,50 +104,28 @@ def preview_ingest_paths(
     total_validation_skips = 0
     total_asset_inserted = 0
     total_asset_skipped = 0
+    overview_totals = _empty_overview_preview_summary()
     all_tx_partitions: set[str] = set()
     all_asset_partitions: set[str] = set()
     all_asset_warnings: list[str] = []
 
     for file_path in file_paths:
         try:
-            df, source_rows, file_mtime = _load_transaction_source(file_path)
-            tx_df, skipped_rows = _build_transaction_dataframe(file_path, df, _PREVIEW_FILE_ID)
-            tx_preview = _preview_append_transactions(csv_base_dir, tx_df, transaction_cache)
-            asset_df, asset_warnings = _build_asset_snapshot_dataframe(
-                file_path=file_path,
-                file_id=_PREVIEW_FILE_ID,
-                file_mtime=file_mtime,
-            )
-            asset_preview = _preview_append_asset_snapshots(asset_base_dir, asset_df, asset_cache)
+            file_summary = _preview_ingest_path(file_path, context)
+            transactions = file_summary["transactions"]
+            assets = file_summary["asset_snapshots"]
+            overview_preview = file_summary["banksalad_overview"]
 
-            total_tx_inserted += int(tx_preview["rows_inserted"])
-            total_tx_skipped += int(tx_preview["rows_skipped"])
-            total_validation_skips += len(skipped_rows)
-            total_asset_inserted += int(asset_preview["rows_inserted"])
-            total_asset_skipped += int(asset_preview["rows_skipped"])
-            all_tx_partitions.update(str(path) for path in tx_preview["affected_partitions"])
-            all_asset_partitions.update(str(path) for path in asset_preview["affected_partitions"])
-            all_asset_warnings.extend(asset_warnings)
-
-            file_summaries.append(
-                {
-                    "source_file": str(file_path),
-                    "source_rows": source_rows,
-                    "would_archive": archive,
-                    "transactions": {
-                        "estimated_new_rows": int(tx_preview["rows_inserted"]),
-                        "estimated_dedup_skips": int(tx_preview["rows_skipped"]),
-                        "validation_skips": len(skipped_rows),
-                        "affected_partitions": tx_preview["affected_partitions"],
-                    },
-                    "asset_snapshots": {
-                        "estimated_new_rows": int(asset_preview["rows_inserted"]),
-                        "estimated_dedup_skips": int(asset_preview["rows_skipped"]),
-                        "affected_partitions": asset_preview["affected_partitions"],
-                        "warnings": asset_warnings,
-                    },
-                }
-            )
+            total_tx_inserted += int(transactions["estimated_new_rows"])
+            total_tx_skipped += int(transactions["estimated_dedup_skips"])
+            total_validation_skips += int(transactions["validation_skips"])
+            total_asset_inserted += int(assets["estimated_new_rows"])
+            total_asset_skipped += int(assets["estimated_dedup_skips"])
+            _merge_overview_preview_totals(overview_totals, overview_preview)
+            all_tx_partitions.update(str(path) for path in transactions["affected_partitions"])
+            all_asset_partitions.update(str(path) for path in assets["affected_partitions"])
+            all_asset_warnings.extend(assets["warnings"])
+            file_summaries.append(file_summary)
         except (FileNotFoundError, PermissionError) as e:
             logger.error("Cannot access source workbook (%s)", type(e).__name__)
             failed_files.append((file_path.name, f"File access error: {str(e)}"))
@@ -152,9 +161,80 @@ def preview_ingest_paths(
             "affected_partitions": sorted(all_asset_partitions),
             "warnings": all_asset_warnings,
         },
+        "banksalad_overview": _sorted_overview_summary(overview_totals),
         "failed": len(failed_files),
         "failed_files": failed_files,
         "files": file_summaries,
+    }
+
+
+def _build_preview_context(csv_base_dir: Path, archive: bool) -> _PreviewContext:
+    return _PreviewContext(
+        csv_base_dir=csv_base_dir,
+        asset_base_dir=csv_base_dir.parent / "assets" / "snapshots",
+        banksalad_base_dir=_banksalad_overview_base_dir(csv_base_dir),
+        archive=archive,
+        transaction_cache={},
+        asset_cache={},
+        overview_caches=_OverviewPreviewCaches(
+            overview_facts={},
+            balance={},
+            cashflow={},
+        ),
+    )
+
+
+def _preview_ingest_path(file_path: Path, context: _PreviewContext) -> dict[str, Any]:
+    df, source_rows, file_mtime = _load_transaction_source(file_path)
+    tx_df, skipped_rows = _build_transaction_dataframe(file_path, df, _PREVIEW_FILE_ID)
+    tx_preview = _preview_append_transactions(
+        context.csv_base_dir,
+        tx_df,
+        context.transaction_cache,
+    )
+    asset_df, asset_warnings = _build_asset_snapshot_dataframe(
+        file_path=file_path,
+        file_id=_PREVIEW_FILE_ID,
+        file_mtime=file_mtime,
+    )
+    asset_preview = _preview_append_asset_snapshots(
+        context.asset_base_dir,
+        asset_df,
+        context.asset_cache,
+    )
+    overview_parse = parse_banksalad_overview(
+        file_path=file_path,
+        file_id=_PREVIEW_FILE_ID,
+        file_mtime=file_mtime,
+    )
+    overview_preview = _preview_banksalad_overview(
+        context.banksalad_base_dir,
+        context.overview_caches,
+        _OverviewPreviewFrames(
+            overview_facts=overview_parse.overview_facts,
+            balance=overview_parse.balance,
+            cashflow=overview_parse.cashflow,
+            warnings=overview_parse.warnings,
+        ),
+    )
+
+    return {
+        "source_file": str(file_path),
+        "source_rows": source_rows,
+        "would_archive": context.archive,
+        "transactions": {
+            "estimated_new_rows": int(tx_preview["rows_inserted"]),
+            "estimated_dedup_skips": int(tx_preview["rows_skipped"]),
+            "validation_skips": len(skipped_rows),
+            "affected_partitions": tx_preview["affected_partitions"],
+        },
+        "asset_snapshots": {
+            "estimated_new_rows": int(asset_preview["rows_inserted"]),
+            "estimated_dedup_skips": int(asset_preview["rows_skipped"]),
+            "affected_partitions": asset_preview["affected_partitions"],
+            "warnings": asset_warnings,
+        },
+        "banksalad_overview": overview_preview,
     }
 
 
@@ -168,8 +248,21 @@ def preview_ingest_all_files(
 def ingest_file(
     file_path: Path, csv_base_dir: Path, archive: bool = False
 ) -> tuple[int, int, list[str]]:
+    """Ingest a single XLSX file and return the legacy transaction tuple."""
+    result = ingest_file_detailed(file_path, csv_base_dir, archive=archive)
+    transactions = result["transactions"]
+    return (
+        int(transactions["inserted"]),
+        int(transactions["dedup_skips"]),
+        list(transactions["skipped_rows"]),
+    )
+
+
+def ingest_file_detailed(
+    file_path: Path, csv_base_dir: Path, archive: bool = False
+) -> dict[str, Any]:
     """
-    Ingest a single XLSX file into CSV partitions (Polars-only).
+    Ingest a single XLSX file into CSV partitions with detailed summaries.
 
     The function performs the following steps:
     1. Read XLSX file with Polars
@@ -193,16 +286,10 @@ def ingest_file(
         archive: If True, copy source file to metadata/archives/ for reproducibility
             (default: False)
 
-    Returns:
-        Tuple of (inserted_count, updated_count, skipped_rows_list)
-
     Raises:
         ValidationError: If required columns are missing from file
     """
     df, source_rows, file_mtime = _load_transaction_source(file_path)
-
-    if source_rows == 0:
-        return 0, 0, []
 
     # Set up metadata tracking
     metadata_dir = csv_base_dir.parent / "metadata"
@@ -258,12 +345,36 @@ def ingest_file(
             f"{asset_inserted} inserted, {asset_skipped} duplicates skipped"
         )
 
+    overview_summary = _write_banksalad_overview(
+        file_path=file_path,
+        csv_base_dir=csv_base_dir,
+        file_id=file_id,
+        file_mtime=file_mtime,
+    )
+    if _overview_has_writes(overview_summary):
+        logger.info("Banksalad overview ingestion complete")
+    for warning in overview_summary["warnings"]:
+        logger.warning("Banksalad overview warning: %s", warning)
+
     logger.info(
         f"Ingestion complete (Polars): {inserted} inserted, "
         f"{skipped_dedup} duplicates skipped, {len(skipped_rows)} rows skipped (validation)"
     )
 
-    return inserted, skipped_dedup, skipped_rows
+    return {
+        "transactions": {
+            "inserted": int(inserted),
+            "dedup_skips": int(skipped_dedup),
+            "validation_skips": len(skipped_rows),
+            "skipped_rows": skipped_rows,
+        },
+        "asset_snapshots": {
+            "inserted": int(asset_inserted),
+            "dedup_skips": int(asset_skipped),
+            "warnings": asset_warnings,
+        },
+        "banksalad_overview": overview_summary,
+    }
 
 
 def ingest_all_files(import_dir: Path, csv_base_dir: Path, archive: bool = False) -> dict[str, Any]:
@@ -302,13 +413,15 @@ def ingest_all_files(import_dir: Path, csv_base_dir: Path, archive: bool = False
 
     total_inserted = 0
     total_updated = 0
+    overview_totals = _empty_overview_write_summary()
     failed_files = []
 
     for file_path in xlsx_files:
         try:
-            inserted, updated, skipped = ingest_file(file_path, csv_base_dir, archive=archive)
-            total_inserted += inserted
-            total_updated += updated
+            result = ingest_file_detailed(file_path, csv_base_dir, archive=archive)
+            total_inserted += int(result["transactions"]["inserted"])
+            total_updated += int(result["transactions"]["dedup_skips"])
+            _merge_overview_write_totals(overview_totals, result["banksalad_overview"])
         except (FileNotFoundError, PermissionError) as e:
             # File access errors - expected during file processing
             logger.error("Cannot access source workbook (%s)", type(e).__name__)
@@ -341,6 +454,7 @@ def ingest_all_files(import_dir: Path, csv_base_dir: Path, archive: bool = False
         "files": len(xlsx_files),
         "inserted": total_inserted,
         "updated": total_updated,
+        "banksalad_overview": overview_totals,
         "failed": len(failed_files),
         "failed_files": failed_files,
     }
@@ -352,3 +466,157 @@ def ingest_all_files(import_dir: Path, csv_base_dir: Path, archive: bool = False
     )
 
     return summary
+
+
+def _banksalad_overview_base_dir(csv_base_dir: Path) -> Path:
+    return csv_base_dir.parent / "banksalad"
+
+
+def _empty_ingest_file_summary() -> dict[str, Any]:
+    return {
+        "transactions": {
+            "inserted": 0,
+            "dedup_skips": 0,
+            "validation_skips": 0,
+            "skipped_rows": [],
+        },
+        "asset_snapshots": {"inserted": 0, "dedup_skips": 0, "warnings": []},
+        "banksalad_overview": _empty_overview_write_summary(),
+    }
+
+
+def _empty_overview_preview_summary() -> dict[str, Any]:
+    return {
+        table_name: {
+            "estimated_new_rows": 0,
+            "estimated_dedup_skips": 0,
+            "affected_partitions": [],
+        }
+        for table_name in _OVERVIEW_TABLE_NAMES
+    } | {"warnings": []}
+
+
+def _empty_overview_write_summary() -> dict[str, Any]:
+    return {
+        table_name: {
+            "inserted": 0,
+            "dedup_skips": 0,
+            "partitions_updated": 0,
+        }
+        for table_name in _OVERVIEW_TABLE_NAMES
+    } | {"warnings": []}
+
+
+def _preview_banksalad_overview(
+    banksalad_base_dir: Path,
+    caches: _OverviewPreviewCaches,
+    frames: _OverviewPreviewFrames,
+) -> dict[str, Any]:
+    result = _empty_overview_preview_summary()
+    result["overview_facts"] = _preview_overview_table_result(
+        _preview_append_banksalad_overview_table(
+            banksalad_base_dir / "overview_facts",
+            frames.overview_facts,
+            caches.overview_facts,
+            _OverviewPreviewSpec(
+                dedup_key=csv_partition.BANKSALAD_OVERVIEW_FACT_DEDUP_KEY,
+                read_month=csv_partition.read_banksalad_overview_facts_month,
+                path_builder=csv_partition.get_banksalad_overview_facts_partition_path,
+                partition_column="snapshot_date",
+            ),
+        )
+    )
+    result["balance"] = _preview_overview_table_result(
+        _preview_append_banksalad_overview_table(
+            banksalad_base_dir / "balance",
+            frames.balance,
+            caches.balance,
+            _OverviewPreviewSpec(
+                dedup_key=csv_partition.BANKSALAD_BALANCE_DEDUP_KEY,
+                read_month=csv_partition.read_banksalad_balance_month,
+                path_builder=csv_partition.get_banksalad_balance_partition_path,
+                partition_column="snapshot_date",
+            ),
+        )
+    )
+    result["cashflow"] = _preview_overview_table_result(
+        _preview_append_banksalad_cashflow(
+            banksalad_base_dir / "cashflow",
+            frames.cashflow,
+            caches.cashflow,
+        )
+    )
+    result["warnings"] = frames.warnings
+    return result
+
+
+def _write_banksalad_overview(
+    file_path: Path,
+    csv_base_dir: Path,
+    file_id: str,
+    file_mtime: str,
+) -> dict[str, Any]:
+    parsed = parse_banksalad_overview(file_path=file_path, file_id=file_id, file_mtime=file_mtime)
+    banksalad_base_dir = _banksalad_overview_base_dir(csv_base_dir)
+    result = _empty_overview_write_summary()
+
+    result["overview_facts"] = _write_overview_table_result(
+        csv_partition.append_banksalad_overview_facts(
+            banksalad_base_dir / "overview_facts",
+            parsed.overview_facts,
+        )
+    )
+    result["balance"] = _write_overview_table_result(
+        csv_partition.append_banksalad_balance(banksalad_base_dir / "balance", parsed.balance)
+    )
+    result["cashflow"] = _write_overview_table_result(
+        csv_partition.append_banksalad_cashflow(banksalad_base_dir / "cashflow", parsed.cashflow)
+    )
+    result["warnings"] = parsed.warnings
+    return result
+
+
+def _write_overview_table_result(append_result: dict[str, Any]) -> dict[str, int]:
+    return {
+        "inserted": int(append_result["rows_inserted"]),
+        "dedup_skips": int(append_result["rows_skipped"]),
+        "partitions_updated": int(append_result["partitions_updated"]),
+    }
+
+
+def _preview_overview_table_result(preview_result: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "estimated_new_rows": int(preview_result["rows_inserted"]),
+        "estimated_dedup_skips": int(preview_result["rows_skipped"]),
+        "affected_partitions": preview_result["affected_partitions"],
+    }
+
+
+def _merge_overview_preview_totals(total: dict[str, Any], item: dict[str, Any]) -> None:
+    for table_name in _OVERVIEW_TABLE_NAMES:
+        total[table_name]["estimated_new_rows"] += int(item[table_name]["estimated_new_rows"])
+        total[table_name]["estimated_dedup_skips"] += int(item[table_name]["estimated_dedup_skips"])
+        total[table_name]["affected_partitions"].extend(item[table_name]["affected_partitions"])
+    total["warnings"].extend(item["warnings"])
+
+
+def _merge_overview_write_totals(total: dict[str, Any], item: dict[str, Any]) -> None:
+    for table_name in _OVERVIEW_TABLE_NAMES:
+        total[table_name]["inserted"] += int(item[table_name]["inserted"])
+        total[table_name]["dedup_skips"] += int(item[table_name]["dedup_skips"])
+        total[table_name]["partitions_updated"] += int(item[table_name]["partitions_updated"])
+    total["warnings"].extend(item["warnings"])
+
+
+def _sorted_overview_summary(summary: dict[str, Any]) -> dict[str, Any]:
+    sorted_summary = {key: value.copy() for key, value in summary.items() if key != "warnings"}
+    for table_name in _OVERVIEW_TABLE_NAMES:
+        sorted_summary[table_name]["affected_partitions"] = sorted(
+            set(sorted_summary[table_name]["affected_partitions"])
+        )
+    sorted_summary["warnings"] = list(summary["warnings"])
+    return sorted_summary
+
+
+def _overview_has_writes(summary: dict[str, Any]) -> bool:
+    return any(summary[table_name]["inserted"] > 0 for table_name in _OVERVIEW_TABLE_NAMES)

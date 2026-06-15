@@ -20,6 +20,14 @@ def _write_snapshot(data_dir: Path, month: str, rows: list[dict[str, object]]) -
     pl.DataFrame(rows).write_csv(partition_dir / "snapshots.csv")
 
 
+def _write_balance(data_dir: Path, month: str, rows: list[dict[str, object]]) -> None:
+    """Write a Banksalad balance partition for tests."""
+    year, mon = month.split("-")
+    partition_dir = data_dir / "banksalad" / "balance" / year / mon
+    partition_dir.mkdir(parents=True, exist_ok=True)
+    pl.DataFrame(rows).write_csv(partition_dir / "balance.csv")
+
+
 @pytest.fixture
 def asset_data_dir(tmp_path: Path) -> Path:
     """Create a data directory with asset snapshot fixtures."""
@@ -202,3 +210,99 @@ class TestAssetsShow:
         assert "--month" in result.output
         assert "--account" in result.output
         assert "--limit" in result.output
+
+
+class TestAssetsBalance:
+    """Tests for finjuice assets balance."""
+
+    def test_balance_json_returns_latest_overview_rows(self, empty_data_dir: Path) -> None:
+        _write_balance(
+            empty_data_dir,
+            "2026-05",
+            [
+                {
+                    "snapshot_date": "2026-05-20",
+                    "side": "asset",
+                    "category": "deposit",
+                    "item_name": "예금",
+                    "amount": 1000000.0,
+                    "currency": "KRW",
+                    "source_fact_id": "fact_old",
+                    "file_id": "260520_1",
+                    "source_row": 5,
+                }
+            ],
+        )
+        _write_balance(
+            empty_data_dir,
+            "2026-06",
+            [
+                {
+                    "snapshot_date": "2026-06-15",
+                    "side": "asset",
+                    "category": "deposit",
+                    "item_name": "입출금",
+                    "amount": 3000000.0,
+                    "currency": "KRW",
+                    "source_fact_id": "fact_asset",
+                    "file_id": "260615_1",
+                    "source_row": 5,
+                },
+                {
+                    "snapshot_date": "2026-06-15",
+                    "side": "liability",
+                    "category": "loan",
+                    "item_name": "신용대출",
+                    "amount": 1200000.0,
+                    "currency": "KRW",
+                    "source_fact_id": "fact_liability",
+                    "file_id": "260615_1",
+                    "source_row": 6,
+                },
+            ],
+        )
+
+        result = runner.invoke(
+            app,
+            ["--data-dir", str(empty_data_dir), "assets", "balance", "--json"],
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["_meta"]["command"] == "assets balance"
+        assert payload["has_data"] is True
+        assert payload["latest_month"] == "2026-06"
+        assert payload["snapshot_date"] == "2026-06-15"
+        assert payload["total_assets"] == 3000000.0
+        assert payload["total_liabilities"] == 1200000.0
+        assert payload["assets"] == [
+            {
+                "category": "deposit",
+                "item_name": "입출금",
+                "amount": 3000000.0,
+                "currency": "KRW",
+            }
+        ]
+        assert payload["liabilities"] == [
+            {
+                "category": "loan",
+                "item_name": "신용대출",
+                "amount": 1200000.0,
+                "currency": "KRW",
+            }
+        ]
+        assert "source_fact_id" not in result.output
+        assert "file_id" not in result.output
+
+    def test_balance_no_data_json(self, empty_data_dir: Path) -> None:
+        result = runner.invoke(
+            app,
+            ["--data-dir", str(empty_data_dir), "assets", "balance", "--json"],
+        )
+
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["_meta"]["command"] == "assets balance"
+        assert payload["has_data"] is False
+        assert payload["assets"] == []
+        assert payload["liabilities"] == []

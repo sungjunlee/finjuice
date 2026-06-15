@@ -31,6 +31,7 @@ def compute_full_pipeline_ingest(config: Any) -> dict[str, Any]:
             "files_processed": int(summary["files"]),
             "new_transactions": int(summary["inserted"]),
             "updated": int(summary["updated"]),
+            "banksalad_overview": summary.get("banksalad_overview", {}),
             "failed": int(summary["failed"]),
             "failed_files": summary.get("failed_files", []),
         },
