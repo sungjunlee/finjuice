@@ -32,6 +32,14 @@ def _write_snapshot(data_dir: Path, month: str, rows: list[dict[str, object]]) -
     pl.DataFrame(rows).write_csv(partition_dir / "snapshots.csv")
 
 
+def _write_balance(data_dir: Path, month: str, rows: list[dict[str, object]]) -> None:
+    """Write a Banksalad balance partition for tests."""
+    year, mon = month.split("-")
+    partition_dir = data_dir / "banksalad" / "balance" / year / mon
+    partition_dir.mkdir(parents=True, exist_ok=True)
+    pl.DataFrame(rows).write_csv(partition_dir / "balance.csv")
+
+
 def _write_assets_yaml(data_dir: Path, raw_text: str) -> None:
     """Write assets.yaml into a test data directory."""
     (data_dir / "assets.yaml").write_text(raw_text, encoding="utf-8")
@@ -281,6 +289,160 @@ def test_networth_snapshot_only_without_assets_yaml(tmp_path: Path) -> None:
             "command": "finjuice assets status --json",
         }
     ]
+
+
+def test_networth_prefers_overview_balance_when_present(tmp_path: Path) -> None:
+    data_dir = _init_data_dir(tmp_path, "overview-preferred")
+    _write_snapshot(
+        data_dir,
+        "2026-06",
+        [
+            {
+                "snapshot_date": "2026-06-15",
+                "account_id": "증권계좌",
+                "instrument_id": "주식형펀드",
+                "quantity": 1.0,
+                "market_value": 999999999.0,
+                "currency": "KRW",
+                "file_id": "260615_1",
+                "source_row": 1,
+            }
+        ],
+    )
+    _write_balance(
+        data_dir,
+        "2026-06",
+        [
+            {
+                "snapshot_date": "2026-06-15",
+                "side": "asset",
+                "category": "financial",
+                "item_name": "증권",
+                "amount": 300000000.0,
+                "currency": "KRW",
+                "source_fact_id": "fact_asset",
+                "file_id": "260615_1",
+                "source_row": 10,
+            },
+            {
+                "snapshot_date": "2026-06-15",
+                "side": "liability",
+                "category": "loan",
+                "item_name": "마이너스통장",
+                "amount": 50000000.0,
+                "currency": "KRW",
+                "source_fact_id": "fact_liability",
+                "file_id": "260615_1",
+                "source_row": 11,
+            },
+        ],
+    )
+
+    result = runner.invoke(app, ["--data-dir", str(data_dir), "networth", "--json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["as_of"] == "2026-06-15"
+    assert payload["total_assets"] == 300000000.0
+    assert payload["total_liabilities"] == 50000000.0
+    assert payload["net_worth"] == 250000000.0
+    assert payload["signals"]["snapshot_status"] == "overview_only"
+    assert payload["signals"]["has_overview_balance_data"] is True
+    assert payload["signals"]["has_snapshot_data"] is False
+
+
+def test_networth_manual_assets_supplement_overview_balance(tmp_path: Path) -> None:
+    data_dir = _init_data_dir(tmp_path, "overview-supplement")
+    _write_balance(
+        data_dir,
+        "2026-06",
+        [
+            {
+                "snapshot_date": "2026-06-15",
+                "side": "asset",
+                "category": "deposit",
+                "item_name": "예금",
+                "amount": 100000000.0,
+                "currency": "KRW",
+                "source_fact_id": "fact_asset",
+                "file_id": "260615_1",
+                "source_row": 10,
+            }
+        ],
+    )
+    _write_assets_yaml(
+        data_dir,
+        """version: 1
+manual_assets:
+  - name: 거주 부동산
+    category: real_estate
+    value: 900000000
+""",
+    )
+
+    result = runner.invoke(
+        app,
+        ["--data-dir", str(data_dir), "networth", "breakdown", "--by", "asset", "--json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    by_name = {row["asset_name"]: row for row in payload["breakdown"]}
+    assert by_name["예금"]["value"] == 100000000.0
+    assert by_name["거주 부동산"]["value"] == 900000000.0
+
+
+def test_networth_manual_exact_name_overrides_overview_balance(tmp_path: Path) -> None:
+    data_dir = _init_data_dir(tmp_path, "overview-override")
+    _write_balance(
+        data_dir,
+        "2026-06",
+        [
+            {
+                "snapshot_date": "2026-06-15",
+                "side": "asset",
+                "category": "deposit",
+                "item_name": "예금",
+                "amount": 100000000.0,
+                "currency": "KRW",
+                "source_fact_id": "fact_asset",
+                "file_id": "260615_1",
+                "source_row": 10,
+            },
+            {
+                "snapshot_date": "2026-06-15",
+                "side": "liability",
+                "category": "loan",
+                "item_name": "담보대출",
+                "amount": 300000000.0,
+                "currency": "KRW",
+                "source_fact_id": "fact_liability",
+                "file_id": "260615_1",
+                "source_row": 11,
+            },
+        ],
+    )
+    _write_assets_yaml(
+        data_dir,
+        """version: 1
+manual_assets:
+  - name: 예금
+    category: deposit
+    value: 120000000
+liabilities:
+  - name: 담보대출
+    principal: 250000000
+""",
+    )
+
+    result = runner.invoke(app, ["--data-dir", str(data_dir), "networth", "--json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["total_assets"] == 120000000.0
+    assert payload["total_liabilities"] == 250000000.0
+    assert payload["net_worth"] == -130000000.0
+    assert payload["signals"]["snapshot_status"] == "overview_and_manual"
 
 
 def test_networth_manual_only_when_no_snapshot_exists_for_date(tmp_path: Path) -> None:
