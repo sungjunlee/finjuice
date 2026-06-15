@@ -28,7 +28,7 @@ def _write_private_sentinel_workbook(file_path: Path) -> None:
     overview.write(4, 4, "대출")
     overview.write(4, 5, "PRIVATE_LOAN_SENTINEL")
     overview.write(4, 6, 123_456_789)
-    overview.write(7, 1, "현금흐름현황")
+    overview.write(7, 1, "2.현금흐름현황")
 
     tx_sheet = workbook.add_worksheet("가계부 내역")
     for col_idx, header in enumerate(["날짜", "시간", "타입", "내용", "금액", "결제수단"]):

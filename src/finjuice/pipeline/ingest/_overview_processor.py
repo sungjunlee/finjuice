@@ -33,6 +33,7 @@ _CASHFLOW_ANCHORS = {
     normalize_sheet_name(value)
     for value in ("현금흐름현황", "현금흐름", "월별현금흐름", "수입지출현황")
 }
+_SECTION_NUMBER_PREFIX_RE = re.compile(r"^\d+[\.)．。]?")
 _CATEGORY_HEADERS = {
     normalize_sheet_name(value)
     for value in ("분류", "카테고리", "구분", "종류", "자산분류", "부채분류")
@@ -259,7 +260,7 @@ def _has_overview_anchors(sheet: Any) -> bool:
             asset_anchors.append(_Anchor(row=row, col=col, text=str(value).strip()))
         elif normalized == _LIABILITY_ANCHOR:
             liability_anchors.append(_Anchor(row=row, col=col, text=str(value).strip()))
-        elif normalized in _CASHFLOW_ANCHORS:
+        elif _is_cashflow_anchor(normalized):
             return True
 
     return _find_balance_anchor_pair(asset_anchors, liability_anchors) is not None
@@ -458,7 +459,7 @@ def _find_balance_end_row(sheet: Any, start_row: int) -> int:
 
     for row in range(start_row, sheet.max_row + 1):
         row_values = [_cell_value(sheet, row, col) for col in range(1, sheet.max_column + 1)]
-        if any(_normalize_cell_text(value) in _ROW_BREAK_ANCHORS for value in row_values):
+        if any(_is_row_break_anchor(_normalize_cell_text(value)) for value in row_values):
             break
 
         if any(_cell_text(value) for value in row_values):
@@ -597,9 +598,23 @@ def _parse_cashflow_block(
 
 def _find_cashflow_anchor(sheet: Any) -> _Anchor | None:
     for row, col, value in _iter_non_empty_cells(sheet):
-        if _normalize_cell_text(value) in _CASHFLOW_ANCHORS:
+        if _is_cashflow_anchor(_normalize_cell_text(value)):
             return _Anchor(row=row, col=col, text=str(value).strip())
     return None
+
+
+def _is_cashflow_anchor(normalized: str) -> bool:
+    return _matches_numbered_anchor(normalized, _CASHFLOW_ANCHORS)
+
+
+def _is_row_break_anchor(normalized: str) -> bool:
+    return _matches_numbered_anchor(normalized, _ROW_BREAK_ANCHORS)
+
+
+def _matches_numbered_anchor(normalized: str, anchors: set[str]) -> bool:
+    if normalized in anchors:
+        return True
+    return _SECTION_NUMBER_PREFIX_RE.sub("", normalized) in anchors
 
 
 def _detect_cashflow_header(sheet: Any, anchor_row: int) -> tuple[int, int, dict[int, str]] | None:
@@ -633,7 +648,7 @@ def _find_table_end_row(sheet: Any, start_row: int, start_col: int, end_col: int
 
     for row in range(start_row, sheet.max_row + 1):
         row_values = [_cell_value(sheet, row, col) for col in range(start_col, end_col + 1)]
-        if any(_normalize_cell_text(value) in _ROW_BREAK_ANCHORS for value in row_values):
+        if any(_is_row_break_anchor(_normalize_cell_text(value)) for value in row_values):
             break
 
         if any(_cell_text(value) for value in row_values):
