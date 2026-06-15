@@ -530,6 +530,248 @@ schemas:
           example: 597
           note: "Enables traceability back to original import file"
 
+# Banksalad Overview Workbook Schemas (ADR-0013)
+banksalad_workbook_schemas:
+  overview_facts_v0:
+    active: true
+    introduced: "2026-06-15"
+    adr: "docs/architecture/decisions/0013-banksalad-overview-workbook-ingest.md"
+    description: "Source-fidelity facts parsed from the formatted 뱅샐현황 worksheet"
+    source_sheet:
+      preferred_name: "뱅샐현황"
+      role_detection:
+        - "sheet name equals 뱅샐현황"
+        - "or worksheet contains recognizable overview anchors such as 자산/부채/현금흐름현황"
+      parser_policy:
+        fixed_row_numbers: false
+        anchor_based_detection: true
+        privacy_safe_inspect_only: true
+    partition_schema:
+      location_pattern: "data/banksalad/overview_facts/YYYY/MM/facts.csv"
+      format: "CSV"
+      encoding: "utf-8"
+      delimiter: ","
+      header: true
+      sort_by: "snapshot_date,block_id,source_row,source_col"
+      line_terminator: "\n"
+    required_columns:
+      - fact_id
+      - snapshot_date
+      - sheet_name
+      - block_id
+      - block_title
+      - fact_kind
+      - row_label
+      - column_label
+      - value_numeric
+      - value_text
+      - value_type
+      - file_id
+      - source_row
+      - source_col
+    key_policy:
+      dedup_grain: "source cell or derived fact"
+      dedup_key:
+        - "snapshot_date"
+        - "block_id"
+        - "fact_kind"
+        - "row_label"
+        - "column_label"
+        - "source_row"
+        - "source_col"
+      fact_id: "sha256(normalized dedup key)[:16]"
+      snapshot_date:
+        source_priority: ["workbook_export_end_date", "file_mtime_local_date"]
+    privacy_policy:
+      local_storage_may_contain_private_labels: true
+      inspect_output_must_redact:
+        - "amounts"
+        - "account names"
+        - "product names"
+        - "email addresses"
+        - "raw row contents"
+    columns:
+      - name: fact_id
+        type: string
+        nullable: false
+        description: "Stable compact ID for one overview worksheet fact"
+      - name: snapshot_date
+        type: date
+        format: "YYYY-MM-DD"
+        nullable: false
+        description: "Workbook snapshot or export end date"
+      - name: sheet_name
+        type: string
+        nullable: false
+        description: "Source worksheet name, normally 뱅샐현황"
+      - name: block_id
+        type: string
+        nullable: false
+        description: "Detected overview block identifier such as cashflow_monthly or balance_status"
+      - name: block_title
+        type: string
+        nullable: true
+        description: "Human source block label when safe to store locally"
+      - name: fact_kind
+        type: string
+        nullable: false
+        enum: ["cell", "table_value", "section_label", "derived"]
+        description: "Generic fact shape before typed projections"
+      - name: row_label
+        type: string
+        nullable: true
+        description: "Local row label from the overview worksheet"
+      - name: column_label
+        type: string
+        nullable: true
+        description: "Local column label from the overview worksheet"
+      - name: value_numeric
+        type: float
+        nullable: true
+        description: "Numeric value when the fact is numeric"
+      - name: value_text
+        type: string
+        nullable: true
+        description: "Text value when preserving a non-numeric fact is useful"
+      - name: value_type
+        type: string
+        nullable: false
+        enum: ["number", "text", "date", "empty"]
+        description: "Original value kind after parsing"
+      - name: file_id
+        type: string
+        nullable: false
+        references: "data/metadata/import_history.csv"
+      - name: source_row
+        type: integer
+        nullable: false
+        description: "1-indexed source worksheet row"
+      - name: source_col
+        type: integer
+        nullable: false
+        description: "1-indexed source worksheet column"
+
+  balance_projection_v0:
+    active: true
+    introduced: "2026-06-15"
+    adr: "docs/architecture/decisions/0013-banksalad-overview-workbook-ingest.md"
+    description: "Typed asset/liability projection derived from 뱅샐현황 overview facts"
+    partition_schema:
+      location_pattern: "data/banksalad/balance/YYYY/MM/balance.csv"
+      format: "CSV"
+      encoding: "utf-8"
+      delimiter: ","
+      header: true
+      sort_by: "snapshot_date,side,category,item_name"
+      line_terminator: "\n"
+    required_columns:
+      - snapshot_date
+      - side
+      - category
+      - item_name
+      - amount
+      - currency
+      - source_fact_id
+      - file_id
+      - source_row
+    key_policy:
+      dedup_grain: "daily balance item"
+      dedup_key:
+        - "snapshot_date"
+        - "side"
+        - "category"
+        - "item_name"
+      side:
+        enum: ["asset", "liability"]
+    columns:
+      - name: snapshot_date
+        type: date
+        format: "YYYY-MM-DD"
+        nullable: false
+      - name: side
+        type: string
+        nullable: false
+        enum: ["asset", "liability"]
+        description: "Whether the row contributes to assets or liabilities"
+      - name: category
+        type: string
+        nullable: true
+        description: "Banksalad overview category near the item row"
+      - name: item_name
+        type: string
+        nullable: false
+        description: "Local item/account/product label from the overview worksheet"
+      - name: amount
+        type: float
+        nullable: false
+        description: "Balance amount in source currency"
+      - name: currency
+        type: string
+        nullable: false
+        default: "KRW"
+      - name: source_fact_id
+        type: string
+        nullable: false
+        references: "banksalad_workbook_schemas.overview_facts_v0.fact_id"
+      - name: file_id
+        type: string
+        nullable: false
+        references: "data/metadata/import_history.csv"
+      - name: source_row
+        type: integer
+        nullable: false
+
+  cashflow_projection_v0:
+    active: true
+    introduced: "2026-06-15"
+    adr: "docs/architecture/decisions/0013-banksalad-overview-workbook-ingest.md"
+    description: "Typed monthly cashflow projection derived from 뱅샐현황 overview facts"
+    partition_schema:
+      location_pattern: "data/banksalad/cashflow/YYYY/MM/cashflow.csv"
+      format: "CSV"
+      encoding: "utf-8"
+      delimiter: ","
+      header: true
+      sort_by: "period_month,category"
+      line_terminator: "\n"
+    required_columns:
+      - snapshot_date
+      - period_month
+      - category
+      - amount
+      - source_fact_id
+      - file_id
+    key_policy:
+      dedup_grain: "monthly cashflow category"
+      dedup_key:
+        - "snapshot_date"
+        - "period_month"
+        - "category"
+    columns:
+      - name: snapshot_date
+        type: date
+        format: "YYYY-MM-DD"
+        nullable: false
+      - name: period_month
+        type: string
+        format: "YYYY-MM"
+        nullable: false
+      - name: category
+        type: string
+        nullable: false
+        description: "Cashflow row label such as income, expense, or net cashflow"
+      - name: amount
+        type: float
+        nullable: false
+      - name: source_fact_id
+        type: string
+        nullable: false
+        references: "banksalad_workbook_schemas.overview_facts_v0.fact_id"
+      - name: file_id
+        type: string
+        nullable: false
+        references: "data/metadata/import_history.csv"
+
 # Asset Snapshot Schema (Issue #223)
 asset_schemas:
   snapshot_v0:

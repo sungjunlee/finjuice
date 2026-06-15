@@ -245,8 +245,29 @@ def test_agent_package_layout_adr_defers_named_packages() -> None:
         assert required_text in adr
 
     assert "0012-agent-package-layout-for-finjuice-workflows.md" in adr_index
-    assert "All 12 current ADRs" in adr_index
+    assert "All 13 current ADRs" in adr_index
     assert "ADR-0012: Agent Package Layout" in arch_readme
+
+
+def test_banksalad_overview_workbook_ingest_adr_is_indexed() -> None:
+    """Banksalad overview workbook ingest should be captured in ADR indexes."""
+    repo_root = _repo_root()
+    adr = (
+        repo_root / "docs/architecture/decisions/0013-banksalad-overview-workbook-ingest.md"
+    ).read_text(encoding="utf-8")
+    adr_index = (repo_root / "docs/architecture/decisions/README.md").read_text(encoding="utf-8")
+    arch_readme = (repo_root / "docs/architecture/README.md").read_text(encoding="utf-8")
+
+    for required_text in (
+        "ingest the whole `뱅샐현황` worksheet as normalized workbook facts",
+        "Do not parse `뱅샐현황` by fixed row numbers",
+        "The inspect/debug surface may print only metadata",
+        "`assets balance`",
+    ):
+        assert required_text in adr
+
+    assert "0013-banksalad-overview-workbook-ingest.md" in adr_index
+    assert "ADR-0013: Banksalad Overview Workbook Ingest" in arch_readme
 
 
 def test_runtime_update_check_docs_cover_ttl_and_snooze() -> None:
