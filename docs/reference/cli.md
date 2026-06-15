@@ -54,6 +54,7 @@ finjuice --version
 │ review          Show transactions that need manual review.                                                           │
 │ show            Show transactions with optional filters.                                                             │
 │ template        Run curated SQL query templates, including dynamic pivot tables                                      │
+│ inspect         Privacy-safe source file inspection.                                                                 │
 │ assets          View raw asset snapshot rows and per-position holdings                                               │
 │ networth        View aggregated net worth from asset snapshots plus assets.yaml. Use `finjuice assets` for raw       │
 │                 snapshot rows.                                                                                       │
