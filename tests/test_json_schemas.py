@@ -23,6 +23,7 @@ runner = CliRunner()
 CATALOGUED_COMMANDS = [
     ("assets show", ["assets", "show", "--json"], "assets_show.schema.json"),
     ("assets status", ["assets", "status", "--json"], "assets_status.schema.json"),
+    ("assets balance", ["assets", "balance", "--json"], "assets_balance.schema.json"),
     ("audit clear", ["audit", "clear", "--yes", "--json"], "audit_clear.schema.json"),
     ("status", ["status", "--json"], "status.schema.json"),
     ("checkup", ["checkup", "--json"], "checkup.schema.json"),
@@ -41,6 +42,16 @@ CATALOGUED_COMMANDS = [
             "--json",
         ],
         "import.schema.json",
+    ),
+    (
+        "inspect xlsx",
+        [
+            "inspect",
+            "xlsx",
+            str(REPO_ROOT / "tests" / "fixtures" / "sample_banksalad.xlsx"),
+            "--json",
+        ],
+        "inspect_xlsx.schema.json",
     ),
     ("ingest", ["ingest", "--dry-run", "--json"], "ingest.schema.json"),
     ("index", ["index", "--json"], "index.schema.json"),

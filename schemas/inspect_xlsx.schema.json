@@ -1,0 +1,118 @@
+{
+  "$id": "inspect_xlsx.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "file": {
+      "additionalProperties": true,
+      "properties": {
+        "extension": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "extension"
+      ],
+      "type": "object"
+    },
+    "summary": {
+      "additionalProperties": true,
+      "properties": {
+        "detected_roles": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "worksheet_count": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "worksheet_count",
+        "detected_roles"
+      ],
+      "type": "object"
+    },
+    "worksheets": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "allowlisted_anchors": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {
+                "anchor": {
+                  "type": "string"
+                },
+                "column": {
+                  "type": "integer"
+                },
+                "row": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "anchor",
+                "row",
+                "column"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "column_count": {
+            "type": "integer"
+          },
+          "detected_blocks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "detected_roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "index": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "row_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "index",
+          "name",
+          "row_count",
+          "column_count",
+          "detected_roles",
+          "detected_blocks",
+          "allowlisted_anchors"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "file",
+    "summary",
+    "worksheets"
+  ],
+  "title": "inspect xlsx --json output",
+  "type": "object"
+}
