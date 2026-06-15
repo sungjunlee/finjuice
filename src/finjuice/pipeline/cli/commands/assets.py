@@ -27,6 +27,7 @@ from finjuice.pipeline.cli.output import (
 from finjuice.pipeline.cli.utils import get_config
 from finjuice.pipeline.networth import (
     discover_snapshot_months,
+    load_latest_balance_partition,
     load_latest_snapshot_partition,
     load_snapshot_partition,
 )
@@ -172,6 +173,37 @@ def _build_show_result(
     }
 
 
+def _build_balance_result(balance_dir: Path) -> dict[str, Any]:
+    """Build latest Banksalad overview balance data."""
+    df, month_label = load_latest_balance_partition(balance_dir)
+    if df is None or df.is_empty():
+        return {
+            "has_data": False,
+            "latest_month": None,
+            "snapshot_date": None,
+            "total_assets": 0.0,
+            "total_liabilities": 0.0,
+            "assets": [],
+            "liabilities": [],
+        }
+
+    latest_date = df.select(pl.col("snapshot_date").max()).to_series()[0]
+    latest_df = df.filter(pl.col("snapshot_date") == latest_date) if latest_date else df
+
+    assets = _balance_side_rows(latest_df, "asset")
+    liabilities = _balance_side_rows(latest_df, "liability")
+
+    return {
+        "has_data": True,
+        "latest_month": month_label,
+        "snapshot_date": str(latest_date) if latest_date else None,
+        "total_assets": sum(float(row["amount"]) for row in assets),
+        "total_liabilities": sum(float(row["amount"]) for row in liabilities),
+        "assets": assets,
+        "liabilities": liabilities,
+    }
+
+
 def _render_show(result: dict[str, Any]) -> None:
     """Render detailed holdings table."""
     if not result.get("has_data"):
@@ -200,6 +232,59 @@ def _render_show(result: dict[str, Any]) -> None:
     typer.echo(f"\n📊 {result['total_count']} positions")
 
 
+def _render_balance(result: dict[str, Any]) -> None:
+    """Render Banksalad overview balance rows."""
+    if not result.get("has_data"):
+        info("뱅샐현황 balance 데이터가 없습니다. Banksalad XLSX를 import 하세요.")
+        return
+
+    section("Banksalad Overview Balance")
+    table_summary(
+        "Latest Balance",
+        [
+            ("Snapshot Date", result["snapshot_date"] or "-"),
+            ("Total Assets", _format_krw(float(result["total_assets"]))),
+            ("Total Liabilities", _format_krw(float(result["total_liabilities"]))),
+        ],
+    )
+
+    for title, rows in (("Assets", result["assets"]), ("Liabilities", result["liabilities"])):
+        if not rows:
+            continue
+        table = Table(title=title)
+        table.add_column("Category", style="cyan")
+        table.add_column("Item", style="yellow")
+        table.add_column("Amount", justify="right", style="green")
+        table.add_column("Currency")
+        for row in rows:
+            table.add_row(
+                str(row["category"]),
+                str(row["item_name"]),
+                _format_krw(float(row["amount"])),
+                str(row["currency"]),
+            )
+        console.print(table)
+
+
+def _balance_side_rows(df: pl.DataFrame, side: str) -> list[dict[str, Any]]:
+    rows = (
+        df.filter(pl.col("side") == side)
+        .group_by(["category", "item_name", "currency"])
+        .agg(pl.col("amount").sum().alias("amount"))
+        .sort("amount", descending=True)
+        .to_dicts()
+    )
+    return [
+        {
+            "category": row["category"],
+            "item_name": row["item_name"],
+            "amount": float(row["amount"] or 0.0),
+            "currency": row["currency"] or "KRW",
+        }
+        for row in rows
+    ]
+
+
 @assets_app.command()
 def status(
     ctx: typer.Context,
@@ -219,6 +304,28 @@ def status(
             error_code=ErrorCode.GENERAL_ERROR,
             json_output=json_output,
             command="assets status",
+        )
+
+
+@assets_app.command()
+def balance(
+    ctx: typer.Context,
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """Show latest Banksalad overview balance rows."""
+    config = get_config(ctx)
+    balance_dir = config.data_dir / "banksalad" / "balance"
+
+    try:
+        result = _build_balance_result(balance_dir)
+        emit(result, json_output, _render_balance, command="assets balance")
+    except Exception as exc:  # intended catch-all for CLI robustness
+        logger.error("Failed to load Banksalad overview balance: %s", exc, exc_info=True)
+        emit_error(
+            f"Failed to load Banksalad overview balance: {exc}",
+            error_code=ErrorCode.GENERAL_ERROR,
+            json_output=json_output,
+            command="assets balance",
         )
 
 

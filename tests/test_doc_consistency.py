@@ -270,6 +270,16 @@ def test_banksalad_overview_workbook_ingest_adr_is_indexed() -> None:
     assert "ADR-0013: Banksalad Overview Workbook Ingest" in arch_readme
 
 
+def test_banksalad_overview_cli_reference_lists_balance_surface() -> None:
+    """Generated CLI reference should keep the Banksalad overview balance surface visible."""
+    repo_root = _repo_root()
+    cli_reference = (repo_root / "docs/reference/cli.md").read_text(encoding="utf-8")
+
+    assert "## `finjuice assets`" in cli_reference
+    assert "balance" in cli_reference
+    assert "Show latest Banksalad overview balance rows." in cli_reference
+
+
 def test_runtime_update_check_docs_cover_ttl_and_snooze() -> None:
     """Runtime setup docs should explain non-blocking TTL checks and bounded snooze."""
     repo_root = _repo_root()

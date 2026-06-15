@@ -639,8 +639,9 @@ finjuice --version
 │ --help          Show this message and exit.                                                                          │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ status   Show asset portfolio overview.                                                                              │
-│ show     Show detailed holdings.                                                                                     │
+│ status    Show asset portfolio overview.                                                                             │
+│ balance   Show latest Banksalad overview balance rows.                                                               │
+│ show      Show detailed holdings.                                                                                    │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```

@@ -73,6 +73,28 @@ def test_inspect_xlsx_json_reports_structure_without_private_values(tmp_path: Pa
     }
 
 
+def test_inspect_xlsx_text_reports_structure_without_private_values(tmp_path: Path) -> None:
+    # Arrange
+    workbook_path = tmp_path / "private_export.xlsx"
+    _write_private_sentinel_workbook(workbook_path)
+
+    # Act
+    result = runner.invoke(app, ["inspect", "xlsx", str(workbook_path)])
+
+    # Assert
+    assert result.exit_code == 0, result.output
+    assert "banksalad_overview" in result.output
+    assert "balance_status" in result.output
+    assert "cashflow_monthly" in result.output
+    assert "PRIVATE_ACCOUNT_SENTINEL" not in result.output
+    assert "PRIVATE_LOAN_SENTINEL" not in result.output
+    assert "PRIVATE_MERCHANT_SENTINEL" not in result.output
+    assert "PRIVATE_CARD_SENTINEL" not in result.output
+    assert "987654321" not in result.output
+    assert "123456789" not in result.output
+    assert "55000" not in result.output
+
+
 def test_inspect_xlsx_missing_file_uses_json_error_envelope(tmp_path: Path) -> None:
     # Act
     result = runner.invoke(app, ["inspect", "xlsx", str(tmp_path / "missing.xlsx"), "--json"])
