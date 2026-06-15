@@ -604,13 +604,17 @@ def _find_cashflow_anchor(sheet: Any) -> _Anchor | None:
 
 
 def _is_cashflow_anchor(normalized: str) -> bool:
-    if normalized in _CASHFLOW_ANCHORS:
-        return True
-    return _SECTION_NUMBER_PREFIX_RE.sub("", normalized) in _CASHFLOW_ANCHORS
+    return _matches_numbered_anchor(normalized, _CASHFLOW_ANCHORS)
 
 
 def _is_row_break_anchor(normalized: str) -> bool:
-    return normalized in _ROW_BREAK_ANCHORS or _is_cashflow_anchor(normalized)
+    return _matches_numbered_anchor(normalized, _ROW_BREAK_ANCHORS)
+
+
+def _matches_numbered_anchor(normalized: str, anchors: set[str]) -> bool:
+    if normalized in anchors:
+        return True
+    return _SECTION_NUMBER_PREFIX_RE.sub("", normalized) in anchors
 
 
 def _detect_cashflow_header(sheet: Any, anchor_row: int) -> tuple[int, int, dict[int, str]] | None:

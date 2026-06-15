@@ -147,6 +147,26 @@ def _write_excel_date_cashflow_headers_xlsx(file_path: Path) -> None:
     workbook.close()
 
 
+def _write_numbered_followup_section_xlsx(file_path: Path) -> None:
+    """Write cashflow followed by another numbered overview section without blank rows."""
+    import xlsxwriter
+
+    workbook = xlsxwriter.Workbook(file_path)
+    sheet = workbook.add_worksheet("뱅샐현황")
+    row = _write_balance_block(sheet, 2)
+    cashflow_row = row + 3
+    _write_cashflow_block(
+        workbook,
+        sheet,
+        cashflow_row,
+        ambiguous_cashflow=False,
+        cashflow_header_as_excel_dates=False,
+    )
+    sheet.write(cashflow_row + 4, 1, "3.소비현황")
+    sheet.write(cashflow_row + 4, 2, "Non Numeric Followup")
+    workbook.close()
+
+
 def _balance_projection_content(df: pl.DataFrame) -> list[tuple[str, str, str, float, str]]:
     """Return stable balance content excluding source coordinates."""
     return list(
@@ -272,6 +292,34 @@ def test_overview_parser_ignores_cashflow_month_dates_for_snapshot_date(
         ("2026-06", "수입", 2_100_000.0),
         ("2026-06", "지출", -1_500_000.0),
     ]
+
+
+def test_overview_parser_stops_cashflow_at_numbered_followup_section(
+    tmp_path: Path,
+) -> None:
+    """Numbered sections after cashflow do not poison the cashflow projection."""
+    # Arrange
+    file_path = tmp_path / "overview_numbered_followup.xlsx"
+    _write_numbered_followup_section_xlsx(file_path)
+
+    # Act
+    result = parse_banksalad_overview(
+        file_path=file_path,
+        file_id="260615_1",
+        snapshot_date="2026-06-15",
+    )
+
+    # Assert
+    assert result.warnings == []
+    assert result.cashflow.select(["period_month", "category", "amount"]).sort(
+        ["period_month", "category"]
+    ).rows() == [
+        ("2026-05", "수입", 2_000_000.0),
+        ("2026-05", "지출", -1_400_000.0),
+        ("2026-06", "수입", 2_100_000.0),
+        ("2026-06", "지출", -1_500_000.0),
+    ]
+    assert "3.소비현황" not in result.cashflow["category"].to_list()
 
 
 def test_overview_parser_returns_empty_frames_and_warning_without_overview_sheet(
