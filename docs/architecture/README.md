@@ -25,6 +25,7 @@ Architecture Decision Records (ADR) documenting significant architectural choice
 - [ADR-0004: DuckDB Analytics](decisions/0004-duckdb-analytics-layer.md) - Fast aggregations
 - [ADR-0005: Issue Workflow](decisions/0005-issue-based-development-workflow.md) - Development process
 - [ADR-0012: Agent Package Layout](decisions/0012-agent-package-layout-for-finjuice-workflows.md) - Skill suite stays canonical
+- [ADR-0013: Banksalad Overview Workbook Ingest](decisions/0013-banksalad-overview-workbook-ingest.md) - Capture `뱅샐현황` as facts and projections
 
 **See**: [Full ADR Index](decisions/README.md)
 
@@ -67,5 +68,5 @@ Implementation discussions and technical analysis.
 
 ---
 
-**Last Updated**: 2025-11-16
+**Last Updated**: 2026-06-15
 **Related Issues**: #109, #110

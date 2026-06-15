@@ -870,6 +870,39 @@ assets_show_schema = command_schema(
     ["has_data"],
 )
 
+balance_row_schema = object_schema(
+    {
+        "amount": number,
+        "category": string,
+        "currency": string,
+        "item_name": string,
+    },
+    required=["category", "item_name", "amount", "currency"],
+)
+
+assets_balance_schema = command_schema(
+    "assets_balance.schema.json",
+    "assets balance --json output",
+    {
+        "assets": array_of(balance_row_schema),
+        "has_data": boolean,
+        "latest_month": string_or_null,
+        "liabilities": array_of(balance_row_schema),
+        "snapshot_date": string_or_null,
+        "total_assets": number,
+        "total_liabilities": number,
+    },
+    [
+        "has_data",
+        "latest_month",
+        "snapshot_date",
+        "total_assets",
+        "total_liabilities",
+        "assets",
+        "liabilities",
+    ],
+)
+
 budget_row_schema = object_schema(
     {
         "actual": integer,
@@ -1447,6 +1480,59 @@ import_schema = command_schema(
     ["files_processed", "files_skipped", "errors"],
 )
 
+inspect_anchor_schema = object_schema(
+    {
+        "anchor": string,
+        "column": integer,
+        "row": integer,
+    },
+    required=["anchor", "row", "column"],
+)
+
+inspect_worksheet_schema = object_schema(
+    {
+        "allowlisted_anchors": array_of(inspect_anchor_schema),
+        "column_count": integer,
+        "detected_blocks": array_of(string),
+        "detected_roles": array_of(string),
+        "index": integer,
+        "name": string,
+        "row_count": integer,
+    },
+    required=[
+        "index",
+        "name",
+        "row_count",
+        "column_count",
+        "detected_roles",
+        "detected_blocks",
+        "allowlisted_anchors",
+    ],
+)
+
+inspect_xlsx_schema = command_schema(
+    "inspect_xlsx.schema.json",
+    "inspect xlsx --json output",
+    {
+        "file": object_schema(
+            {
+                "extension": string,
+                "name": string,
+            },
+            required=["name", "extension"],
+        ),
+        "summary": object_schema(
+            {
+                "detected_roles": array_of(string),
+                "worksheet_count": integer,
+            },
+            required=["worksheet_count", "detected_roles"],
+        ),
+        "worksheets": array_of(inspect_worksheet_schema),
+    },
+    ["file", "summary", "worksheets"],
+)
+
 ingest_schema = command_schema(
     "ingest.schema.json",
     "ingest --json output",
@@ -1830,6 +1916,7 @@ SCHEMAS: dict[str, JsonSchema] = {
     "_meta.schema.json": meta_schema,
     "_pagination.schema.json": pagination_schema,
     "all.schema.json": all_schema,
+    "assets_balance.schema.json": assets_balance_schema,
     "assets_show.schema.json": assets_show_schema,
     "assets_status.schema.json": assets_status_schema,
     "audit_clear.schema.json": audit_clear_schema,
@@ -1846,6 +1933,7 @@ SCHEMAS: dict[str, JsonSchema] = {
     "export.schema.json": export_schema,
     "history.schema.json": history_schema,
     "import.schema.json": import_schema,
+    "inspect_xlsx.schema.json": inspect_xlsx_schema,
     "ingest.schema.json": ingest_schema,
     "index.schema.json": index_schema,
     "journal_list.schema.json": journal_list_schema,

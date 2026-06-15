@@ -31,6 +31,7 @@ from finjuice.pipeline.cli.commands.import_cmd import register_import_command
 from finjuice.pipeline.cli.commands.index import register_index_command
 from finjuice.pipeline.cli.commands.ingest import ingest_command
 from finjuice.pipeline.cli.commands.init import register_init_commands
+from finjuice.pipeline.cli.commands.inspect_cmd import inspect_app
 from finjuice.pipeline.cli.commands.journal import journal_app
 from finjuice.pipeline.cli.commands.manifest import register_manifest_command
 from finjuice.pipeline.cli.commands.networth import networth_app
@@ -78,6 +79,7 @@ app = typer.Typer(
 
 # Add subcommand groups
 app.add_typer(template_app, name="template", rich_help_panel="Analysis")
+app.add_typer(inspect_app, name="inspect", rich_help_panel="Analysis")
 
 # Register import command
 register_import_command(app)
@@ -372,9 +374,9 @@ def main(
     help_requested = (
         any(arg in ("--help", "-h") for arg in raw_args) or "--help" in sys.argv or "-h" in sys.argv
     )
-    manifest_requested = ctx.invoked_subcommand == "manifest"
+    utility_without_data_dir_requested = ctx.invoked_subcommand in {"manifest", "inspect"}
     # Also check for resilient_parsing (used during completion/help)
-    if help_requested or manifest_requested or ctx.resilient_parsing:
+    if help_requested or utility_without_data_dir_requested or ctx.resilient_parsing:
         ctx.obj["config"] = None
         return
 

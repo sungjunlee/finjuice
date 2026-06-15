@@ -114,6 +114,83 @@ ASSET_SNAPSHOT_POLARS_SCHEMA = {
     "source_row": pl.Int64,
 }
 
+# Banksalad overview workbook schemas (ADR-0013)
+BANKSALAD_OVERVIEW_FACT_COLUMNS = [
+    "fact_id",
+    "snapshot_date",
+    "sheet_name",
+    "block_id",
+    "block_title",
+    "fact_kind",
+    "row_label",
+    "column_label",
+    "value_numeric",
+    "value_text",
+    "value_type",
+    "file_id",
+    "source_row",
+    "source_col",
+]
+
+BANKSALAD_OVERVIEW_FACT_POLARS_SCHEMA = {
+    "fact_id": pl.Utf8,
+    "snapshot_date": pl.Utf8,
+    "sheet_name": pl.Utf8,
+    "block_id": pl.Utf8,
+    "block_title": pl.Utf8,
+    "fact_kind": pl.Utf8,
+    "row_label": pl.Utf8,
+    "column_label": pl.Utf8,
+    "value_numeric": pl.Float64,
+    "value_text": pl.Utf8,
+    "value_type": pl.Utf8,
+    "file_id": pl.Utf8,
+    "source_row": pl.Int64,
+    "source_col": pl.Int64,
+}
+
+BANKSALAD_BALANCE_COLUMNS = [
+    "snapshot_date",
+    "side",
+    "category",
+    "item_name",
+    "amount",
+    "currency",
+    "source_fact_id",
+    "file_id",
+    "source_row",
+]
+
+BANKSALAD_BALANCE_POLARS_SCHEMA = {
+    "snapshot_date": pl.Utf8,
+    "side": pl.Utf8,
+    "category": pl.Utf8,
+    "item_name": pl.Utf8,
+    "amount": pl.Float64,
+    "currency": pl.Utf8,
+    "source_fact_id": pl.Utf8,
+    "file_id": pl.Utf8,
+    "source_row": pl.Int64,
+}
+
+BANKSALAD_CASHFLOW_COLUMNS = [
+    "snapshot_date",
+    "period_month",
+    "category",
+    "amount",
+    "source_fact_id",
+    "file_id",
+]
+
+BANKSALAD_CASHFLOW_POLARS_SCHEMA = {
+    "snapshot_date": pl.Utf8,
+    "period_month": pl.Utf8,
+    "category": pl.Utf8,
+    "amount": pl.Float64,
+    "source_fact_id": pl.Utf8,
+    "file_id": pl.Utf8,
+}
+
 
 def get_partition_path(base_dir: Path, year: int, month: int) -> Path:
     """Return CSV partition file path for the given transaction year/month.
@@ -130,11 +207,35 @@ def get_asset_snapshot_partition_path(base_dir: Path, year: int, month: int) -> 
     return base_dir / str(year) / f"{month:02d}" / "snapshots.csv"
 
 
+def get_banksalad_overview_facts_partition_path(base_dir: Path, year: int, month: int) -> Path:
+    """Return Banksalad overview facts partition path for the given snapshot year/month."""
+    return base_dir / str(year) / f"{month:02d}" / "facts.csv"
+
+
+def get_banksalad_balance_partition_path(base_dir: Path, year: int, month: int) -> Path:
+    """Return Banksalad balance projection partition path for the given snapshot year/month."""
+    return base_dir / str(year) / f"{month:02d}" / "balance.csv"
+
+
+def get_banksalad_cashflow_partition_path(base_dir: Path, year: int, month: int) -> Path:
+    """Return Banksalad cashflow projection partition path for the given period year/month."""
+    return base_dir / str(year) / f"{month:02d}" / "cashflow.csv"
+
+
 __all__ = [
     "ASSET_SNAPSHOT_COLUMNS",
     "ASSET_SNAPSHOT_POLARS_SCHEMA",
+    "BANKSALAD_BALANCE_COLUMNS",
+    "BANKSALAD_BALANCE_POLARS_SCHEMA",
+    "BANKSALAD_CASHFLOW_COLUMNS",
+    "BANKSALAD_CASHFLOW_POLARS_SCHEMA",
+    "BANKSALAD_OVERVIEW_FACT_COLUMNS",
+    "BANKSALAD_OVERVIEW_FACT_POLARS_SCHEMA",
     "CSV_COLUMNS",
     "POLARS_SCHEMA",
     "get_asset_snapshot_partition_path",
+    "get_banksalad_balance_partition_path",
+    "get_banksalad_cashflow_partition_path",
+    "get_banksalad_overview_facts_partition_path",
     "get_partition_path",
 ]

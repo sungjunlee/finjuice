@@ -34,6 +34,7 @@ command/code/exit-code combinations against this schema.
 | `schemas/_error.schema.json` | Error envelope | `error`, `exit_code` |
 | `schemas/_pagination.schema.json` | Pagination envelope | `limit`, `cursor`, `next_cursor`, `has_more` |
 | `schemas/all.schema.json` | all --json output | `command`, `steps` |
+| `schemas/assets_balance.schema.json` | assets balance --json output | `has_data`, `latest_month`, `snapshot_date`, `total_assets`, `total_liabilities`, `assets`, `liabilities` |
 | `schemas/assets_show.schema.json` | assets show --json output | `has_data` |
 | `schemas/assets_status.schema.json` | assets status --json output | `has_data` |
 | `schemas/audit_clear.schema.json` | audit clear --json output | `entries_kept`, `action`, `skipped_entries` |
@@ -53,6 +54,7 @@ command/code/exit-code combinations against this schema.
 | `schemas/index.schema.json` | index --json output | `workspace`, `collections`, `recommended_next`, `schema_ref` |
 | `schemas/ingest.schema.json` | ingest --json output | `command`, `dry_run`, `source` |
 | `schemas/init.schema.json` | init --json output | `status`, `data_dir`, `already_initialized` |
+| `schemas/inspect_xlsx.schema.json` | inspect xlsx --json output | `file`, `summary`, `worksheets` |
 | `schemas/journal_list.schema.json` | journal list --json output | `entries`, `count` |
 | `schemas/manifest.schema.json` | manifest --json output | `manifest_schema_version`, `finjuice_version`, `commands` |
 | `schemas/networth.schema.json` | networth --json output | `as_of`, `total_assets`, `total_liabilities`, `net_worth`, `health`, `actionable`, `signals`, `next_steps` |
@@ -339,6 +341,121 @@ all --json output
     "steps"
   ],
   "title": "all --json output",
+  "type": "object"
+}
+```
+
+## `schemas/assets_balance.schema.json`
+
+assets balance --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `assets` | `array`[`object`] | yes |
+| `has_data` | `boolean` | yes |
+| `latest_month` | `string` \| `null` | yes |
+| `liabilities` | `array`[`object`] | yes |
+| `snapshot_date` | `string` \| `null` | yes |
+| `total_assets` | `number` | yes |
+| `total_liabilities` | `number` | yes |
+
+```json
+{
+  "$id": "assets_balance.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "assets": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "amount": {
+            "type": "number"
+          },
+          "category": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "item_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "category",
+          "item_name",
+          "amount",
+          "currency"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "has_data": {
+      "type": "boolean"
+    },
+    "latest_month": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "liabilities": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "amount": {
+            "type": "number"
+          },
+          "category": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "item_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "category",
+          "item_name",
+          "amount",
+          "currency"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "snapshot_date": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "total_assets": {
+      "type": "number"
+    },
+    "total_liabilities": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "_meta",
+    "has_data",
+    "latest_month",
+    "snapshot_date",
+    "total_assets",
+    "total_liabilities",
+    "assets",
+    "liabilities"
+  ],
+  "title": "assets balance --json output",
   "type": "object"
 }
 ```
@@ -2658,6 +2775,138 @@ init --json output
     "already_initialized"
   ],
   "title": "init --json output",
+  "type": "object"
+}
+```
+
+## `schemas/inspect_xlsx.schema.json`
+
+inspect xlsx --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `file` | `object` | yes |
+| `summary` | `object` | yes |
+| `worksheets` | `array`[`object`] | yes |
+
+```json
+{
+  "$id": "inspect_xlsx.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "file": {
+      "additionalProperties": true,
+      "properties": {
+        "extension": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "extension"
+      ],
+      "type": "object"
+    },
+    "summary": {
+      "additionalProperties": true,
+      "properties": {
+        "detected_roles": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "worksheet_count": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "worksheet_count",
+        "detected_roles"
+      ],
+      "type": "object"
+    },
+    "worksheets": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "allowlisted_anchors": {
+            "items": {
+              "additionalProperties": true,
+              "properties": {
+                "anchor": {
+                  "type": "string"
+                },
+                "column": {
+                  "type": "integer"
+                },
+                "row": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "anchor",
+                "row",
+                "column"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "column_count": {
+            "type": "integer"
+          },
+          "detected_blocks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "detected_roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "index": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "row_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "index",
+          "name",
+          "row_count",
+          "column_count",
+          "detected_roles",
+          "detected_blocks",
+          "allowlisted_anchors"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "file",
+    "summary",
+    "worksheets"
+  ],
+  "title": "inspect xlsx --json output",
   "type": "object"
 }
 ```

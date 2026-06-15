@@ -25,6 +25,7 @@ def _render_ingest_archive_result(result: dict[str, Any]) -> None:
     output.success("[OK] Re-import complete:")
     output.info(f"  New transactions: {s['new_transactions']}")
     output.info(f"  Updated: {s['updated']}")
+    _render_overview_write_summary(s.get("banksalad_overview"))
     if s["skipped"] > 0:
         output.warning(f"  Skipped: {s['skipped']}")
 
@@ -36,6 +37,7 @@ def _render_ingest_result(result: dict[str, Any]) -> None:
     output.info(f"  Files processed: {s['files_processed']}")
     output.info(f"  New transactions: {s['new_transactions']}")
     output.info(f"  Updated: {s['updated']}")
+    _render_overview_write_summary(s.get("banksalad_overview"))
     if s["failed"] > 0:
         output.error(f"  Failed: {s['failed']}")
         for filename, err in s.get("failed_files", []):
@@ -52,6 +54,7 @@ def _render_ingest_dry_run(preview: dict[str, Any]) -> None:
     """Render the human-readable ingest dry-run preview."""
     tx_preview = preview["transactions"]
     asset_preview = preview["asset_snapshots"]
+    overview_preview = preview.get("banksalad_overview")
 
     output.info("[Dry-run Summary]")
     output.info(f"  Source XLSX files found: {preview['files_found']}")
@@ -80,12 +83,64 @@ def _render_ingest_dry_run(preview: dict[str, Any]) -> None:
             f"{asset_preview['estimated_dedup_skips']} dedup skips"
         )
 
+    _render_overview_preview_summary(overview_preview)
+
     if preview["failed"] > 0:
         output.error(f"  Failed previews: {preview['failed']}")
         for filename, err in preview["failed_files"]:
             output.error(f"    - {filename}: {err}")
 
     output.warning("⚠️  No changes written (dry-run mode)")
+
+
+def _render_overview_preview_summary(overview_preview: dict[str, Any] | None) -> None:
+    """Render privacy-safe Banksalad overview dry-run counts."""
+    if not overview_preview:
+        return
+
+    total_new = sum(
+        int(overview_preview[table_name]["estimated_new_rows"])
+        for table_name in ("overview_facts", "balance", "cashflow")
+    )
+    total_skipped = sum(
+        int(overview_preview[table_name]["estimated_dedup_skips"])
+        for table_name in ("overview_facts", "balance", "cashflow")
+    )
+    if total_new == 0 and total_skipped == 0 and not overview_preview.get("warnings"):
+        return
+
+    output.info(
+        "  Banksalad overview: "
+        f"+{total_new} rows, {total_skipped} dedup skips "
+        "(facts/balance/cashflow)"
+    )
+    if overview_preview.get("warnings"):
+        output.warning(f"  Banksalad overview warnings: {len(overview_preview['warnings'])}")
+
+
+def _render_overview_write_summary(overview_summary: dict[str, Any] | None) -> None:
+    """Render privacy-safe Banksalad overview write counts."""
+    if not overview_summary:
+        return
+
+    total_inserted = sum(
+        int(overview_summary[table_name]["inserted"])
+        for table_name in ("overview_facts", "balance", "cashflow")
+    )
+    total_skipped = sum(
+        int(overview_summary[table_name]["dedup_skips"])
+        for table_name in ("overview_facts", "balance", "cashflow")
+    )
+    if total_inserted == 0 and total_skipped == 0 and not overview_summary.get("warnings"):
+        return
+
+    output.info(
+        "  Banksalad overview: "
+        f"+{total_inserted} rows, {total_skipped} dedup skips "
+        "(facts/balance/cashflow)"
+    )
+    if overview_summary.get("warnings"):
+        output.warning(f"  Banksalad overview warnings: {len(overview_summary['warnings'])}")
 
 
 def _render_standard_dry_run(result: dict[str, Any]) -> None:
@@ -133,7 +188,7 @@ def ingest_command(
     """
     from finjuice.pipeline.ingest.pipeline import (
         ingest_all_files,
-        ingest_file,
+        ingest_file_detailed,
         preview_ingest_all_files,
         preview_ingest_paths,
     )
@@ -154,7 +209,7 @@ def ingest_command(
                 json_output,
                 get_source_file_info,
                 preview_ingest_paths,
-                ingest_file,
+                ingest_file_detailed,
             )
             return
 
@@ -211,7 +266,7 @@ def _ingest_from_archive(
     json_output: bool,
     get_source_file_info: Any,
     preview_ingest_paths: Any,
-    ingest_file: Any,
+    ingest_file_detailed: Any,
 ) -> None:
     """Handle --from-archive ingest mode."""
     metadata_dir = config.csv_base_dir.parent / "metadata"
@@ -268,7 +323,8 @@ def _ingest_from_archive(
         # No early existence check - let the file operation fail atomically
         # This prevents TOCTOU race conditions (CWE-367)
 
-        inserted, updated, skipped = ingest_file(archived_path, config.csv_base_dir, archive=False)
+        ingest_result = ingest_file_detailed(archived_path, config.csv_base_dir, archive=False)
+        transactions = ingest_result["transactions"]
 
         result = {
             "command": "ingest",
@@ -277,9 +333,10 @@ def _ingest_from_archive(
             "from_archive": from_archive,
             "summary": {
                 "files_processed": 1,
-                "new_transactions": inserted,
-                "updated": updated,
-                "skipped": len(skipped),
+                "new_transactions": int(transactions["inserted"]),
+                "updated": int(transactions["dedup_skips"]),
+                "skipped": int(transactions["validation_skips"]),
+                "banksalad_overview": ingest_result["banksalad_overview"],
             },
         }
         write_schema_version(config.data_dir, SCHEMA_VERSION)
@@ -332,6 +389,7 @@ def _ingest_standard(
             "files_processed": summary["files"],
             "new_transactions": summary["inserted"],
             "updated": summary["updated"],
+            "banksalad_overview": summary.get("banksalad_overview", {}),
             "failed": summary["failed"],
             "failed_files": summary.get("failed_files", []),
         },

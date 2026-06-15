@@ -26,6 +26,7 @@ For new ADRs, please use [template.md](template.md) as basis.
 | [0010](0010-ai-enrichment-proposal-log.md) | AI Enrichment Proposal Log | ✅ accepted | 2026-05-12 | #602 |
 | [0011](0011-defer-mcp-and-vector-search-for-index.md) | Defer MCP and Vector Search for Index | ✅ accepted | 2026-05-24 | #774 |
 | [0012](0012-agent-package-layout-for-finjuice-workflows.md) | Agent Package Layout for Finjuice Workflows | ✅ accepted | 2026-05-24 | #779 |
+| [0013](0013-banksalad-overview-workbook-ingest.md) | Banksalad Overview Workbook Ingest | ✅ accepted | 2026-06-15 | N/A |
 
 ## Index by Category
 
@@ -49,6 +50,8 @@ For new ADRs, please use [template.md](template.md) as basis.
   - 89% metadata reduction, git-friendly diffs, 56% token efficiency
 - [ADR-0008: Financial Metadata Notes Path](0008-financial-metadata-notes-path.md) ✅
   - Use goals.yaml for stable context and rules.yaml notes for rule rationale
+- [ADR-0013: Banksalad Overview Workbook Ingest](0013-banksalad-overview-workbook-ingest.md) ✅
+  - Capture `뱅샐현황` as workbook facts, then derive typed balance/cashflow projections.
 
 ### Performance & Analytics
 - [ADR-0003: Polars Migration Strategy](0003-polars-migration-strategy.md) ✅
@@ -90,7 +93,7 @@ ADR-0006 (Role Separation)
 
 ## Active ADRs
 
-All 12 current ADRs are **accepted** and active:
+All 13 current ADRs are **accepted** and active:
 
 1. **MADR Format** - Using MADR 3.0.0 template
 2. **CSV Partitions** - Monthly partitioned CSV storage
@@ -104,6 +107,7 @@ All 12 current ADRs are **accepted** and active:
 10. **AI Enrichment Proposal Log** - Append-only proposal records before any explicit AI tag apply
 11. **Defer MCP and Vector Search for Index** - Catalog first, retrieval later, MCP last
 12. **Agent Package Layout** - Keep the current skill suite canonical; defer named bundles
+13. **Banksalad Overview Workbook Ingest** - Capture `뱅샐현황` facts and derive typed projections
 
 ## Superseded ADRs
 
@@ -190,6 +194,6 @@ proposed → accepted → [deprecated | superseded]
 
 ---
 
-**Last Updated**: 2026-05-12
+**Last Updated**: 2026-06-15
 **Related Issues**: #110 (ADR Introduction), #602 (AI Enrichment Proposal Log)
 **Format**: MADR 3.0.0
