@@ -333,6 +333,40 @@ def test_banksalad_structured_overview_tables_partition_and_dedup(tmp_path: Path
     assert read_banksalad_loan_month(base_dir / "loans", 2026, 6).height == 2
 
 
+def test_banksalad_investment_dedup_preserves_same_product_from_different_source_rows(
+    tmp_path: Path,
+) -> None:
+    base_dir = tmp_path / "banksalad" / "investments"
+    duplicate_product_position = pl.DataFrame(
+        {
+            "snapshot_date": ["2026-06-15"],
+            "product_type": ["stock"],
+            "institution": ["broker_a"],
+            "product_name": ["holding_a"],
+            "principal_amount": [40.0],
+            "valuation_amount": [55.0],
+            "return_rate": [37.5],
+            "start_date": ["2025-02-01"],
+            "maturity_date": [None],
+            "currency": ["KRW"],
+            "source_fact_id": ["fact_duplicate_product"],
+            "file_id": ["260615_1"],
+            "source_row": [9],
+        }
+    )
+    batch = pl.concat([_investment_df(), duplicate_product_position])
+
+    result = append_banksalad_investments(base_dir, batch)
+    repeat = append_banksalad_investments(base_dir, batch)
+    june = read_banksalad_investment_month(base_dir, 2026, 6)
+
+    assert result["rows_inserted"] == 4
+    assert result["rows_skipped"] == 0
+    assert repeat["rows_inserted"] == 0
+    assert repeat["rows_skipped"] == 4
+    assert june.filter(pl.col("product_name") == "holding_a").height == 2
+
+
 def test_banksalad_append_empty_batches_are_noops(tmp_path: Path) -> None:
     base_dir = tmp_path / "banksalad"
 

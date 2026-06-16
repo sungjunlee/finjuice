@@ -58,11 +58,11 @@ BANKSALAD_OVERVIEW_FACT_DEDUP_KEY = [
     "source_row",
     "source_col",
 ]
-BANKSALAD_BALANCE_DEDUP_KEY = ["snapshot_date", "side", "category", "item_name"]
+BANKSALAD_BALANCE_DEDUP_KEY = ["snapshot_date", "side", "category", "item_name", "source_row"]
 BANKSALAD_CASHFLOW_DEDUP_KEY = ["snapshot_date", "period_month", "category"]
-BANKSALAD_INSURANCE_DEDUP_KEY = ["snapshot_date", "institution", "policy_name"]
-BANKSALAD_INVESTMENT_DEDUP_KEY = ["snapshot_date", "institution", "product_name"]
-BANKSALAD_LOAN_DEDUP_KEY = ["snapshot_date", "institution", "product_name"]
+BANKSALAD_INSURANCE_DEDUP_KEY = ["snapshot_date", "institution", "policy_name", "source_row"]
+BANKSALAD_INVESTMENT_DEDUP_KEY = ["snapshot_date", "institution", "product_name", "source_row"]
+BANKSALAD_LOAN_DEDUP_KEY = ["snapshot_date", "institution", "product_name", "source_row"]
 
 _OVERVIEW_FACT_SPEC = _OverviewTableSpec(
     columns=BANKSALAD_OVERVIEW_FACT_COLUMNS,

@@ -681,6 +681,7 @@ banksalad_workbook_schemas:
         - "side"
         - "category"
         - "item_name"
+        - "source_row"
       side:
         enum: ["asset", "liability"]
     columns:
@@ -803,6 +804,7 @@ banksalad_workbook_schemas:
         - "snapshot_date"
         - "institution"
         - "policy_name"
+        - "source_row"
     columns:
       - {name: snapshot_date, type: date, format: "YYYY-MM-DD", nullable: false}
       - {name: institution, type: string, nullable: false}
@@ -855,6 +857,7 @@ banksalad_workbook_schemas:
         - "snapshot_date"
         - "institution"
         - "product_name"
+        - "source_row"
     columns:
       - {name: snapshot_date, type: date, format: "YYYY-MM-DD", nullable: false}
       - {name: product_type, type: string, nullable: true}
@@ -909,6 +912,7 @@ banksalad_workbook_schemas:
         - "snapshot_date"
         - "institution"
         - "product_name"
+        - "source_row"
     columns:
       - {name: snapshot_date, type: date, format: "YYYY-MM-DD", nullable: false}
       - {name: loan_type, type: string, nullable: true}

@@ -1422,11 +1422,19 @@ def _resolve_snapshot_date(
     if labeled_date is not None:
         return labeled_date
 
+    filename_date = _parse_filename_snapshot_date(file_path)
+    if filename_date is not None:
+        return filename_date
+
     mtime_date = _parse_date_value(file_mtime)
     if mtime_date is not None:
         return mtime_date
 
     return datetime.fromtimestamp(file_path.stat().st_mtime).date().isoformat()
+
+
+def _parse_filename_snapshot_date(file_path: Path) -> str | None:
+    return _parse_date_text(file_path.stem)
 
 
 def _find_labeled_snapshot_date(sheet: Any) -> str | None:
