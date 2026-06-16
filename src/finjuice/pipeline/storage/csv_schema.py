@@ -191,6 +191,98 @@ BANKSALAD_CASHFLOW_POLARS_SCHEMA = {
     "file_id": pl.Utf8,
 }
 
+BANKSALAD_INSURANCE_COLUMNS = [
+    "snapshot_date",
+    "institution",
+    "policy_name",
+    "contract_status",
+    "paid_amount",
+    "contract_date",
+    "maturity_date",
+    "currency",
+    "source_fact_id",
+    "file_id",
+    "source_row",
+]
+
+BANKSALAD_INSURANCE_POLARS_SCHEMA = {
+    "snapshot_date": pl.Utf8,
+    "institution": pl.Utf8,
+    "policy_name": pl.Utf8,
+    "contract_status": pl.Utf8,
+    "paid_amount": pl.Float64,
+    "contract_date": pl.Utf8,
+    "maturity_date": pl.Utf8,
+    "currency": pl.Utf8,
+    "source_fact_id": pl.Utf8,
+    "file_id": pl.Utf8,
+    "source_row": pl.Int64,
+}
+
+BANKSALAD_INVESTMENT_COLUMNS = [
+    "snapshot_date",
+    "product_type",
+    "institution",
+    "product_name",
+    "principal_amount",
+    "valuation_amount",
+    "return_rate",
+    "start_date",
+    "maturity_date",
+    "currency",
+    "source_fact_id",
+    "file_id",
+    "source_row",
+]
+
+BANKSALAD_INVESTMENT_POLARS_SCHEMA = {
+    "snapshot_date": pl.Utf8,
+    "product_type": pl.Utf8,
+    "institution": pl.Utf8,
+    "product_name": pl.Utf8,
+    "principal_amount": pl.Float64,
+    "valuation_amount": pl.Float64,
+    "return_rate": pl.Float64,
+    "start_date": pl.Utf8,
+    "maturity_date": pl.Utf8,
+    "currency": pl.Utf8,
+    "source_fact_id": pl.Utf8,
+    "file_id": pl.Utf8,
+    "source_row": pl.Int64,
+}
+
+BANKSALAD_LOAN_COLUMNS = [
+    "snapshot_date",
+    "loan_type",
+    "institution",
+    "product_name",
+    "principal_amount",
+    "balance_amount",
+    "interest_rate",
+    "start_date",
+    "maturity_date",
+    "currency",
+    "source_fact_id",
+    "file_id",
+    "source_row",
+]
+
+BANKSALAD_LOAN_POLARS_SCHEMA = {
+    "snapshot_date": pl.Utf8,
+    "loan_type": pl.Utf8,
+    "institution": pl.Utf8,
+    "product_name": pl.Utf8,
+    "principal_amount": pl.Float64,
+    "balance_amount": pl.Float64,
+    "interest_rate": pl.Float64,
+    "start_date": pl.Utf8,
+    "maturity_date": pl.Utf8,
+    "currency": pl.Utf8,
+    "source_fact_id": pl.Utf8,
+    "file_id": pl.Utf8,
+    "source_row": pl.Int64,
+}
+
 
 def get_partition_path(base_dir: Path, year: int, month: int) -> Path:
     """Return CSV partition file path for the given transaction year/month.
@@ -222,6 +314,21 @@ def get_banksalad_cashflow_partition_path(base_dir: Path, year: int, month: int)
     return base_dir / str(year) / f"{month:02d}" / "cashflow.csv"
 
 
+def get_banksalad_insurance_partition_path(base_dir: Path, year: int, month: int) -> Path:
+    """Return Banksalad insurance partition path for the given snapshot year/month."""
+    return base_dir / str(year) / f"{month:02d}" / "insurance.csv"
+
+
+def get_banksalad_investment_partition_path(base_dir: Path, year: int, month: int) -> Path:
+    """Return Banksalad investment partition path for the given snapshot year/month."""
+    return base_dir / str(year) / f"{month:02d}" / "investments.csv"
+
+
+def get_banksalad_loan_partition_path(base_dir: Path, year: int, month: int) -> Path:
+    """Return Banksalad loan partition path for the given snapshot year/month."""
+    return base_dir / str(year) / f"{month:02d}" / "loans.csv"
+
+
 __all__ = [
     "ASSET_SNAPSHOT_COLUMNS",
     "ASSET_SNAPSHOT_POLARS_SCHEMA",
@@ -229,6 +336,12 @@ __all__ = [
     "BANKSALAD_BALANCE_POLARS_SCHEMA",
     "BANKSALAD_CASHFLOW_COLUMNS",
     "BANKSALAD_CASHFLOW_POLARS_SCHEMA",
+    "BANKSALAD_INSURANCE_COLUMNS",
+    "BANKSALAD_INSURANCE_POLARS_SCHEMA",
+    "BANKSALAD_INVESTMENT_COLUMNS",
+    "BANKSALAD_INVESTMENT_POLARS_SCHEMA",
+    "BANKSALAD_LOAN_COLUMNS",
+    "BANKSALAD_LOAN_POLARS_SCHEMA",
     "BANKSALAD_OVERVIEW_FACT_COLUMNS",
     "BANKSALAD_OVERVIEW_FACT_POLARS_SCHEMA",
     "CSV_COLUMNS",
@@ -236,6 +349,9 @@ __all__ = [
     "get_asset_snapshot_partition_path",
     "get_banksalad_balance_partition_path",
     "get_banksalad_cashflow_partition_path",
+    "get_banksalad_insurance_partition_path",
+    "get_banksalad_investment_partition_path",
+    "get_banksalad_loan_partition_path",
     "get_banksalad_overview_facts_partition_path",
     "get_partition_path",
 ]

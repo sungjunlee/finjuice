@@ -19,10 +19,19 @@ from finjuice.pipeline.storage.csv_schema import (
     BANKSALAD_BALANCE_POLARS_SCHEMA,
     BANKSALAD_CASHFLOW_COLUMNS,
     BANKSALAD_CASHFLOW_POLARS_SCHEMA,
+    BANKSALAD_INSURANCE_COLUMNS,
+    BANKSALAD_INSURANCE_POLARS_SCHEMA,
+    BANKSALAD_INVESTMENT_COLUMNS,
+    BANKSALAD_INVESTMENT_POLARS_SCHEMA,
+    BANKSALAD_LOAN_COLUMNS,
+    BANKSALAD_LOAN_POLARS_SCHEMA,
     BANKSALAD_OVERVIEW_FACT_COLUMNS,
     BANKSALAD_OVERVIEW_FACT_POLARS_SCHEMA,
     get_banksalad_balance_partition_path,
     get_banksalad_cashflow_partition_path,
+    get_banksalad_insurance_partition_path,
+    get_banksalad_investment_partition_path,
+    get_banksalad_loan_partition_path,
     get_banksalad_overview_facts_partition_path,
 )
 
@@ -51,6 +60,9 @@ BANKSALAD_OVERVIEW_FACT_DEDUP_KEY = [
 ]
 BANKSALAD_BALANCE_DEDUP_KEY = ["snapshot_date", "side", "category", "item_name"]
 BANKSALAD_CASHFLOW_DEDUP_KEY = ["snapshot_date", "period_month", "category"]
+BANKSALAD_INSURANCE_DEDUP_KEY = ["snapshot_date", "institution", "policy_name"]
+BANKSALAD_INVESTMENT_DEDUP_KEY = ["snapshot_date", "institution", "product_name"]
+BANKSALAD_LOAN_DEDUP_KEY = ["snapshot_date", "institution", "product_name"]
 
 _OVERVIEW_FACT_SPEC = _OverviewTableSpec(
     columns=BANKSALAD_OVERVIEW_FACT_COLUMNS,
@@ -72,6 +84,27 @@ _CASHFLOW_SPEC = _OverviewTableSpec(
     path_builder=get_banksalad_cashflow_partition_path,
     dedup_key=BANKSALAD_CASHFLOW_DEDUP_KEY,
     default_sort_by=("period_month", "category"),
+)
+_INSURANCE_SPEC = _OverviewTableSpec(
+    columns=BANKSALAD_INSURANCE_COLUMNS,
+    schema=BANKSALAD_INSURANCE_POLARS_SCHEMA,
+    path_builder=get_banksalad_insurance_partition_path,
+    dedup_key=BANKSALAD_INSURANCE_DEDUP_KEY,
+    default_sort_by=("snapshot_date", "institution", "policy_name"),
+)
+_INVESTMENT_SPEC = _OverviewTableSpec(
+    columns=BANKSALAD_INVESTMENT_COLUMNS,
+    schema=BANKSALAD_INVESTMENT_POLARS_SCHEMA,
+    path_builder=get_banksalad_investment_partition_path,
+    dedup_key=BANKSALAD_INVESTMENT_DEDUP_KEY,
+    default_sort_by=("snapshot_date", "institution", "product_name"),
+)
+_LOAN_SPEC = _OverviewTableSpec(
+    columns=BANKSALAD_LOAN_COLUMNS,
+    schema=BANKSALAD_LOAN_POLARS_SCHEMA,
+    path_builder=get_banksalad_loan_partition_path,
+    dedup_key=BANKSALAD_LOAN_DEDUP_KEY,
+    default_sort_by=("snapshot_date", "institution", "product_name"),
 )
 
 
@@ -220,6 +253,123 @@ def append_banksalad_cashflow(
         base_dir=base_dir,
         df=df,
         partition_column="_partition_source",
+        deduplicate=deduplicate,
+    )
+
+
+def read_banksalad_insurance_month(
+    base_dir: Path,
+    year: int,
+    month: int,
+    columns: list[str] | None = None,
+) -> pl.DataFrame:
+    """Read Banksalad insurance policies for one month partition."""
+    return _read_month(_INSURANCE_SPEC, base_dir, year, month, columns)
+
+
+def write_banksalad_insurance_month(
+    base_dir: Path,
+    df: pl.DataFrame,
+    year: int,
+    month: int,
+    sort_by: tuple[str, ...] = ("snapshot_date", "institution", "policy_name"),
+) -> dict[str, Any]:
+    """Write Banksalad insurance policies to a monthly partition."""
+    return _write_partition(
+        spec=_INSURANCE_SPEC,
+        partition_path=get_banksalad_insurance_partition_path(base_dir, year, month),
+        df=df,
+        sort_by=sort_by,
+    )
+
+
+def append_banksalad_insurance(
+    base_dir: Path, df: pl.DataFrame, deduplicate: bool = True
+) -> dict[str, Any]:
+    """Append Banksalad insurance policies partitioned by ``snapshot_date``."""
+    return _append_partitioned(
+        spec=_INSURANCE_SPEC,
+        base_dir=base_dir,
+        df=df,
+        partition_column="snapshot_date",
+        deduplicate=deduplicate,
+    )
+
+
+def read_banksalad_investment_month(
+    base_dir: Path,
+    year: int,
+    month: int,
+    columns: list[str] | None = None,
+) -> pl.DataFrame:
+    """Read Banksalad investment positions for one month partition."""
+    return _read_month(_INVESTMENT_SPEC, base_dir, year, month, columns)
+
+
+def write_banksalad_investment_month(
+    base_dir: Path,
+    df: pl.DataFrame,
+    year: int,
+    month: int,
+    sort_by: tuple[str, ...] = ("snapshot_date", "institution", "product_name"),
+) -> dict[str, Any]:
+    """Write Banksalad investment positions to a monthly partition."""
+    return _write_partition(
+        spec=_INVESTMENT_SPEC,
+        partition_path=get_banksalad_investment_partition_path(base_dir, year, month),
+        df=df,
+        sort_by=sort_by,
+    )
+
+
+def append_banksalad_investments(
+    base_dir: Path, df: pl.DataFrame, deduplicate: bool = True
+) -> dict[str, Any]:
+    """Append Banksalad investment positions partitioned by ``snapshot_date``."""
+    return _append_partitioned(
+        spec=_INVESTMENT_SPEC,
+        base_dir=base_dir,
+        df=df,
+        partition_column="snapshot_date",
+        deduplicate=deduplicate,
+    )
+
+
+def read_banksalad_loan_month(
+    base_dir: Path,
+    year: int,
+    month: int,
+    columns: list[str] | None = None,
+) -> pl.DataFrame:
+    """Read Banksalad loan positions for one month partition."""
+    return _read_month(_LOAN_SPEC, base_dir, year, month, columns)
+
+
+def write_banksalad_loan_month(
+    base_dir: Path,
+    df: pl.DataFrame,
+    year: int,
+    month: int,
+    sort_by: tuple[str, ...] = ("snapshot_date", "institution", "product_name"),
+) -> dict[str, Any]:
+    """Write Banksalad loan positions to a monthly partition."""
+    return _write_partition(
+        spec=_LOAN_SPEC,
+        partition_path=get_banksalad_loan_partition_path(base_dir, year, month),
+        df=df,
+        sort_by=sort_by,
+    )
+
+
+def append_banksalad_loans(
+    base_dir: Path, df: pl.DataFrame, deduplicate: bool = True
+) -> dict[str, Any]:
+    """Append Banksalad loan positions partitioned by ``snapshot_date``."""
+    return _append_partitioned(
+        spec=_LOAN_SPEC,
+        base_dir=base_dir,
+        df=df,
+        partition_column="snapshot_date",
         deduplicate=deduplicate,
     )
 
@@ -407,14 +557,26 @@ def _empty_append_result() -> dict[str, Any]:
 __all__ = [
     "BANKSALAD_BALANCE_DEDUP_KEY",
     "BANKSALAD_CASHFLOW_DEDUP_KEY",
+    "BANKSALAD_INSURANCE_DEDUP_KEY",
+    "BANKSALAD_INVESTMENT_DEDUP_KEY",
+    "BANKSALAD_LOAN_DEDUP_KEY",
     "BANKSALAD_OVERVIEW_FACT_DEDUP_KEY",
     "append_banksalad_balance",
     "append_banksalad_cashflow",
+    "append_banksalad_insurance",
+    "append_banksalad_investments",
+    "append_banksalad_loans",
     "append_banksalad_overview_facts",
     "read_banksalad_balance_month",
     "read_banksalad_cashflow_month",
+    "read_banksalad_insurance_month",
+    "read_banksalad_investment_month",
+    "read_banksalad_loan_month",
     "read_banksalad_overview_facts_month",
     "write_banksalad_balance_month",
     "write_banksalad_cashflow_month",
+    "write_banksalad_insurance_month",
+    "write_banksalad_investment_month",
+    "write_banksalad_loan_month",
     "write_banksalad_overview_facts_month",
 ]

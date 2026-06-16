@@ -29,11 +29,16 @@ _BALANCE_BLOCK_ID = "balance_status"
 _BALANCE_BLOCK_TITLE = "자산/부채"
 _CASHFLOW_BLOCK_ID = "cashflow_monthly"
 _CASHFLOW_BLOCK_TITLE = "현금흐름현황"
+_CUSTOMER_BLOCK_ID = "customer_info"
+_INSURANCE_BLOCK_ID = "insurance_status"
+_INVESTMENT_BLOCK_ID = "investment_status"
+_LOAN_BLOCK_ID = "loan_status"
 _CASHFLOW_ANCHORS = {
     normalize_sheet_name(value)
     for value in ("현금흐름현황", "현금흐름", "월별현금흐름", "수입지출현황")
 }
 _SECTION_NUMBER_PREFIX_RE = re.compile(r"^\d+[\.)．。]?")
+_NUMBERED_SECTION_RE = re.compile(r"^\s*\d+[\.)．。]?\s*(.+?)\s*$")
 _CATEGORY_HEADERS = {
     normalize_sheet_name(value)
     for value in ("분류", "카테고리", "구분", "종류", "자산분류", "부채분류")
@@ -54,7 +59,56 @@ _SNAPSHOT_DATE_LABELS = {
     for value in ("기준일", "조회일", "현황기준일", "자산기준일", "내보내기일")
 }
 _ROW_BREAK_ANCHORS = _CASHFLOW_ANCHORS | {
-    normalize_sheet_name(value) for value in ("자산추이", "부채추이", "소비현황")
+    normalize_sheet_name(value)
+    for value in (
+        "고객정보",
+        "재무현황",
+        "보험현황",
+        "투자현황",
+        "대출현황",
+        "자산추이",
+        "부채추이",
+        "소비현황",
+    )
+}
+_SECTION_BLOCKS = {
+    normalize_sheet_name("고객정보"): (_CUSTOMER_BLOCK_ID, "고객정보"),
+    normalize_sheet_name("현금흐름현황"): (_CASHFLOW_BLOCK_ID, _CASHFLOW_BLOCK_TITLE),
+    normalize_sheet_name("재무현황"): (_BALANCE_BLOCK_ID, _BALANCE_BLOCK_TITLE),
+    normalize_sheet_name("보험현황"): (_INSURANCE_BLOCK_ID, "보험현황"),
+    normalize_sheet_name("투자현황"): (_INVESTMENT_BLOCK_ID, "투자현황"),
+    normalize_sheet_name("대출현황"): (_LOAN_BLOCK_ID, "대출현황"),
+}
+_SUMMARY_LABELS = {normalize_sheet_name(value) for value in ("합계", "총계", "총자산", "총부채")}
+_STRUCTURED_TABLE_HEADERS = {
+    "insurance": {
+        "institution": {normalize_sheet_name("금융사")},
+        "policy_name": {normalize_sheet_name("보험명")},
+        "contract_status": {normalize_sheet_name("계약상태")},
+        "paid_amount": {normalize_sheet_name("총납입금")},
+        "contract_date": {normalize_sheet_name("계약일자")},
+        "maturity_date": {normalize_sheet_name("만기일자")},
+    },
+    "investments": {
+        "product_type": {normalize_sheet_name("투자상품종류")},
+        "institution": {normalize_sheet_name("금융사")},
+        "product_name": {normalize_sheet_name("상품명")},
+        "principal_amount": {normalize_sheet_name("투자원금")},
+        "valuation_amount": {normalize_sheet_name("평가금액")},
+        "return_rate": {normalize_sheet_name("수익률")},
+        "start_date": {normalize_sheet_name("가입일자")},
+        "maturity_date": {normalize_sheet_name("만기일자")},
+    },
+    "loans": {
+        "loan_type": {normalize_sheet_name("대출종류")},
+        "institution": {normalize_sheet_name("금융사")},
+        "product_name": {normalize_sheet_name("상품명")},
+        "principal_amount": {normalize_sheet_name("대출원금")},
+        "balance_amount": {normalize_sheet_name("대출잔액")},
+        "interest_rate": {normalize_sheet_name("대출금리")},
+        "start_date": {normalize_sheet_name("대출신규일")},
+        "maturity_date": {normalize_sheet_name("대출만기일"), normalize_sheet_name("만기일자")},
+    },
 }
 
 
@@ -65,6 +119,9 @@ class BanksaladOverviewParseResult:
     overview_facts: pl.DataFrame
     balance: pl.DataFrame
     cashflow: pl.DataFrame
+    insurance: pl.DataFrame
+    investments: pl.DataFrame
+    loans: pl.DataFrame
     warnings: list[str]
 
 
@@ -120,6 +177,16 @@ class _FactLabels:
 
 
 @dataclass(frozen=True)
+class _OverviewBlockParseContext:
+    """Shared parser metadata for typed overview projections."""
+
+    sheet_name: str
+    snapshot_date: str
+    file_id: str
+    file_name: str
+
+
+@dataclass(frozen=True)
 class _BalanceFactContext:
     """Detected balance table range and metadata for fact extraction."""
 
@@ -141,6 +208,26 @@ class _CashflowFactContext:
     end_row: int
     category_col: int
     month_cols: dict[int, str]
+
+
+@dataclass(frozen=True)
+class _SectionRange:
+    """Detected numbered overview section range."""
+
+    block_id: str
+    block_title: str
+    anchor_row: int
+    anchor_col: int
+    end_row: int
+
+
+@dataclass(frozen=True)
+class _StructuredTableSpec:
+    """Header mapping for one structured overview table."""
+
+    section: _SectionRange
+    header_row: int
+    columns: dict[str, int]
 
 
 def parse_banksalad_overview(
@@ -182,26 +269,58 @@ def parse_banksalad_overview(
             snapshot_date=snapshot_date,
             file_mtime=file_mtime,
         )
-        fact_rows: list[dict[str, Any]] = []
-
-        balance_rows, balance_facts, balance_warnings = _parse_balance_block(
+        section_ranges = _find_numbered_sections(sheet)
+        section_facts = _build_section_facts(
             sheet=sheet,
             sheet_name=str(sheet.title),
             snapshot_date=resolved_snapshot_date,
             file_id=file_id,
+            sections=section_ranges,
+        )
+        fact_rows: list[dict[str, Any]] = list(section_facts.rows)
+        block_context = _OverviewBlockParseContext(
+            sheet_name=str(sheet.title),
+            snapshot_date=resolved_snapshot_date,
+            file_id=file_id,
+            file_name=file_path.name,
+        )
+
+        balance_rows, balance_facts, balance_warnings = _parse_balance_block(
+            sheet=sheet,
+            block_context=block_context,
+            fact_ids=section_facts.fact_ids,
         )
         fact_rows.extend(balance_facts)
         warnings.extend(balance_warnings)
 
         cashflow_rows, cashflow_facts, cashflow_warnings = _parse_cashflow_block(
             sheet=sheet,
-            sheet_name=str(sheet.title),
-            snapshot_date=resolved_snapshot_date,
-            file_id=file_id,
-            file_name=file_path.name,
+            block_context=block_context,
+            fact_ids=section_facts.fact_ids,
         )
         fact_rows.extend(cashflow_facts)
         warnings.extend(cashflow_warnings)
+        insurance_rows = _parse_insurance_rows(
+            sheet=sheet,
+            snapshot_date=resolved_snapshot_date,
+            file_id=file_id,
+            sections=section_ranges,
+            fact_ids=section_facts.fact_ids,
+        )
+        investment_rows = _parse_investment_rows(
+            sheet=sheet,
+            snapshot_date=resolved_snapshot_date,
+            file_id=file_id,
+            sections=section_ranges,
+            fact_ids=section_facts.fact_ids,
+        )
+        loan_rows = _parse_loan_rows(
+            sheet=sheet,
+            snapshot_date=resolved_snapshot_date,
+            file_id=file_id,
+            sections=section_ranges,
+            fact_ids=section_facts.fact_ids,
+        )
 
         return BanksaladOverviewParseResult(
             overview_facts=_frame_from_rows(
@@ -216,6 +335,18 @@ def parse_banksalad_overview(
                 cashflow_rows,
                 csv_partition.BANKSALAD_CASHFLOW_POLARS_SCHEMA,
             ).sort(["period_month", "category"]),
+            insurance=_frame_from_rows(
+                insurance_rows,
+                csv_partition.BANKSALAD_INSURANCE_POLARS_SCHEMA,
+            ).sort(["institution", "policy_name"]),
+            investments=_frame_from_rows(
+                investment_rows,
+                csv_partition.BANKSALAD_INVESTMENT_POLARS_SCHEMA,
+            ).sort(["institution", "product_name"]),
+            loans=_frame_from_rows(
+                loan_rows,
+                csv_partition.BANKSALAD_LOAN_POLARS_SCHEMA,
+            ).sort(["institution", "product_name"]),
             warnings=warnings,
         )
     finally:
@@ -227,6 +358,9 @@ def _empty_result(warnings: list[str]) -> BanksaladOverviewParseResult:
         overview_facts=pl.DataFrame(schema=csv_partition.BANKSALAD_OVERVIEW_FACT_POLARS_SCHEMA),
         balance=pl.DataFrame(schema=csv_partition.BANKSALAD_BALANCE_POLARS_SCHEMA),
         cashflow=pl.DataFrame(schema=csv_partition.BANKSALAD_CASHFLOW_POLARS_SCHEMA),
+        insurance=pl.DataFrame(schema=csv_partition.BANKSALAD_INSURANCE_POLARS_SCHEMA),
+        investments=pl.DataFrame(schema=csv_partition.BANKSALAD_INVESTMENT_POLARS_SCHEMA),
+        loans=pl.DataFrame(schema=csv_partition.BANKSALAD_LOAN_POLARS_SCHEMA),
         warnings=warnings,
     )
 
@@ -266,17 +400,160 @@ def _has_overview_anchors(sheet: Any) -> bool:
     return _find_balance_anchor_pair(asset_anchors, liability_anchors) is not None
 
 
-def _parse_balance_block(
+def _find_numbered_sections(sheet: Any) -> list[_SectionRange]:
+    anchors: list[tuple[int, int, str, str]] = []
+    for row, col, value in _iter_non_empty_cells(sheet):
+        title = _numbered_section_title(value)
+        if title is None:
+            continue
+        section = _SECTION_BLOCKS.get(normalize_sheet_name(title))
+        if section is None:
+            continue
+        block_id, block_title = section
+        anchors.append((row, col, block_id, block_title))
+
+    sections: list[_SectionRange] = []
+    for idx, (row, col, block_id, block_title) in enumerate(anchors):
+        end_row = anchors[idx + 1][0] - 1 if idx + 1 < len(anchors) else sheet.max_row
+        sections.append(
+            _SectionRange(
+                block_id=block_id,
+                block_title=block_title,
+                anchor_row=row,
+                anchor_col=col,
+                end_row=end_row,
+            )
+        )
+    return sections
+
+
+def _numbered_section_title(value: Any) -> str | None:
+    text = _cell_text(value)
+    if text is None:
+        return None
+    match = _NUMBERED_SECTION_RE.match(text)
+    if match is None:
+        return None
+    return match.group(1).strip()
+
+
+def _build_section_facts(
     sheet: Any,
     sheet_name: str,
     snapshot_date: str,
     file_id: str,
+    sections: list[_SectionRange],
+) -> _FactBuildResult:
+    rows: list[dict[str, Any]] = []
+    fact_ids: dict[tuple[int, int], str] = {}
+
+    for section in sections:
+        header_row = _detect_section_header_row(sheet, section)
+        context = _FactContext(
+            snapshot_date=snapshot_date,
+            sheet_name=sheet_name,
+            block_id=section.block_id,
+            block_title=section.block_title,
+            file_id=file_id,
+        )
+        for source_row in range(section.anchor_row, section.end_row + 1):
+            row_label = _section_row_label(sheet, section, source_row, header_row)
+            for source_col in range(1, sheet.max_column + 1):
+                value = _cell_value(sheet, source_row, source_col)
+                if not _cell_text(value):
+                    continue
+
+                fact = _make_fact(
+                    context=context,
+                    labels=_FactLabels(
+                        fact_kind=_section_fact_kind(section, source_row, header_row),
+                        row_label=row_label,
+                        column_label=_section_column_label(sheet, source_col, header_row),
+                    ),
+                    value=value,
+                    source_row=source_row,
+                    source_col=source_col,
+                )
+                rows.append(fact)
+                fact_ids[(source_row, source_col)] = str(fact["fact_id"])
+
+    return _FactBuildResult(rows=rows, fact_ids=fact_ids)
+
+
+def _detect_section_header_row(sheet: Any, section: _SectionRange) -> int | None:
+    for row in range(section.anchor_row + 1, min(section.end_row, section.anchor_row + 6) + 1):
+        labels = [
+            _normalize_cell_text(_cell_value(sheet, row, col))
+            for col in range(1, sheet.max_column + 1)
+        ]
+        populated = [label for label in labels if label]
+        if len(populated) >= 2 and any(
+            label in _CATEGORY_HEADERS | _ITEM_HEADERS | _AMOUNT_HEADERS
+            or label
+            in {
+                normalize_sheet_name(value)
+                for value in (
+                    "이름",
+                    "성별",
+                    "금융사",
+                    "보험명",
+                    "투자상품종류",
+                    "대출종류",
+                    "대출잔액",
+                    "대출금리",
+                )
+            }
+            for label in populated
+        ):
+            return row
+    return None
+
+
+def _section_fact_kind(
+    section: _SectionRange,
+    source_row: int,
+    header_row: int | None,
+) -> str:
+    if source_row == section.anchor_row:
+        return "section_label"
+    if header_row is not None and source_row == header_row:
+        return "cell"
+    return "table_value"
+
+
+def _section_row_label(
+    sheet: Any,
+    section: _SectionRange,
+    source_row: int,
+    header_row: int | None,
+) -> str | None:
+    if source_row == section.anchor_row or (header_row is not None and source_row <= header_row):
+        return None
+    for col in range(1, sheet.max_column + 1):
+        text = _cell_text(_cell_value(sheet, source_row, col))
+        if text:
+            return text
+    return None
+
+
+def _section_column_label(sheet: Any, source_col: int, header_row: int | None) -> str | None:
+    if header_row is None:
+        return None
+    return _cell_text(_cell_value(sheet, header_row, source_col))
+
+
+def _parse_balance_block(
+    sheet: Any,
+    block_context: _OverviewBlockParseContext,
+    fact_ids: dict[tuple[int, int], str] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
     warnings: list[str] = []
     asset_anchors, liability_anchors = _collect_balance_anchors(sheet)
     balance_table = _find_balance_table(sheet, asset_anchors, liability_anchors)
     if balance_table is None:
-        warnings.append(f"Balance block not found in overview sheet '{sheet_name}'; skipped")
+        warnings.append(
+            f"Balance block not found in overview sheet '{block_context.sheet_name}'; skipped"
+        )
         return [], [], warnings
 
     asset_anchor, liability_anchor, asset_spec, liability_spec = balance_table
@@ -285,20 +562,21 @@ def _parse_balance_block(
         sheet,
         min(asset_spec.header_row, liability_spec.header_row) + 1,
     )
-    fact_result = _build_balance_facts(
+    fact_result = _balance_fact_result(
         _BalanceFactContext(
             sheet=sheet,
             fact_context=_FactContext(
-                snapshot_date=snapshot_date,
-                sheet_name=sheet_name,
+                snapshot_date=block_context.snapshot_date,
+                sheet_name=block_context.sheet_name,
                 block_id=_BALANCE_BLOCK_ID,
                 block_title=_BALANCE_BLOCK_TITLE,
-                file_id=file_id,
+                file_id=block_context.file_id,
             ),
             start_row=asset_anchor.row,
             end_row=end_row,
             side_specs=(asset_spec, liability_spec),
-        )
+        ),
+        fact_ids=fact_ids or {},
     )
     rows: list[dict[str, Any]] = []
 
@@ -321,19 +599,34 @@ def _parse_balance_block(
 
             rows.append(
                 {
-                    "snapshot_date": snapshot_date,
+                    "snapshot_date": block_context.snapshot_date,
                     "side": spec.side,
                     "category": category,
                     "item_name": item_name,
                     "amount": amount,
                     "currency": "KRW",
                     "source_fact_id": source_fact_id,
-                    "file_id": file_id,
+                    "file_id": block_context.file_id,
                     "source_row": source_row,
                 }
             )
 
     return rows, fact_result.rows, warnings
+
+
+def _balance_fact_result(
+    context: _BalanceFactContext,
+    fact_ids: dict[tuple[int, int], str],
+) -> _FactBuildResult:
+    has_projection_fact_ids = all(
+        (row, spec.amount_col) in fact_ids
+        for spec in context.side_specs
+        for row in range(spec.header_row + 1, context.end_row + 1)
+    )
+    if has_projection_fact_ids:
+        return _FactBuildResult(rows=[], fact_ids=fact_ids)
+
+    return _build_balance_facts(context)
 
 
 def _find_balance_table(
@@ -513,10 +806,8 @@ def _build_balance_facts(context: _BalanceFactContext) -> _FactBuildResult:
 
 def _parse_cashflow_block(
     sheet: Any,
-    sheet_name: str,
-    snapshot_date: str,
-    file_id: str,
-    file_name: str,
+    block_context: _OverviewBlockParseContext,
+    fact_ids: dict[tuple[int, int], str] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
     warnings: list[str] = []
     anchor = _find_cashflow_anchor(sheet)
@@ -525,36 +816,37 @@ def _parse_cashflow_block(
 
     header = _detect_cashflow_header(sheet, anchor.row)
     if header is None:
-        fact_rows = _build_cashflow_facts_without_projection(
+        fact_rows = _cashflow_facts_without_projection(
             sheet=sheet,
-            sheet_name=sheet_name,
-            snapshot_date=snapshot_date,
-            file_id=file_id,
+            block_context=block_context,
             anchor=anchor,
+            fact_ids=fact_ids or {},
         )
         warnings.append(
-            f"Cashflow projection skipped in {file_name}: month/category headers are ambiguous"
+            f"Cashflow projection skipped in {block_context.file_name}: "
+            "month/category headers are ambiguous"
         )
         return [], fact_rows, warnings
 
     header_row, category_col, month_cols = header
     end_row = _find_table_end_row(sheet, header_row + 1, category_col, max(month_cols))
-    fact_result = _build_cashflow_facts(
+    fact_result = _cashflow_fact_result(
         _CashflowFactContext(
             sheet=sheet,
             fact_context=_FactContext(
-                snapshot_date=snapshot_date,
-                sheet_name=sheet_name,
+                snapshot_date=block_context.snapshot_date,
+                sheet_name=block_context.sheet_name,
                 block_id=_CASHFLOW_BLOCK_ID,
                 block_title=_CASHFLOW_BLOCK_TITLE,
-                file_id=file_id,
+                file_id=block_context.file_id,
             ),
             anchor_row=anchor.row,
             header_row=header_row,
             end_row=end_row,
             category_col=category_col,
             month_cols=month_cols,
-        )
+        ),
+        fact_ids=fact_ids or {},
     )
 
     rows: list[dict[str, Any]] = []
@@ -570,8 +862,8 @@ def _parse_cashflow_block(
             amount = _parse_numeric_value(raw_value)
             if amount is None:
                 warnings.append(
-                    f"Cashflow projection skipped in {file_name}: non-numeric value at "
-                    f"row {source_row}, column {source_col}"
+                    f"Cashflow projection skipped in {block_context.file_name}: "
+                    f"non-numeric value at row {source_row}, column {source_col}"
                 )
                 return [], fact_result.rows, warnings
 
@@ -581,19 +873,36 @@ def _parse_cashflow_block(
 
             rows.append(
                 {
-                    "snapshot_date": snapshot_date,
+                    "snapshot_date": block_context.snapshot_date,
                     "period_month": period_month,
                     "category": category,
                     "amount": amount,
                     "source_fact_id": source_fact_id,
-                    "file_id": file_id,
+                    "file_id": block_context.file_id,
                 }
             )
 
     if not rows:
-        warnings.append(f"Cashflow projection skipped in {file_name}: no numeric rows found")
+        warnings.append(
+            f"Cashflow projection skipped in {block_context.file_name}: no numeric rows found"
+        )
 
     return rows, fact_result.rows, warnings
+
+
+def _cashflow_fact_result(
+    context: _CashflowFactContext,
+    fact_ids: dict[tuple[int, int], str],
+) -> _FactBuildResult:
+    has_projection_fact_ids = all(
+        (row, col) in fact_ids
+        for row in range(context.header_row + 1, context.end_row + 1)
+        for col in context.month_cols
+    )
+    if has_projection_fact_ids:
+        return _FactBuildResult(rows=[], fact_ids=fact_ids)
+
+    return _build_cashflow_facts(context)
 
 
 def _find_cashflow_anchor(sheet: Any) -> _Anchor | None:
@@ -663,23 +972,30 @@ def _find_table_end_row(sheet: Any, start_row: int, start_col: int, end_col: int
     return end_row
 
 
-def _build_cashflow_facts_without_projection(
+def _cashflow_facts_without_projection(
     sheet: Any,
-    sheet_name: str,
-    snapshot_date: str,
-    file_id: str,
+    block_context: _OverviewBlockParseContext,
     anchor: _Anchor,
+    fact_ids: dict[tuple[int, int], str],
 ) -> list[dict[str, Any]]:
     end_row = _find_table_end_row(sheet, anchor.row + 1, anchor.col, sheet.max_column)
+    has_existing_fact_ids = any(
+        (row, col) in fact_ids
+        for row in range(anchor.row, end_row + 1)
+        for col in range(1, sheet.max_column + 1)
+    )
+    if has_existing_fact_ids:
+        return []
+
     fact_result = _build_cashflow_facts(
         _CashflowFactContext(
             sheet=sheet,
             fact_context=_FactContext(
-                snapshot_date=snapshot_date,
-                sheet_name=sheet_name,
+                snapshot_date=block_context.snapshot_date,
+                sheet_name=block_context.sheet_name,
                 block_id=_CASHFLOW_BLOCK_ID,
                 block_title=_CASHFLOW_BLOCK_TITLE,
-                file_id=file_id,
+                file_id=block_context.file_id,
             ),
             anchor_row=anchor.row,
             header_row=anchor.row,
@@ -737,6 +1053,265 @@ def _build_cashflow_facts(context: _CashflowFactContext) -> _FactBuildResult:
             fact_ids[(source_row, source_col)] = str(fact["fact_id"])
 
     return _FactBuildResult(rows=rows, fact_ids=fact_ids)
+
+
+def _parse_insurance_rows(
+    sheet: Any,
+    snapshot_date: str,
+    file_id: str,
+    sections: list[_SectionRange],
+    fact_ids: dict[tuple[int, int], str],
+) -> list[dict[str, Any]]:
+    table = _detect_structured_table(
+        sheet,
+        sections,
+        _INSURANCE_BLOCK_ID,
+        _STRUCTURED_TABLE_HEADERS["insurance"],
+    )
+    if table is None:
+        return []
+
+    rows: list[dict[str, Any]] = []
+    for source_row in _table_data_rows(sheet, table):
+        institution = _text_at(sheet, source_row, table.columns.get("institution"))
+        policy_name = _text_at(sheet, source_row, table.columns.get("policy_name"))
+        if not _has_entity_identity(institution, policy_name):
+            continue
+
+        rows.append(
+            {
+                "snapshot_date": snapshot_date,
+                "institution": institution,
+                "policy_name": policy_name,
+                "contract_status": _text_at(
+                    sheet,
+                    source_row,
+                    table.columns.get("contract_status"),
+                ),
+                "paid_amount": _number_at(sheet, source_row, table.columns.get("paid_amount")),
+                "contract_date": _date_at(sheet, source_row, table.columns.get("contract_date")),
+                "maturity_date": _date_at(sheet, source_row, table.columns.get("maturity_date")),
+                "currency": "KRW",
+                "source_fact_id": _source_fact_id(
+                    fact_ids,
+                    source_row,
+                    (table.columns.get("policy_name"), table.columns.get("institution")),
+                ),
+                "file_id": file_id,
+                "source_row": source_row,
+            }
+        )
+    return rows
+
+
+def _parse_investment_rows(
+    sheet: Any,
+    snapshot_date: str,
+    file_id: str,
+    sections: list[_SectionRange],
+    fact_ids: dict[tuple[int, int], str],
+) -> list[dict[str, Any]]:
+    table = _detect_structured_table(
+        sheet,
+        sections,
+        _INVESTMENT_BLOCK_ID,
+        _STRUCTURED_TABLE_HEADERS["investments"],
+    )
+    if table is None:
+        return []
+
+    rows: list[dict[str, Any]] = []
+    for source_row in _table_data_rows(sheet, table):
+        institution = _text_at(sheet, source_row, table.columns.get("institution"))
+        product_name = _text_at(sheet, source_row, table.columns.get("product_name"))
+        if not _has_entity_identity(institution, product_name):
+            continue
+
+        rows.append(
+            {
+                "snapshot_date": snapshot_date,
+                "product_type": _text_at(sheet, source_row, table.columns.get("product_type")),
+                "institution": institution,
+                "product_name": product_name,
+                "principal_amount": _number_at(
+                    sheet,
+                    source_row,
+                    table.columns.get("principal_amount"),
+                ),
+                "valuation_amount": _number_at(
+                    sheet,
+                    source_row,
+                    table.columns.get("valuation_amount"),
+                ),
+                "return_rate": _number_at(sheet, source_row, table.columns.get("return_rate")),
+                "start_date": _date_at(sheet, source_row, table.columns.get("start_date")),
+                "maturity_date": _date_at(sheet, source_row, table.columns.get("maturity_date")),
+                "currency": "KRW",
+                "source_fact_id": _source_fact_id(
+                    fact_ids,
+                    source_row,
+                    (table.columns.get("product_name"), table.columns.get("institution")),
+                ),
+                "file_id": file_id,
+                "source_row": source_row,
+            }
+        )
+    return rows
+
+
+def _parse_loan_rows(
+    sheet: Any,
+    snapshot_date: str,
+    file_id: str,
+    sections: list[_SectionRange],
+    fact_ids: dict[tuple[int, int], str],
+) -> list[dict[str, Any]]:
+    table = _detect_structured_table(
+        sheet,
+        sections,
+        _LOAN_BLOCK_ID,
+        _STRUCTURED_TABLE_HEADERS["loans"],
+    )
+    if table is None:
+        return []
+
+    rows: list[dict[str, Any]] = []
+    for source_row in _table_data_rows(sheet, table):
+        institution = _text_at(sheet, source_row, table.columns.get("institution"))
+        product_name = _text_at(sheet, source_row, table.columns.get("product_name"))
+        if not _has_entity_identity(institution, product_name):
+            continue
+
+        rows.append(
+            {
+                "snapshot_date": snapshot_date,
+                "loan_type": _text_at(sheet, source_row, table.columns.get("loan_type")),
+                "institution": institution,
+                "product_name": product_name,
+                "principal_amount": _number_at(
+                    sheet,
+                    source_row,
+                    table.columns.get("principal_amount"),
+                ),
+                "balance_amount": _number_at(
+                    sheet,
+                    source_row,
+                    table.columns.get("balance_amount"),
+                ),
+                "interest_rate": _number_at(sheet, source_row, table.columns.get("interest_rate")),
+                "start_date": _date_at(sheet, source_row, table.columns.get("start_date")),
+                "maturity_date": _date_at(sheet, source_row, table.columns.get("maturity_date")),
+                "currency": "KRW",
+                "source_fact_id": _source_fact_id(
+                    fact_ids,
+                    source_row,
+                    (table.columns.get("product_name"), table.columns.get("institution")),
+                ),
+                "file_id": file_id,
+                "source_row": source_row,
+            }
+        )
+    return rows
+
+
+def _detect_structured_table(
+    sheet: Any,
+    sections: list[_SectionRange],
+    block_id: str,
+    header_candidates: dict[str, set[str]],
+) -> _StructuredTableSpec | None:
+    section = _section_by_block_id(sections, block_id)
+    if section is None:
+        return None
+
+    for row in range(section.anchor_row + 1, min(section.end_row, section.anchor_row + 8) + 1):
+        normalized_headers = _normalized_header_map(sheet, row)
+        columns: dict[str, int] = {}
+        for output_name, candidates in header_candidates.items():
+            col = _first_header_col(normalized_headers, candidates)
+            if col is not None:
+                columns[output_name] = col
+
+        if _has_required_structured_columns(block_id, columns):
+            return _StructuredTableSpec(section=section, header_row=row, columns=columns)
+
+    return None
+
+
+def _section_by_block_id(
+    sections: list[_SectionRange],
+    block_id: str,
+) -> _SectionRange | None:
+    for section in sections:
+        if section.block_id == block_id:
+            return section
+    return None
+
+
+def _normalized_header_map(sheet: Any, row: int) -> dict[int, str]:
+    return {
+        col: normalized
+        for col in range(1, sheet.max_column + 1)
+        if (normalized := _normalize_cell_text(_cell_value(sheet, row, col)))
+    }
+
+
+def _has_required_structured_columns(block_id: str, columns: dict[str, int]) -> bool:
+    if block_id == _INSURANCE_BLOCK_ID:
+        return {"institution", "policy_name"} <= columns.keys()
+    return {"institution", "product_name"} <= columns.keys()
+
+
+def _table_data_rows(sheet: Any, table: _StructuredTableSpec) -> list[int]:
+    rows: list[int] = []
+    first_data_row = table.header_row + 1
+    for source_row in range(first_data_row, table.section.end_row + 1):
+        values = [
+            _cell_value(sheet, source_row, source_col)
+            for source_col in sorted(set(table.columns.values()))
+        ]
+        if not any(_cell_text(value) for value in values):
+            continue
+        if _is_summary_row(values):
+            continue
+        rows.append(source_row)
+    return rows
+
+
+def _text_at(sheet: Any, source_row: int, source_col: int | None) -> str | None:
+    return _cell_text(_cell_value(sheet, source_row, source_col))
+
+
+def _number_at(sheet: Any, source_row: int, source_col: int | None) -> float | None:
+    return _parse_numeric_value(_cell_value(sheet, source_row, source_col))
+
+
+def _date_at(sheet: Any, source_row: int, source_col: int | None) -> str | None:
+    return _parse_date_value(_cell_value(sheet, source_row, source_col))
+
+
+def _has_entity_identity(institution: str | None, name: str | None) -> bool:
+    if not institution or not name:
+        return False
+    return not _is_summary_label(institution) and not _is_summary_label(name)
+
+
+def _is_summary_row(values: list[Any]) -> bool:
+    return any(_is_summary_label(text) for value in values if (text := _cell_text(value)))
+
+
+def _source_fact_id(
+    fact_ids: dict[tuple[int, int], str],
+    source_row: int,
+    preferred_cols: tuple[int | None, ...],
+) -> str | None:
+    for source_col in preferred_cols:
+        if source_col is None:
+            continue
+        source_fact_id = fact_ids.get((source_row, source_col))
+        if source_fact_id is not None:
+            return source_fact_id
+    return None
 
 
 def _make_fact(

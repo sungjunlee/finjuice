@@ -20,6 +20,9 @@ and 2025-06-07 to 2026-06-07 workbooks, showed a different stable shape:
 * `뱅샐현황` is a formatted overview worksheet, not a header-row table.
 * Asset and liability information is embedded in a `재무현황` block with side-by-side
   `자산` and `부채` regions.
+* `보험현황`, `투자현황`, and `대출현황` appear as structured overview tables with
+  institution/product rows and snapshot amounts, but not transaction-level trade history
+  or quantity-level holdings.
 * Row numbers drift across exports, so fixed row offsets are not a reliable parser
   contract.
 * Recent exports still do not contain a separate holdings sheet with `수량`.
@@ -48,7 +51,7 @@ workbook overview source and collect every structured block that can be detected
 * Keep the existing optional holdings-sheet parser.
 * Parse only the `자산`/`부채` block from `뱅샐현황`.
 * Ingest the whole `뱅샐현황` worksheet as normalized workbook facts, then derive typed
-  projections for balance, cashflow, and future views.
+  projections for balance, cashflow, insurance, investments, and loans.
 
 ## Decision Outcome
 
@@ -68,9 +71,9 @@ Introduce two layers:
   fact in `뱅샐현황`. This captures block identity, row/column labels, numeric/text value
   type, source row/column, and source file id.
 * **Typed projections**: stable, purpose-built tables derived from facts. Initial
-  projections should include balance items and monthly cashflow. Later projections can
-  cover insurance, loans, card summaries, or other detected overview sections without
-  changing the raw-fact capture layer.
+  projections include balance items, monthly cashflow, insurance policies, investment
+  positions, and loan positions. Later projections can cover card summaries or other
+  detected overview sections without changing the raw-fact capture layer.
 
 ### Detection Policy
 
@@ -80,6 +83,10 @@ Do not parse `뱅샐현황` by fixed row numbers. Detect worksheet roles and blo
 * Overview worksheet: `뱅샐현황` name or recognizable overview anchors.
 * Balance block: side-by-side `자산` and `부채` anchors with nearby `금액` columns.
 * Cashflow block: `현금흐름현황` anchor with month columns and income/expense/net rows.
+* Numbered overview sections: `고객정보`, `현금흐름현황`, `재무현황`, `보험현황`,
+  `투자현황`, and `대출현황` anchors define source-fidelity fact ranges.
+* Typed insurance/investment/loan projections: section-local header rows with allowlisted
+  Korean headers such as `금융사`, `보험명`, `상품명`, `대출잔액`, and `평가금액`.
 * Unknown overview tables: preserve as generic workbook facts when row/column labels and
   values can be detected, even if no typed projection exists yet.
 
@@ -103,7 +110,7 @@ Initial user-facing surfaces should be:
 
 * `ingest --dry-run --json`: include overview workbook counts and warnings.
 * `ingest` and `refresh --json`: include inserted/skipped counts for workbook facts and
-  typed balance projections.
+  typed projections.
 * `assets balance`: show latest asset/liability balance rows from `뱅샐현황`.
 * `networth`: use typed balance projections as the primary Banksalad overview source
   when available. Holdings snapshots remain a quantity-level source only when a workbook
@@ -144,11 +151,12 @@ Initial user-facing surfaces should be:
 This decision is working when:
 
 * Recent Banksalad workbooks with only `뱅샐현황` and `가계부 내역` produce non-zero
-  workbook facts and balance rows.
+  workbook facts plus balance, cashflow, insurance, investment, and loan rows when those
+  sections are populated.
 * The current transaction ingest count remains unchanged for the same files.
 * The existing holdings-sheet tests still pass for synthetic/future holdings sheets.
-* `ingest --dry-run --json` reports overview facts without writing files.
-* Re-running ingest is idempotent for facts and typed projections.
+* `ingest --dry-run --json` reports all overview table counts without writing files.
+* Re-running ingest is idempotent for facts and all typed projections.
 * Privacy tests prove that diagnostics redact private labels and amounts.
 
 ## Pros and Cons of the Options

@@ -9,6 +9,9 @@ from finjuice.pipeline.ingest._overview_processor import parse_banksalad_overvie
 from finjuice.pipeline.storage.csv_partition import (
     BANKSALAD_BALANCE_POLARS_SCHEMA,
     BANKSALAD_CASHFLOW_POLARS_SCHEMA,
+    BANKSALAD_INSURANCE_POLARS_SCHEMA,
+    BANKSALAD_INVESTMENT_POLARS_SCHEMA,
+    BANKSALAD_LOAN_POLARS_SCHEMA,
     BANKSALAD_OVERVIEW_FACT_POLARS_SCHEMA,
 )
 
@@ -167,6 +170,124 @@ def _write_numbered_followup_section_xlsx(file_path: Path) -> None:
     workbook.close()
 
 
+def _write_full_overview_xlsx(file_path: Path) -> None:
+    """Write a synthetic numbered overview workbook with all supported sections."""
+    import xlsxwriter
+
+    workbook = xlsxwriter.Workbook(file_path)
+    date_format = workbook.add_format({"num_format": "yyyy-mm-dd"})
+    sheet = workbook.add_worksheet("뱅샐현황")
+
+    sheet.write(0, 0, "기준일")
+    sheet.write_datetime(0, 1, datetime(2026, 6, 15), date_format)
+    sheet.write(2, 0, "1.고객정보")
+    sheet.write(3, 0, "이름")
+    sheet.write(3, 1, "Synthetic User")
+    _write_cashflow_block(
+        workbook,
+        sheet,
+        6,
+        ambiguous_cashflow=False,
+        cashflow_header_as_excel_dates=False,
+    )
+    sheet.write(12, 0, "3.재무현황")
+    _write_balance_block(sheet, 13)
+    sheet.write(19, 0, "4.보험현황")
+    sheet.write_row(20, 0, ["금융사", "보험명", "계약상태", "총납입금", "계약일자", "만기일자"])
+    sheet.write_row(21, 0, ["Synthetic Insurer", "Synthetic Policy", "정상", 120_000])
+    sheet.write_datetime(21, 4, datetime(2024, 1, 2), date_format)
+    sheet.write_datetime(21, 5, datetime(2034, 1, 2), date_format)
+    sheet.write_row(22, 0, ["합계", "", "", 120_000, "", ""])
+    sheet.write(25, 0, "5.투자현황")
+    sheet.write_row(
+        26,
+        0,
+        [
+            "투자상품종류",
+            "금융사",
+            "상품명",
+            "투자원금",
+            "평가금액",
+            "수익률",
+            "가입일자",
+            "만기일자",
+        ],
+    )
+    sheet.write_row(
+        27,
+        0,
+        ["펀드", "Synthetic Securities", "Synthetic Fund A", 1_000_000, 1_050_000, 5.0],
+    )
+    sheet.write_datetime(27, 6, datetime(2025, 3, 1), date_format)
+    sheet.write(30, 0, "6.대출현황")
+    sheet.write_row(
+        31,
+        0,
+        [
+            "대출종류",
+            "금융사",
+            "상품명",
+            "대출원금",
+            "대출잔액",
+            "대출금리",
+            "대출신규일",
+            "대출만기일",
+        ],
+    )
+    sheet.write_row(
+        32,
+        0,
+        ["신용", "Synthetic Bank", "Synthetic Loan A", 3_000_000, 2_500_000, 4.5],
+    )
+    sheet.write_datetime(32, 6, datetime(2023, 4, 1), date_format)
+    sheet.write_datetime(32, 7, datetime(2028, 4, 1), date_format)
+    workbook.close()
+
+
+def _write_empty_structured_sections_xlsx(file_path: Path) -> None:
+    """Write overview sections with headers but no entity rows."""
+    import xlsxwriter
+
+    workbook = xlsxwriter.Workbook(file_path)
+    sheet = workbook.add_worksheet("뱅샐현황")
+    sheet.write(0, 0, "1.고객정보")
+    sheet.write(3, 0, "3.재무현황")
+    _write_balance_block(sheet, 4)
+    sheet.write(10, 0, "4.보험현황")
+    sheet.write_row(11, 0, ["금융사", "보험명", "계약상태", "총납입금", "계약일자", "만기일자"])
+    sheet.write(14, 0, "5.투자현황")
+    sheet.write_row(
+        15,
+        0,
+        [
+            "투자상품종류",
+            "금융사",
+            "상품명",
+            "투자원금",
+            "평가금액",
+            "수익률",
+            "가입일자",
+            "만기일자",
+        ],
+    )
+    sheet.write(18, 0, "6.대출현황")
+    sheet.write_row(
+        19,
+        0,
+        [
+            "대출종류",
+            "금융사",
+            "상품명",
+            "대출원금",
+            "대출잔액",
+            "대출금리",
+            "대출신규일",
+            "대출만기일",
+        ],
+    )
+    workbook.close()
+
+
 def _balance_projection_content(df: pl.DataFrame) -> list[tuple[str, str, str, float, str]]:
     """Return stable balance content excluding source coordinates."""
     return list(
@@ -216,6 +337,72 @@ def test_overview_parser_extracts_facts_balance_and_cashflow_from_overview_sheet
         ("2026-06", "수입", 2_100_000.0),
         ("2026-06", "지출", -1_500_000.0),
     ]
+
+
+def test_overview_parser_extracts_all_numbered_overview_sections(
+    tmp_path: Path,
+) -> None:
+    """Numbered overview sections become source facts plus typed projections."""
+    # Arrange
+    file_path = tmp_path / "full_overview.xlsx"
+    _write_full_overview_xlsx(file_path)
+
+    # Act
+    result = parse_banksalad_overview(
+        file_path=file_path,
+        file_id="260615_1",
+    )
+
+    # Assert
+    assert result.warnings == []
+    assert result.insurance.schema == BANKSALAD_INSURANCE_POLARS_SCHEMA
+    assert result.investments.schema == BANKSALAD_INVESTMENT_POLARS_SCHEMA
+    assert result.loans.schema == BANKSALAD_LOAN_POLARS_SCHEMA
+    assert set(result.overview_facts["block_id"].to_list()) == {
+        "customer_info",
+        "cashflow_monthly",
+        "balance_status",
+        "insurance_status",
+        "investment_status",
+        "loan_status",
+    }
+    assert result.insurance.select(["institution", "policy_name", "paid_amount"]).rows() == [
+        ("Synthetic Insurer", "Synthetic Policy", 120_000.0)
+    ]
+    assert result.investments.select(
+        ["product_type", "institution", "product_name", "valuation_amount"]
+    ).rows() == [("펀드", "Synthetic Securities", "Synthetic Fund A", 1_050_000.0)]
+    assert result.loans.select(
+        ["loan_type", "institution", "product_name", "balance_amount"]
+    ).rows() == [("신용", "Synthetic Bank", "Synthetic Loan A", 2_500_000.0)]
+    assert result.insurance["source_fact_id"].drop_nulls().len() == 1
+    assert result.investments["source_fact_id"].drop_nulls().len() == 1
+    assert result.loans["source_fact_id"].drop_nulls().len() == 1
+
+
+def test_overview_parser_handles_empty_structured_sections(
+    tmp_path: Path,
+) -> None:
+    """Empty detected sections still produce facts without typed entity rows."""
+    # Arrange
+    file_path = tmp_path / "empty_sections.xlsx"
+    _write_empty_structured_sections_xlsx(file_path)
+
+    # Act
+    result = parse_banksalad_overview(
+        file_path=file_path,
+        file_id="260615_1",
+        snapshot_date="2026-06-15",
+    )
+
+    # Assert
+    assert result.warnings == []
+    assert {"customer_info", "insurance_status", "investment_status", "loan_status"} <= set(
+        result.overview_facts["block_id"].to_list()
+    )
+    assert result.insurance.height == 0
+    assert result.investments.height == 0
+    assert result.loans.height == 0
 
 
 def test_overview_parser_uses_anchors_not_absolute_rows_for_balance(

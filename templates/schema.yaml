@@ -772,6 +772,164 @@ banksalad_workbook_schemas:
         nullable: false
         references: "data/metadata/import_history.csv"
 
+  insurance_policies_v0:
+    active: true
+    introduced: "2026-06-16"
+    adr: "docs/architecture/decisions/0013-banksalad-overview-workbook-ingest.md"
+    description: "Typed insurance policy snapshot derived from 뱅샐현황 overview facts"
+    partition_schema:
+      location_pattern: "data/banksalad/insurance/YYYY/MM/insurance.csv"
+      format: "CSV"
+      encoding: "utf-8"
+      delimiter: ","
+      header: true
+      sort_by: "snapshot_date,institution,policy_name"
+      line_terminator: "\n"
+    required_columns:
+      - snapshot_date
+      - institution
+      - policy_name
+      - contract_status
+      - paid_amount
+      - contract_date
+      - maturity_date
+      - currency
+      - source_fact_id
+      - file_id
+      - source_row
+    key_policy:
+      dedup_grain: "daily insurance policy"
+      dedup_key:
+        - "snapshot_date"
+        - "institution"
+        - "policy_name"
+    columns:
+      - {name: snapshot_date, type: date, format: "YYYY-MM-DD", nullable: false}
+      - {name: institution, type: string, nullable: false}
+      - {name: policy_name, type: string, nullable: false}
+      - {name: contract_status, type: string, nullable: true}
+      - {name: paid_amount, type: float, nullable: true}
+      - {name: contract_date, type: date, format: "YYYY-MM-DD", nullable: true}
+      - {name: maturity_date, type: date, format: "YYYY-MM-DD", nullable: true}
+      - {name: currency, type: string, nullable: false, default: "KRW"}
+      - name: source_fact_id
+        type: string
+        nullable: false
+        references: "banksalad_workbook_schemas.overview_facts_v0.fact_id"
+      - name: file_id
+        type: string
+        nullable: false
+        references: "data/metadata/import_history.csv"
+      - {name: source_row, type: integer, nullable: false}
+
+  investment_positions_v0:
+    active: true
+    introduced: "2026-06-16"
+    adr: "docs/architecture/decisions/0013-banksalad-overview-workbook-ingest.md"
+    description: "Typed investment holding snapshot derived from 뱅샐현황 overview facts"
+    partition_schema:
+      location_pattern: "data/banksalad/investments/YYYY/MM/investments.csv"
+      format: "CSV"
+      encoding: "utf-8"
+      delimiter: ","
+      header: true
+      sort_by: "snapshot_date,institution,product_name"
+      line_terminator: "\n"
+    required_columns:
+      - snapshot_date
+      - product_type
+      - institution
+      - product_name
+      - principal_amount
+      - valuation_amount
+      - return_rate
+      - start_date
+      - maturity_date
+      - currency
+      - source_fact_id
+      - file_id
+      - source_row
+    key_policy:
+      dedup_grain: "daily investment holding"
+      dedup_key:
+        - "snapshot_date"
+        - "institution"
+        - "product_name"
+    columns:
+      - {name: snapshot_date, type: date, format: "YYYY-MM-DD", nullable: false}
+      - {name: product_type, type: string, nullable: true}
+      - {name: institution, type: string, nullable: false}
+      - {name: product_name, type: string, nullable: false}
+      - {name: principal_amount, type: float, nullable: true}
+      - {name: valuation_amount, type: float, nullable: true}
+      - {name: return_rate, type: float, nullable: true}
+      - {name: start_date, type: date, format: "YYYY-MM-DD", nullable: true}
+      - {name: maturity_date, type: date, format: "YYYY-MM-DD", nullable: true}
+      - {name: currency, type: string, nullable: false, default: "KRW"}
+      - name: source_fact_id
+        type: string
+        nullable: false
+        references: "banksalad_workbook_schemas.overview_facts_v0.fact_id"
+      - name: file_id
+        type: string
+        nullable: false
+        references: "data/metadata/import_history.csv"
+      - {name: source_row, type: integer, nullable: false}
+
+  loan_positions_v0:
+    active: true
+    introduced: "2026-06-16"
+    adr: "docs/architecture/decisions/0013-banksalad-overview-workbook-ingest.md"
+    description: "Typed loan snapshot derived from 뱅샐현황 overview facts"
+    partition_schema:
+      location_pattern: "data/banksalad/loans/YYYY/MM/loans.csv"
+      format: "CSV"
+      encoding: "utf-8"
+      delimiter: ","
+      header: true
+      sort_by: "snapshot_date,institution,product_name"
+      line_terminator: "\n"
+    required_columns:
+      - snapshot_date
+      - loan_type
+      - institution
+      - product_name
+      - principal_amount
+      - balance_amount
+      - interest_rate
+      - start_date
+      - maturity_date
+      - currency
+      - source_fact_id
+      - file_id
+      - source_row
+    key_policy:
+      dedup_grain: "daily loan position"
+      dedup_key:
+        - "snapshot_date"
+        - "institution"
+        - "product_name"
+    columns:
+      - {name: snapshot_date, type: date, format: "YYYY-MM-DD", nullable: false}
+      - {name: loan_type, type: string, nullable: true}
+      - {name: institution, type: string, nullable: false}
+      - {name: product_name, type: string, nullable: false}
+      - {name: principal_amount, type: float, nullable: true}
+      - {name: balance_amount, type: float, nullable: true}
+      - {name: interest_rate, type: float, nullable: true}
+      - {name: start_date, type: date, format: "YYYY-MM-DD", nullable: true}
+      - {name: maturity_date, type: date, format: "YYYY-MM-DD", nullable: true}
+      - {name: currency, type: string, nullable: false, default: "KRW"}
+      - name: source_fact_id
+        type: string
+        nullable: false
+        references: "banksalad_workbook_schemas.overview_facts_v0.fact_id"
+      - name: file_id
+        type: string
+        nullable: false
+        references: "data/metadata/import_history.csv"
+      - {name: source_row, type: integer, nullable: false}
+
 # Asset Snapshot Schema (Issue #223)
 asset_schemas:
   snapshot_v0:

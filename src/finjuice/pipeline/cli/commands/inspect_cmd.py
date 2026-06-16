@@ -32,6 +32,15 @@ _CASHFLOW_ANCHORS = {
     normalize_sheet_name("수입지출현황"),
 }
 _SECTION_NUMBER_PREFIX_RE = re.compile(r"^\d+[\.)．。]?")
+_NUMBERED_SECTION_RE = re.compile(r"^\s*\d+[\.)．。]?\s*(.+?)\s*$")
+_OVERVIEW_SECTION_ANCHORS = {
+    normalize_sheet_name("고객정보"): "customer_info_anchor",
+    normalize_sheet_name("현금흐름현황"): "cashflow_anchor",
+    normalize_sheet_name("재무현황"): "balance_anchor",
+    normalize_sheet_name("보험현황"): "insurance_anchor",
+    normalize_sheet_name("투자현황"): "investment_anchor",
+    normalize_sheet_name("대출현황"): "loan_anchor",
+}
 _ANCHOR_LABELS = {
     normalize_sheet_name("기준일"): "snapshot_date",
     normalize_sheet_name("자산"): "asset_anchor",
@@ -104,6 +113,8 @@ def _collect_allowlisted_anchors(sheet: Any) -> list[dict[str, Any]]:
             if anchor is None and _is_cashflow_anchor(normalized):
                 anchor = "cashflow_anchor"
             if anchor is None:
+                anchor = _overview_section_anchor(cell.value)
+            if anchor is None:
                 continue
 
             key = (anchor, int(cell.row), int(cell.column))
@@ -125,6 +136,15 @@ def _is_cashflow_anchor(normalized: str) -> bool:
     if normalized in _CASHFLOW_ANCHORS:
         return True
     return _SECTION_NUMBER_PREFIX_RE.sub("", normalized) in _CASHFLOW_ANCHORS
+
+
+def _overview_section_anchor(value: Any) -> str | None:
+    if value is None:
+        return None
+    match = _NUMBERED_SECTION_RE.match(str(value).strip())
+    if match is None:
+        return None
+    return _OVERVIEW_SECTION_ANCHORS.get(normalize_sheet_name(match.group(1)))
 
 
 def _detect_roles(sheet_name: str, anchor_names: set[str]) -> list[str]:
@@ -153,6 +173,7 @@ def _is_overview_sheet(anchor_names: set[str]) -> bool:
     return (
         {"asset_anchor", "liability_anchor"} <= anchor_names
         or "cashflow_anchor" in anchor_names
+        or any(anchor_name.endswith("_anchor") for anchor_name in anchor_names)
         or "snapshot_date" in anchor_names
     )
 
@@ -165,9 +186,19 @@ def _detect_blocks(anchor_names: set[str], roles: list[str]) -> list[str]:
         blocks.append("asset_snapshot_table")
     if {"asset_anchor", "liability_anchor"} <= anchor_names:
         blocks.append("balance_status")
+    if "balance_anchor" in anchor_names:
+        blocks.append("balance_status")
     if "cashflow_anchor" in anchor_names:
         blocks.append("cashflow_monthly")
-    return blocks
+    if "customer_info_anchor" in anchor_names:
+        blocks.append("customer_info")
+    if "insurance_anchor" in anchor_names:
+        blocks.append("insurance_status")
+    if "investment_anchor" in anchor_names:
+        blocks.append("investment_status")
+    if "loan_anchor" in anchor_names:
+        blocks.append("loan_status")
+    return list(dict.fromkeys(blocks))
 
 
 def _render_xlsx_inspection(result: dict[str, Any]) -> None:

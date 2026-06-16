@@ -35,7 +35,14 @@ from ._transaction_processor import (
 logger = logging.getLogger(__name__)
 
 _PREVIEW_FILE_ID = "dry_run_preview"
-_OVERVIEW_TABLE_NAMES = ("overview_facts", "balance", "cashflow")
+_OVERVIEW_TABLE_NAMES = (
+    "overview_facts",
+    "balance",
+    "cashflow",
+    "insurance",
+    "investments",
+    "loans",
+)
 
 
 @dataclass
@@ -43,6 +50,9 @@ class _OverviewPreviewCaches:
     overview_facts: dict[tuple[int, int], set[tuple[object, ...]]]
     balance: dict[tuple[int, int], set[tuple[object, ...]]]
     cashflow: dict[tuple[int, int], set[tuple[object, ...]]]
+    insurance: dict[tuple[int, int], set[tuple[object, ...]]]
+    investments: dict[tuple[int, int], set[tuple[object, ...]]]
+    loans: dict[tuple[int, int], set[tuple[object, ...]]]
 
 
 @dataclass
@@ -61,6 +71,9 @@ class _OverviewPreviewFrames:
     overview_facts: pl.DataFrame
     balance: pl.DataFrame
     cashflow: pl.DataFrame
+    insurance: pl.DataFrame
+    investments: pl.DataFrame
+    loans: pl.DataFrame
     warnings: list[str]
 
 
@@ -180,6 +193,9 @@ def _build_preview_context(csv_base_dir: Path, archive: bool) -> _PreviewContext
             overview_facts={},
             balance={},
             cashflow={},
+            insurance={},
+            investments={},
+            loans={},
         ),
     )
 
@@ -214,6 +230,9 @@ def _preview_ingest_path(file_path: Path, context: _PreviewContext) -> dict[str,
             overview_facts=overview_parse.overview_facts,
             balance=overview_parse.balance,
             cashflow=overview_parse.cashflow,
+            insurance=overview_parse.insurance,
+            investments=overview_parse.investments,
+            loans=overview_parse.loans,
             warnings=overview_parse.warnings,
         ),
     )
@@ -546,6 +565,45 @@ def _preview_banksalad_overview(
             caches.cashflow,
         )
     )
+    result["insurance"] = _preview_overview_table_result(
+        _preview_append_banksalad_overview_table(
+            banksalad_base_dir / "insurance",
+            frames.insurance,
+            caches.insurance,
+            _OverviewPreviewSpec(
+                dedup_key=csv_partition.BANKSALAD_INSURANCE_DEDUP_KEY,
+                read_month=csv_partition.read_banksalad_insurance_month,
+                path_builder=csv_partition.get_banksalad_insurance_partition_path,
+                partition_column="snapshot_date",
+            ),
+        )
+    )
+    result["investments"] = _preview_overview_table_result(
+        _preview_append_banksalad_overview_table(
+            banksalad_base_dir / "investments",
+            frames.investments,
+            caches.investments,
+            _OverviewPreviewSpec(
+                dedup_key=csv_partition.BANKSALAD_INVESTMENT_DEDUP_KEY,
+                read_month=csv_partition.read_banksalad_investment_month,
+                path_builder=csv_partition.get_banksalad_investment_partition_path,
+                partition_column="snapshot_date",
+            ),
+        )
+    )
+    result["loans"] = _preview_overview_table_result(
+        _preview_append_banksalad_overview_table(
+            banksalad_base_dir / "loans",
+            frames.loans,
+            caches.loans,
+            _OverviewPreviewSpec(
+                dedup_key=csv_partition.BANKSALAD_LOAN_DEDUP_KEY,
+                read_month=csv_partition.read_banksalad_loan_month,
+                path_builder=csv_partition.get_banksalad_loan_partition_path,
+                partition_column="snapshot_date",
+            ),
+        )
+    )
     result["warnings"] = frames.warnings
     return result
 
@@ -571,6 +629,24 @@ def _write_banksalad_overview(
     )
     result["cashflow"] = _write_overview_table_result(
         csv_partition.append_banksalad_cashflow(banksalad_base_dir / "cashflow", parsed.cashflow)
+    )
+    result["insurance"] = _write_overview_table_result(
+        csv_partition.append_banksalad_insurance(
+            banksalad_base_dir / "insurance",
+            parsed.insurance,
+        )
+    )
+    result["investments"] = _write_overview_table_result(
+        csv_partition.append_banksalad_investments(
+            banksalad_base_dir / "investments",
+            parsed.investments,
+        )
+    )
+    result["loans"] = _write_overview_table_result(
+        csv_partition.append_banksalad_loans(
+            banksalad_base_dir / "loans",
+            parsed.loans,
+        )
     )
     result["warnings"] = parsed.warnings
     return result
