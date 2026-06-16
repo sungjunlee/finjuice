@@ -614,9 +614,9 @@ def test_finjuice_skills_declare_standard_runtime_requirements() -> None:
         capabilities = _runtime_capabilities(text)
         if (
             "## Runtime Requirements" not in text
-            or "Minimum finjuice: `0.6.2`" not in text
+            or "Minimum finjuice: `0.7.0`" not in text
             or "Capabilities:" not in text
-            or "--require-version 0.6.2" not in preflight
+            or "--require-version 0.7.0" not in preflight
         ):
             missing_contract.append(str(path.relative_to(repo_root)))
         for capability in capabilities:

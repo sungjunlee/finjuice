@@ -361,7 +361,7 @@ class TestDoctorSkillRuntimeChecks:
         helper.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
         helper.chmod(0o755)
 
-        monkeypatch.setattr(doctor, "get_version", lambda: "0.6.2")
+        monkeypatch.setattr(doctor, "get_version", lambda: "0.7.0")
         monkeypatch.setattr(
             doctor,
             "_discover_skill_runtime_helper",
@@ -381,7 +381,7 @@ class TestDoctorSkillRuntimeChecks:
             "skill_runtime_capability_tag_edit",
         ]
         assert all(result.status == "ok" for result in results)
-        assert "0.6.2" in results[0].message
+        assert "0.7.0" in results[0].message
         assert str(helper) in results[1].message
 
     def test_skill_runtime_checks_warn_on_stale_version_and_missing_helper(
@@ -427,7 +427,7 @@ class TestDoctorSkillRuntimeChecks:
         helper.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
         helper.chmod(0o755)
 
-        monkeypatch.setattr(doctor, "get_version", lambda: "0.6.2")
+        monkeypatch.setattr(doctor, "get_version", lambda: "0.7.0")
         monkeypatch.setattr(doctor, "_discover_skill_runtime_helper", lambda: helper)
         monkeypatch.setattr(
             doctor,
@@ -444,7 +444,7 @@ class TestDoctorSkillRuntimeChecks:
         assert checks["skill_runtime_helper"]["status"] == "pass"
         assert checks["skill_runtime_capability_tag_edit"]["status"] == "pass"
         assert "skill_runtime" in payload
-        assert payload["skill_runtime"]["required_version"] == "0.6.2"
+        assert payload["skill_runtime"]["required_version"] == "0.7.0"
         assert payload["skill_runtime"]["capabilities"] == ["tag.edit"]
 
     def test_doctor_text_shows_skill_runtime_section(
