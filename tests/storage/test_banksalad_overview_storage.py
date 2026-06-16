@@ -11,17 +11,32 @@ from finjuice.pipeline.storage.csv_partition import (
     BANKSALAD_BALANCE_POLARS_SCHEMA,
     BANKSALAD_CASHFLOW_DEDUP_KEY,
     BANKSALAD_CASHFLOW_POLARS_SCHEMA,
+    BANKSALAD_INSURANCE_DEDUP_KEY,
+    BANKSALAD_INSURANCE_POLARS_SCHEMA,
+    BANKSALAD_INVESTMENT_DEDUP_KEY,
+    BANKSALAD_INVESTMENT_POLARS_SCHEMA,
+    BANKSALAD_LOAN_DEDUP_KEY,
+    BANKSALAD_LOAN_POLARS_SCHEMA,
     BANKSALAD_OVERVIEW_FACT_COLUMNS,
     BANKSALAD_OVERVIEW_FACT_DEDUP_KEY,
     BANKSALAD_OVERVIEW_FACT_POLARS_SCHEMA,
     append_banksalad_balance,
     append_banksalad_cashflow,
+    append_banksalad_insurance,
+    append_banksalad_investments,
+    append_banksalad_loans,
     append_banksalad_overview_facts,
     get_banksalad_balance_partition_path,
     get_banksalad_cashflow_partition_path,
+    get_banksalad_insurance_partition_path,
+    get_banksalad_investment_partition_path,
+    get_banksalad_loan_partition_path,
     get_banksalad_overview_facts_partition_path,
     read_banksalad_balance_month,
     read_banksalad_cashflow_month,
+    read_banksalad_insurance_month,
+    read_banksalad_investment_month,
+    read_banksalad_loan_month,
     read_banksalad_overview_facts_month,
 )
 
@@ -76,12 +91,73 @@ def _cashflow_df() -> pl.DataFrame:
     )
 
 
+def _insurance_df() -> pl.DataFrame:
+    return pl.DataFrame(
+        {
+            "snapshot_date": ["2026-06-15", "2026-06-15", "2026-07-01"],
+            "institution": ["insurer_b", "insurer_a", "insurer_a"],
+            "policy_name": ["policy_b", "policy_a", "policy_a"],
+            "contract_status": ["active", "active", "active"],
+            "paid_amount": [80.0, 120.0, 125.0],
+            "contract_date": ["2024-01-01", "2024-02-01", "2024-02-01"],
+            "maturity_date": ["2034-01-01", "2034-02-01", "2034-02-01"],
+            "currency": ["KRW", "KRW", "KRW"],
+            "source_fact_id": ["fact_b", "fact_a", "fact_c"],
+            "file_id": ["260615_1", "260615_1", "260701_1"],
+            "source_row": [6, 5, 5],
+        }
+    )
+
+
+def _investment_df() -> pl.DataFrame:
+    return pl.DataFrame(
+        {
+            "snapshot_date": ["2026-06-15", "2026-06-15", "2026-07-01"],
+            "product_type": ["fund", "stock", "stock"],
+            "institution": ["broker_b", "broker_a", "broker_a"],
+            "product_name": ["holding_b", "holding_a", "holding_a"],
+            "principal_amount": [200.0, 100.0, 110.0],
+            "valuation_amount": [210.0, 120.0, 130.0],
+            "return_rate": [5.0, 20.0, 18.18],
+            "start_date": ["2025-01-01", "2025-02-01", "2025-02-01"],
+            "maturity_date": [None, None, None],
+            "currency": ["KRW", "KRW", "KRW"],
+            "source_fact_id": ["fact_b", "fact_a", "fact_c"],
+            "file_id": ["260615_1", "260615_1", "260701_1"],
+            "source_row": [6, 5, 5],
+        }
+    )
+
+
+def _loan_df() -> pl.DataFrame:
+    return pl.DataFrame(
+        {
+            "snapshot_date": ["2026-06-15", "2026-06-15", "2026-07-01"],
+            "loan_type": ["credit", "mortgage", "mortgage"],
+            "institution": ["bank_b", "bank_a", "bank_a"],
+            "product_name": ["loan_b", "loan_a", "loan_a"],
+            "principal_amount": [300.0, 500.0, 500.0],
+            "balance_amount": [250.0, 450.0, 440.0],
+            "interest_rate": [4.5, 3.8, 3.8],
+            "start_date": ["2024-01-01", "2024-02-01", "2024-02-01"],
+            "maturity_date": ["2029-01-01", "2029-02-01", "2029-02-01"],
+            "currency": ["KRW", "KRW", "KRW"],
+            "source_fact_id": ["fact_b", "fact_a", "fact_c"],
+            "file_id": ["260615_1", "260615_1", "260701_1"],
+            "source_row": [6, 5, 5],
+        }
+    )
+
+
 def test_banksalad_empty_reads_return_typed_dataframes(tmp_path: Path) -> None:
     base_dir = tmp_path / "banksalad"
 
     facts = read_banksalad_overview_facts_month(base_dir / "overview_facts", 2026, 6)
     balance = read_banksalad_balance_month(base_dir / "balance", 2026, 6)
     cashflow = read_banksalad_cashflow_month(base_dir / "cashflow", 2026, 6)
+    insurance = read_banksalad_insurance_month(base_dir / "insurance", 2026, 6)
+    investments = read_banksalad_investment_month(base_dir / "investments", 2026, 6)
+    loans = read_banksalad_loan_month(base_dir / "loans", 2026, 6)
 
     assert facts.height == 0
     assert facts.schema == BANKSALAD_OVERVIEW_FACT_POLARS_SCHEMA
@@ -89,6 +165,12 @@ def test_banksalad_empty_reads_return_typed_dataframes(tmp_path: Path) -> None:
     assert balance.schema == BANKSALAD_BALANCE_POLARS_SCHEMA
     assert cashflow.height == 0
     assert cashflow.schema == BANKSALAD_CASHFLOW_POLARS_SCHEMA
+    assert insurance.height == 0
+    assert insurance.schema == BANKSALAD_INSURANCE_POLARS_SCHEMA
+    assert investments.height == 0
+    assert investments.schema == BANKSALAD_INVESTMENT_POLARS_SCHEMA
+    assert loans.height == 0
+    assert loans.schema == BANKSALAD_LOAN_POLARS_SCHEMA
 
 
 def test_banksalad_dedup_keys_match_schema_yaml() -> None:
@@ -113,6 +195,18 @@ def test_banksalad_dedup_keys_match_schema_yaml() -> None:
         assert (
             workbook_schemas["cashflow_projection_v0"]["key_policy"]["dedup_key"]
             == BANKSALAD_CASHFLOW_DEDUP_KEY
+        )
+        assert (
+            workbook_schemas["insurance_policies_v0"]["key_policy"]["dedup_key"]
+            == BANKSALAD_INSURANCE_DEDUP_KEY
+        )
+        assert (
+            workbook_schemas["investment_positions_v0"]["key_policy"]["dedup_key"]
+            == BANKSALAD_INVESTMENT_DEDUP_KEY
+        )
+        assert (
+            workbook_schemas["loan_positions_v0"]["key_policy"]["dedup_key"]
+            == BANKSALAD_LOAN_DEDUP_KEY
         )
 
 
@@ -214,6 +308,31 @@ def test_banksalad_cashflow_requires_valid_partition_source(tmp_path: Path) -> N
     assert not base_dir.exists()
 
 
+def test_banksalad_structured_overview_tables_partition_and_dedup(tmp_path: Path) -> None:
+    base_dir = tmp_path / "banksalad"
+
+    insurance_batch = pl.concat([_insurance_df(), _insurance_df().slice(1, 1)])
+    investment_batch = pl.concat([_investment_df(), _investment_df().slice(1, 1)])
+    loan_batch = pl.concat([_loan_df(), _loan_df().slice(1, 1)])
+
+    insurance_result = append_banksalad_insurance(base_dir / "insurance", insurance_batch)
+    investment_result = append_banksalad_investments(base_dir / "investments", investment_batch)
+    loan_result = append_banksalad_loans(base_dir / "loans", loan_batch)
+
+    assert insurance_result["rows_inserted"] == 3
+    assert insurance_result["rows_skipped"] == 1
+    assert investment_result["rows_inserted"] == 3
+    assert investment_result["rows_skipped"] == 1
+    assert loan_result["rows_inserted"] == 3
+    assert loan_result["rows_skipped"] == 1
+    assert get_banksalad_insurance_partition_path(base_dir / "insurance", 2026, 6).exists()
+    assert get_banksalad_investment_partition_path(base_dir / "investments", 2026, 6).exists()
+    assert get_banksalad_loan_partition_path(base_dir / "loans", 2026, 6).exists()
+    assert read_banksalad_insurance_month(base_dir / "insurance", 2026, 6).height == 2
+    assert read_banksalad_investment_month(base_dir / "investments", 2026, 6).height == 2
+    assert read_banksalad_loan_month(base_dir / "loans", 2026, 6).height == 2
+
+
 def test_banksalad_append_empty_batches_are_noops(tmp_path: Path) -> None:
     base_dir = tmp_path / "banksalad"
 
@@ -230,6 +349,24 @@ def test_banksalad_append_empty_batches_are_noops(tmp_path: Path) -> None:
         "rows_skipped": 0,
     }
     assert append_banksalad_cashflow(base_dir / "cashflow", pl.DataFrame()) == {
+        "total_rows": 0,
+        "partitions_updated": 0,
+        "rows_inserted": 0,
+        "rows_skipped": 0,
+    }
+    assert append_banksalad_insurance(base_dir / "insurance", pl.DataFrame()) == {
+        "total_rows": 0,
+        "partitions_updated": 0,
+        "rows_inserted": 0,
+        "rows_skipped": 0,
+    }
+    assert append_banksalad_investments(base_dir / "investments", pl.DataFrame()) == {
+        "total_rows": 0,
+        "partitions_updated": 0,
+        "rows_inserted": 0,
+        "rows_skipped": 0,
+    }
+    assert append_banksalad_loans(base_dir / "loans", pl.DataFrame()) == {
         "total_rows": 0,
         "partitions_updated": 0,
         "rows_inserted": 0,

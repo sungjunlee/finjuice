@@ -29,6 +29,21 @@ def _write_private_sentinel_workbook(file_path: Path) -> None:
     overview.write(4, 5, "PRIVATE_LOAN_SENTINEL")
     overview.write(4, 6, 123_456_789)
     overview.write(7, 1, "2.현금흐름현황")
+    overview.write(10, 1, "4.보험현황")
+    overview.write(11, 1, "금융사")
+    overview.write(11, 2, "보험명")
+    overview.write(12, 1, "PRIVATE_INSURER_SENTINEL")
+    overview.write(12, 2, "PRIVATE_POLICY_SENTINEL")
+    overview.write(15, 1, "5.투자현황")
+    overview.write(16, 1, "투자상품종류")
+    overview.write(16, 2, "금융사")
+    overview.write(16, 3, "상품명")
+    overview.write(17, 3, "PRIVATE_INVESTMENT_SENTINEL")
+    overview.write(20, 1, "6.대출현황")
+    overview.write(21, 1, "대출종류")
+    overview.write(21, 2, "금융사")
+    overview.write(21, 3, "상품명")
+    overview.write(22, 3, "PRIVATE_LOAN_PRODUCT_SENTINEL")
 
     tx_sheet = workbook.add_worksheet("가계부 내역")
     for col_idx, header in enumerate(["날짜", "시간", "타입", "내용", "금액", "결제수단"]):
@@ -55,6 +70,10 @@ def test_inspect_xlsx_json_reports_structure_without_private_values(tmp_path: Pa
     assert "PRIVATE_LOAN_SENTINEL" not in output_text
     assert "PRIVATE_MERCHANT_SENTINEL" not in output_text
     assert "PRIVATE_CARD_SENTINEL" not in output_text
+    assert "PRIVATE_INSURER_SENTINEL" not in output_text
+    assert "PRIVATE_POLICY_SENTINEL" not in output_text
+    assert "PRIVATE_INVESTMENT_SENTINEL" not in output_text
+    assert "PRIVATE_LOAN_PRODUCT_SENTINEL" not in output_text
     assert "987654321" not in output_text
     assert "123456789" not in output_text
     assert "55000" not in output_text
@@ -66,10 +85,16 @@ def test_inspect_xlsx_json_reports_structure_without_private_values(tmp_path: Pa
     assert overview_sheet["detected_roles"] == ["banksalad_overview"]
     assert "balance_status" in overview_sheet["detected_blocks"]
     assert "cashflow_monthly" in overview_sheet["detected_blocks"]
+    assert "insurance_status" in overview_sheet["detected_blocks"]
+    assert "investment_status" in overview_sheet["detected_blocks"]
+    assert "loan_status" in overview_sheet["detected_blocks"]
     assert {anchor["anchor"] for anchor in overview_sheet["allowlisted_anchors"]} >= {
         "asset_anchor",
         "liability_anchor",
         "cashflow_anchor",
+        "insurance_anchor",
+        "investment_anchor",
+        "loan_anchor",
     }
 
 
@@ -90,6 +115,10 @@ def test_inspect_xlsx_text_reports_structure_without_private_values(tmp_path: Pa
     assert "PRIVATE_LOAN_SENTINEL" not in result.output
     assert "PRIVATE_MERCHANT_SENTINEL" not in result.output
     assert "PRIVATE_CARD_SENTINEL" not in result.output
+    assert "PRIVATE_INSURER_SENTINEL" not in result.output
+    assert "PRIVATE_POLICY_SENTINEL" not in result.output
+    assert "PRIVATE_INVESTMENT_SENTINEL" not in result.output
+    assert "PRIVATE_LOAN_PRODUCT_SENTINEL" not in result.output
     assert "987654321" not in result.output
     assert "123456789" not in result.output
     assert "55000" not in result.output

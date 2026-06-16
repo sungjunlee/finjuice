@@ -39,6 +39,71 @@ def _write_overview_export_xlsx(file_path: Path, *, include_transaction_row: boo
     overview.write(8, 2, "2026-06")
     overview.write(9, 1, "수입")
     overview.write(9, 2, 2_000_000)
+    overview.write(12, 1, "4.보험현황")
+    overview.write_row(13, 1, ["금융사", "보험명", "계약상태", "총납입금", "계약일자", "만기일자"])
+    overview.write_row(
+        14,
+        1,
+        ["Synthetic Insurer", "Synthetic Policy", "정상", 120_000, "2024-01-01", "2034-01-01"],
+    )
+    overview.write(17, 1, "5.투자현황")
+    overview.write_row(
+        18,
+        1,
+        [
+            "투자상품종류",
+            "금융사",
+            "상품명",
+            "투자원금",
+            "평가금액",
+            "수익률",
+            "가입일자",
+            "만기일자",
+        ],
+    )
+    overview.write_row(
+        19,
+        1,
+        [
+            "펀드",
+            "Synthetic Securities",
+            "Synthetic Fund",
+            1_000_000,
+            1_050_000,
+            5.0,
+            "2025-01-01",
+            "",
+        ],
+    )
+    overview.write(22, 1, "6.대출현황")
+    overview.write_row(
+        23,
+        1,
+        [
+            "대출종류",
+            "금융사",
+            "상품명",
+            "대출원금",
+            "대출잔액",
+            "대출금리",
+            "대출신규일",
+            "대출만기일",
+        ],
+    )
+    overview.write_row(
+        24,
+        1,
+        [
+            "신용",
+            "Synthetic Bank",
+            "Synthetic Loan Detail",
+            3_000_000,
+            2_500_000,
+            4.5,
+            "2023-01-01",
+            "2028-01-01",
+        ],
+    )
 
     tx_sheet = workbook.add_worksheet("가계부 내역")
     headers = [
@@ -100,6 +165,13 @@ def test_overview_ingest_writes_and_is_idempotent(tmp_path: Path) -> None:
     cashflow = csv_partition.read_banksalad_cashflow_month(
         data_dir / "banksalad" / "cashflow", 2026, 6
     )
+    insurance = csv_partition.read_banksalad_insurance_month(
+        data_dir / "banksalad" / "insurance", 2026, 6
+    )
+    investments = csv_partition.read_banksalad_investment_month(
+        data_dir / "banksalad" / "investments", 2026, 6
+    )
+    loans = csv_partition.read_banksalad_loan_month(data_dir / "banksalad" / "loans", 2026, 6)
 
     # Assert
     assert first["transactions"]["inserted"] == 1
@@ -108,9 +180,15 @@ def test_overview_ingest_writes_and_is_idempotent(tmp_path: Path) -> None:
     assert first["banksalad_overview"]["overview_facts"]["inserted"] == facts.height
     assert first["banksalad_overview"]["balance"]["inserted"] == balance.height
     assert first["banksalad_overview"]["cashflow"]["inserted"] == cashflow.height
+    assert first["banksalad_overview"]["insurance"]["inserted"] == insurance.height
+    assert first["banksalad_overview"]["investments"]["inserted"] == investments.height
+    assert first["banksalad_overview"]["loans"]["inserted"] == loans.height
     assert second["banksalad_overview"]["overview_facts"]["dedup_skips"] == facts.height
     assert second["banksalad_overview"]["balance"]["dedup_skips"] == balance.height
     assert second["banksalad_overview"]["cashflow"]["dedup_skips"] == cashflow.height
+    assert second["banksalad_overview"]["insurance"]["dedup_skips"] == insurance.height
+    assert second["banksalad_overview"]["investments"]["dedup_skips"] == investments.height
+    assert second["banksalad_overview"]["loans"]["dedup_skips"] == loans.height
 
 
 def test_overview_ingest_without_transaction_rows(tmp_path: Path) -> None:
@@ -148,6 +226,9 @@ def test_overview_dry_run_reports_counts_without_writing(tmp_path: Path) -> None
     assert overview["overview_facts"]["estimated_new_rows"] > 0
     assert overview["balance"]["estimated_new_rows"] == 2
     assert overview["cashflow"]["estimated_new_rows"] == 1
+    assert overview["insurance"]["estimated_new_rows"] == 1
+    assert overview["investments"]["estimated_new_rows"] == 1
+    assert overview["loans"]["estimated_new_rows"] == 1
     assert not (data_dir / "banksalad").exists()
 
 
@@ -176,9 +257,15 @@ def test_overview_dry_run_after_write_reports_dedup_without_transaction_drift(
     assert after_write["banksalad_overview"]["overview_facts"]["estimated_new_rows"] == 0
     assert after_write["banksalad_overview"]["balance"]["estimated_new_rows"] == 0
     assert after_write["banksalad_overview"]["cashflow"]["estimated_new_rows"] == 0
+    assert after_write["banksalad_overview"]["insurance"]["estimated_new_rows"] == 0
+    assert after_write["banksalad_overview"]["investments"]["estimated_new_rows"] == 0
+    assert after_write["banksalad_overview"]["loans"]["estimated_new_rows"] == 0
     assert after_write["banksalad_overview"]["overview_facts"]["estimated_dedup_skips"] > 0
     assert after_write["banksalad_overview"]["balance"]["estimated_dedup_skips"] == 2
     assert after_write["banksalad_overview"]["cashflow"]["estimated_dedup_skips"] == 1
+    assert after_write["banksalad_overview"]["insurance"]["estimated_dedup_skips"] == 1
+    assert after_write["banksalad_overview"]["investments"]["estimated_dedup_skips"] == 1
+    assert after_write["banksalad_overview"]["loans"]["estimated_dedup_skips"] == 1
 
 
 def test_ingest_json_includes_overview_counts_without_private_values(tmp_path: Path) -> None:
@@ -196,6 +283,16 @@ def test_ingest_json_includes_overview_counts_without_private_values(tmp_path: P
     dry_run_payload = json.loads(dry_run.output)
     write_payload = json.loads(write.output)
     assert dry_run_payload["preview"]["banksalad_overview"]["balance"]["estimated_new_rows"] == 2
+    assert dry_run_payload["preview"]["banksalad_overview"]["insurance"]["estimated_new_rows"] == 1
+    assert (
+        dry_run_payload["preview"]["banksalad_overview"]["investments"]["estimated_new_rows"] == 1
+    )
+    assert dry_run_payload["preview"]["banksalad_overview"]["loans"]["estimated_new_rows"] == 1
     assert write_payload["summary"]["banksalad_overview"]["balance"]["inserted"] == 2
+    assert write_payload["summary"]["banksalad_overview"]["insurance"]["inserted"] == 1
+    assert write_payload["summary"]["banksalad_overview"]["investments"]["inserted"] == 1
+    assert write_payload["summary"]["banksalad_overview"]["loans"]["inserted"] == 1
     assert "Synthetic Deposit" not in dry_run.output
     assert "Synthetic Loan" not in write.output
+    assert "Synthetic Policy" not in dry_run.output
+    assert "Synthetic Fund" not in write.output
