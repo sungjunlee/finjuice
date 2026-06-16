@@ -42,7 +42,7 @@ from finjuice.pipeline.tagging.validator import validate_rules
 
 logger = logging.getLogger(__name__)
 
-SKILL_RUNTIME_REQUIRED_VERSION = "0.7.0"
+SKILL_RUNTIME_REQUIRED_VERSION = "0.7.1"
 SKILL_RUNTIME_UPDATE_COMMAND = "skills/finjuice/scripts/ensure_finjuice_cli.sh --update --json"
 KNOWN_SKILL_CAPABILITIES = {
     "tag.edit": "finjuice tag --edit",
