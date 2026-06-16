@@ -481,6 +481,26 @@ def test_overview_parser_ignores_cashflow_month_dates_for_snapshot_date(
     ]
 
 
+def test_overview_parser_uses_export_range_end_date_before_file_mtime(
+    tmp_path: Path,
+) -> None:
+    """Banksalad export filenames carry the snapshot date when the sheet has no label."""
+    # Arrange
+    file_path = tmp_path / "synthetic_2025-06-07~2026-06-07.xlsx"
+    _write_excel_date_cashflow_headers_xlsx(file_path)
+
+    # Act
+    result = parse_banksalad_overview(
+        file_path=file_path,
+        file_id="260607_1",
+        file_mtime="2026-06-16T12:00:00",
+    )
+
+    # Assert
+    assert set(result.balance["snapshot_date"].to_list()) == {"2026-06-07"}
+    assert set(result.cashflow["snapshot_date"].to_list()) == {"2026-06-07"}
+
+
 def test_overview_parser_stops_cashflow_at_numbered_followup_section(
     tmp_path: Path,
 ) -> None:
