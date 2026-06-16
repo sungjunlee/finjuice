@@ -1,7 +1,7 @@
 # Troubleshooting Guide
 
-**Last Updated**: 2026-05-22  
-**Status**: Current for finjuice v0.6.2
+**Last Updated**: 2026-06-16
+**Status**: Current for finjuice v0.7.0
 
 This guide covers hand-written troubleshooting advice for the current CLI. For exact
 syntax, run `finjuice --help` or `finjuice <command> --help`.
@@ -34,7 +34,7 @@ syntax, run `finjuice --help` or `finjuice <command> --help`.
 cd /path/to/finjuice
 uv sync
 uv run finjuice --version
-# Expected: finjuice 0.6.2
+# Expected: finjuice 0.7.0
 ```
 
 If you installed a standalone executable, check that the install location is on PATH:
@@ -251,7 +251,7 @@ finjuice explain "스타벅스" --date 2024-10-25
 finjuice rules test cafe_starbucks --limit 10
 ```
 
-Important v0.6.2 behavior:
+Important v0.7.0 behavior:
 
 - All matching enabled rules contribute deduplicated tags.
 - The highest-priority matching rule with a non-empty `category` sets `category_rule`.
@@ -512,6 +512,6 @@ If your issue is not covered here:
 
 ---
 
-**Last Updated**: 2026-05-22  
-**Version**: v0.6.2  
+**Last Updated**: 2026-06-16
+**Version**: v0.7.0
 **Related**: [Guides README](README.md), [User Guide](user_guide.md), [CLI Reference](../reference/cli.md)

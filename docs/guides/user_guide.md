@@ -1,10 +1,10 @@
 # 사용자 가이드
 
-> finjuice v0.6.2 기준, 뱅크샐러드 XLSX/ZIP 내보내기를 로컬 CSV 파티션으로 처리하고
+> finjuice v0.7.0 기준, 뱅크샐러드 XLSX/ZIP 내보내기를 로컬 CSV 파티션으로 처리하고
 > 조회, 태깅, 리포트, AI 에이전트용 읽기 컨텍스트까지 다루는 사용 가이드입니다.
 
-마지막 업데이트: 2026-05-22
-버전: v0.6.2
+마지막 업데이트: 2026-06-16
+버전: v0.7.0
 
 ---
 
@@ -177,7 +177,7 @@ rules:
 
 ### 3.2 적용 방식
 
-v0.6.2의 태깅은 단일 "첫 매칭만 적용" 방식이 아닙니다.
+v0.7.0의 태깅은 단일 "첫 매칭만 적용" 방식이 아닙니다.
 
 - 활성화된 모든 매칭 규칙의 태그가 우선순위 순서대로 `tags_rule`에 병합됩니다.
 - 중복 태그는 먼저 나온 값만 남습니다.
@@ -498,7 +498,7 @@ finjuice --help
 A: 동작은 하지만 deprecated입니다. `finjuice refresh`를 쓰세요.
 
 **Q: 기본 데이터 위치가 `./data`인가요?**  
-A: 아닙니다. v0.6.2 기본값은 `~/.finjuice`입니다. 기존 `./data`는 `finjuice migrate`로
+A: 아닙니다. v0.7.0 기본값은 `~/.finjuice`입니다. 기존 `./data`는 `finjuice migrate`로
 옮기거나 repo 밖의 개인 데이터 디렉터리를 `--data-dir`로 명시하세요.
 
 **Q: 이체 시간 창을 CLI에서 바꿀 수 있나요?**  
@@ -515,6 +515,6 @@ A: 네. `finjuice import ~/Downloads/*.xlsx` 또는 `finjuice import ~/Downloads
 
 ---
 
-**문서 버전**: v0.6.2  
-**마지막 업데이트**: 2026-05-22  
+**문서 버전**: v0.7.0
+**마지막 업데이트**: 2026-06-16
 **문의**: [GitHub Issues](https://github.com/sungjunlee/finjuice/issues)

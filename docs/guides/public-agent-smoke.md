@@ -50,7 +50,7 @@ script, run the shared runtime preflight first:
 
 ```bash
 skills/finjuice/scripts/ensure_finjuice_cli.sh --json \
-  --require-version 0.6.2 \
+  --require-version 0.7.0 \
   --require-command "index" \
   --require-command "checkup" \
   --require-command "status" \

@@ -23,7 +23,7 @@ compatibility: "Requires finjuice CLI runtime; resolve and run the shared runtim
 
 ## Runtime Requirements
 
-- Minimum finjuice: `0.6.2`
+- Minimum finjuice: `0.7.0`
 - Capabilities: `index`, `checkup`, `context`, `status`, `template run`, `rules gaps`, `show`, `explain`
 - Extras: `analytics` (`duckdb`)
 - Unsupported fallback: Unsupported CLI path: `<cli path>`. Confidence lost for this workflow because the local finjuice runtime lacks required capability `<capability>`. Do not recommend or run the failed command after preflight failure.
@@ -38,7 +38,7 @@ run this skill-local gate:
 
 ```bash
 "$FINJUICE_ENSURE" --json \
-  --require-version 0.6.2 \
+  --require-version 0.7.0 \
   --require-command "index" \
   --require-command "checkup" \
   --require-command "context" \

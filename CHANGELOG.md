@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.7.0] - 2026-06-16
+
+### Highlights
+
+Feature release adding first-class Banksalad overview workbook ingest. finjuice can now
+parse, store, inspect, and report data from the `뱅샐현황` workbook sections in addition
+to transaction exports, including balance snapshots, asset/liability projections, and
+cashflow projections.
+
 ### Added
 
 - `finjuice version` subcommand — shows software version + data schema version,
@@ -34,17 +45,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dependency updates (#643).
 - Documented GitHub Actions least-privilege permissions and `main` branch
   protection expectations (#646).
+- Banksalad overview workbook ingest for `뱅샐현황` sheets, including normalized fact
+  rows, balance projections, asset projections, liability projections, and cashflow
+  projections (#8, #9, #10).
+- CSV storage, schema definitions, JSON schema generation, and partition previews for
+  Banksalad overview facts and projections (#8, #10).
+- `inspect xlsx` overview detection and structured `overview_blocks` metadata for
+  workbook role/block analysis (#9).
+- `assets` and `networth` CLI integration for overview balance snapshots, so imported
+  overview assets can flow into existing analysis surfaces (#12).
+- Regression coverage for overview ingest, storage idempotency, generated schemas,
+  inspect output, and end-to-end workbook import behavior (#13).
 
 ### Changed
 
 - Hardened GitHub Actions workflow tokens with top-level read defaults and
   job-level write permissions only where audit, release, or Claude actions need
   them (#646).
+- Full pipeline ingest now preserves overview import summaries alongside transaction
+  import summaries when overview workbooks are present (#10).
+- `inspect xlsx` and overview ingest now recognize numbered Banksalad section headings
+  such as `2.현금흐름현황` (#14).
 
 ### Fixed
 
 - `finjuice doctor` now reports the installed `finjuice` package version instead of the
   legacy `banksalad-tools` package name fallback.
+- Cashflow parsing now stops before numbered follow-up overview sections such as
+  `3.소비현황`, preventing those rows from being treated as cashflow data (#14).
+- Updated `cryptography` to `48.0.1` to clear the dependency security baseline for the
+  current vulnerability audit (#14).
 
 ---
 

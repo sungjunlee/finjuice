@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
   "name": "finjuice",
-  "version": "0.6.2",
-  "generated_at": "2026-06-15T13:53:04+00:00",
+  "version": "0.7.0",
+  "generated_at": "2026-06-16T02:19:23+00:00",
   "tools": [
     {
       "name": "assets.balance",
