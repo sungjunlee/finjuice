@@ -38,7 +38,7 @@ resolving `FINJUICE_ENSURE`, run the command shown in that skill's
 
 ```bash
 "$FINJUICE_ENSURE" --json \
-  --require-version 0.7.0
+  --require-version 0.7.1
 ```
 
 and then include the skill-specific `--require-command`, `--require-flag`, and

@@ -63,7 +63,7 @@ temporarily. Set FINJUICE_RUNTIME_UPDATE_CHECK=0 to skip the remote check for th
 current run only.
 
 Skills may declare runtime requirements before use:
-  --require-version 0.7.0
+  --require-version 0.7.1
   --require-command "status"
   --require-flag "tag:--edit"
   --require-capability tag.edit

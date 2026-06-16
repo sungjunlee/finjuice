@@ -601,6 +601,8 @@ def test_finjuice_skill_files_do_not_duplicate_shared_runtime_shell_block() -> N
 
 def test_finjuice_skills_declare_standard_runtime_requirements() -> None:
     """Every finjuice skill should declare local capabilities and matching gates."""
+    from finjuice.pipeline.cli.commands.doctor import SKILL_RUNTIME_REQUIRED_VERSION
+
     repo_root = _repo_root()
     skill_paths = sorted((repo_root / "skills").glob("finjuice*/SKILL.md"))
 
@@ -614,9 +616,9 @@ def test_finjuice_skills_declare_standard_runtime_requirements() -> None:
         capabilities = _runtime_capabilities(text)
         if (
             "## Runtime Requirements" not in text
-            or "Minimum finjuice: `0.7.0`" not in text
+            or f"Minimum finjuice: `{SKILL_RUNTIME_REQUIRED_VERSION}`" not in text
             or "Capabilities:" not in text
-            or "--require-version 0.7.0" not in preflight
+            or f"--require-version {SKILL_RUNTIME_REQUIRED_VERSION}" not in preflight
         ):
             missing_contract.append(str(path.relative_to(repo_root)))
         for capability in capabilities:

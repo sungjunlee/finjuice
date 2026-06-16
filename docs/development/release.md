@@ -90,6 +90,7 @@ facade exists.
 
 ## Current Recommendation
 
-Use `v0.7.0` for the evidence-backed AI finance report workflow tranche because it adds
-a new agent-facing reporting capability. Keep pure bug fixes and documentation-only
-follow-ups on the `0.6.x` patch line when they do not ship new workflow behavior.
+Use patch releases on the active `0.7.x` line for non-breaking Banksalad overview
+ingest fixes, including snapshot-date or deduplication fixes that affect real imported
+data. Reserve the next minor release for additive CLI, JSON, template, or skill
+workflow behavior.

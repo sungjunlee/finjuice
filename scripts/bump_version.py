@@ -2,8 +2,8 @@
 """Bump finjuice version across all source locations atomically.
 
 Usage:
-    uv run python scripts/bump_version.py 0.7.0
-    uv run python scripts/bump_version.py --dry-run 0.7.0
+    uv run python scripts/bump_version.py X.Y.Z
+    uv run python scripts/bump_version.py --dry-run X.Y.Z
 """
 
 import argparse
@@ -17,6 +17,16 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 # Each entry is a (path, pattern, replacement_template) tuple.
 # pattern: regex matching the line containing the version
 # replacement_template: the new line, with {version} placeholder
+SKILL_REQUIREMENT_FILES = [
+    "skills/finjuice/SKILL.md",
+    "skills/finjuice-curate/SKILL.md",
+    "skills/finjuice-diagnose/SKILL.md",
+    "skills/finjuice-onboard/SKILL.md",
+    "skills/finjuice-report/SKILL.md",
+    "skills/finjuice-review/SKILL.md",
+    "skills/finjuice-rule-cleanup/SKILL.md",
+]
+
 VERSION_LOCATIONS = [
     (
         "pyproject.toml",
@@ -34,21 +44,31 @@ VERSION_LOCATIONS = [
         'SKILL_RUNTIME_REQUIRED_VERSION = "{version}"',
     ),
     (
-        "skills/finjuice/SKILL.md",
-        r"^- Minimum finjuice: `[^`]+`",
-        "- Minimum finjuice: `{version}`",
-    ),
-    (
-        "skills/finjuice/SKILL.md",
-        r"^  --require-version [0-9.]+ ",
-        "  --require-version {version} \\",
-    ),
-    (
         "skills/finjuice/references/runtime-preflight.md",
         r"^  --require-version [0-9.]+$",
         "  --require-version {version}",
     ),
+    (
+        "skills/finjuice/scripts/ensure_finjuice_cli.sh",
+        r"^  --require-version [0-9.]+$",
+        "  --require-version {version}",
+    ),
 ]
+for skill_path in SKILL_REQUIREMENT_FILES:
+    VERSION_LOCATIONS.extend(
+        [
+            (
+                skill_path,
+                r"^- Minimum finjuice: `[^`]+`",
+                "- Minimum finjuice: `{version}`",
+            ),
+            (
+                skill_path,
+                r"^  --require-version [0-9.]+ ",
+                "  --require-version {version} \\",
+            ),
+        ]
+    )
 
 SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
 

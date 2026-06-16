@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.7.1] - 2026-06-16
+
+### Fixed
+
+- Banksalad overview workbook imports now use the export filename date before file
+  modification time when a workbook does not include an explicit snapshot date,
+  preventing extracted ZIP files from collapsing multiple exports into the import date
+  (#23).
+- Banksalad overview balance, insurance, investment, and loan projections now preserve
+  same-name rows from different source rows during deduplication, preventing distinct
+  holdings or policies with the same institution/product name from being dropped (#23).
+
+---
+
 ## [0.7.0] - 2026-06-16
 
 ### Highlights

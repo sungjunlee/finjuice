@@ -1,6 +1,6 @@
 [project]
 name = "finjuice"
-version = "0.7.0"
+version = "0.7.1"
 description = "Local-first personal finance tools for Banksalad data (finjuice CLI)"
 readme = "README.md"
 requires-python = ">=3.10"

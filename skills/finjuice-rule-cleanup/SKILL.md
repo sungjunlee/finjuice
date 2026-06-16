@@ -22,7 +22,7 @@ compatibility: "Requires finjuice CLI runtime; resolve and run the shared runtim
 
 ## Runtime Requirements
 
-- Minimum finjuice: `0.7.0`
+- Minimum finjuice: `0.7.1`
 - Capabilities: `index`, `checkup`, `context`, `rules validate`, `rules gaps`, `rules suggest`, `rules test`, `rules add`, `rules remove`, `explain`, `show`, `journal`
 - Unsupported fallback: Unsupported CLI path: `<cli path>`. Confidence lost for this workflow because the local finjuice runtime lacks required capability `<capability>`. Do not recommend or run the failed command after preflight failure.
 
@@ -36,7 +36,7 @@ run this skill-local gate:
 
 ```bash
 "$FINJUICE_ENSURE" --json \
-  --require-version 0.7.0 \
+  --require-version 0.7.1 \
   --require-command "index" \
   --require-command "checkup" \
   --require-command "context" \
