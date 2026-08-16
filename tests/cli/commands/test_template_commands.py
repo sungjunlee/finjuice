@@ -960,6 +960,23 @@ def review_data_dir(tmp_path):
             "account": "Card B",
         }
     )
+    # Card-payment settlement row in current period — a transfer, not a merchant
+    rows.append(
+        {
+            "date": (latest_date - timedelta(days=1)).isoformat(),
+            "time": "09:00",
+            "merchant_raw": "CARD_SETTLEMENT_EXAMPLE",
+            "amount": -150000,
+            "memo_raw": "",
+            "major_raw": "Transfer",
+            "minor_raw": "Card Settlement",
+            "type_norm": "transfer",
+            "is_transfer": 0,
+            "tags_final": json.dumps([]),
+            "category_final": "카드대금",
+            "account": "Card A",
+        }
+    )
 
     df = pl.DataFrame(rows)
 
@@ -1057,6 +1074,8 @@ def test_template_run_new_merchants(review_data_dir):
     merchants = [r["merchant_raw"] for r in payload["rows"]]
     assert "NewShop" in merchants
     assert "Starbucks" not in merchants
+    # Regression (#29): card-payment settlement rows are not merchants
+    assert "CARD_SETTLEMENT_EXAMPLE" not in merchants
     row_keys = set(payload["rows"][0])
     assert row_keys.issuperset({"merchant_raw", "transaction_count", "total_spend"})
 

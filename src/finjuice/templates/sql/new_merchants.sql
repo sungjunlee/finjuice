@@ -17,6 +17,7 @@ SELECT
 FROM normalized_transactions
 CROSS JOIN bounds
 WHERE amount < 0
+  AND type_norm = 'expense'
   AND is_transfer_bool = FALSE
   AND txn_date > max_date - {{days}} * INTERVAL '1' DAY
   AND txn_date <= max_date
@@ -26,6 +27,7 @@ WHERE amount < 0
       CROSS JOIN bounds
       WHERE txn_date <= max_date - {{days}} * INTERVAL '1' DAY
         AND merchant_raw IS NOT NULL
+        AND type_norm = 'expense'
         AND is_transfer_bool = FALSE
   )
   AND merchant_raw IS NOT NULL
