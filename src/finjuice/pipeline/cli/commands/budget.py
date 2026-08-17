@@ -18,7 +18,7 @@ from finjuice.pipeline.cli.output import ErrorCode, ExitCode, _build_meta, conso
 from finjuice.pipeline.cli.report_filters import apply_report_filters, load_cli_report_filters
 from finjuice.pipeline.cli.utils import get_config
 from finjuice.pipeline.config import Config
-from finjuice.pipeline.filters import exclude_transfers_for
+from finjuice.pipeline.filters import exclude_non_consumption_for, exclude_transfers_for
 from finjuice.pipeline.goals import (
     GoalsValidationProblem,
     MonthlyBudget,
@@ -48,6 +48,9 @@ _RESERVED_BUDGET_EDIT_KEYS = {
     "monthly_budget.notes",
     "version",
 }
+BUDGET_SPEND_INCLUSION = (
+    "spend excludes savings/transfers/investments matching the shared non-consumption pattern"
+)
 
 budget_app = typer.Typer(
     name="budget",
@@ -62,7 +65,11 @@ def budget_status_command(
     month: str | None = typer.Option(None, "--month", help="Budget month (YYYY-MM)"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
-    """Show monthly budget targets vs actual spending."""
+    """Show monthly budget targets vs actual consumption spend.
+
+    Spend excludes savings/transfers/investments matching the shared
+    non-consumption pattern used by monthly_consumption_summary.
+    """
     config = get_config(ctx)
     try:
         result = _compute_budget_status(config, ctx, month=month, json_output=json_output)
@@ -80,6 +87,7 @@ def budget_status_command(
             extras={
                 "filters_applied": result["_filters_applied"],
                 "month": result["month"],
+                "inclusion": BUDGET_SPEND_INCLUSION,
             },
         )
         payload = {k: v for k, v in result.items() if not k.startswith("_")}
@@ -325,6 +333,7 @@ def _compute_budget_validate(config: Config) -> dict[str, Any]:
 def _render_budget_status(result: dict[str, Any]) -> None:
     """Render budget status in Rich tables."""
     console.print(f"\n[bold cyan]📒 Budget Status[/bold cyan] [dim]{result['month']}[/dim]\n")
+    console.print(f"[dim]{BUDGET_SPEND_INCLUSION}[/dim]\n")
 
     goals_file = result["goals_file"]
     if not goals_file["exists"]:
@@ -477,14 +486,14 @@ def _load_budget_actuals(
 
 
 def _expense_rows(df: pl.DataFrame) -> pl.DataFrame:
-    """Return expense rows with transfers excluded."""
+    """Return consumption expense rows, excluding transfers and non-consumption."""
     if df.is_empty() or "amount" not in df.columns:
         return df.head(0)
 
     expr = pl.col("amount") < 0
     if "type_norm" in df.columns:
         expr = expr & (pl.col("type_norm").cast(pl.Utf8, strict=False) == "expense")
-    expr = expr & exclude_transfers_for(df)
+    expr = expr & exclude_transfers_for(df) & exclude_non_consumption_for(df)
     return df.filter(expr)
 
 

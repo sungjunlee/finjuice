@@ -269,6 +269,66 @@ def test_budget_status_unbudgeted_only_uses_matching_next_step_signal(tmp_path: 
     assert payload["next_steps"][0]["signal"] == "unbudgeted_spend"
 
 
+def test_budget_status_excludes_savings_from_total_and_unbudgeted(tmp_path: Path) -> None:
+    """Savings-type expenses must not inflate Total.actual or unbudgeted rows."""
+    data_dir = tmp_path / "data"
+    (data_dir / "imports").mkdir(parents=True)
+    (data_dir / "exports").mkdir()
+    (data_dir / "metadata").mkdir()
+    (data_dir / "rules.yaml").write_text("version: 1\nrules: []\n", encoding="utf-8")
+    (data_dir / "goals.yaml").write_text(
+        "\n".join(
+            [
+                "version: 1",
+                "monthly_budget:",
+                "  total: 200000",
+                "  categories:",
+                "    식비: 100000",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    _write_month(
+        data_dir,
+        pl.DataFrame(
+            [
+                _transaction_row("2026-04-02", -80_000, "식비", "Grocer"),
+                _transaction_row("2026-04-03", -50_000, "저축", "Monthly Savings"),
+            ]
+        ),
+        "2026",
+        "04",
+    )
+
+    result = runner.invoke(
+        app,
+        ["--data-dir", str(data_dir), "budget", "status", "--json", "--month", "2026-04"],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    rows = {row["name"]: row for row in payload["categories"]}
+
+    assert payload["summary"]["actual"] == 80_000
+    assert "저축" not in rows
+    assert payload["signals"]["unbudgeted_count"] == 0
+    assert payload["review"]["unbudgeted_categories"] == []
+    assert "non-consumption" in payload["_meta"]["inclusion"]
+    assert "savings" in payload["_meta"]["inclusion"]
+
+    help_result = runner.invoke(app, ["budget", "status", "--help"])
+    assert help_result.exit_code == 0, help_result.output
+    assert "non-consumption" in help_result.output
+
+    human_result = runner.invoke(
+        app,
+        ["--data-dir", str(data_dir), "budget", "status", "--month", "2026-04"],
+    )
+    assert human_result.exit_code == 0, human_result.output
+    assert "non-consumption" in human_result.output
+
+
 def test_budget_edit_round_trip_preserves_comments_and_skips_prompt_with_yes(
     budget_data_dir: Path,
     monkeypatch: pytest.MonkeyPatch,
