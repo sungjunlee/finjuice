@@ -22,6 +22,18 @@ Usage (SQL):
 
 import polars as pl
 
+# Shared with monthly_consumption_summary and sibling consumption SQL templates.
+NON_CONSUMPTION_PATTERN = (
+    r"(카드대금|카드결제|결제대금|상환|이체|송금|투자|증권|주식|펀드|"
+    r"isa|irp|연금|저축|적금|예금|savings?|investment)"
+)
+_NON_CONSUMPTION_TEXT_COLUMNS = (
+    "category_final",
+    "major_raw",
+    "minor_raw",
+    "tags_final",
+)
+
 
 def exclude_transfers() -> pl.Expr:
     """
@@ -125,6 +137,27 @@ def exclude_transfers_sql() -> str:
         "(is_transfer IS NULL OR is_transfer = 0 OR transfer_group_id IS NULL "
         "OR TRIM(CAST(transfer_group_id AS VARCHAR)) = '')"
     )
+
+
+def exclude_non_consumption_for(df: pl.DataFrame) -> pl.Expr:
+    """Exclude savings, transfers, investments, and card-payment-like rows.
+
+    Matches ``NON_CONSUMPTION_PATTERN`` case-insensitively against the
+    concatenation of ``category_final``, ``major_raw``, ``minor_raw``, and
+    ``tags_final`` — the same fields the monthly_consumption_summary SQL
+    template concatenates.
+
+    Returns True for consumption rows (keep). Missing text columns are skipped.
+    """
+    parts = [
+        pl.col(name).cast(pl.Utf8, strict=False).fill_null("")
+        for name in _NON_CONSUMPTION_TEXT_COLUMNS
+        if name in df.columns
+    ]
+    if not parts:
+        return pl.lit(True)
+    haystack = pl.concat_str(parts, separator=" ").str.to_lowercase()
+    return ~haystack.str.contains(NON_CONSUMPTION_PATTERN)
 
 
 def only_transfers_sql() -> str:
