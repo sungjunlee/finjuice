@@ -21,7 +21,7 @@ finjuice --version
 
 ```
 
- Usage: finjuice [OPTIONS] COMMAND [ARGS]...
+ Usage: finjuice [OPTIONS] [COMMAND] [ARGS]...
 
  Local-first personal finance pipeline for Banksalad data
 
@@ -292,7 +292,7 @@ finjuice --version
 │ --help          Show this message and exit.                                                                          │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ status     Show monthly budget targets vs actual spending.                                                           │
+│ status     Show monthly budget targets vs actual consumption spend.                                                  │
 │ edit       Edit monthly budget values in goals.yaml while preserving comments.                                       │
 │ validate   Validate goals.yaml against the monthly_budget schema.                                                    │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
@@ -305,7 +305,10 @@ finjuice --version
 
  Usage: finjuice budget status [OPTIONS]
 
- Show monthly budget targets vs actual spending.
+ Show monthly budget targets vs actual consumption spend.
+
+ Spend excludes savings/transfers/investments matching the shared
+ non-consumption pattern used by monthly_consumption_summary.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ --month        TEXT  Budget month (YYYY-MM)                                                                          │
@@ -685,7 +688,7 @@ finjuice --version
 
 ```
 
- Usage: finjuice networth [OPTIONS] COMMAND [ARGS]...
+ Usage: finjuice networth [OPTIONS] [COMMAND] [ARGS]...
 
  View aggregated net worth from asset snapshots plus assets.yaml. Use `finjuice assets` for raw snapshot rows.
 
