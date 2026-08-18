@@ -25,7 +25,8 @@ import polars as pl
 # Shared with monthly_consumption_summary and sibling consumption SQL templates.
 NON_CONSUMPTION_PATTERN = (
     r"(카드대금|카드결제|결제대금|상환|이체|송금|투자|증권|주식|펀드|"
-    r"isa|irp|연금|저축|적금|예금|savings?|investment)"
+    r"isa|irp|연금|저축|적금|예금|savings?|investment|"
+    r"소비제외|금융|금융비용|외화)"
 )
 _NON_CONSUMPTION_TEXT_COLUMNS = (
     "category_final",

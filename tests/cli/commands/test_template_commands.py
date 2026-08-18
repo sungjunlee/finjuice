@@ -384,6 +384,134 @@ def test_template_run_event_adjusted_spend_excludes_selected_event_tags(
     ]
 
 
+def test_consumption_templates_exclude_financial_category_and_exclusion_tag(tmp_path):
+    """금융비용 category and 소비제외 tag must not count as consumption spend."""
+    data_dir = tmp_path / "data"
+    month_dir = data_dir / "transactions" / "2026" / "07"
+    month_dir.mkdir(parents=True)
+    (data_dir / "rules.yaml").write_text("version: 1\nrules: []\n", encoding="utf-8")
+
+    def row(spec: dict[str, object]) -> dict[str, object]:
+        date_value = str(spec["date"])
+        category = str(spec["category"])
+        tags = spec["tags"]
+        assert isinstance(tags, list)
+        return {
+            "row_hash": spec["row_hash"],
+            "date": date_value,
+            "time": "09:00",
+            "datetime": f"{date_value}T09:00:00",
+            "type_raw": "승인",
+            "type_norm": "expense",
+            "major_raw": category,
+            "minor_raw": category,
+            "merchant_raw": spec["merchant"],
+            "memo_raw": "",
+            "amount": spec["amount"],
+            "account": "테스트카드",
+            "currency": "KRW",
+            "category_final": category,
+            "tags_final": json.dumps(tags, ensure_ascii=False),
+            "is_transfer": 0,
+            "transfer_group_id": "",
+        }
+
+    pl.DataFrame(
+        [
+            row(
+                {
+                    "row_hash": "grocery",
+                    "date": "2026-07-01",
+                    "merchant": "동네마트",
+                    "amount": -100,
+                    "category": "식비",
+                    "tags": ["생활"],
+                }
+            ),
+            row(
+                {
+                    "row_hash": "card",
+                    "date": "2026-07-02",
+                    "merchant": "카드대금",
+                    "amount": -1000,
+                    "category": "카드대금",
+                    "tags": ["카드대금"],
+                }
+            ),
+            row(
+                {
+                    "row_hash": "finance",
+                    "date": "2026-07-03",
+                    "merchant": "보험료",
+                    "amount": -800,
+                    "category": "금융비용",
+                    "tags": ["보험"],
+                }
+            ),
+            row(
+                {
+                    "row_hash": "excluded",
+                    "date": "2026-07-04",
+                    "merchant": "제외상점",
+                    "amount": -250,
+                    "category": "식비",
+                    "tags": ["소비제외"],
+                }
+            ),
+        ]
+    ).write_csv(month_dir / "transactions.csv")
+
+    summary_result = runner.invoke(
+        app,
+        [
+            "--data-dir",
+            str(data_dir),
+            "template",
+            "run",
+            "monthly_consumption_summary",
+            "--param",
+            "since=2026-07",
+            "--param",
+            "until=2026-07",
+            "--json",
+        ],
+    )
+    breakdown_result = runner.invoke(
+        app,
+        [
+            "--data-dir",
+            str(data_dir),
+            "template",
+            "run",
+            "consumption_category_breakdown",
+            "--param",
+            "month=2026-07",
+            "--param",
+            "top_n=10",
+            "--json",
+        ],
+    )
+
+    assert summary_result.exit_code == 0, summary_result.output
+    assert breakdown_result.exit_code == 0, breakdown_result.output
+    summary = json.loads(summary_result.output)
+    breakdown = json.loads(breakdown_result.output)
+    assert summary["rows"] == [
+        {
+            "month": "2026-07",
+            "transaction_count": 1,
+            "consumption_spend": 100,
+            "excluded_non_consumption_spend": 2050,
+        }
+    ]
+    assert breakdown["rows"] == [
+        {"category": "식비", "transaction_count": 1, "consumption_spend": 100},
+    ]
+    categories = {row["category"] for row in breakdown["rows"]}
+    assert "금융비용" not in categories
+    assert all(row["category"] != "소비제외" for row in breakdown["rows"])
+
+
 def test_template_run_event_adjusted_spend_handles_zero_events(review_template_data_dir):
     """Omitting event tags should keep adjusted total equal to total consumption spend."""
     result = runner.invoke(
