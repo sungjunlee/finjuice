@@ -391,16 +391,13 @@ def test_consumption_templates_exclude_financial_category_and_exclusion_tag(tmp_
     month_dir.mkdir(parents=True)
     (data_dir / "rules.yaml").write_text("version: 1\nrules: []\n", encoding="utf-8")
 
-    def row(
-        row_hash: str,
-        date_value: str,
-        merchant: str,
-        amount: int,
-        category: str,
-        tags: list[str],
-    ) -> dict[str, object]:
+    def row(spec: dict[str, object]) -> dict[str, object]:
+        date_value = str(spec["date"])
+        category = str(spec["category"])
+        tags = spec["tags"]
+        assert isinstance(tags, list)
         return {
-            "row_hash": row_hash,
+            "row_hash": spec["row_hash"],
             "date": date_value,
             "time": "09:00",
             "datetime": f"{date_value}T09:00:00",
@@ -408,9 +405,9 @@ def test_consumption_templates_exclude_financial_category_and_exclusion_tag(tmp_
             "type_norm": "expense",
             "major_raw": category,
             "minor_raw": category,
-            "merchant_raw": merchant,
+            "merchant_raw": spec["merchant"],
             "memo_raw": "",
-            "amount": amount,
+            "amount": spec["amount"],
             "account": "테스트카드",
             "currency": "KRW",
             "category_final": category,
@@ -421,10 +418,46 @@ def test_consumption_templates_exclude_financial_category_and_exclusion_tag(tmp_
 
     pl.DataFrame(
         [
-            row("grocery", "2026-07-01", "동네마트", -100, "식비", ["생활"]),
-            row("card", "2026-07-02", "카드대금", -1000, "카드대금", ["카드대금"]),
-            row("finance", "2026-07-03", "보험료", -800, "금융비용", ["보험"]),
-            row("excluded", "2026-07-04", "제외상점", -250, "식비", ["소비제외"]),
+            row(
+                {
+                    "row_hash": "grocery",
+                    "date": "2026-07-01",
+                    "merchant": "동네마트",
+                    "amount": -100,
+                    "category": "식비",
+                    "tags": ["생활"],
+                }
+            ),
+            row(
+                {
+                    "row_hash": "card",
+                    "date": "2026-07-02",
+                    "merchant": "카드대금",
+                    "amount": -1000,
+                    "category": "카드대금",
+                    "tags": ["카드대금"],
+                }
+            ),
+            row(
+                {
+                    "row_hash": "finance",
+                    "date": "2026-07-03",
+                    "merchant": "보험료",
+                    "amount": -800,
+                    "category": "금융비용",
+                    "tags": ["보험"],
+                }
+            ),
+            row(
+                {
+                    "row_hash": "excluded",
+                    "date": "2026-07-04",
+                    "merchant": "제외상점",
+                    "amount": -250,
+                    "category": "식비",
+                    "tags": ["소비제외"],
+                }
+            ),
         ]
     ).write_csv(month_dir / "transactions.csv")
 
