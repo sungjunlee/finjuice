@@ -27,7 +27,7 @@ consumption_rows AS (
                   coalesce(array_to_string(tags_list, ' '), '')
               )
           ),
-          '(카드대금|카드결제|결제대금|상환|이체|송금|투자|증권|주식|펀드|isa|irp|연금|저축|적금|예금|savings?|investment)'
+          '(카드대금|카드결제|결제대금|상환|이체|송금|투자|증권|주식|펀드|isa|irp|연금|저축|적금|예금|savings?|investment|소비제외|금융|금융비용|외화)'
       )
 )
 SELECT
