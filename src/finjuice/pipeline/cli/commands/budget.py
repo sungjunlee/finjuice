@@ -672,8 +672,7 @@ def _build_budget_guidance(
                 {
                     "signal": "unmatched_goal_categories",
                     "message": (
-                        "Rename goals.yaml categories so they exactly match "
-                        "category_final values."
+                        "Rename goals.yaml categories so they exactly match category_final values."
                     ),
                     "command": "finjuice budget edit --help",
                 }
