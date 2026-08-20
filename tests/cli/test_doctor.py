@@ -288,7 +288,7 @@ class TestDoctorCheckResults:
 
     def test_check_result_icons(self) -> None:
         """CheckResult should return correct icons for each status."""
-        from finjuice.pipeline.cli.commands.doctor import CheckResult
+        from finjuice.pipeline.doctor.checks import CheckResult
 
         ok_result = CheckResult(status="ok", message="Test")
         assert ok_result.icon == "✅"
@@ -301,7 +301,7 @@ class TestDoctorCheckResults:
 
     def test_check_result_with_detail(self) -> None:
         """CheckResult should store detail and suggestion."""
-        from finjuice.pipeline.cli.commands.doctor import CheckResult
+        from finjuice.pipeline.doctor.checks import CheckResult
 
         result = CheckResult(
             status="warning",
@@ -321,7 +321,7 @@ class TestDoctorSystemChecks:
 
     def test_python_version_check(self) -> None:
         """Python version check should return ok for Python 3.10+."""
-        from finjuice.pipeline.cli.commands.doctor import _check_python_version
+        from finjuice.pipeline.doctor.checks import _check_python_version
 
         result = _check_python_version()
 
@@ -330,7 +330,7 @@ class TestDoctorSystemChecks:
 
     def test_finjuice_version_check(self) -> None:
         """finjuice version check should return version info."""
-        from finjuice.pipeline.cli.commands.doctor import _check_finjuice_version
+        from finjuice.pipeline.doctor.checks import _check_finjuice_version
 
         result = _check_finjuice_version()
 
@@ -339,7 +339,7 @@ class TestDoctorSystemChecks:
 
     def test_os_info_check(self) -> None:
         """OS info check should return system information."""
-        from finjuice.pipeline.cli.commands.doctor import _check_os_info
+        from finjuice.pipeline.doctor.checks import _check_os_info
 
         result = _check_os_info()
 
@@ -354,7 +354,7 @@ class TestDoctorSkillRuntimeChecks:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Runtime checks should be read-only and expose known skill capabilities."""
-        import finjuice.pipeline.cli.commands.doctor as doctor
+        import finjuice.pipeline.doctor.checks as doctor
 
         helper = tmp_path / "skills/finjuice/scripts/ensure_finjuice_cli.sh"
         helper.parent.mkdir(parents=True)
@@ -388,7 +388,7 @@ class TestDoctorSkillRuntimeChecks:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Stale or missing runtime support should suggest explicit update only."""
-        import finjuice.pipeline.cli.commands.doctor as doctor
+        import finjuice.pipeline.doctor.checks as doctor
 
         monkeypatch.setattr(doctor, "get_version", lambda: "0.6.1")
         monkeypatch.setattr(doctor, "_discover_skill_runtime_helper", lambda: None)
@@ -421,7 +421,7 @@ class TestDoctorSkillRuntimeChecks:
         self, doctor_data_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """doctor --json should include deterministic skill runtime sanity checks."""
-        import finjuice.pipeline.cli.commands.doctor as doctor
+        import finjuice.pipeline.doctor.checks as doctor
 
         helper = tmp_path / "ensure_finjuice_cli.sh"
         helper.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
@@ -451,7 +451,7 @@ class TestDoctorSkillRuntimeChecks:
         self, doctor_data_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Human doctor output should show runtime sanity without network checks."""
-        import finjuice.pipeline.cli.commands.doctor as doctor
+        import finjuice.pipeline.doctor.checks as doctor
 
         monkeypatch.setattr(doctor, "get_version", lambda: "0.6.1")
         monkeypatch.setattr(doctor, "_discover_skill_runtime_helper", lambda: None)
@@ -475,7 +475,7 @@ class TestDoctorDependencyChecks:
 
     def test_dependency_check_finds_polars(self) -> None:
         """Dependency check should find polars package."""
-        from finjuice.pipeline.cli.commands.doctor import _check_dependencies
+        from finjuice.pipeline.doctor.checks import _check_dependencies
 
         results = _check_dependencies()
 
@@ -485,7 +485,7 @@ class TestDoctorDependencyChecks:
 
     def test_dependency_check_finds_typer(self) -> None:
         """Dependency check should find typer package."""
-        from finjuice.pipeline.cli.commands.doctor import _check_dependencies
+        from finjuice.pipeline.doctor.checks import _check_dependencies
 
         results = _check_dependencies()
 
@@ -587,7 +587,7 @@ class TestDoctorAnalyticsChecks:
 
     def test_analytics_check_reports_no_missing_extras_when_duckdb_imports(self) -> None:
         """Analytics check should report no missing extra when duckdb imports cleanly."""
-        import finjuice.pipeline.cli.commands.doctor as doctor
+        import finjuice.pipeline.doctor.checks as doctor
 
         original_import_module = doctor.importlib.import_module
         doctor.importlib.import_module = lambda name: SimpleNamespace(__version__="1.4.2")
@@ -605,7 +605,7 @@ class TestDoctorAnalyticsChecks:
         self, doctor_data_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Doctor text output should name the missing analytics extra and install command."""
-        import finjuice.pipeline.cli.commands.doctor as doctor
+        import finjuice.pipeline.doctor.checks as doctor
 
         original_import_module = doctor.importlib.import_module
 
@@ -627,7 +627,7 @@ class TestDoctorAnalyticsChecks:
         self, doctor_data_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """doctor --json should expose additive analytics recovery keys."""
-        import finjuice.pipeline.cli.commands.doctor as doctor
+        import finjuice.pipeline.doctor.checks as doctor
 
         original_import_module = doctor.importlib.import_module
 

@@ -601,7 +601,7 @@ def test_finjuice_skill_files_do_not_duplicate_shared_runtime_shell_block() -> N
 
 def test_finjuice_skills_declare_standard_runtime_requirements() -> None:
     """Every finjuice skill should declare local capabilities and matching gates."""
-    from finjuice.pipeline.cli.commands.doctor import SKILL_RUNTIME_REQUIRED_VERSION
+    from finjuice.pipeline.doctor import SKILL_RUNTIME_REQUIRED_VERSION
 
     repo_root = _repo_root()
     skill_paths = sorted((repo_root / "skills").glob("finjuice*/SKILL.md"))
