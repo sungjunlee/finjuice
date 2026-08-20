@@ -8,7 +8,8 @@ monthly_budget:
   # Total monthly spending cap.
   total: 2000000
 
-  # Category targets are optional and can cover only the categories you track.
+  # Category keys must exactly match category_final values.
+  # `budget status` warns when a name does not bind to any spend category.
   categories:
     식비: 700000
     교통: 150000

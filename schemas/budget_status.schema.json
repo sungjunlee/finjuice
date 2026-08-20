@@ -234,6 +234,31 @@
           "type": "null"
         }
       ]
+    },
+    "unmatched_goal_categories": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "actual": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "suggested": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "actual"
+        ],
+        "type": "object"
+      },
+      "type": "array"
     }
   },
   "required": [
@@ -242,6 +267,7 @@
     "goals_file",
     "summary",
     "categories",
+    "unmatched_goal_categories",
     "health",
     "actionable",
     "signals",

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `finjuice budget status` now warns when `goals.yaml` category names do not
+  match any spend category in the month, so a stale name like `카페` is no
+  longer silently untracked next to unbudgeted `카페/간식` (#31).
+
 ---
 
 ## [0.7.1] - 2026-06-16

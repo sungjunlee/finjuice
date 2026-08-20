@@ -958,12 +958,23 @@ budget_status_schema = command_schema(
         "review": budget_review_schema,
         "signals": object_any,
         "summary": {"anyOf": [budget_row_schema, {"type": "null"}]},
+        "unmatched_goal_categories": array_of(
+            object_schema(
+                {
+                    "actual": integer,
+                    "name": string,
+                    "suggested": array_of(string),
+                },
+                required=["name", "actual"],
+            )
+        ),
     },
     [
         "month",
         "goals_file",
         "summary",
         "categories",
+        "unmatched_goal_categories",
         "health",
         "actionable",
         "signals",
