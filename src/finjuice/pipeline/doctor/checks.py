@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import importlib
 import importlib.metadata
-import inspect
 import logging
 import os
 import platform
@@ -122,18 +121,18 @@ def _discover_skill_runtime_helper() -> Path | None:
     return None
 
 
+def _probe_cli_capabilities() -> dict[str, bool]:
+    """CLI-layer capability probe.
+
+    The doctor command injects a real probe that may inspect Typer commands.
+    Core doctor checks must not import ``finjuice.pipeline.cli``.
+    """
+    return {name: False for name in KNOWN_SKILL_CAPABILITIES}
+
+
 def _known_skill_capability_checks() -> dict[str, bool]:
     """Return deterministic support checks for known skill runtime capabilities."""
-    results: dict[str, bool] = {}
-
-    try:
-        from finjuice.pipeline.cli.commands.tag import tag_command
-
-        results["tag.edit"] = "edit" in inspect.signature(tag_command).parameters
-    except (ImportError, AttributeError):
-        results["tag.edit"] = False
-
-    return results
+    return _probe_cli_capabilities()
 
 
 def _capability_check_name(capability: str) -> str:

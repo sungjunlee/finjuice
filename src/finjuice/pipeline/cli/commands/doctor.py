@@ -2,12 +2,25 @@
 
 from __future__ import annotations
 
+import inspect
+
 import typer
 from rich.panel import Panel
 
 from finjuice.pipeline.cli.output import console, emit
 from finjuice.pipeline.config import Config
 from finjuice.pipeline.doctor import CheckResult, DoctorResult, _build_doctor_result
+from finjuice.pipeline.doctor import checks as doctor_checks
+
+
+def _probe_cli_capabilities() -> dict[str, bool]:
+    """Inspect CLI command signatures without leaking that import into core."""
+    try:
+        from finjuice.pipeline.cli.commands.tag import tag_command
+
+        return {"tag.edit": "edit" in inspect.signature(tag_command).parameters}
+    except (ImportError, AttributeError):
+        return {"tag.edit": False}
 
 
 def doctor(
@@ -25,6 +38,7 @@ def doctor(
     - Dependencies (required and optional packages)
     """
     config: Config = ctx.obj["config"]
+    doctor_checks._probe_cli_capabilities = _probe_cli_capabilities
     result = _build_doctor_result(config)
     emit(
         result.payload,
