@@ -42,7 +42,7 @@ command/code/exit-code combinations against this schema.
 | `schemas/audit_stats.schema.json` | audit stats --json output | `suggestions`, `executions`, `success_rate`, `top_commands`, `skipped_entries` |
 | `schemas/automation_run.schema.json` | automation run --json output | `enabled`, `actionable`, `thresholds`, `pending_imports`, `tagging_pressure`, `large_transactions`, `next_steps`, `warnings` |
 | `schemas/budget_edit.schema.json` | budget edit --json output | `path`, `changes`, `monthly_budget` |
-| `schemas/budget_status.schema.json` | budget status --json output | `month`, `goals_file`, `summary`, `categories`, `health`, `actionable`, `signals`, `review`, `next_steps` |
+| `schemas/budget_status.schema.json` | budget status --json output | `month`, `goals_file`, `summary`, `categories`, `unmatched_goal_categories`, `health`, `actionable`, `signals`, `review`, `next_steps` |
 | `schemas/budget_validate.schema.json` | budget validate --json output | `status`, `path`, `problems` |
 | `schemas/checkup.schema.json` | checkup --json output | `summary`, `actionable`, `warnings`, `next_actions`, `domains` |
 | `schemas/context.schema.json` | context --json output | `journals`, `status_snapshot`, `active_goals`, `financial_metadata`, `rule_notes`, `top_patterns` |
@@ -1214,6 +1214,7 @@ budget status --json output
 | `review` | `object` | yes |
 | `signals` | `object` | yes |
 | `summary` | `object` or `null` | yes |
+| `unmatched_goal_categories` | `array`[`object`] | yes |
 
 ```json
 {
@@ -1452,6 +1453,31 @@ budget status --json output
           "type": "null"
         }
       ]
+    },
+    "unmatched_goal_categories": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "actual": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "suggested": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "actual"
+        ],
+        "type": "object"
+      },
+      "type": "array"
     }
   },
   "required": [
@@ -1460,6 +1486,7 @@ budget status --json output
     "goals_file",
     "summary",
     "categories",
+    "unmatched_goal_categories",
     "health",
     "actionable",
     "signals",

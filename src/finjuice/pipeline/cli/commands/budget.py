@@ -191,12 +191,14 @@ def _compute_budget_status(
             "goals_file": goals_file,
             "summary": None,
             "categories": [],
+            "unmatched_goal_categories": [],
             **_build_budget_guidance(
                 month=resolved_month,
                 goals_exists=False,
                 summary=None,
                 category_rows=[],
                 filters_applied=filters_applied,
+                unmatched_goal_categories=[],
             ),
             "_filters_applied": filters_applied,
         }
@@ -218,6 +220,7 @@ def _compute_budget_status(
     )
 
     category_rows = _build_category_rows(budget, actuals)
+    unmatched_goal_categories = _unmatched_goal_categories(budget, actuals)
     summary = _build_summary_row(budget, actuals)
     goals_file["updated"] = budget.updated
     goals_file["notes"] = budget.notes
@@ -227,12 +230,14 @@ def _compute_budget_status(
         "goals_file": goals_file,
         "summary": summary,
         "categories": category_rows,
+        "unmatched_goal_categories": unmatched_goal_categories,
         **_build_budget_guidance(
             month=resolved_month,
             goals_exists=True,
             summary=summary,
             category_rows=category_rows,
             filters_applied=filters_applied,
+            unmatched_goal_categories=unmatched_goal_categories,
         ),
         "_filters_applied": filters_applied,
     }
@@ -384,6 +389,7 @@ def _render_budget_status(result: dict[str, Any]) -> None:
         category_table.add_row("[dim]No categories configured[/dim]", "-", "-", "-", "-", "-")
 
     console.print(category_table)
+    _render_unmatched_goal_warning(result.get("unmatched_goal_categories") or [])
     filters_applied = result.get("_filters_applied", 0)
     if filters_applied > 0:
         console.print(
@@ -530,6 +536,47 @@ def _build_category_rows(
     return rows
 
 
+def _unmatched_goal_categories(
+    monthly_budget: MonthlyBudget,
+    actuals: dict[str, int],
+) -> list[dict[str, Any]]:
+    """List goal names that do not bind to this month's spend categories.
+
+    A configured name is unmatched when it is absent from ``actuals`` and that
+    absence is not just a quiet month: leftover spend exists under names that
+    did not bind to any goal.
+    """
+    unbudgeted_names = [
+        name
+        for name, amount in actuals.items()
+        if name not in monthly_budget.categories and amount > 0
+    ]
+    if not unbudgeted_names:
+        return []
+
+    unmatched: list[dict[str, Any]] = []
+    for name in monthly_budget.categories:
+        if name in actuals:
+            continue
+        unmatched.append(
+            {
+                "name": name,
+                "actual": 0,
+                "suggested": _suggested_spend_categories(name, unbudgeted_names),
+            }
+        )
+    return unmatched
+
+
+def _suggested_spend_categories(goal_name: str, spend_names: list[str]) -> list[str]:
+    """Return unbudgeted spend names that look like a renamed form of ``goal_name``."""
+    return sorted(
+        spend_name
+        for spend_name in spend_names
+        if goal_name in spend_name or spend_name in goal_name
+    )
+
+
 def _build_summary_row(monthly_budget: MonthlyBudget, actuals: dict[str, int]) -> dict[str, Any]:
     """Build the overall budget summary row."""
     total_actual = sum(actuals.values())
@@ -558,6 +605,7 @@ def _build_budget_guidance(
     summary: dict[str, Any] | None,
     category_rows: list[dict[str, Any]],
     filters_applied: int,
+    unmatched_goal_categories: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """Build additive health/action cues for budget status."""
     over_budget_count = sum(
@@ -586,6 +634,8 @@ def _build_budget_guidance(
             reasons.append("over_budget_categories")
         if unbudgeted_count > 0:
             reasons.append("unbudgeted_spend")
+        if unmatched_goal_categories:
+            reasons.append("unmatched_goal_categories")
 
     next_steps: list[dict[str, str]] = []
     if not goals_exists:
@@ -608,6 +658,17 @@ def _build_budget_guidance(
                     "signal": review_signal,
                     "message": "Inspect this month's review queue before changing the budget.",
                     "command": f"finjuice review --json --month {month}",
+                }
+            )
+        if "unmatched_goal_categories" in reasons:
+            next_steps.append(
+                {
+                    "signal": "unmatched_goal_categories",
+                    "message": (
+                        "Rename goals.yaml categories so they exactly match "
+                        "category_final values."
+                    ),
+                    "command": "finjuice budget edit --help",
                 }
             )
         next_steps.append(
@@ -829,3 +890,22 @@ def _display_change_value(value: Any) -> str:
     if isinstance(value, int):
         return _format_currency(value)
     return str(value)
+
+
+def _render_unmatched_goal_warning(unmatched: list[dict[str, Any]]) -> None:
+    """Render a warning for goal names that did not bind to spend categories."""
+    if not unmatched:
+        return
+
+    names = ", ".join(str(item["name"]) for item in unmatched)
+    examples: list[str] = []
+    for item in unmatched:
+        for suggested in item.get("suggested") or []:
+            if suggested not in examples:
+                examples.append(suggested)
+    example_text = f" (e.g. {', '.join(examples)})" if examples else ""
+    console.print(
+        "\n[yellow]⚠️  Goals categories not matching any spend category: "
+        f"{names} — goals.yaml names must exactly match category_final values"
+        f"{example_text}; use `finjuice budget edit --set` or fix goals.yaml.[/yellow]"
+    )

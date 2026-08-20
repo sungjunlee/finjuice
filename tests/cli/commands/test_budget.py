@@ -142,6 +142,7 @@ def test_budget_status_json_reports_total_category_states_and_unbudgeted_spend(
             "command": "finjuice budget edit --help",
         },
     ]
+    assert payload["unmatched_goal_categories"] == []
 
 
 def test_budget_status_missing_goals_yaml_returns_empty_envelope(
@@ -190,6 +191,7 @@ def test_budget_status_missing_goals_yaml_returns_empty_envelope(
             "command": "finjuice budget edit --help",
         }
     ]
+    assert payload["unmatched_goal_categories"] == []
 
 
 def test_budget_status_missing_goals_yaml_preserves_filter_metadata(
@@ -601,6 +603,91 @@ def test_budget_status_can_navigate_historical_months(budget_data_dir: Path) -> 
         "reasons": [],
     }
     assert payload["actionable"] is False
+    assert payload["unmatched_goal_categories"] == []
+
+
+def test_budget_status_flags_unmatched_goal_category_names(tmp_path: Path) -> None:
+    """Stale goals names should warn instead of silently showing actual=0 / target=0."""
+    data_dir = tmp_path / "data"
+    (data_dir / "imports").mkdir(parents=True)
+    (data_dir / "exports").mkdir()
+    (data_dir / "metadata").mkdir()
+    (data_dir / "rules.yaml").write_text("version: 1\nrules: []\n", encoding="utf-8")
+    (data_dir / "goals.yaml").write_text(
+        "\n".join(
+            [
+                "version: 1",
+                "monthly_budget:",
+                "  total: 130000",
+                "  categories:",
+                "    식비: 100000",
+                "    카페: 30000",
+                '  updated: "2026-04-15"',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    _write_month(
+        data_dir,
+        pl.DataFrame(
+            [
+                _transaction_row("2026-04-02", -50_000, "식비", "Grocer"),
+                _transaction_row("2026-04-04", -40_000, "카페/간식", "Cafe"),
+            ]
+        ),
+        "2026",
+        "04",
+    )
+
+    json_result = runner.invoke(
+        app,
+        ["--data-dir", str(data_dir), "budget", "status", "--json", "--month", "2026-04"],
+    )
+    human_result = runner.invoke(
+        app,
+        ["--data-dir", str(data_dir), "budget", "status", "--month", "2026-04"],
+    )
+
+    assert json_result.exit_code == 0, json_result.output
+    assert human_result.exit_code == 0, human_result.output
+    payload = json.loads(json_result.output)
+    rows = {row["name"]: row for row in payload["categories"]}
+
+    assert rows["식비"]["actual"] == 50_000
+    assert rows["카페"] == {
+        "name": "카페",
+        "target": 30_000,
+        "actual": 0,
+        "remaining": 30_000,
+        "progress_pct": 0.0,
+        "status": "under",
+    }
+    assert rows["카페/간식"] == {
+        "name": "카페/간식",
+        "target": 0,
+        "actual": 40_000,
+        "remaining": -40_000,
+        "progress_pct": None,
+        "status": "over",
+    }
+    assert payload["unmatched_goal_categories"] == [
+        {"name": "카페", "actual": 0, "suggested": ["카페/간식"]},
+    ]
+    assert payload["health"] == {
+        "status": "warning",
+        "reasons": ["unbudgeted_spend", "unmatched_goal_categories"],
+    }
+    assert payload["review"]["unbudgeted_categories"] == ["카페/간식"]
+    assert payload["next_steps"][0]["signal"] == "unbudgeted_spend"
+    assert payload["next_steps"][1] == {
+        "signal": "unmatched_goal_categories",
+        "message": "Rename goals.yaml categories so they exactly match category_final values.",
+        "command": "finjuice budget edit --help",
+    }
+    assert "Goals categories not matching any spend category: 카페" in human_result.output
+    assert "카페/간식" in human_result.output
+    assert "finjuice budget edit --set" in human_result.output
 
 
 def test_budget_status_honors_report_filters_and_no_filter_override(
