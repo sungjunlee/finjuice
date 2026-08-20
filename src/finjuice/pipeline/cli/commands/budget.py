@@ -197,8 +197,7 @@ def _compute_budget_status(
                 goals_exists=False,
                 summary=None,
                 category_rows=[],
-                filters_applied=filters_applied,
-                unmatched_goal_categories=[],
+                extras={"filters_applied": filters_applied, "unmatched_goal_categories": []},
             ),
             "_filters_applied": filters_applied,
         }
@@ -236,8 +235,10 @@ def _compute_budget_status(
             goals_exists=True,
             summary=summary,
             category_rows=category_rows,
-            filters_applied=filters_applied,
-            unmatched_goal_categories=unmatched_goal_categories,
+            extras={
+                "filters_applied": filters_applied,
+                "unmatched_goal_categories": unmatched_goal_categories,
+            },
         ),
         "_filters_applied": filters_applied,
     }
@@ -604,10 +605,16 @@ def _build_budget_guidance(
     goals_exists: bool,
     summary: dict[str, Any] | None,
     category_rows: list[dict[str, Any]],
-    filters_applied: int,
-    unmatched_goal_categories: list[dict[str, Any]],
+    extras: dict[str, Any],
 ) -> dict[str, Any]:
-    """Build additive health/action cues for budget status."""
+    """Build additive health/action cues for budget status.
+
+    ``extras`` carries ``filters_applied`` (int) and
+    ``unmatched_goal_categories`` (list of dicts) so the call surface stays
+    under the repo's function-argument ratchet.
+    """
+    filters_applied = extras.get("filters_applied", 0)
+    unmatched_goal_categories = extras.get("unmatched_goal_categories") or []
     over_budget_count = sum(
         1 for row in category_rows if row["status"] == "over" and row["target"] > 0
     )
