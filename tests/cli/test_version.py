@@ -7,9 +7,9 @@ import pytest
 from typer.testing import CliRunner
 
 from finjuice import __version__, get_version
-from finjuice.pipeline.cli.commands import doctor
-from finjuice.pipeline.cli.commands.doctor import _check_finjuice_version
 from finjuice.pipeline.cli.main import app
+from finjuice.pipeline.doctor import checks as doctor
+from finjuice.pipeline.doctor.checks import _check_finjuice_version
 
 runner = CliRunner()
 

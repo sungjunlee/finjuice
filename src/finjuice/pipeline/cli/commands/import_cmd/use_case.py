@@ -326,7 +326,7 @@ def _ensure_initialized(options: ImportOptions, dependencies: ImportDependencies
 def _run_quick_doctor(options: ImportOptions) -> None:
     """Run lightweight dependency check after auto-init, continue regardless."""
     try:
-        from finjuice.pipeline.cli.commands.doctor import (
+        from finjuice.pipeline.doctor import (
             _check_analytics_duckdb,
             _check_dependencies,
         )

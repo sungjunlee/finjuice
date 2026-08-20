@@ -197,46 +197,6 @@
       "value": 12
     },
     {
-      "code": "C901",
-      "column": 5,
-      "limit": 10,
-      "message": "`_check_configuration` is too complex (12 > 10)",
-      "path": "src/finjuice/pipeline/cli/commands/doctor.py",
-      "row": 348,
-      "symbol": "_check_configuration",
-      "value": 12
-    },
-    {
-      "code": "PLR0912",
-      "column": 5,
-      "limit": 12,
-      "message": "Too many branches (13 > 12)",
-      "path": "src/finjuice/pipeline/cli/commands/doctor.py",
-      "row": 348,
-      "symbol": "_check_configuration",
-      "value": 13
-    },
-    {
-      "code": "C901",
-      "column": 5,
-      "limit": 10,
-      "message": "`_check_data_status` is too complex (14 > 10)",
-      "path": "src/finjuice/pipeline/cli/commands/doctor.py",
-      "row": 454,
-      "symbol": "_check_data_status",
-      "value": 14
-    },
-    {
-      "code": "PLR0912",
-      "column": 5,
-      "limit": 12,
-      "message": "Too many branches (14 > 12)",
-      "path": "src/finjuice/pipeline/cli/commands/doctor.py",
-      "row": 454,
-      "symbol": "_check_data_status",
-      "value": 14
-    },
-    {
       "code": "PLR0913",
       "column": 5,
       "limit": 5,
@@ -895,6 +855,46 @@
       "row": 283,
       "symbol": "truncate_rows_to_max_bytes",
       "value": 6
+    },
+    {
+      "code": "C901",
+      "column": 5,
+      "limit": 10,
+      "message": "`_check_configuration` is too complex (12 > 10)",
+      "path": "src/finjuice/pipeline/doctor/checks.py",
+      "row": 310,
+      "symbol": "_check_configuration",
+      "value": 12
+    },
+    {
+      "code": "PLR0912",
+      "column": 5,
+      "limit": 12,
+      "message": "Too many branches (13 > 12)",
+      "path": "src/finjuice/pipeline/doctor/checks.py",
+      "row": 310,
+      "symbol": "_check_configuration",
+      "value": 13
+    },
+    {
+      "code": "C901",
+      "column": 5,
+      "limit": 10,
+      "message": "`_check_data_status` is too complex (14 > 10)",
+      "path": "src/finjuice/pipeline/doctor/checks.py",
+      "row": 416,
+      "symbol": "_check_data_status",
+      "value": 14
+    },
+    {
+      "code": "PLR0912",
+      "column": 5,
+      "limit": 12,
+      "message": "Too many branches (14 > 12)",
+      "path": "src/finjuice/pipeline/doctor/checks.py",
+      "row": 416,
+      "symbol": "_check_data_status",
+      "value": 14
     },
     {
       "code": "PLR0913",
