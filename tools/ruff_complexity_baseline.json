@@ -111,8 +111,8 @@
       "column": 5,
       "limit": 10,
       "message": "`_build_next_actions` is too complex (15 > 10)",
-      "path": "src/finjuice/pipeline/checkup.py",
-      "row": 628,
+      "path": "src/finjuice/pipeline/checkup/compose.py",
+      "row": 137,
       "symbol": "_build_next_actions",
       "value": 15
     },
@@ -121,8 +121,8 @@
       "column": 5,
       "limit": 12,
       "message": "Too many branches (14 > 12)",
-      "path": "src/finjuice/pipeline/checkup.py",
-      "row": 628,
+      "path": "src/finjuice/pipeline/checkup/compose.py",
+      "row": 137,
       "symbol": "_build_next_actions",
       "value": 14
     },
@@ -131,8 +131,8 @@
       "column": 5,
       "limit": 10,
       "message": "`_detect_large_recurring_outflow_candidates` is too complex (11 > 10)",
-      "path": "src/finjuice/pipeline/checkup.py",
-      "row": 847,
+      "path": "src/finjuice/pipeline/checkup/recurring.py",
+      "row": 19,
       "symbol": "_detect_large_recurring_outflow_candidates",
       "value": 11
     },
@@ -1310,21 +1310,21 @@
       "code": "PLR0913",
       "column": 5,
       "limit": 5,
-      "message": "Too many arguments in function definition (12 > 5)",
-      "path": "tests/tagging/test_suggestions.py",
-      "row": 38,
-      "symbol": "_transaction",
-      "value": 12
+      "message": "Too many arguments in function definition (11 > 5)",
+      "path": "tests/pipeline/checkup/helpers.py",
+      "row": 52,
+      "symbol": "_tx_row",
+      "value": 11
     },
     {
       "code": "PLR0913",
       "column": 5,
       "limit": 5,
-      "message": "Too many arguments in function definition (11 > 5)",
-      "path": "tests/test_checkup_bundle.py",
-      "row": 57,
-      "symbol": "_tx_row",
-      "value": 11
+      "message": "Too many arguments in function definition (12 > 5)",
+      "path": "tests/tagging/test_suggestions.py",
+      "row": 38,
+      "symbol": "_transaction",
+      "value": 12
     },
     {
       "code": "C901",
