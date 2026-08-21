@@ -114,6 +114,35 @@ def test_collector_modules_do_not_import_composer() -> None:
     assert violations == {}
 
 
+def test_package_init_does_not_eagerly_import_composer() -> None:
+    """Package import must not load compose.py, or deleting it breaks collectors."""
+    init_path = _COMPOSE_PATH.parent / "__init__.py"
+    tree = ast.parse(init_path.read_text(encoding="utf-8"), filename=str(init_path))
+    runtime_imports: list[str] = []
+    for node in tree.body:
+        if isinstance(node, ast.If):
+            continue
+        if isinstance(node, ast.Import):
+            runtime_imports.extend(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            runtime_imports.append(node.module)
+    assert "finjuice.pipeline.checkup.compose" not in runtime_imports
+    assert not any(module.endswith(".compose") for module in runtime_imports)
+
+
+def test_collector_submodule_import_does_not_load_composer() -> None:
+    """Importing a collector must not execute compose.py via package init."""
+    import importlib
+    import sys
+
+    package = "finjuice.pipeline.checkup"
+    sys.modules.pop(f"{package}.compose", None)
+    sys.modules.pop(f"{package}.budget", None)
+    module = importlib.import_module(f"{package}.budget")
+    assert hasattr(module, "collect_budget_posture")
+    assert f"{package}.compose" not in sys.modules
+
+
 def test_run_named_collector_propagates_collector_failures() -> None:
     """A collector exception must abort instead of returning a stand-in result."""
 
