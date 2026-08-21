@@ -155,6 +155,25 @@ def read_range(
     return df
 
 
+def _serialize_tag_json(x: Any) -> str:
+    """Serialize tag collections to UTF-8 JSON without double-encoding."""
+    if x is None:
+        return "[]"
+    if isinstance(x, str):
+        stripped = x.strip()
+        if stripped == "":
+            return "[]"
+        try:
+            parsed = json.loads(stripped)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, list):
+            return json.dumps(parsed, ensure_ascii=False)
+        return stripped
+    payload = list(x) if isinstance(x, Iterable) and not isinstance(x, (str, bytes)) else [x]
+    return json.dumps(payload, ensure_ascii=False)
+
+
 def write_month(
     base_dir: Path,
     df: pl.DataFrame,
@@ -183,30 +202,11 @@ def write_month(
                 column_expr = column_expr.fill_null(0)
             df = df.with_columns(column_expr.alias(col))
 
-    def serialize_list(x: Any) -> str:
-        """Serialize tag collections to JSON string without double-encoding."""
-        if x is None:
-            return "[]"
-        if isinstance(x, str):
-            stripped = x.strip()
-            if stripped == "":
-                return "[]"
-            try:
-                parsed = json.loads(stripped)
-            except json.JSONDecodeError:
-                return stripped
-            if isinstance(parsed, list):
-                return json.dumps(parsed, ensure_ascii=False)
-            return stripped
-        if isinstance(x, Iterable) and not isinstance(x, (str, bytes)):
-            return json.dumps(list(x), ensure_ascii=False)
-        return json.dumps([x], ensure_ascii=False)
-
     tag_columns = ["tags_rule", "tags_ai", "tags_manual", "tags_final"]
     for col in tag_columns:
         if col in df.columns:
             df = df.with_columns(
-                pl.col(col).map_elements(serialize_list, return_dtype=pl.Utf8).alias(col)
+                pl.col(col).map_elements(_serialize_tag_json, return_dtype=pl.Utf8).alias(col)
             )
 
     tmp_path = partition_path.with_suffix(".tmp")
