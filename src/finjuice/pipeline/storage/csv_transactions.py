@@ -189,7 +189,15 @@ def write_month(
             return "[]"
         if isinstance(x, str):
             stripped = x.strip()
-            return "[]" if stripped == "" else stripped
+            if stripped == "":
+                return "[]"
+            try:
+                parsed = json.loads(stripped)
+            except json.JSONDecodeError:
+                return stripped
+            if isinstance(parsed, list):
+                return json.dumps(parsed, ensure_ascii=False)
+            return stripped
         if isinstance(x, Iterable) and not isinstance(x, (str, bytes)):
             return json.dumps(list(x), ensure_ascii=False)
         return json.dumps([x], ensure_ascii=False)
@@ -534,7 +542,11 @@ def _ensure_schema_columns(df: pl.DataFrame) -> pl.DataFrame:
                 df = df.with_columns(
                     pl.col(col)
                     .map_elements(
-                        lambda x: json.dumps(list(x) if x is not None else []), return_dtype=pl.Utf8
+                        lambda x: json.dumps(
+                            list(x) if x is not None else [],
+                            ensure_ascii=False,
+                        ),
+                        return_dtype=pl.Utf8,
                     )
                     .alias(col)
                 )

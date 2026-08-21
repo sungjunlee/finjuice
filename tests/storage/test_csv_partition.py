@@ -445,6 +445,64 @@ class TestWriteMonth:
         assert row["tags_rule"] == ["카페", "커피"]
         assert row["tags_final"] == ["카페", "커피"]
 
+    def test_write_month_persists_korean_tags_as_plain_utf8_json(self, temp_storage_dir):
+        """Korean tags must be stored as readable UTF-8, not \\uXXXX escapes."""
+        # Arrange
+        tx_df = pl.DataFrame(
+            [
+                {
+                    "row_hash": "hash_utf8_tags",
+                    "date": "2024-10-15",
+                    "datetime": "2024-10-15T10:00:00",
+                    "merchant_raw": "Cafe",
+                    "tags_rule": ["소비제외"],
+                    "tags_ai": [],
+                    "tags_manual": [],
+                    "tags_final": ["소비제외"],
+                }
+            ]
+        )
+
+        # Act
+        write_month(temp_storage_dir, tx_df, 2024, 10)
+        write_month(temp_storage_dir, read_month(temp_storage_dir, 2024, 10), 2024, 10)
+
+        # Assert - on-disk CSV contains readable Korean, not Unicode escapes
+        csv_text = get_partition_path(temp_storage_dir, 2024, 10).read_text(encoding="utf-8")
+        assert "소비제외" in csv_text
+        assert r"\uc18c" not in csv_text
+        df_read = read_month(temp_storage_dir, 2024, 10)
+        assert df_read.row(0, named=True)["tags_final"] == ["소비제외"]
+
+    def test_write_month_reencodes_legacy_unicode_escaped_tag_json(self, temp_storage_dir):
+        """Partition rewrite should convert \\uXXXX tag JSON to plain UTF-8."""
+        # Arrange - simulate a legacy partition cell written with ensure_ascii=True
+        escaped_tags = '["\\uc18c\\ube44\\uc81c\\uc678"]'
+        tx_df = pl.DataFrame(
+            [
+                {
+                    "row_hash": "hash_escaped_tags",
+                    "date": "2024-10-15",
+                    "datetime": "2024-10-15T10:00:00",
+                    "merchant_raw": "Cafe",
+                    "tags_rule": escaped_tags,
+                    "tags_ai": "[]",
+                    "tags_manual": "[]",
+                    "tags_final": escaped_tags,
+                }
+            ]
+        )
+
+        # Act - refresh/rewrite path reuses write_month
+        write_month(temp_storage_dir, tx_df, 2024, 10)
+
+        # Assert
+        csv_text = get_partition_path(temp_storage_dir, 2024, 10).read_text(encoding="utf-8")
+        assert "소비제외" in csv_text
+        assert r"\uc18c" not in csv_text
+        df_read = read_month(temp_storage_dir, 2024, 10)
+        assert df_read.row(0, named=True)["tags_final"] == ["소비제외"]
+
     def test_write_month_serializes_empty_preencoded_and_scalar_tags(self, temp_storage_dir):
         """Tag columns should be normalized to JSON strings before CSV persistence."""
         tx_df = pl.DataFrame(
