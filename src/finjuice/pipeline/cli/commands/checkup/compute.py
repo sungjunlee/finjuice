@@ -8,8 +8,8 @@ from dataclasses import dataclass
 from finjuice.pipeline.checkup import CheckupBundle
 from finjuice.pipeline.config import Config
 
-# TODO: engine split tracked in a follow-up to #654; this CLI layer now exposes
-# compute/detector/rendering boundaries while the Python bundle engine remains stable.
+# CLI boundary: compute collects facts, detector decides diagnoses, rendering
+# serializes payloads. The Python bundle engine stays in pipeline.checkup.
 
 
 @dataclass(frozen=True)
