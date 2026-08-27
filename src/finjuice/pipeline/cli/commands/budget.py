@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 import polars as pl
@@ -14,6 +12,7 @@ from rich.table import Table
 from ruamel.yaml.comments import CommentedMap
 from ruamel.yaml.error import YAMLError
 
+from finjuice.pipeline.cli.commands.budget_period import resolve_budget_period
 from finjuice.pipeline.cli.output import ErrorCode, ExitCode, _build_meta, console, emit_error
 from finjuice.pipeline.cli.report_filters import apply_report_filters, load_cli_report_filters
 from finjuice.pipeline.cli.utils import get_config
@@ -26,7 +25,6 @@ from finjuice.pipeline.goals import (
     load_goals_roundtrip,
     new_goals_document,
     validate_goals_payload,
-    validate_month_literal,
     write_goals_roundtrip,
 )
 from finjuice.pipeline.storage.csv_schema import POLARS_SCHEMA, get_partition_path
@@ -172,7 +170,7 @@ def _compute_budget_status(
     json_output: bool,
 ) -> dict[str, Any]:
     """Compute the budget status payload."""
-    resolved_month = _resolve_budget_month(config, month)
+    resolved_month = resolve_budget_period(month, csv_base_dir=config.csv_base_dir)
     goals_result = load_goals_file(config.goals_file)
     goals_file = {
         "path": str(config.goals_file),
@@ -420,32 +418,6 @@ def _render_budget_validate(result: dict[str, Any]) -> None:
     console.print(f"[red]❌ goals.yaml validation failed[/red]\n[dim]{result['path']}[/dim]")
     for index, problem in enumerate(result["_problems"], start=1):
         console.print(f"  {index}. {problem.format()}")
-
-
-def _resolve_budget_month(config: Config, requested_month: str | None) -> str:
-    """Resolve the effective budget month."""
-    if requested_month is not None:
-        return validate_month_literal(requested_month, param_name="month")
-
-    latest_month = _latest_partition_month(config.csv_base_dir)
-    if latest_month is not None:
-        return latest_month
-    return datetime.now().astimezone().strftime("%Y-%m")
-
-
-def _latest_partition_month(csv_base_dir: Path) -> str | None:
-    """Return the latest YYYY-MM partition containing transactions.csv."""
-    if not csv_base_dir.exists():
-        return None
-
-    months = [
-        f"{path.parent.parent.name}-{path.parent.name}"
-        for path in csv_base_dir.glob("*/*/transactions.csv")
-        if path.is_file()
-    ]
-    if not months:
-        return None
-    return sorted(months)[-1]
 
 
 def _load_budget_actuals(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 
 import polars as pl
@@ -10,7 +11,13 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
+from finjuice.pipeline.cli.commands.budget_period import (
+    latest_budget_window,
+    parse_budget_period,
+    resolve_budget_period,
+)
 from finjuice.pipeline.cli.main import app
+from finjuice.pipeline.cli.output import ErrorCode, ExitCode
 
 runner = CliRunner()
 
@@ -574,6 +581,113 @@ def test_budget_edit_rejects_invalid_update_keys(
     assert goals_path.read_text(encoding="utf-8") == before_text
 
 
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("2026-04", "2026-04"),
+        ("1999-01", "1999-01"),
+        ("2099-12", "2099-12"),
+    ],
+)
+def test_parse_budget_period_accepts_yyyy_mm(raw: str, expected: str) -> None:
+    """Explicit period values should round-trip as YYYY-MM."""
+    # Arrange / Act
+    parsed = parse_budget_period(raw)
+
+    # Assert
+    assert parsed == expected
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "2026-13",
+        "2026-00",
+        "2026/04",
+        "2026-4",
+        "26-04",
+        "",
+        "latest",
+    ],
+)
+def test_parse_budget_period_rejects_invalid_values(raw: str) -> None:
+    """Invalid period literals should raise the existing month-format error."""
+    # Arrange / Act / Assert
+    with pytest.raises(ValueError, match="expected YYYY-MM"):
+        parse_budget_period(raw)
+
+
+def test_latest_budget_window_returns_newest_partition(tmp_path: Path) -> None:
+    """The default window should be the newest transactions.csv partition."""
+    # Arrange
+    csv_base_dir = tmp_path / "transactions"
+    _touch_partition(csv_base_dir, "2026", "03")
+    _touch_partition(csv_base_dir, "2026", "04")
+    (csv_base_dir / "2026" / "05").mkdir(parents=True)
+    (csv_base_dir / "notes.txt").write_text("ignore", encoding="utf-8")
+
+    # Act
+    window = latest_budget_window(csv_base_dir)
+
+    # Assert
+    assert window == "2026-04"
+
+
+def test_latest_budget_window_returns_none_without_partitions(tmp_path: Path) -> None:
+    """Missing or empty partition roots should not invent a window."""
+    # Arrange
+    missing = tmp_path / "missing"
+    empty = tmp_path / "empty"
+    empty.mkdir()
+
+    # Act / Assert
+    assert latest_budget_window(missing) is None
+    assert latest_budget_window(empty) is None
+
+
+def test_resolve_budget_period_prefers_explicit_month(tmp_path: Path) -> None:
+    """`--month` should win over the latest partition window."""
+    # Arrange
+    csv_base_dir = tmp_path / "transactions"
+    _touch_partition(csv_base_dir, "2026", "04")
+
+    # Act
+    resolved = resolve_budget_period("2026-03", csv_base_dir=csv_base_dir)
+
+    # Assert
+    assert resolved == "2026-03"
+
+
+def test_resolve_budget_period_defaults_to_latest_window(tmp_path: Path) -> None:
+    """Omitting `--month` should use the latest partition window."""
+    # Arrange
+    csv_base_dir = tmp_path / "transactions"
+    _touch_partition(csv_base_dir, "2026", "03")
+    _touch_partition(csv_base_dir, "2026", "04")
+
+    # Act
+    resolved = resolve_budget_period(None, csv_base_dir=csv_base_dir)
+
+    # Assert
+    assert resolved == "2026-04"
+
+
+def test_resolve_budget_period_falls_back_to_today_without_window(tmp_path: Path) -> None:
+    """An empty partition root should fall back to the local calendar month."""
+    # Arrange
+    csv_base_dir = tmp_path / "transactions"
+
+    # Act
+    resolved = resolve_budget_period(
+        None,
+        csv_base_dir=csv_base_dir,
+        today=date(2026, 8, 27),
+    )
+
+    # Assert
+    assert resolved == "2026-08"
+
+
 def test_budget_status_can_navigate_historical_months(budget_data_dir: Path) -> None:
     """`--month` should switch actuals to the requested historical partition."""
     result = runner.invoke(
@@ -604,6 +718,48 @@ def test_budget_status_can_navigate_historical_months(budget_data_dir: Path) -> 
     }
     assert payload["actionable"] is False
     assert payload["unmatched_goal_categories"] == []
+
+
+def test_budget_status_defaults_to_latest_partition_window(budget_data_dir: Path) -> None:
+    """Omitting `--month` should report the latest partition in JSON and human output."""
+    # Arrange / Act
+    json_result = runner.invoke(
+        app,
+        ["--data-dir", str(budget_data_dir), "budget", "status", "--json"],
+    )
+    human_result = runner.invoke(
+        app,
+        ["--data-dir", str(budget_data_dir), "budget", "status"],
+    )
+
+    # Assert
+    assert json_result.exit_code == 0, json_result.output
+    assert human_result.exit_code == 0, human_result.output
+    payload = json.loads(json_result.output)
+    assert payload["_meta"]["month"] == "2026-04"
+    assert payload["month"] == "2026-04"
+    assert "2026-04" in human_result.output
+
+
+def test_budget_status_invalid_month_is_usage_error(budget_data_dir: Path) -> None:
+    """Invalid `--month` should keep JSON/human usage-error semantics."""
+    # Arrange
+    args = ["--data-dir", str(budget_data_dir), "budget", "status", "--month", "2026-13"]
+
+    # Act
+    json_result = runner.invoke(app, [*args, "--json"])
+    human_result = runner.invoke(app, args)
+
+    # Assert
+    assert json_result.exit_code == ExitCode.USAGE_ERROR, json_result.output
+    payload = json.loads(json_result.output)
+    assert payload["_meta"]["command"] == "budget status"
+    assert payload["error"]["code"] == ErrorCode.INVALID_ARGS
+    assert "expected YYYY-MM" in payload["error"]["message"]
+
+    assert human_result.exit_code == ExitCode.USAGE_ERROR, human_result.output
+    assert "Invalid month value for 'month': 2026-13" in human_result.output
+    assert "expected YYYY-MM" in human_result.output
 
 
 def test_budget_status_flags_unmatched_goal_category_names(tmp_path: Path) -> None:
@@ -790,3 +946,10 @@ def _write_month(data_dir: Path, df: pl.DataFrame, year: str, month: str) -> Non
     month_dir = data_dir / "transactions" / year / month
     month_dir.mkdir(parents=True)
     df.write_csv(month_dir / "transactions.csv")
+
+
+def _touch_partition(csv_base_dir: Path, year: str, month: str) -> None:
+    """Create an empty transactions.csv partition for window discovery tests."""
+    path = csv_base_dir / year / month / "transactions.csv"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("row_hash\n", encoding="utf-8")
