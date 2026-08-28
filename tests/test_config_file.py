@@ -167,31 +167,6 @@ class TestConfigValidation:
         with pytest.raises(ValueError, match="must not be a symlink"):
             validate_config_path(symlink)
 
-    def test_validate_config_parent_not_dir(self, tmp_path):
-        """validate_config_path() rejects when parent is not directory."""
-        not_a_dir = tmp_path / "not_a_dir"
-        not_a_dir.touch()  # Create as file, not directory
-
-        # Create config file with file as parent (corrupted state)
-        config_path = not_a_dir / "config.toml"
-
-        # Manually create the config file to simulate corrupted state
-        # (This wouldn't normally be possible, but simulates filesystem corruption)
-        try:
-            # This should fail because parent is a file
-            config_path.parent.mkdir(parents=True, exist_ok=True)
-        except (NotADirectoryError, FileExistsError):
-            # Expected: cannot create directory because parent is a file
-            pass
-
-        # Create a real scenario: config file exists but parent became a file somehow
-        # For this test, we'll just verify the validation logic exists
-        # by checking a config file whose parent was changed to a file
-
-        # Skip this test as it's hard to simulate filesystem corruption
-        # The actual validation happens in save_config() which we test separately
-        pytest.skip("Filesystem corruption scenario is difficult to simulate reliably")
-
     def test_user_config_validate_empty_directory(self):
         """UserConfig validation rejects empty directory."""
         config = UserConfig(data=DataConfig(directory=""))
