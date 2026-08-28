@@ -160,7 +160,7 @@
     },
     {
       "test_id": "B608",
-      "filename": "src/finjuice/pipeline/tagging/suggestions.py",
+      "filename": "src/finjuice/pipeline/tagging/suggestion_scoring.py",
       "function": "_merchant_context_query",
       "issue_severity": "MEDIUM",
       "issue_confidence": "LOW",
@@ -169,7 +169,7 @@
     },
     {
       "test_id": "B608",
-      "filename": "src/finjuice/pipeline/tagging/suggestions.py",
+      "filename": "src/finjuice/pipeline/tagging/suggestion_scoring.py",
       "function": "_similar_merchants_query",
       "issue_severity": "MEDIUM",
       "issue_confidence": "LOW",
@@ -178,7 +178,7 @@
     },
     {
       "test_id": "B608",
-      "filename": "src/finjuice/pipeline/tagging/suggestions.py",
+      "filename": "src/finjuice/pipeline/tagging/suggestion_scoring.py",
       "function": "get_suggestion_coverage_stats",
       "issue_severity": "MEDIUM",
       "issue_confidence": "LOW",
