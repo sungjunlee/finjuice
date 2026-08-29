@@ -630,21 +630,21 @@
       "code": "C901",
       "column": 5,
       "limit": 10,
-      "message": "`show_command` is too complex (18 > 10)",
+      "message": "`show_command` is too complex (12 > 10)",
       "path": "src/finjuice/pipeline/cli/commands/show_cmd.py",
-      "row": 64,
+      "row": 65,
       "symbol": "show_command",
-      "value": 18
+      "value": 12
     },
     {
       "code": "PLR0912",
       "column": 5,
       "limit": 12,
-      "message": "Too many branches (20 > 12)",
+      "message": "Too many branches (13 > 12)",
       "path": "src/finjuice/pipeline/cli/commands/show_cmd.py",
-      "row": 64,
+      "row": 65,
       "symbol": "show_command",
-      "value": 20
+      "value": 13
     },
     {
       "code": "PLR0913",
@@ -652,7 +652,7 @@
       "limit": 5,
       "message": "Too many arguments in function definition (9 > 5)",
       "path": "src/finjuice/pipeline/cli/commands/show_cmd.py",
-      "row": 64,
+      "row": 65,
       "symbol": "show_command",
       "value": 9
     },
@@ -660,11 +660,11 @@
       "code": "PLR0915",
       "column": 5,
       "limit": 50,
-      "message": "Too many statements (85 > 50)",
+      "message": "Too many statements (56 > 50)",
       "path": "src/finjuice/pipeline/cli/commands/show_cmd.py",
-      "row": 64,
+      "row": 65,
       "symbol": "show_command",
-      "value": 85
+      "value": 56
     },
     {
       "code": "C901",
