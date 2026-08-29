@@ -540,36 +540,6 @@
       "code": "C901",
       "column": 5,
       "limit": 10,
-      "message": "`_compute_rules_suggest_json` is too complex (15 > 10)",
-      "path": "src/finjuice/pipeline/cli/commands/rules_cmd/suggest.py",
-      "row": 181,
-      "symbol": "_compute_rules_suggest_json",
-      "value": 15
-    },
-    {
-      "code": "PLR0912",
-      "column": 5,
-      "limit": 12,
-      "message": "Too many branches (16 > 12)",
-      "path": "src/finjuice/pipeline/cli/commands/rules_cmd/suggest.py",
-      "row": 181,
-      "symbol": "_compute_rules_suggest_json",
-      "value": 16
-    },
-    {
-      "code": "PLR0913",
-      "column": 5,
-      "limit": 5,
-      "message": "Too many arguments in function definition (11 > 5)",
-      "path": "src/finjuice/pipeline/cli/commands/rules_cmd/suggest.py",
-      "row": 181,
-      "symbol": "_compute_rules_suggest_json",
-      "value": 11
-    },
-    {
-      "code": "C901",
-      "column": 5,
-      "limit": 10,
       "message": "`_interactive_apply_suggestions` is too complex (17 > 10)",
       "path": "src/finjuice/pipeline/cli/commands/rules_cmd/suggest.py",
       "row": 691,
@@ -1134,6 +1104,36 @@
       "path": "src/finjuice/pipeline/tagging/rules_yaml_io.py",
       "row": 391,
       "symbol": "save_rules.rule_to_dict",
+      "value": 11
+    },
+    {
+      "code": "C901",
+      "column": 5,
+      "limit": 10,
+      "message": "`_compute_rules_suggest_json` is too complex (15 > 10)",
+      "path": "src/finjuice/pipeline/tagging/suggest_compute.py",
+      "row": 115,
+      "symbol": "_compute_rules_suggest_json",
+      "value": 15
+    },
+    {
+      "code": "PLR0912",
+      "column": 5,
+      "limit": 12,
+      "message": "Too many branches (16 > 12)",
+      "path": "src/finjuice/pipeline/tagging/suggest_compute.py",
+      "row": 115,
+      "symbol": "_compute_rules_suggest_json",
+      "value": 16
+    },
+    {
+      "code": "PLR0913",
+      "column": 5,
+      "limit": 5,
+      "message": "Too many arguments in function definition (11 > 5)",
+      "path": "src/finjuice/pipeline/tagging/suggest_compute.py",
+      "row": 115,
+      "symbol": "_compute_rules_suggest_json",
       "value": 11
     },
     {
