@@ -667,16 +667,6 @@
       "value": 85
     },
     {
-      "code": "PLR0913",
-      "column": 5,
-      "limit": 5,
-      "message": "Too many arguments in function definition (7 > 5)",
-      "path": "src/finjuice/pipeline/cli/commands/tag.py",
-      "row": 154,
-      "symbol": "_compute_tag_edit",
-      "value": 7
-    },
-    {
       "code": "C901",
       "column": 5,
       "limit": 10,
@@ -695,6 +685,16 @@
       "row": 281,
       "symbol": "tag_command",
       "value": 8
+    },
+    {
+      "code": "PLR0913",
+      "column": 5,
+      "limit": 5,
+      "message": "Too many arguments in function definition (7 > 5)",
+      "path": "src/finjuice/pipeline/cli/commands/tag_edit.py",
+      "row": 78,
+      "symbol": "_compute_tag_edit",
+      "value": 7
     },
     {
       "code": "PLR0913",
