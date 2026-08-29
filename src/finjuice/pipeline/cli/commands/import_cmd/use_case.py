@@ -8,7 +8,7 @@ from typing import Any, Protocol
 
 import typer
 
-from finjuice.pipeline.cli.commands.init_cmd import initialize_data_directory
+from finjuice.pipeline.cli.commands.init_helpers import initialize_data_directory
 from finjuice.pipeline.cli.output import ErrorCode, ExitCode, emit_error
 from finjuice.pipeline.config import Config
 
