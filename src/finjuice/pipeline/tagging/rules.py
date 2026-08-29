@@ -15,6 +15,8 @@ Sibling modules own the other concerns:
   conflict detection.
 * :mod:`finjuice.pipeline.tagging.rules_yaml_io` — reading/writing
   ``rules.yaml`` and loading the ``report_filters`` block.
+* :mod:`finjuice.pipeline.tagging.rules_yaml_roundtrip` — ruamel.yaml
+  round-trip dump helpers re-exported from ``rules_yaml_io``.
 """
 
 from finjuice.pipeline.tagging.matcher import (
