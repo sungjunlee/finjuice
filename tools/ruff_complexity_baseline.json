@@ -821,8 +821,8 @@
       "column": 5,
       "limit": 5,
       "message": "Too many arguments in function definition (6 > 5)",
-      "path": "src/finjuice/pipeline/cli/output.py",
-      "row": 283,
+      "path": "src/finjuice/pipeline/cli/output_pagination.py",
+      "row": 157,
       "symbol": "truncate_rows_to_max_bytes",
       "value": 6
     },
