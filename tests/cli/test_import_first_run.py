@@ -49,7 +49,7 @@ class TestImportFirstRun:
 
         with (
             patch(
-                "finjuice.pipeline.cli.commands.init_cmd.init_git_repository",
+                "finjuice.pipeline.cli.commands.init_helpers.init_git_repository",
                 return_value=False,
             ),
             patch(
@@ -81,7 +81,7 @@ class TestImportFirstRun:
 
         with (
             patch(
-                "finjuice.pipeline.cli.commands.init_cmd.init_git_repository",
+                "finjuice.pipeline.cli.commands.init_helpers.init_git_repository",
                 return_value=False,
             ),
             patch(
