@@ -9,6 +9,7 @@ from finjuice.pipeline.cli.main import app
 from finjuice.pipeline.ingest.pipeline import ingest_file_detailed, preview_ingest_paths
 from finjuice.pipeline.storage import csv_partition
 
+INGEST_DIR = Path("src/finjuice/pipeline/ingest")
 runner = CliRunner()
 
 
@@ -296,3 +297,17 @@ def test_ingest_json_includes_overview_counts_without_private_values(tmp_path: P
     assert "Synthetic Loan" not in write.output
     assert "Synthetic Policy" not in dry_run.output
     assert "Synthetic Fund" not in write.output
+
+
+def test_overview_preview_write_helpers_live_outside_pipeline() -> None:
+    """Banksalad overview preview/write helpers belong to a sibling ingest module."""
+    pipeline_text = (INGEST_DIR / "pipeline.py").read_text(encoding="utf-8")
+    overview_io_text = (INGEST_DIR / "_overview_io.py").read_text(encoding="utf-8")
+
+    assert "def preview_ingest_paths" in pipeline_text
+    assert "def ingest_file" in pipeline_text
+    assert "def ingest_all_files" in pipeline_text
+    assert "def _preview_banksalad_overview" not in pipeline_text
+    assert "def _write_banksalad_overview" not in pipeline_text
+    assert "def _preview_banksalad_overview" in overview_io_text
+    assert "def _write_banksalad_overview" in overview_io_text
