@@ -872,8 +872,8 @@
       "limit": 5,
       "message": "Too many arguments in function definition (6 > 5)",
       "path": "src/finjuice/pipeline/export/html_report.py",
-      "row": 358,
-      "symbol": "_render_html_report",
+      "row": 538,
+      "symbol": "generate_html_report",
       "value": 6
     },
     {
@@ -881,9 +881,9 @@
       "column": 5,
       "limit": 5,
       "message": "Too many arguments in function definition (6 > 5)",
-      "path": "src/finjuice/pipeline/export/html_report.py",
-      "row": 538,
-      "symbol": "generate_html_report",
+      "path": "src/finjuice/pipeline/export/html_report_render.py",
+      "row": 321,
+      "symbol": "_render_html_report",
       "value": 6
     },
     {
