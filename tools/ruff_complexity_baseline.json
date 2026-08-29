@@ -1080,16 +1080,6 @@
       "code": "C901",
       "column": 5,
       "limit": 10,
-      "message": "`_rule_to_map` is too complex (12 > 10)",
-      "path": "src/finjuice/pipeline/tagging/rules_yaml_io.py",
-      "row": 80,
-      "symbol": "_rule_to_map",
-      "value": 12
-    },
-    {
-      "code": "C901",
-      "column": 5,
-      "limit": 10,
       "message": "`save_rules` is too complex (13 > 10)",
       "path": "src/finjuice/pipeline/tagging/rules_yaml_io.py",
       "row": 377,
@@ -1105,6 +1095,16 @@
       "row": 391,
       "symbol": "save_rules.rule_to_dict",
       "value": 11
+    },
+    {
+      "code": "C901",
+      "column": 5,
+      "limit": 10,
+      "message": "`_rule_to_map` is too complex (12 > 10)",
+      "path": "src/finjuice/pipeline/tagging/rules_yaml_roundtrip.py",
+      "row": 45,
+      "symbol": "_rule_to_map",
+      "value": 12
     },
     {
       "code": "C901",

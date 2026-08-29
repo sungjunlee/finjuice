@@ -8,6 +8,8 @@ Extracted from ``tagging/rules.py`` as the matcher half of the Epic #707
   conflict detection.
 * :mod:`finjuice.pipeline.tagging.rules_yaml_io` — reading/writing
   ``rules.yaml`` and loading the ``report_filters`` block.
+* :mod:`finjuice.pipeline.tagging.rules_yaml_roundtrip` — ruamel.yaml
+  round-trip dump helpers re-exported from ``rules_yaml_io``.
 * :mod:`finjuice.pipeline.tagging.rules` — thin backwards-compatibility shim
   that re-exports the small documented public API surface.
 """
