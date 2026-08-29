@@ -180,6 +180,51 @@ def _render_apply_dry_run(suggestions: list[dict[str, Any]], rules_file: Path) -
     console.print("[yellow]Dry run: no changes made[/yellow]")
 
 
+def _audit_applied_suggestion(config: Config, rule_name: str) -> None:
+    _append_rule_mutation_audit_event(
+        config,
+        command="rules suggest",
+        action="applied",
+        rule_name=rule_name,
+        change_summary="suggestion rule applied",
+    )
+
+
+def _emit_suggest_compute_error(
+    exc: SuggestComputeError,
+    *,
+    json_output: bool,
+    privacy: PrivacyProfile,
+) -> None:
+    emit_error(
+        exc.message,
+        error_code=ErrorCode(exc.error_code),
+        exit_code=ExitCode(exc.exit_code),
+        suggestion=exc.suggestion,
+        json_output=json_output,
+        command="rules suggest",
+        privacy=privacy,
+    )
+
+
+def _rules_suggest_json_payload(
+    config: Config,
+    privacy: PrivacyProfile,
+    json_output: bool,
+    compute_kwargs: dict[str, Any],
+) -> dict[str, Any]:
+    try:
+        return _compute_rules_suggest_json(
+            config=config,
+            json_output=json_output,
+            on_applied=lambda rule_name: _audit_applied_suggestion(config, rule_name),
+            **compute_kwargs,
+        )
+    except SuggestComputeError as exc:
+        _emit_suggest_compute_error(exc, json_output=json_output, privacy=privacy)
+        raise
+
+
 def suggest_rules_command(
     ctx: typer.Context,
     top_n: int = typer.Option(
@@ -264,40 +309,21 @@ def suggest_rules_command(
 
     try:
         if json_output:
-
-            def _on_applied(rule_name: str) -> None:
-                _append_rule_mutation_audit_event(
-                    config,
-                    command="rules suggest",
-                    action="applied",
-                    rule_name=rule_name,
-                    change_summary="suggestion rule applied",
-                )
-
-            try:
-                result = _compute_rules_suggest_json(
-                    config=config,
-                    top_n=top_n,
-                    min_count=min_count,
-                    apply=apply,
-                    yes=yes,
-                    tag_after=tag_after,
-                    preview=preview,
-                    dry_run=dry_run,
-                    json_output=json_output,
-                    file_id=file_id,
-                    on_applied=_on_applied,
-                )
-            except SuggestComputeError as exc:
-                emit_error(
-                    exc.message,
-                    error_code=ErrorCode(exc.error_code),
-                    exit_code=ExitCode(exc.exit_code),
-                    suggestion=exc.suggestion,
-                    json_output=json_output,
-                    command="rules suggest",
-                    privacy=privacy,
-                )
+            result = _rules_suggest_json_payload(
+                config,
+                privacy,
+                json_output,
+                {
+                    "top_n": top_n,
+                    "min_count": min_count,
+                    "apply": apply,
+                    "yes": yes,
+                    "tag_after": tag_after,
+                    "preview": preview,
+                    "dry_run": dry_run,
+                    "file_id": file_id,
+                },
+            )
             emit(
                 apply_privacy_profile(
                     result,
