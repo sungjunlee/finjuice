@@ -1,8 +1,10 @@
 """CLI report formatting and rule serialization for tag suggestions.
 
 Scoring and candidate generation live in
-:mod:`finjuice.pipeline.tagging.suggestion_scoring`. This module owns
-plain-text reports, rules.yaml payloads, and Banksalad mapping guides.
+:mod:`finjuice.pipeline.tagging.suggestion_scoring`. Merchant similarity and
+clustering live in :mod:`finjuice.pipeline.tagging.suggestion_similarity`.
+This module owns plain-text reports, rules.yaml payloads, and Banksalad
+mapping guides.
 
 Callers should keep importing the documented public surface from
 :mod:`finjuice.pipeline.tagging.suggestions`.
