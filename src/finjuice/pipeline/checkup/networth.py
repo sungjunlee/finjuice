@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from finjuice.pipeline.asset_config import validate_assets_config_file
 from finjuice.pipeline.checkup.models import NetWorthPostureSummary
 from finjuice.pipeline.config import Config
 from finjuice.pipeline.goals import load_goals_file
 from finjuice.pipeline.networth import (
     build_networth_position,
     discover_snapshot_months,
-    validate_assets_config_file,
 )
 
 

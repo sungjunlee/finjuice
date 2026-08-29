@@ -10,7 +10,7 @@ from typing import Any, Literal, TypeAlias, TypeGuard, cast
 import yaml
 from yaml.nodes import MappingNode, Node, ScalarNode, SequenceNode
 
-from finjuice.pipeline.networth import ASSET_CATEGORIES, ManualAsset
+from finjuice.pipeline.asset_config import ASSET_CATEGORIES, ManualAsset
 
 SCENARIOS_CONFIG_VERSION = 1
 SCENARIO_NAMES: tuple[str, ...] = ("conservative", "neutral", "optimistic")

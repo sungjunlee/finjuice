@@ -10,6 +10,11 @@ from typing import Any, Literal, cast
 
 import typer
 
+from finjuice.pipeline.asset_config import (
+    AssetsConfigValidationError,
+    load_assets_config,
+    validate_assets_config_file,
+)
 from finjuice.pipeline.cli.commands.networth_rendering import (
     _render_breakdown,
     _render_forecast,
@@ -36,14 +41,11 @@ from finjuice.pipeline.forecast import (
 )
 from finjuice.pipeline.goals import GoalsValidationProblem, load_goals_file
 from finjuice.pipeline.networth import (
-    AssetsConfigValidationError,
     build_breakdown_rows,
     build_networth_position,
     list_history_snapshots,
-    load_assets_config,
     merge_asset_sources,
     snapshot_assets_from_selection,
-    validate_assets_config_file,
 )
 
 logger = logging.getLogger(__name__)
