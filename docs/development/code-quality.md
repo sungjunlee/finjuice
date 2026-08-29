@@ -41,8 +41,8 @@ paths while focused validation contracts live in sibling modules:
 
 - `goals_validators.py` owns `GoalsValidationProblem`, `ValidationProblems`, goals payload
   dataclasses, and section-level validators.
-- `forecast_validators.py` owns scenarios config validation contracts and lifecycle-event
-  shape validators.
+- `forecast_validators` owns scenarios config validation contracts (`models.py`) and
+  lifecycle-event shape validators (`validate.py`).
 
 ## Rebasing baseline paths after a refactor
 
