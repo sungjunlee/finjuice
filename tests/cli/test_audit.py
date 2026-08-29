@@ -14,7 +14,7 @@ import pytest
 from typer.testing import CliRunner
 
 from finjuice.pipeline.cli.audit_log import append_audit_event
-from finjuice.pipeline.cli.commands.audit import (
+from finjuice.pipeline.cli.commands.audit_template_metrics import (
     TemplateMetrics,
     _compute_domain_template_retry_stats,
     _compute_template_metrics,

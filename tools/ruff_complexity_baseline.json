@@ -147,16 +147,6 @@
       "value": 9
     },
     {
-      "code": "PLR0913",
-      "column": 5,
-      "limit": 5,
-      "message": "Too many arguments in function definition (6 > 5)",
-      "path": "src/finjuice/pipeline/cli/commands/audit.py",
-      "row": 165,
-      "symbol": "_build_template_metrics",
-      "value": 6
-    },
-    {
       "code": "C901",
       "column": 5,
       "limit": 10,
@@ -165,6 +155,16 @@
       "row": 665,
       "symbol": "clear",
       "value": 11
+    },
+    {
+      "code": "PLR0913",
+      "column": 5,
+      "limit": 5,
+      "message": "Too many arguments in function definition (6 > 5)",
+      "path": "src/finjuice/pipeline/cli/commands/audit_template_metrics.py",
+      "row": 145,
+      "symbol": "_build_template_metrics",
+      "value": 6
     },
     {
       "code": "C901",
