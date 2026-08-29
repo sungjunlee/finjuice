@@ -221,8 +221,8 @@
       "column": 5,
       "limit": 10,
       "message": "`_discover_downloads` is too complex (14 > 10)",
-      "path": "src/finjuice/pipeline/cli/commands/import_cmd/use_case.py",
-      "row": 164,
+      "path": "src/finjuice/pipeline/cli/commands/import_cmd/inputs.py",
+      "row": 62,
       "symbol": "_discover_downloads",
       "value": 14
     },
@@ -231,8 +231,8 @@
       "column": 5,
       "limit": 6,
       "message": "Too many return statements (9 > 6)",
-      "path": "src/finjuice/pipeline/cli/commands/import_cmd/use_case.py",
-      "row": 164,
+      "path": "src/finjuice/pipeline/cli/commands/import_cmd/inputs.py",
+      "row": 62,
       "symbol": "_discover_downloads",
       "value": 9
     },
@@ -241,8 +241,8 @@
       "column": 5,
       "limit": 12,
       "message": "Too many branches (13 > 12)",
-      "path": "src/finjuice/pipeline/cli/commands/import_cmd/use_case.py",
-      "row": 164,
+      "path": "src/finjuice/pipeline/cli/commands/import_cmd/inputs.py",
+      "row": 62,
       "symbol": "_discover_downloads",
       "value": 13
     },
