@@ -761,8 +761,8 @@
       "column": 5,
       "limit": 10,
       "message": "`_parse_month_window` is too complex (11 > 10)",
-      "path": "src/finjuice/pipeline/cli/commands/template_cmd/param_coercion.py",
-      "row": 146,
+      "path": "src/finjuice/pipeline/cli/commands/template_cmd/param_coercion_helpers.py",
+      "row": 44,
       "symbol": "_parse_month_window",
       "value": 11
     },
