@@ -7,12 +7,8 @@ import importlib
 
 def test_rendering_reexports_table_row_helpers() -> None:
     """Table-row helpers stay importable from rendering after the split."""
-    rendering = importlib.import_module(
-        "finjuice.pipeline.cli.commands.status.rendering"
-    )
-    helpers = importlib.import_module(
-        "finjuice.pipeline.cli.commands.status.rendering_table"
-    )
+    rendering = importlib.import_module("finjuice.pipeline.cli.commands.status.rendering")
+    helpers = importlib.import_module("finjuice.pipeline.cli.commands.status.rendering_table")
 
     assert rendering._build_status_table is helpers._build_status_table
     assert rendering._add_data_rows is helpers._add_data_rows
@@ -27,9 +23,7 @@ def test_rendering_reexports_table_row_helpers() -> None:
 
 def test_rendering_keeps_public_status_api() -> None:
     """Public status rendering names stay on rendering after the split."""
-    rendering = importlib.import_module(
-        "finjuice.pipeline.cli.commands.status.rendering"
-    )
+    rendering = importlib.import_module("finjuice.pipeline.cli.commands.status.rendering")
 
     assert rendering.__all__ == [
         "StatusRenderContext",
