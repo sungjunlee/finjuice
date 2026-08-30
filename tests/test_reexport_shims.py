@@ -128,3 +128,18 @@ def test_checkup_entrypoint_does_not_export_private_rendering_helpers() -> None:
 
     assert "_compact_checkup" not in checkup.__all__
     assert "_serialize_checkup_payload" not in checkup.__all__
+
+
+def test_reports_polars_reexports_csv_io_helpers() -> None:
+    """CSV load/write helpers stay importable from reports_polars after the split."""
+    reports_polars = importlib.import_module("finjuice.pipeline.export.reports_polars")
+    helpers = importlib.import_module("finjuice.pipeline.export.reports_polars_helpers")
+
+    assert reports_polars.UTF8_BOM is helpers.UTF8_BOM
+    assert reports_polars._write_csv_with_bom is helpers._write_csv_with_bom
+    assert reports_polars._load_report_source_df is helpers._load_report_source_df
+    assert callable(reports_polars.export_monthly_spend_polars)
+    assert callable(reports_polars.export_by_tag_polars)
+    assert callable(reports_polars.export_by_category_polars)
+    assert callable(reports_polars.export_by_account_polars)
+    assert callable(reports_polars.export_transfers_polars)
