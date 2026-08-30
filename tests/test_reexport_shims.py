@@ -30,6 +30,25 @@ def test_csv_partition_polars_shim_exports_only_schema_contract() -> None:
     ]
 
 
+def test_csv_transactions_reexports_public_crud_api() -> None:
+    """Transaction CRUD stays on csv_transactions after the helper split."""
+    transactions = importlib.import_module("finjuice.pipeline.storage.csv_transactions")
+    helpers = importlib.import_module("finjuice.pipeline.storage.csv_transactions_helpers")
+
+    assert transactions.__all__ == [
+        "append_transactions",
+        "find_transaction_by_hash",
+        "get_all_transactions",
+        "read_month",
+        "read_range",
+        "upsert_transaction",
+        "write_month",
+    ]
+    assert transactions._add_read_defaults is helpers._add_read_defaults
+    assert transactions._ensure_schema_columns is helpers._ensure_schema_columns
+    assert transactions._get_transaction_read_columns is helpers._get_transaction_read_columns
+
+
 def test_init_command_shim_does_not_keep_migration_patch_dependencies() -> None:
     """Migration tests should patch migrate_cmd, not the init command shim."""
     init_shim = importlib.import_module("finjuice.pipeline.cli.commands.init")
