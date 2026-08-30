@@ -7,13 +7,15 @@ helpers remain importable through the original module via re-export.
 Schema/column helpers live in
 :mod:`finjuice.pipeline.storage.csv_transactions_helpers` and are re-exported
 here so existing callers can keep importing from this module.
+
+Write-time integer-flag and tag JSON serialization live in
+:mod:`finjuice.pipeline.storage.csv_transactions_serialize` and are
+re-exported here so existing callers can keep importing from this module.
 """
 
 from __future__ import annotations
 
-import json
 import logging
-from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -29,6 +31,11 @@ from finjuice.pipeline.storage.csv_transactions_helpers import (
     _add_read_defaults,
     _ensure_schema_columns,
     _get_transaction_read_columns,
+)
+from finjuice.pipeline.storage.csv_transactions_serialize import (
+    _cast_int_flag_columns,
+    _serialize_list,  # noqa: F401 — re-exported for existing csv_transactions imports
+    _serialize_tag_columns,
 )
 
 logger = logging.getLogger(__name__)
@@ -183,31 +190,8 @@ def write_month(
     if sort_by in df.columns:
         df = df.sort(sort_by)
 
-    int_columns = ["needs_review", "is_transfer_candidate", "is_transfer", "source_row"]
-    for col in int_columns:
-        if col in df.columns:
-            column_expr = pl.col(col).cast(pl.Int64, strict=False)
-            if col in {"is_transfer_candidate", "is_transfer"}:
-                column_expr = column_expr.fill_null(0)
-            df = df.with_columns(column_expr.alias(col))
-
-    def serialize_list(x: Any) -> str:
-        """Serialize tag collections to JSON string without double-encoding."""
-        if x is None:
-            return "[]"
-        if isinstance(x, str):
-            stripped = x.strip()
-            return "[]" if stripped == "" else stripped
-        if isinstance(x, Iterable) and not isinstance(x, (str, bytes)):
-            return json.dumps(list(x), ensure_ascii=False)
-        return json.dumps([x], ensure_ascii=False)
-
-    tag_columns = ["tags_rule", "tags_ai", "tags_manual", "tags_final"]
-    for col in tag_columns:
-        if col in df.columns:
-            df = df.with_columns(
-                pl.col(col).map_elements(serialize_list, return_dtype=pl.Utf8).alias(col)
-            )
+    df = _cast_int_flag_columns(df)
+    df = _serialize_tag_columns(df)
 
     tmp_path = partition_path.with_suffix(".tmp")
     df.write_csv(
