@@ -4,6 +4,10 @@ This module provides a DuckDB-based analytics layer that integrates with
 the existing CSV partition storage via zero-copy Apache Arrow conversion
 to Polars DataFrames.
 
+Read-only SQL validation helpers live in
+:mod:`finjuice.pipeline.analytics.readonly_sql` and are re-exported here so
+existing callers can keep importing from this module.
+
 Performance characteristics:
 - Native multi-file CSV reading with parallel scan
 - Vectorized SQL execution
@@ -14,13 +18,17 @@ See: https://duckdb.org/docs/guides/python/polars
 """
 
 import logging
-import re
 from pathlib import Path
 from types import TracebackType
 from typing import Any, Optional
 
 from finjuice.pipeline.analytics.install_hints import DUCKDB_DOCTOR_HINT
 from finjuice.pipeline.analytics.query_builder import build_report_filter_duckdb_where
+from finjuice.pipeline.analytics.readonly_sql import (
+    RESTRICTED_KEYWORDS,  # noqa: F401 — re-exported for existing duckdb_layer imports
+    RESTRICTED_TABLE_FUNCTIONS,  # noqa: F401 — re-exported for existing duckdb_layer imports
+    validate_readonly_sql,
+)
 from finjuice.pipeline.filters import exclude_transfers_sql
 from finjuice.pipeline.sql_utils import (
     quote_duckdb_identifier,
@@ -42,89 +50,6 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 DUCKDB_INSTALL_HINT = DUCKDB_DOCTOR_HINT
-
-RESTRICTED_KEYWORDS = [
-    "DELETE",
-    "DROP",
-    "UPDATE",
-    "INSERT",
-    "ALTER",
-    "TRUNCATE",
-    "COPY",
-    "READ_CSV",
-    "READ_PARQUET",
-    "READ_JSON",
-    "READ_BLOB",
-    "INSTALL",
-    "LOAD",
-]
-
-RESTRICTED_TABLE_FUNCTIONS = [
-    "READ_BLOB",
-    "READ_CSV",
-    "READ_CSV_AUTO",
-    "READ_JSON",
-    "READ_JSON_AUTO",
-    "READ_JSON_OBJECTS",
-    "READ_JSON_OBJECTS_AUTO",
-    "READ_NDJSON",
-    "READ_NDJSON_AUTO",
-    "READ_NDJSON_OBJECTS",
-    "READ_PARQUET",
-    "READ_TEXT",
-    "PARQUET_BLOOM_PROBE",
-    "PARQUET_FILE_METADATA",
-    "PARQUET_KV_METADATA",
-    "PARQUET_METADATA",
-    "PARQUET_SCAN",
-    "PARQUET_SCHEMA",
-    "SNIFF_CSV",
-]
-
-
-def _contains_restricted_keyword(sql_upper: str, keyword: str) -> bool:
-    """Return True when restricted keyword appears as a standalone SQL token."""
-    pattern = rf"(?<![A-Z0-9_]){re.escape(keyword)}(?![A-Z0-9_])"
-    return re.search(pattern, sql_upper) is not None
-
-
-def _contains_restricted_table_function(sql_upper: str, function_name: str) -> bool:
-    """Return True when a restricted DuckDB table function is called."""
-    pattern = rf"(?<![A-Z0-9_]){re.escape(function_name)}\s*\("
-    return re.search(pattern, sql_upper) is not None
-
-
-def validate_readonly_sql(sql: str) -> str:
-    """Validate SQL string for read-only query execution.
-
-    Args:
-        sql: Raw SQL string.
-
-    Returns:
-        Normalized SQL string (uppercased) for downstream checks.
-
-    Raises:
-        ValueError: If SQL violates read-only constraints.
-    """
-    if ";" in sql.rstrip(";\n\r\t "):
-        raise ValueError("Multi-statement queries are not allowed (semicolons detected).")
-
-    normalized_sql = sql.strip().upper()
-    if not (normalized_sql.startswith("SELECT") or normalized_sql.startswith("WITH")):
-        raise ValueError("Only SELECT or WITH queries are allowed.")
-
-    for function_name in RESTRICTED_TABLE_FUNCTIONS:
-        if _contains_restricted_table_function(normalized_sql, function_name):
-            raise ValueError(
-                "Security violation: Query calls restricted DuckDB table function "
-                f"'{function_name}'."
-            )
-
-    for keyword in RESTRICTED_KEYWORDS:
-        if _contains_restricted_keyword(normalized_sql, keyword):
-            raise ValueError(f"Security violation: Query contains restricted keyword '{keyword}'.")
-
-    return normalized_sql
 
 
 class DuckDBAnalytics:
