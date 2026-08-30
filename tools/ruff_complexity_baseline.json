@@ -540,46 +540,6 @@
       "code": "C901",
       "column": 5,
       "limit": 10,
-      "message": "`_interactive_apply_suggestions` is too complex (17 > 10)",
-      "path": "src/finjuice/pipeline/cli/commands/rules_cmd/suggest.py",
-      "row": 691,
-      "symbol": "_interactive_apply_suggestions",
-      "value": 17
-    },
-    {
-      "code": "PLR0912",
-      "column": 5,
-      "limit": 12,
-      "message": "Too many branches (18 > 12)",
-      "path": "src/finjuice/pipeline/cli/commands/rules_cmd/suggest.py",
-      "row": 691,
-      "symbol": "_interactive_apply_suggestions",
-      "value": 18
-    },
-    {
-      "code": "PLR0913",
-      "column": 5,
-      "limit": 5,
-      "message": "Too many arguments in function definition (6 > 5)",
-      "path": "src/finjuice/pipeline/cli/commands/rules_cmd/suggest.py",
-      "row": 691,
-      "symbol": "_interactive_apply_suggestions",
-      "value": 6
-    },
-    {
-      "code": "PLR0915",
-      "column": 5,
-      "limit": 50,
-      "message": "Too many statements (87 > 50)",
-      "path": "src/finjuice/pipeline/cli/commands/rules_cmd/suggest.py",
-      "row": 691,
-      "symbol": "_interactive_apply_suggestions",
-      "value": 87
-    },
-    {
-      "code": "C901",
-      "column": 5,
-      "limit": 10,
       "message": "`suggest_rules_command` is too complex (22 > 10)",
       "path": "src/finjuice/pipeline/cli/commands/rules_cmd/suggest.py",
       "row": 444,
@@ -615,6 +575,46 @@
       "row": 444,
       "symbol": "suggest_rules_command",
       "value": 77
+    },
+    {
+      "code": "C901",
+      "column": 5,
+      "limit": 10,
+      "message": "`_interactive_apply_suggestions` is too complex (17 > 10)",
+      "path": "src/finjuice/pipeline/cli/commands/rules_cmd/suggest_apply.py",
+      "row": 18,
+      "symbol": "_interactive_apply_suggestions",
+      "value": 17
+    },
+    {
+      "code": "PLR0912",
+      "column": 5,
+      "limit": 12,
+      "message": "Too many branches (18 > 12)",
+      "path": "src/finjuice/pipeline/cli/commands/rules_cmd/suggest_apply.py",
+      "row": 18,
+      "symbol": "_interactive_apply_suggestions",
+      "value": 18
+    },
+    {
+      "code": "PLR0913",
+      "column": 5,
+      "limit": 5,
+      "message": "Too many arguments in function definition (6 > 5)",
+      "path": "src/finjuice/pipeline/cli/commands/rules_cmd/suggest_apply.py",
+      "row": 18,
+      "symbol": "_interactive_apply_suggestions",
+      "value": 6
+    },
+    {
+      "code": "PLR0915",
+      "column": 5,
+      "limit": 50,
+      "message": "Too many statements (87 > 50)",
+      "path": "src/finjuice/pipeline/cli/commands/rules_cmd/suggest_apply.py",
+      "row": 18,
+      "symbol": "_interactive_apply_suggestions",
+      "value": 87
     },
     {
       "code": "PLR0913",
