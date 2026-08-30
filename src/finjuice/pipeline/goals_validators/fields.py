@@ -1,7 +1,8 @@
 """Field-level helpers for goals.yaml validation.
 
-Section validators stay in ``validate.py``. This module owns scalar field
-checks, date/month ranges, and problem construction with source locations.
+Section validators stay in ``validate.py``. Monthly-budget section helpers
+live in ``budget.py``. This module owns scalar field checks, date/month
+ranges, and problem construction with source locations.
 """
 
 from __future__ import annotations

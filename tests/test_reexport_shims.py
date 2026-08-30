@@ -52,6 +52,22 @@ def test_csv_partition_polars_shim_exports_only_schema_contract() -> None:
     ]
 
 
+def test_goals_validate_reexports_budget_helpers() -> None:
+    """Monthly-budget section validators stay on validate after the helper split."""
+    validate = importlib.import_module("finjuice.pipeline.goals_validators.validate")
+    budget = importlib.import_module("finjuice.pipeline.goals_validators.budget")
+
+    assert validate._validate_monthly_budget is budget._validate_monthly_budget
+    assert validate._validate_monthly_budget_mapping is budget._validate_monthly_budget_mapping
+    assert validate._validate_budget_total is budget._validate_budget_total
+    assert validate._validate_budget_categories is budget._validate_budget_categories
+    assert validate._validate_budget_category_values is budget._validate_budget_category_values
+    assert validate._validate_budget_updated is budget._validate_budget_updated
+    assert validate._validate_budget_notes is budget._validate_budget_notes
+    assert callable(validate.validate_goals_payload)
+    assert callable(validate.validate_month_literal)
+
+
 def test_csv_transactions_reexports_public_crud_api() -> None:
     """Transaction CRUD stays on csv_transactions after the helper split."""
     transactions = importlib.import_module("finjuice.pipeline.storage.csv_transactions")
