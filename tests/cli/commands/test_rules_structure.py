@@ -35,6 +35,7 @@ def test_rules_command_implementations_are_split_by_domain() -> None:
         "mutations",
         "testing",
         "suggest",
+        "suggest_rendering",
         "export",
         "gaps",
     }.issubset(module_names)
@@ -57,3 +58,20 @@ def test_rules_suggest_compute_lives_in_tagging_pipeline() -> None:
     assert "def _compact_suggested_rule" in compute_text
     assert "def _compact_rule_suggestion" in compute_text
     assert "def _compact_rules_suggest_result" in compute_text
+
+
+def test_rules_suggest_rendering_lives_in_helper_module() -> None:
+    """Merchant-context formatting and tables should not live in the Typer command."""
+    suggest_text = (COMMANDS_DIR / "rules_cmd" / "suggest.py").read_text(encoding="utf-8")
+    rendering_text = (COMMANDS_DIR / "rules_cmd" / "suggest_rendering.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "def suggest_rules_command" in suggest_text
+    assert "def _interactive_apply_suggestions" in suggest_text
+    assert "def _render_suggestion_context_table" not in suggest_text
+    assert "def _render_apply_dry_run" not in suggest_text
+    assert "def _format_suggestion_category" not in suggest_text
+    assert "def _render_suggestion_context_table" in rendering_text
+    assert "def _render_apply_dry_run" in rendering_text
+    assert "def _format_suggestion_category" in rendering_text
