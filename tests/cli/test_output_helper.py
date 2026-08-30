@@ -11,7 +11,7 @@ from io import StringIO
 import pytest
 from rich.console import Console
 
-from finjuice.pipeline.cli import output, output_pagination
+from finjuice.pipeline.cli import output, output_messages, output_pagination
 
 
 @pytest.fixture
@@ -49,6 +49,22 @@ class TestPublicNames:
         assert output.DEFAULT_PAGINATION_LIMIT is output_pagination.DEFAULT_PAGINATION_LIMIT
         assert output.DEFAULT_MAX_BYTES is output_pagination.DEFAULT_MAX_BYTES
         assert output.MAX_PAGINATION_LIMIT is output_pagination.MAX_PAGINATION_LIMIT
+
+    def test_message_helpers_are_reexported(self) -> None:
+        """Issue #163: Rich message helpers remain importable from output."""
+        assert output.success is output_messages.success
+        assert output.info is output_messages.info
+        assert output.warning is output_messages.warning
+        assert output.error is output_messages.error
+        assert output.error_with_ai_hint is output_messages.error_with_ai_hint
+        assert output.step is output_messages.step
+        assert output.section is output_messages.section
+        assert output.panel_info is output_messages.panel_info
+        assert output.table_summary is output_messages.table_summary
+        assert output.bullet_list is output_messages.bullet_list
+        assert output.progress_indicator is output_messages.progress_indicator
+        assert output.newline is output_messages.newline
+        assert output.hr is output_messages.hr
 
 
 class TestOutputHelpers:
