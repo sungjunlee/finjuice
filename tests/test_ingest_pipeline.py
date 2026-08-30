@@ -563,3 +563,20 @@ class TestIngestAllFiles:
         # Verify total count in CSV partitions
         df = csv_partition.get_all_transactions(temp_csv_base_dir)
         assert len(df) == 3  # Only 3 unique transactions
+
+
+def test_preview_helpers_live_outside_pipeline() -> None:
+    """Per-file preview context/path helpers belong to a sibling ingest module."""
+    ingest_dir = Path("src/finjuice/pipeline/ingest")
+    pipeline_text = (ingest_dir / "pipeline.py").read_text(encoding="utf-8")
+    preview_text = (ingest_dir / "_preview.py").read_text(encoding="utf-8")
+
+    assert "def preview_ingest_paths" in pipeline_text
+    assert "def ingest_file" in pipeline_text
+    assert "def ingest_all_files" in pipeline_text
+    assert "def _preview_ingest_path" not in pipeline_text
+    assert "class _PreviewContext" not in pipeline_text
+    assert "def _build_preview_context" not in pipeline_text
+    assert "def _preview_ingest_path" in preview_text
+    assert "class _PreviewContext" in preview_text
+    assert "def _build_preview_context" in preview_text
