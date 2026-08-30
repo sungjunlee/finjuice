@@ -1,7 +1,9 @@
 """Backwards-compatibility shim for the tagging-suggestions public API.
 
 Scoring and candidate generation live in
-:mod:`finjuice.pipeline.tagging.suggestion_scoring`. Merchant similarity and
+:mod:`finjuice.pipeline.tagging.suggestion_scoring`. Merchant-context queries
+and coverage stats live in :mod:`finjuice.pipeline.tagging.suggestion_queries`
+and are re-exported through the scoring module. Merchant similarity and
 clustering live in :mod:`finjuice.pipeline.tagging.suggestion_similarity` and
 are re-exported through the scoring module. CLI report formatting,
 rules.yaml serialization, and Banksalad mapping guides live in

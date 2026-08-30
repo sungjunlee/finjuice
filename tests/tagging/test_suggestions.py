@@ -730,3 +730,20 @@ class TestNewModuleKoreanRoundTrip:
         assert loaded[0].match == "스타벅스|스타벅스 강남점"
         assert loaded[0].tags == ["카페", "커피"]
         assert loaded[0].category == "카페"
+
+
+def test_merchant_context_queries_live_in_helper_module() -> None:
+    """DuckDB merchant-context SQL belongs to suggestion_queries, not scoring."""
+    tagging_dir = Path("src/finjuice/pipeline/tagging")
+    scoring_text = (tagging_dir / "suggestion_scoring.py").read_text(encoding="utf-8")
+    queries_text = (tagging_dir / "suggestion_queries.py").read_text(encoding="utf-8")
+
+    assert "def generate_merchant_context" in scoring_text
+    assert "def classify_merchant_kind" in scoring_text
+    assert "def build_suggested_rule_field" in scoring_text
+    assert "def get_suggestion_coverage_stats" not in scoring_text
+    assert "def _merchant_context_query" not in scoring_text
+    assert "def _similar_merchants_query" not in scoring_text
+    assert "def get_suggestion_coverage_stats" in queries_text
+    assert "def _merchant_context_query" in queries_text
+    assert "def _similar_merchants_query" in queries_text
