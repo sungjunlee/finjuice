@@ -33,6 +33,7 @@ def test_rules_command_implementations_are_split_by_domain() -> None:
     assert {
         "shared",
         "mutations",
+        "mutations_helpers",
         "testing",
         "suggest",
         "suggest_rendering",
@@ -75,3 +76,20 @@ def test_rules_suggest_rendering_lives_in_helper_module() -> None:
     assert "def _render_suggestion_context_table" in rendering_text
     assert "def _render_apply_dry_run" in rendering_text
     assert "def _format_suggestion_category" in rendering_text
+
+
+def test_rules_mutation_helpers_live_in_helper_module() -> None:
+    """Upsert, impact preview, and rendering should not live in the Typer command."""
+    mutations_text = (COMMANDS_DIR / "rules_cmd" / "mutations.py").read_text(encoding="utf-8")
+    helpers_text = (COMMANDS_DIR / "rules_cmd" / "mutations_helpers.py").read_text(encoding="utf-8")
+
+    assert "def add_rule_command" in mutations_text
+    assert "def remove_rule_command" in mutations_text
+    assert "def _compute_add_rule" in mutations_text
+    assert "def _compute_remove_rule" in mutations_text
+    assert "def _upsert_candidate_rules" not in mutations_text
+    assert "def _compute_rule_impact_preview" not in mutations_text
+    assert "def _render_rule_mutation" not in mutations_text
+    assert "def _upsert_candidate_rules" in helpers_text
+    assert "def _compute_rule_impact_preview" in helpers_text
+    assert "def _render_rule_mutation" in helpers_text

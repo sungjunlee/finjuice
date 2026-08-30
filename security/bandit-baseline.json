@@ -124,12 +124,12 @@
     },
     {
       "test_id": "B608",
-      "filename": "src/finjuice/pipeline/cli/commands/rules_cmd/mutations.py",
+      "filename": "src/finjuice/pipeline/cli/commands/rules_cmd/mutations_helpers.py",
       "function": "_compute_rule_impact_preview",
       "issue_severity": "MEDIUM",
       "issue_confidence": "LOW",
       "test_name": "hardcoded_sql_expressions",
-      "rationale": "DuckDB query uses placeholders for user rule patterns; field names are already schema-validated and quoted with quote_duckdb_identifier before predicate assembly; see src/finjuice/pipeline/cli/commands/rules_cmd/mutations.py:_compute_rule_impact_preview."
+      "rationale": "DuckDB query uses placeholders for user rule patterns; field names are already schema-validated and quoted with quote_duckdb_identifier before predicate assembly; see src/finjuice/pipeline/cli/commands/rules_cmd/mutations_helpers.py:_compute_rule_impact_preview."
     },
     {
       "test_id": "B608",
