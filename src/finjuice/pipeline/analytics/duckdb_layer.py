@@ -6,7 +6,10 @@ to Polars DataFrames.
 
 Read-only SQL validation helpers live in
 :mod:`finjuice.pipeline.analytics.readonly_sql` and are re-exported here so
-existing callers can keep importing from this module.
+existing callers can keep importing from this module. Optional-dependency
+detection helpers live in
+:mod:`finjuice.pipeline.analytics.duckdb_layer_helpers`; the install hint is
+re-exported here for the same reason.
 
 Performance characteristics:
 - Native multi-file CSV reading with parallel scan
@@ -22,7 +25,10 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, Optional
 
-from finjuice.pipeline.analytics.install_hints import DUCKDB_DOCTOR_HINT
+from finjuice.pipeline.analytics.duckdb_layer_helpers import (
+    DUCKDB_INSTALL_HINT,
+    detect_analytics_dependencies,
+)
 from finjuice.pipeline.analytics.query_builder import build_report_filter_duckdb_where
 from finjuice.pipeline.analytics.readonly_sql import (
     RESTRICTED_KEYWORDS,  # noqa: F401 — re-exported for existing duckdb_layer imports
@@ -38,18 +44,9 @@ from finjuice.pipeline.sql_utils import (
 from finjuice.pipeline.storage.schema_registry import get_current_schema
 from finjuice.pipeline.tagging.rules import ReportFilters
 
-try:
-    import duckdb
-    import polars as pl
-
-    DUCKDB_AVAILABLE = True
-except ImportError:
-    DUCKDB_AVAILABLE = False
-    duckdb = None  # type: ignore[assignment]  # optional dependency sentinel
-    pl = None  # type: ignore[assignment]  # optional dependency sentinel
+DUCKDB_AVAILABLE, duckdb, pl = detect_analytics_dependencies()
 
 logger = logging.getLogger(__name__)
-DUCKDB_INSTALL_HINT = DUCKDB_DOCTOR_HINT
 
 
 class DuckDBAnalytics:
