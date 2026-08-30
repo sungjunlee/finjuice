@@ -1,9 +1,10 @@
 """Diagnostic format and suggestion helpers for tagging rule validation.
 
 Owns rule labels, Did-you-mean hints, and suggestion-message assembly used by
-schema validation. Condition and conflict validators stay in
-:mod:`finjuice.pipeline.tagging.validator`, which re-exports the names that
-existing callers import from that module.
+schema validation. Field and condition helpers live in
+:mod:`finjuice.pipeline.tagging.validator_schema`. The per-rule orchestrator
+and conflict detection stay in :mod:`finjuice.pipeline.tagging.validator`,
+which re-exports the names that existing callers import from that module.
 """
 
 from __future__ import annotations
