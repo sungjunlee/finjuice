@@ -1,8 +1,9 @@
 """Human-readable Rich rendering for ``finjuice audit``.
 
 Owns audit log/stats/clear tables, event detail formatting, and
-template-run metric sections. Typer commands and JSONL I/O stay in
-:mod:`finjuice.pipeline.cli.commands.audit`.
+template-run metric sections. Typer commands stay in
+:mod:`finjuice.pipeline.cli.commands.audit`. JSONL I/O lives in
+:mod:`finjuice.pipeline.cli.commands.audit_io`.
 """
 
 from __future__ import annotations

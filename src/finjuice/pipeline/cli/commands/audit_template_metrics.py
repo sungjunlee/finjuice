@@ -1,8 +1,10 @@
 """Template-run metrics helpers for ``finjuice audit``.
 
 Owns template domain resolution, retry attribution, aggregate metrics, and
-usage counters. Typer commands, JSONL I/O, and human rendering stay in
-:mod:`finjuice.pipeline.cli.commands.audit`.
+usage counters. Typer commands stay in
+:mod:`finjuice.pipeline.cli.commands.audit`. JSONL I/O lives in
+:mod:`finjuice.pipeline.cli.commands.audit_io`. Human rendering lives in
+:mod:`finjuice.pipeline.cli.commands.audit_rendering`.
 """
 
 from __future__ import annotations
