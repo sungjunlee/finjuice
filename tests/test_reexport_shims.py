@@ -87,6 +87,33 @@ def test_csv_transactions_reexports_public_crud_api() -> None:
     assert transactions._get_transaction_read_columns is helpers._get_transaction_read_columns
 
 
+def test_schema_registry_reexports_load_cache_helpers() -> None:
+    """Load/cache helpers stay importable from schema_registry after the split."""
+    registry = importlib.import_module("finjuice.pipeline.storage.schema_registry")
+    helpers = importlib.import_module("finjuice.pipeline.storage.schema_registry_helpers")
+
+    assert registry.__all__ == [
+        "PartitionSchemaSummary",
+        "SchemaCompatibilityState",
+        "SchemaDetection",
+        "clear_cache",
+        "detect_schema_version",
+        "get_column_definition",
+        "get_compatible_read_versions",
+        "get_current_schema",
+        "get_schema_migration_guidance",
+        "get_schema_version",
+        "list_migrations",
+        "load_schema_registry",
+        "summarize_partition_schema_versions",
+        "validate_column_names",
+    ]
+    assert registry.clear_cache is helpers.clear_cache
+    assert registry.load_schema_registry is helpers.load_schema_registry
+    assert registry._get_default_metadata_dir is helpers._get_default_metadata_dir
+    assert registry._load_registry_for_detection is helpers._load_registry_for_detection
+
+
 def test_init_command_shim_does_not_keep_migration_patch_dependencies() -> None:
     """Migration tests should patch migrate_cmd, not the init command shim."""
     init_shim = importlib.import_module("finjuice.pipeline.cli.commands.init")
