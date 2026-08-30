@@ -1,4 +1,8 @@
-"""ZIP extraction helpers for Banksalad import archives."""
+"""ZIP extraction orchestration for Banksalad import archives.
+
+Member policy, size limits, and path-traversal checks live in
+:mod:`finjuice.pipeline.cli.commands.import_cmd.zip_policy`.
+"""
 
 import logging
 import shutil
@@ -10,6 +14,14 @@ from pathlib import Path
 from prompt_toolkit import PromptSession
 
 from finjuice.pipeline.cli.output import console, error
+
+from .zip_policy import (
+    ZIP_EXTRACTION_LIMITS,
+    ZipExtractionLimits,  # noqa: F401 — re-exported for existing zip_extraction imports
+    _validate_member_paths,
+    _validate_zip_members,
+    _xlsx_member_names,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,24 +48,6 @@ class _ZipExtractionOptions:
     password: str | None
     interactive: bool
     emit_text: bool
-
-
-@dataclass(frozen=True)
-class ZipExtractionLimits:
-    """Resource limits for ZIP imports.
-
-    Banksalad ZIPs normally contain one compressed XLSX export plus occasional
-    OS metadata. The defaults leave room for large personal exports while
-    bounding archive shapes that are risky to extract.
-    """
-
-    max_members: int = 32
-    max_total_uncompressed_bytes: int = 100 * 1024 * 1024
-    max_single_member_bytes: int = 50 * 1024 * 1024
-    max_compression_ratio: float = 100.0
-
-
-ZIP_EXTRACTION_LIMITS = ZipExtractionLimits()
 
 
 def _cleanup_temp_dirs(temp_dirs: list[str]) -> None:
@@ -131,7 +125,12 @@ def _extract_xlsx_from_open_zip(
     """Extract the first XLSX member from an already-open ZIP archive."""
     temp_dir: str | None = None
     try:
-        if not _validate_zip_members(zf, zip_path, emit_text=options.emit_text):
+        if not _validate_zip_members(
+            zf,
+            zip_path,
+            emit_text=options.emit_text,
+            limits=ZIP_EXTRACTION_LIMITS,
+        ):
             return None
 
         xlsx_files = _xlsx_member_names(zf)
@@ -200,124 +199,6 @@ def _zip_file_requires_password(zf: zipfile.ZipFile) -> bool:
     return any(_zip_info_requires_password(info) for info in zf.infolist())
 
 
-def _xlsx_member_names(zf: zipfile.ZipFile) -> list[str]:
-    """Return XLSX member names, excluding macOS metadata."""
-    return [
-        filename
-        for filename in zf.namelist()
-        if filename.lower().endswith(".xlsx") and not _is_ignored_metadata_name(filename)
-    ]
-
-
-def _validate_zip_members(
-    zf: zipfile.ZipFile,
-    zip_path: Path,
-    *,
-    emit_text: bool,
-) -> bool:
-    """Validate ZIP metadata before any member is extracted."""
-    limits = ZIP_EXTRACTION_LIMITS
-    members = zf.infolist()
-    if len(members) > limits.max_members:
-        return _handle_zip_policy_error(
-            zip_path,
-            emit_text=emit_text,
-            log_reason=f"member count limit exceeded ({len(members)} > {limits.max_members})",
-            user_reason="ZIP 항목 수 제한 초과",
-        )
-
-    total_uncompressed_bytes = 0
-    for member in members:
-        if not _is_supported_zip_member(member):
-            return _handle_zip_policy_error(
-                zip_path,
-                emit_text=emit_text,
-                log_reason="unsupported member type",
-                user_reason="ZIP에 지원하지 않는 항목 포함 (XLSX만 지원)",
-            )
-
-        if member.file_size > limits.max_single_member_bytes:
-            return _handle_zip_policy_error(
-                zip_path,
-                emit_text=emit_text,
-                log_reason=(
-                    "single member size limit exceeded "
-                    f"({member.file_size} > {limits.max_single_member_bytes})"
-                ),
-                user_reason="ZIP 항목 크기 제한 초과",
-            )
-
-        total_uncompressed_bytes += member.file_size
-        if total_uncompressed_bytes > limits.max_total_uncompressed_bytes:
-            return _handle_zip_policy_error(
-                zip_path,
-                emit_text=emit_text,
-                log_reason=(
-                    "total uncompressed size limit exceeded "
-                    f"({total_uncompressed_bytes} > {limits.max_total_uncompressed_bytes})"
-                ),
-                user_reason="ZIP 압축 해제 크기 제한 초과",
-            )
-
-        if _has_suspicious_compression_ratio(member, limits):
-            return _handle_zip_policy_error(
-                zip_path,
-                emit_text=emit_text,
-                log_reason="compression ratio limit exceeded",
-                user_reason="ZIP 압축률이 비정상적으로 높음",
-            )
-
-    return True
-
-
-def _is_supported_zip_member(member: zipfile.ZipInfo) -> bool:
-    """Return True for XLSX payloads and harmless metadata entries."""
-    if member.is_dir():
-        return True
-
-    filename = member.filename
-    return filename.lower().endswith(".xlsx") or _is_ignored_metadata_name(filename)
-
-
-def _is_ignored_metadata_name(filename: str) -> bool:
-    """Return True for ZIP members that represent harmless OS metadata."""
-    normalized = filename.replace("\\", "/")
-    relative_name = normalized.lstrip("/")
-    parts = [part for part in relative_name.split("/") if part]
-    if not parts:
-        return False
-
-    basename = parts[-1]
-    return parts[0] == "__MACOSX" or basename == ".DS_Store" or basename.startswith("._")
-
-
-def _has_suspicious_compression_ratio(
-    member: zipfile.ZipInfo,
-    limits: ZipExtractionLimits,
-) -> bool:
-    """Return True when ZIP metadata indicates a suspicious expansion ratio."""
-    if member.is_dir() or member.file_size <= 0:
-        return False
-    if member.compress_size <= 0:
-        return True
-
-    return member.file_size / member.compress_size > limits.max_compression_ratio
-
-
-def _handle_zip_policy_error(
-    zip_path: Path,
-    *,
-    emit_text: bool,
-    log_reason: str,
-    user_reason: str,
-) -> bool:
-    """Render and log a ZIP policy rejection without exposing member names."""
-    logger.debug("Rejected ZIP import: %s - %s", zip_path.name, log_reason)
-    if emit_text:
-        error(f"{user_reason}: {zip_path.name}", prefix="   ❌")
-    return False
-
-
 def _handle_no_xlsx(zip_path: Path, *, emit_text: bool) -> Path | None:
     """Render and log a ZIP-without-XLSX failure."""
     logger.debug("No XLSX files found in ZIP: %s", zip_path.name)
@@ -370,30 +251,6 @@ def _re_prompt_password(
     if not pwd:
         return None
     return pwd
-
-
-def _validate_member_paths(
-    zf: zipfile.ZipFile,
-    zip_path: Path,
-    temp_dir_path: Path,
-    *,
-    emit_text: bool,
-) -> bool:
-    """Validate ZIP member targets to prevent directory traversal."""
-    for member in zf.infolist():
-        member_path = (temp_dir_path / member.filename).resolve()
-        if member_path.is_relative_to(temp_dir_path):
-            continue
-
-        logger.warning("SECURITY: Path traversal attempt detected in ZIP archive")
-        if emit_text:
-            error(
-                f"보안 오류: ZIP에 잘못된 경로 포함 ({zip_path.name})",
-                prefix="   ❌",
-            )
-        return False
-
-    return True
 
 
 def _extract_all(
