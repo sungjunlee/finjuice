@@ -2,9 +2,11 @@
 
 Owns rule labels, Did-you-mean hints, and suggestion-message assembly used by
 schema validation. Field and condition helpers live in
-:mod:`finjuice.pipeline.tagging.validator_schema`. The per-rule orchestrator
-and conflict detection stay in :mod:`finjuice.pipeline.tagging.validator`,
-which re-exports the names that existing callers import from that module.
+:mod:`finjuice.pipeline.tagging.validator_schema`. Conflict checks live in
+:mod:`finjuice.pipeline.tagging.validator_conflicts`. The per-rule
+orchestrator and conflict-detection orchestrator stay in
+:mod:`finjuice.pipeline.tagging.validator`, which re-exports the names that
+existing callers import from that module.
 """
 
 from __future__ import annotations

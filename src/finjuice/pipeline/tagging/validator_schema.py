@@ -1,8 +1,10 @@
 """Schema field and condition helpers for tagging rule validation.
 
 Owns required-string/list checks, match/fields pairing, condition parsing
-(including numeric ``between`` ranges), and logic-mode validation. The
-per-rule orchestrator :func:`_validate_rule` and conflict detection stay in
+(including numeric ``between`` ranges), and logic-mode validation. Conflict
+checks live in :mod:`finjuice.pipeline.tagging.validator_conflicts`. The
+per-rule orchestrator :func:`_validate_rule` and conflict-detection
+orchestrator :func:`validate_rules` stay in
 :mod:`finjuice.pipeline.tagging.validator`, which re-exports the names that
 existing callers import from that module.
 """
