@@ -124,6 +124,7 @@ ignore = []
 "tests/test_undo_redo.py" = ["E501"]
 # Embedded Jinja2 templates have long lines for readability (Issue #117)
 "src/finjuice/pipeline/export/html_report_render.py" = ["E501"]
+"src/finjuice/pipeline/export/html_report_render_helpers.py" = ["E501"]
 "src/finjuice/pipeline/export/markdown_report.py" = ["E501"]
 
 [tool.mypy]
