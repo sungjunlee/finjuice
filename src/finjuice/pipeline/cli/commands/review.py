@@ -1,4 +1,10 @@
-"""Review command for transactions needing manual attention."""
+"""Review command for transactions needing manual attention.
+
+Human rendering lives in :mod:`finjuice.pipeline.cli.commands.review_rendering`
+and is re-exported here so existing callers can keep importing from this
+module. JSON row projection lives in
+:mod:`finjuice.pipeline.cli.commands.review_serialize`.
+"""
 
 import logging
 from pathlib import Path
@@ -6,15 +12,19 @@ from typing import Any, Optional
 
 import polars as pl
 import typer
-from rich.table import Table
 
 from finjuice.pipeline.cli import output as cli_output
 from finjuice.pipeline.cli.commands.export_helpers import validate_period
+from finjuice.pipeline.cli.commands.review_rendering import (
+    _format_amount,  # noqa: F401 — re-exported for existing review imports
+    _format_confidence,  # noqa: F401 — re-exported for existing review imports
+    _render_review,
+)
 from finjuice.pipeline.cli.commands.review_serialize import (
     _compact_review_result,
     _serialize_transaction,
 )
-from finjuice.pipeline.cli.output import ErrorCode, ExitCode, console, emit, emit_error
+from finjuice.pipeline.cli.output import ErrorCode, ExitCode, emit, emit_error
 from finjuice.pipeline.cli.privacy import (
     PrivacyProfile,
     apply_privacy_profile,
@@ -96,23 +106,6 @@ def _default_review_expr(dtype: pl.DataType | None) -> pl.Expr:
     )
 
 
-def _format_amount(amount: Any) -> str:
-    """Format a transaction amount as Korean won."""
-    if amount is None:
-        return "-"
-
-    amount_value = float(amount)
-    formatted = f"₩{abs(amount_value):,.0f}"
-    return f"-{formatted}" if amount_value < 0 else formatted
-
-
-def _format_confidence(confidence: Any) -> str:
-    """Format a confidence score for table output."""
-    if confidence is None:
-        return "-"
-    return f"{float(confidence):.2f}"
-
-
 def _count_matches(df: pl.DataFrame, predicate: pl.Expr) -> int:
     """Return the number of rows matching *predicate*."""
     if df.is_empty():
@@ -180,56 +173,6 @@ def _load_review_rule_notes(rules_file: Path) -> list[dict[str, Any]]:
         return summarize_rule_notes(rules_file, limit=5)
     except (OSError, ValueError):
         return []
-
-
-def _render_review(result: dict[str, Any]) -> None:
-    """Render review results as a Rich table."""
-    transactions = result["transactions"]
-    filters = result.get("filters") or {}
-    month_label = "all history" if filters.get("all_history") else result.get("month") or "latest"
-
-    if not transactions:
-        typer.echo("📝 No transactions match the review filters.")
-        return
-
-    table = Table(title=f"Transactions Requiring Review ({month_label})")
-    table.add_column("Date", style="cyan")
-    table.add_column("Merchant", style="yellow")
-    table.add_column("Amount", justify="right", style="green")
-    table.add_column("Category", style="magenta")
-    table.add_column("Tags", style="blue")
-    table.add_column("Confidence", justify="right", style="white")
-
-    for row in transactions:
-        merchant = row.get("merchant_raw") or "N/A"
-        if len(merchant) > 30:
-            merchant = merchant[:27] + "..."
-
-        tags = row.get("tags_final") or []
-        tags_display = ", ".join(tags) if tags else "-"
-
-        table.add_row(
-            str(row.get("date") or "-"),
-            merchant,
-            _format_amount(row.get("amount")),
-            str(row.get("category_final") or "미분류"),
-            tags_display,
-            _format_confidence(row.get("confidence")),
-        )
-
-    console.print(table)
-    typer.echo(f"\n📊 Showing {result['total_count']} transactions")
-    pagination_dict = result.get("pagination")
-    if isinstance(pagination_dict, dict):
-        pagination = cli_output.Pagination(
-            limit=int(pagination_dict.get("limit", 0)),
-            cursor=str(pagination_dict.get("cursor", "0")),
-            next_cursor=pagination_dict.get("next_cursor"),
-            has_more=bool(pagination_dict.get("has_more", False)),
-            total_estimate=pagination_dict.get("total_estimate"),
-            truncated_by_bytes=bool(pagination_dict.get("truncated_by_bytes", False)),
-        )
-        cli_output.render_pagination_footer(len(transactions), pagination)
 
 
 def _sort_review_rows(df: pl.DataFrame) -> pl.DataFrame:
