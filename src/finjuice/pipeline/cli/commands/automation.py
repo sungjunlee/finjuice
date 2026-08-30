@@ -13,8 +13,21 @@ from typing import Any, cast
 import typer
 
 from finjuice.pipeline.automation import collect_automation_signals
-from finjuice.pipeline.cli.commands.automation_helpers import (
+from finjuice.pipeline.cli.commands.automation_helpers import (  # noqa: F401
+    AutomationNextStepPayload,
     AutomationRunPayload,
+    AutomationThresholdsPayload,
+    CompactAutomationRunPayload,
+    CompactLargeTransactionsPayload,
+    CompactPendingImportsPayload,
+    CompactTaggingPressurePayload,
+    LargeTransactionSamplePayload,
+    LargeTransactionsPayload,
+    MerchantPressurePayload,
+    PendingImportFailurePayload,
+    PendingImportFilePayload,
+    PendingImportsPayload,
+    TaggingPressurePayload,
     _compact_automation_run_payload,
     _serialize_automation_run_payload,
 )
