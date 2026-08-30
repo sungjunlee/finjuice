@@ -3,6 +3,8 @@
 Owns ruamel.yaml-backed save/add/update/remove that preserve comments and
 formatting. Typed loaders stay in :mod:`finjuice.pipeline.tagging.rules_yaml_io`,
 which re-exports the public dump names used by CLI callers.
+Report-filters parsing lives in
+:mod:`finjuice.pipeline.tagging.rules_yaml_filters`.
 """
 
 from __future__ import annotations

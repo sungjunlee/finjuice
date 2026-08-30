@@ -20,6 +20,28 @@ def test_tagging_rules_shim_exports_only_documented_public_api() -> None:
     ]
 
 
+def test_rules_yaml_io_keeps_public_yaml_api() -> None:
+    """Public YAML IO names stay on rules_yaml_io after the filter-helper split."""
+    yaml_io = importlib.import_module("finjuice.pipeline.tagging.rules_yaml_io")
+    filters = importlib.import_module("finjuice.pipeline.tagging.rules_yaml_filters")
+
+    for name in (
+        "load_rules",
+        "load_rules_collecting",
+        "load_report_filters",
+        "save_rules",
+        "append_rule",
+        "summarize_rule_notes",
+        "save_rule_dicts_roundtrip",
+        "add_rule_roundtrip",
+        "update_rule_roundtrip",
+        "remove_rule_roundtrip",
+    ):
+        assert callable(getattr(yaml_io, name))
+
+    assert yaml_io._parse_report_filters is filters._parse_report_filters
+
+
 def test_csv_partition_polars_shim_exports_only_schema_contract() -> None:
     """The old storage umbrella path should only keep the tiny schema contract."""
     storage = importlib.import_module("finjuice.pipeline.storage.csv_partition_polars")
