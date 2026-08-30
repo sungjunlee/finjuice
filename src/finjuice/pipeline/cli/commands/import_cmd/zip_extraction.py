@@ -2,6 +2,11 @@
 
 Member policy, size limits, and path-traversal checks live in
 :mod:`finjuice.pipeline.cli.commands.import_cmd.zip_policy`.
+
+Password detection and prompting live in
+:mod:`finjuice.pipeline.cli.commands.import_cmd.zip_extraction_helpers`
+and are re-exported here so existing callers can keep importing from this
+module.
 """
 
 import logging
@@ -11,10 +16,16 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from prompt_toolkit import PromptSession
-
 from finjuice.pipeline.cli.output import console, error
 
+from .zip_extraction_helpers import (
+    _decide_password,
+    _PasswordDecision,  # noqa: F401 — re-exported for existing zip_extraction imports
+    _re_prompt_password,
+    _zip_file_requires_password,  # noqa: F401 — re-exported for existing zip_extraction imports
+    _zip_info_requires_password,  # noqa: F401 — re-exported for existing zip_extraction imports
+    _zip_requires_password,  # noqa: F401 — re-exported for existing zip_extraction imports
+)
 from .zip_policy import (
     ZIP_EXTRACTION_LIMITS,
     ZipExtractionLimits,  # noqa: F401 — re-exported for existing zip_extraction imports
@@ -24,14 +35,6 @@ from .zip_policy import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class _PasswordDecision:
-    """Password state for one ZIP extraction."""
-
-    password: str | None
-    can_extract: bool
 
 
 @dataclass
@@ -54,19 +57,6 @@ def _cleanup_temp_dirs(temp_dirs: list[str]) -> None:
     """Remove temporary ZIP extraction directories."""
     for temp_dir in temp_dirs:
         shutil.rmtree(temp_dir, ignore_errors=True)
-
-
-def _zip_requires_password(zip_path: Path) -> bool:
-    """Return True when any ZIP member is encrypted.
-
-    For unreadable or corrupt archives, return False so the normal extraction
-    path can surface the existing detailed error message.
-    """
-    try:
-        with zipfile.ZipFile(zip_path, "r") as zf:
-            return _zip_file_requires_password(zf)
-    except (zipfile.BadZipFile, PermissionError, OSError):
-        return False
 
 
 def extract_xlsx_from_zip(
@@ -189,68 +179,12 @@ def _extract_xlsx_from_open_zip(
         raise
 
 
-def _zip_info_requires_password(info: zipfile.ZipInfo) -> bool:
-    """Return True when a ZIP member advertises encryption."""
-    return bool((info.flag_bits & 0x1) or (info.flag_bits & 0x40))
-
-
-def _zip_file_requires_password(zf: zipfile.ZipFile) -> bool:
-    """Return True when any member in an open ZIP is encrypted."""
-    return any(_zip_info_requires_password(info) for info in zf.infolist())
-
-
 def _handle_no_xlsx(zip_path: Path, *, emit_text: bool) -> Path | None:
     """Render and log a ZIP-without-XLSX failure."""
     logger.debug("No XLSX files found in ZIP: %s", zip_path.name)
     if emit_text:
         error(f"ZIP에 XLSX 파일 없음: {zip_path.name}", prefix="   ❌")
     return None
-
-
-def _decide_password(
-    zf: zipfile.ZipFile,
-    zip_path: Path,
-    *,
-    password: str | None,
-    interactive: bool,
-    emit_text: bool,
-) -> _PasswordDecision:
-    """Resolve whether extraction can proceed and which password to use."""
-    if not _zip_file_requires_password(zf):
-        return _PasswordDecision(password=password, can_extract=True)
-
-    if password is not None:
-        return _PasswordDecision(password=password, can_extract=True)
-
-    if interactive:
-        if emit_text:
-            console.print(f"   🔐 [bold]{zip_path.name}[/bold]")
-        _ps: PromptSession[str] = PromptSession(is_password=True)
-        password = _ps.prompt("      ZIP 암호: ")
-        if not password:
-            return _PasswordDecision(password=None, can_extract=False)
-        return _PasswordDecision(password=password, can_extract=True)
-
-    logger.debug("Password required for encrypted ZIP: %s", zip_path.name)
-    if emit_text:
-        error(f"암호 필요: {zip_path.name} (--password 옵션 사용)", prefix="   ❌")
-    return _PasswordDecision(password=None, can_extract=False)
-
-
-def _re_prompt_password(
-    zip_path: Path,
-    remaining: int,
-    *,
-    emit_text: bool,
-) -> str | None:
-    """Re-prompt for ZIP password after a wrong attempt with remaining count."""
-    if emit_text:
-        error(f"잘못된 암호: {zip_path.name} ({remaining}회 남음)", prefix="   ❌")
-    _ps: PromptSession[str] = PromptSession(is_password=True)
-    pwd = _ps.prompt("      ZIP 암호 (그만두려면 Enter): ")
-    if not pwd:
-        return None
-    return pwd
 
 
 def _extract_all(
