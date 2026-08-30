@@ -436,7 +436,8 @@ class DuckDBAnalytics:
             f"LIMIT {top_n}"  # nosec B608
         )
         logger.debug(f"Calculating top {top_n} tags with DuckDB unnest")
-        return self.conn.execute(sql).pl()
+        result: "pl.DataFrame" = self.conn.execute(sql).pl()
+        return result
 
     def __enter__(self) -> "DuckDBAnalytics":
         """Context manager entry."""
