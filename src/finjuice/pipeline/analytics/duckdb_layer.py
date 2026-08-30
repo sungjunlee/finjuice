@@ -20,10 +20,15 @@ Performance characteristics:
 See: https://duckdb.org/docs/guides/python/polars
 """
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
 from types import TracebackType
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
+
+if TYPE_CHECKING:
+    import polars as pl
 
 from finjuice.pipeline.analytics.duckdb_layer_helpers import (
     DUCKDB_INSTALL_HINT,
