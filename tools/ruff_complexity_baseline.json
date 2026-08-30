@@ -137,24 +137,24 @@
       "value": 11
     },
     {
-      "code": "PLR0911",
-      "column": 5,
-      "limit": 6,
-      "message": "Too many return statements (9 > 6)",
-      "path": "src/finjuice/pipeline/cli/commands/audit.py",
-      "row": 358,
-      "symbol": "_build_audit_log_details",
-      "value": 9
-    },
-    {
       "code": "C901",
       "column": 5,
       "limit": 10,
       "message": "`clear` is too complex (11 > 10)",
       "path": "src/finjuice/pipeline/cli/commands/audit.py",
-      "row": 665,
+      "row": 275,
       "symbol": "clear",
       "value": 11
+    },
+    {
+      "code": "PLR0911",
+      "column": 5,
+      "limit": 6,
+      "message": "Too many return statements (9 > 6)",
+      "path": "src/finjuice/pipeline/cli/commands/audit_rendering.py",
+      "row": 86,
+      "symbol": "_build_audit_log_details",
+      "value": 9
     },
     {
       "code": "PLR0913",
