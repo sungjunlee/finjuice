@@ -3,6 +3,9 @@ CLI for finjuice.
 
 Provides Typer-based commands for the full data pipeline.
 
+No-args brief-status helpers live in
+:mod:`finjuice.pipeline.cli.main_helpers` and are re-exported here.
+
 Global options:
 - --data-dir / -d: Specify data directory (or set FINJUICE_DATA_DIR env var)
 - --verbose / -v: Enable DEBUG-level logging
@@ -46,6 +49,12 @@ from finjuice.pipeline.cli.commands.transfer import transfer_command
 from finjuice.pipeline.cli.commands.update_agents import register_update_agents_command
 from finjuice.pipeline.cli.commands.validate_cmd import validate_partitions_command
 from finjuice.pipeline.cli.commands.workspace_cmd import register_workspace_command
+from finjuice.pipeline.cli.main_helpers import (
+    _count_pending_imports,  # noqa: F401 — re-exported for existing main imports
+    _count_transaction_partitions,  # noqa: F401 — re-exported for existing main imports
+    _is_data_directory_initialized,  # noqa: F401 — re-exported for existing main imports
+    _show_brief_status,
+)
 from finjuice.pipeline.cli.output import ErrorCode, ExitCode
 from finjuice.pipeline.cli.utils import set_log_level
 from finjuice.pipeline.config import Config
@@ -178,35 +187,6 @@ app.add_typer(budget_app, name="budget", rich_help_panel="Analysis")
 app.add_typer(journal_app, name="journal", rich_help_panel="Commands")
 
 
-def _is_data_directory_initialized(config: Config) -> bool:
-    """Return True when the standard finjuice data layout exists."""
-    required_paths = (
-        config.import_dir,
-        config.csv_base_dir,
-        config.export_dir,
-        config.metadata_dir,
-    )
-    return (
-        config.data_dir.exists()
-        and config.rules_file.exists()
-        and all(path.exists() for path in required_paths)
-    )
-
-
-def _count_transaction_partitions(config: Config) -> int:
-    """Count CSV partition files under transactions/."""
-    if not config.csv_base_dir.exists():
-        return 0
-    return len(list(config.csv_base_dir.rglob("*.csv")))
-
-
-def _count_pending_imports(config: Config) -> int:
-    """Count pending XLSX files already staged in imports/."""
-    if not config.import_dir.exists():
-        return 0
-    return len(list(config.import_dir.glob("*.xlsx")))
-
-
 def _machine_output_requested(raw_args: list[str] | None = None) -> bool:
     """Return True when the invocation requests machine-readable JSON output."""
     args = raw_args or sys.argv[1:]
@@ -249,56 +229,6 @@ def _suppress_logs_for_machine_output(ctx: typer.Context, enabled: bool) -> None
             logging.getLogger(logger_name).setLevel(previous_level)
 
     ctx.call_on_close(_restore_logger_levels)
-
-
-def _show_brief_status(config: Config) -> None:
-    """
-    Show brief CLI-style status output.
-
-    This is shown when finjuice is run without arguments (Issue #141).
-    """
-    from finjuice import get_version
-    from finjuice.pipeline.cli.output import console
-
-    is_initialized = _is_data_directory_initialized(config)
-    transaction_partitions = _count_transaction_partitions(config)
-    pending_imports = _count_pending_imports(config)
-
-    console.print()
-    console.print(f"[bold cyan]📊 finjuice[/bold cyan] [dim]v{get_version()}[/dim]")
-    console.print()
-
-    # Show data location
-    console.print(f"[bold]데이터 위치:[/bold] [cyan]{config.data_dir}[/cyan]")
-
-    # Show status based on state
-    if not is_initialized:
-        console.print("[yellow]상태: 초기화 필요[/yellow]")
-    elif transaction_partitions == 0:
-        console.print("[yellow]상태: 거래 데이터 없음[/yellow]")
-    else:
-        console.print(f"[green]거래 CSV 파티션:[/green] {transaction_partitions}개")
-
-    if pending_imports > 0:
-        console.print(f"[yellow]미처리 파일:[/yellow] {pending_imports}개")
-
-    # Show useful commands
-    console.print()
-    console.print("[bold]💡 자주 쓰는 명령어:[/bold]")
-
-    if not is_initialized:
-        console.print("  [cyan]finjuice import <file.xlsx>[/cyan]   파일 가져오기 + 초기화")
-    elif pending_imports > 0:
-        console.print("  [cyan]finjuice refresh[/cyan]         파이프라인 실행")
-    else:
-        console.print("  [cyan]finjuice import <file.xlsx>[/cyan]   파일 가져오기 + 처리")
-
-    console.print("  [cyan]finjuice status[/cyan]          상태 확인")
-    console.print("  [cyan]finjuice query --help[/cyan]    SQL 조회")
-    console.print("  [cyan]finjuice explain QUERY[/cyan]   태깅 규칙 추적")
-    console.print()
-    console.print("[dim]'finjuice --help'로 전체 명령어를 확인하세요.[/dim]")
-    console.print()
 
 
 def _version_callback(value: bool) -> None:
