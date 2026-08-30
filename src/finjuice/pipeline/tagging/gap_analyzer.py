@@ -7,6 +7,11 @@ Analyzes gaps between:
 - Coverage improvement simulation
 
 This module helps users understand and prioritize rule creation.
+
+Mismatch type/severity constants, :class:`MismatchClassification`, and the
+classification helpers live in
+:mod:`finjuice.pipeline.tagging.gap_mismatch` and are re-exported here so
+existing callers can keep importing from this module.
 """
 
 import logging
@@ -18,6 +23,16 @@ from typing import Optional
 import polars as pl
 
 from finjuice.pipeline.storage import csv_partition
+from finjuice.pipeline.tagging.gap_mismatch import (
+    MISMATCH_SEVERITY_ORDER,
+    MISMATCH_TYPE_CATEGORY,
+    MISMATCH_TYPE_CONFLICT,
+    MISMATCH_TYPE_MULTI_TAG_NOISE,
+    MismatchClassification,  # noqa: F401 — re-exported for existing callers.
+    _category_parts,  # noqa: F401 — re-exported for existing callers.
+    _mapped_categories_for_tags,  # noqa: F401 — re-exported for existing callers.
+    classify_mismatch,
+)
 from finjuice.pipeline.tagging.suggestions import get_banksalad_category
 
 logger = logging.getLogger(__name__)
@@ -30,17 +45,6 @@ class GapType(Enum):
     MISMATCH = "태깅됨 + 불일치"  # Has tags BUT category doesn't match
     PARTIAL = "부분 매칭"  # Some tags match category
     COMPLETE = "완전 매칭"  # Tags ↔ Category aligned
-
-
-MISMATCH_TYPE_CONFLICT = "conflict"
-MISMATCH_TYPE_CATEGORY = "category_mismatch"
-MISMATCH_TYPE_MULTI_TAG_NOISE = "multi_tag_noise"
-MISMATCH_SEVERITY_ORDER = {
-    "high": 0,
-    "medium": 1,
-    "low": 2,
-    "none": 3,
-}
 
 
 @dataclass
@@ -68,65 +72,6 @@ class CoverageSimulation:
     expected_tagged: int
     expected_coverage_pct: float
     improvement_pct: float
-
-
-@dataclass(frozen=True)
-class MismatchClassification:
-    """Actionability metadata for tagged category mismatches."""
-
-    mismatch_type: str
-    mismatch_severity: str
-    actionable: bool
-
-
-def _category_parts(category: str) -> tuple[str, str]:
-    """Split a major:minor category string into normalized parts."""
-    major, separator, minor = (category or "").partition(":")
-    if not separator:
-        return major or "기타", ""
-    return major or "기타", minor or ""
-
-
-def _mapped_categories_for_tags(tags: list[str]) -> list[str]:
-    """Return unique non-fallback Banksalad categories for individual tags."""
-    categories: list[str] = []
-    for tag in tags:
-        category = get_banksalad_category([tag])
-        if category == "기타:기타":
-            continue
-        if category not in categories:
-            categories.append(category)
-    return categories
-
-
-def classify_mismatch(
-    tags: list[str],
-    raw_category: str,
-    expected_category: str,
-) -> MismatchClassification:
-    """Classify mismatch severity without mutating transactions or rules."""
-    mapped_categories = _mapped_categories_for_tags(tags)
-    if len(tags) > 1 and raw_category in mapped_categories and raw_category != expected_category:
-        return MismatchClassification(
-            mismatch_type=MISMATCH_TYPE_MULTI_TAG_NOISE,
-            mismatch_severity="low",
-            actionable=False,
-        )
-
-    raw_major, _raw_minor = _category_parts(raw_category)
-    expected_major, _expected_minor = _category_parts(expected_category)
-    if raw_major != expected_major and raw_major != "기타" and expected_major != "기타":
-        return MismatchClassification(
-            mismatch_type=MISMATCH_TYPE_CONFLICT,
-            mismatch_severity="high",
-            actionable=True,
-        )
-
-    return MismatchClassification(
-        mismatch_type=MISMATCH_TYPE_CATEGORY,
-        mismatch_severity="medium",
-        actionable=True,
-    )
 
 
 def sort_mismatch_gaps(gaps: list[GapAnalysis]) -> list[GapAnalysis]:
