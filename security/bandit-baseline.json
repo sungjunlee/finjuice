@@ -133,7 +133,7 @@
     },
     {
       "test_id": "B608",
-      "filename": "src/finjuice/pipeline/cli/commands/template_cmd/execution.py",
+      "filename": "src/finjuice/pipeline/cli/commands/template_cmd/execution_helpers.py",
       "function": "_build_pivot_base_rows_sql",
       "issue_severity": "MEDIUM",
       "issue_confidence": "LOW",
@@ -142,7 +142,7 @@
     },
     {
       "test_id": "B608",
-      "filename": "src/finjuice/pipeline/cli/commands/template_cmd/execution.py",
+      "filename": "src/finjuice/pipeline/cli/commands/template_cmd/execution_helpers.py",
       "function": "_build_pivot_base_rows_sql",
       "issue_severity": "MEDIUM",
       "issue_confidence": "LOW",
@@ -151,7 +151,7 @@
     },
     {
       "test_id": "B608",
-      "filename": "src/finjuice/pipeline/cli/commands/template_cmd/execution.py",
+      "filename": "src/finjuice/pipeline/cli/commands/template_cmd/execution_helpers.py",
       "function": "_discover_pivot_columns",
       "issue_severity": "MEDIUM",
       "issue_confidence": "LOW",

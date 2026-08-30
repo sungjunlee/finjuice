@@ -721,8 +721,8 @@
       "column": 5,
       "limit": 5,
       "message": "Too many arguments in function definition (7 > 5)",
-      "path": "src/finjuice/pipeline/cli/commands/template_cmd/execution.py",
-      "row": 166,
+      "path": "src/finjuice/pipeline/cli/commands/template_cmd/execution_helpers.py",
+      "row": 128,
       "symbol": "_discover_pivot_columns",
       "value": 7
     },
