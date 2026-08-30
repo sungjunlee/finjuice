@@ -3,6 +3,8 @@ Workspace command: Manage symlink-based work directories.
 
 Provides user-friendly workspace creation for easy data access,
 especially useful for Claude Code and other AI tools (Issue #65).
+
+Human rendering lives in :mod:`finjuice.pipeline.cli.commands.workspace_rendering`.
 """
 
 import logging
@@ -16,8 +18,8 @@ import typer
 import yaml
 
 from finjuice.pipeline.cli.commands.workspace_helpers import (
-    FILE_SYMLINKS,
-    SYMLINK_TARGETS,
+    FILE_SYMLINKS,  # noqa: F401 — re-exported for existing workspace imports
+    SYMLINK_TARGETS,  # noqa: F401 — re-exported for existing workspace imports
     WORKSPACE_README_TEMPLATE,
     WORKSPACE_VERSION,
     create_symlinks,
@@ -28,7 +30,14 @@ from finjuice.pipeline.cli.commands.workspace_helpers import (
     validate_data_directories,
     verify_symlinks,
 )
-from finjuice.pipeline.cli.output import console, error, success, warning
+from finjuice.pipeline.cli.commands.workspace_rendering import (
+    _render_workspace_create_success,
+    _render_workspace_list,
+    _render_workspace_remove_success,
+    _render_workspace_remove_warning,
+    _render_workspace_verify,
+)
+from finjuice.pipeline.cli.output import console
 
 logger = logging.getLogger(__name__)
 
@@ -134,21 +143,7 @@ def workspace_create(
     # Register workspace
     register_workspace(data_dir, workspace_path)
 
-    # Success message
-    console.print()
-    success(f"Created workspace: {workspace_path}")
-    console.print()
-    console.print("📁 Structure:")
-    for target in SYMLINK_TARGETS:
-        console.print(f"   {target}/ → {data_dir / target}")
-    for target in FILE_SYMLINKS:
-        console.print(f"   {target} → {data_dir / target}")
-
-    console.print(f"\n💡 Now you can work from {workspace_path}")
-    console.print("\n📋 Next steps:")
-    console.print(f"   cd {workspace_path}")
-    console.print("   ls -la imports/")
-    console.print("   finjuice refresh")
+    _render_workspace_create_success(workspace_path, data_dir)
 
 
 @workspace_app.command("list")
@@ -174,28 +169,7 @@ def workspace_list(
     data_dir = config.data_dir
     registry = load_workspace_registry(data_dir)
     workspaces = registry.get("workspaces", [])
-
-    if not workspaces:
-        console.print("\n📁 No workspaces found\n")
-        console.print("Create one with: finjuice workspace create <path>")
-        return
-
-    console.print("\n📁 Active workspaces:\n", style="bold")
-    for i, ws in enumerate(workspaces, 1):
-        ws_path = Path(ws.get("path", ""))
-        created = ws.get("created_at", "Unknown")
-
-        # Check if still valid
-        if ws_path.exists() and is_valid_workspace(ws_path):
-            status = "✅ Valid"
-        else:
-            status = "❌ Invalid/Missing"
-
-        console.print(f"   {i}. {ws_path}")
-        console.print(f"      Created: {created}")
-        console.print(f"      Status: {status}\n")
-
-    console.print(f"💾 Data location: {data_dir}")
+    _render_workspace_list(workspaces, data_dir)
 
 
 @workspace_app.command("remove")
@@ -249,9 +223,7 @@ def workspace_remove(
 
     # Confirm removal
     if not force and not yes:
-        console.print()
-        warning("This will remove the workspace directory and symlinks.")
-        console.print("   Your actual data will NOT be deleted.\n")
+        _render_workspace_remove_warning()
         confirm = typer.confirm("Proceed?")
         if not confirm:
             console.print("Cancelled")
@@ -267,9 +239,7 @@ def workspace_remove(
     # Unregister
     unregister_workspace(data_dir, workspace_path)
 
-    console.print()
-    success(f"Removed workspace: {workspace_path}")
-    console.print(f"💾 Data remains safe at: {data_dir}")
+    _render_workspace_remove_success(workspace_path, data_dir)
 
 
 @workspace_app.command("verify")
@@ -300,38 +270,10 @@ def workspace_verify(
         )
         raise typer.Exit(code=1)
 
-    console.print(f"\n🔍 Verifying workspace: {workspace_path}\n")
-
     # Verify symlinks
     results = verify_symlinks(workspace_path)
-    all_valid = True
-
-    for name, status in results:
-        if status == "valid":
-            success(f"{name} → Valid symlink")
-        elif status == "broken":
-            error(f"{name} → Broken symlink")
-            all_valid = False
-        elif status == "missing":
-            error(f"{name} → Missing")
-            all_valid = False
-        else:
-            warning(f"{name} → Not a symlink")
-            all_valid = False
-
-    # Check metadata
-    metadata_file = workspace_path / ".finjuice-workspace"
-    if metadata_file.exists():
-        success(".finjuice-workspace → Valid metadata")
-    else:
-        error(".finjuice-workspace → Missing")
-        all_valid = False
-
-    console.print()
-    if all_valid:
-        success("All checks passed!")
-    else:
-        error("Some checks failed")
+    all_valid = _render_workspace_verify(workspace_path, results)
+    if not all_valid:
         raise typer.Exit(code=1)
 
 
