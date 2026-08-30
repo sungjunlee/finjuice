@@ -44,7 +44,11 @@ from finjuice.pipeline.goals_validators.fields import (
 )
 from finjuice.pipeline.goals_validators.models import (
     MONTH_LITERAL_PATTERN,
+    FamilyContext,  # noqa: F401 — re-exported for existing validate.py imports
+    FinancialContext,  # noqa: F401 — re-exported for existing validate.py imports
     GoalsDocument,
+    HousingContext,  # noqa: F401 — re-exported for existing validate.py imports
+    IncomeContext,  # noqa: F401 — re-exported for existing validate.py imports
     KnownObligation,
     RecurringSavingsGoal,
     ValidationProblems,
