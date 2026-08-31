@@ -32,6 +32,8 @@ from finjuice.pipeline.forecast_validators.fields import (
     _walk_node,  # noqa: F401 — re-exported for existing validate.py imports
 )
 from finjuice.pipeline.forecast_validators.lifecycle import (
+    _ASSET_SWAP_ADD_KEYS,  # noqa: F401 — re-exported for existing validate.py imports
+    _ASSET_SWAP_KEYS,  # noqa: F401 — re-exported for existing validate.py imports
     _select_lifecycle_event_shape,  # noqa: F401 — re-exported for existing validate.py imports
     _validate_asset_swap,  # noqa: F401 — re-exported for existing validate.py imports
     _validate_asset_swap_event,  # noqa: F401 — re-exported for existing validate.py imports

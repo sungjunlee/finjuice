@@ -42,6 +42,8 @@ def test_lifecycle_helpers_reexport_from_validate() -> None:
     )
     assert validate._validate_asset_swap_event is lifecycle._validate_asset_swap_event
     assert validate._validate_asset_swap is lifecycle._validate_asset_swap
+    assert validate._ASSET_SWAP_KEYS is lifecycle._ASSET_SWAP_KEYS
+    assert validate._ASSET_SWAP_ADD_KEYS is lifecycle._ASSET_SWAP_ADD_KEYS
     assert callable(validate.validate_scenarios_config_file)
     assert callable(validate._validate_assumptions)
     assert callable(validate._validate_asset_returns)
