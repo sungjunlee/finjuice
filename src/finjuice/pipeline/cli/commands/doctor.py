@@ -11,6 +11,7 @@ from finjuice.pipeline.cli.output import emit
 from finjuice.pipeline.config import Config
 from finjuice.pipeline.doctor import _build_doctor_result
 from finjuice.pipeline.doctor import checks as doctor_checks
+from finjuice.pipeline.doctor import skill_runtime as doctor_skill_runtime
 
 
 def _probe_cli_capabilities() -> dict[str, bool]:
@@ -39,6 +40,7 @@ def doctor(
     """
     config: Config = ctx.obj["config"]
     doctor_checks._probe_cli_capabilities = _probe_cli_capabilities
+    doctor_skill_runtime._probe_cli_capabilities = _probe_cli_capabilities
     result = _build_doctor_result(config)
     emit(
         result.payload,
