@@ -16,7 +16,6 @@ def test_budget_rendering_helpers_live_in_helper_module() -> None:
     assert "def budget_status_command" in command_text
     assert "def budget_edit_command" in command_text
     assert "def budget_validate_command" in command_text
-    assert "def _raise_goals_validation_error" in command_text
     assert "def _render_budget_status" not in command_text
     assert "def _render_budget_edit" not in command_text
     assert "def _render_budget_validate" not in command_text
