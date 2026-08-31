@@ -15,12 +15,16 @@ def collect_pipeline_freshness(
     *,
     today: date,
     stale_after_days: int,
+    preview_imports: bool = True,
 ) -> PipelineFreshnessSummary:
     """Summarize transaction freshness from the shared status snapshot surface."""
     snapshot_result = collect_status_snapshot(config)
     snapshot = snapshot_result.snapshot
     partition_count = len(list(config.csv_base_dir.glob("*/*/transactions.csv")))
-    pending_import_files, failed_import_files = _collect_import_preview_counts(config)
+    pending_import_files, failed_import_files = _collect_import_preview_counts(
+        config,
+        preview_imports=preview_imports,
+    )
     pending_import_status = "present" if pending_import_files > 0 else "clear"
     latest_date = _extract_latest_date(snapshot.data_range)
     days_since_latest = (today - latest_date).days if latest_date is not None else None
@@ -145,8 +149,21 @@ def _extract_latest_date(data_range: str | None) -> date | None:
         return None
 
 
-def _collect_import_preview_counts(config: Config) -> tuple[int, int]:
-    """Count staged imports that are actionable vs preview failures."""
+def _collect_import_preview_counts(
+    config: Config,
+    *,
+    preview_imports: bool = True,
+) -> tuple[int, int]:
+    """Count staged imports that are actionable vs preview failures.
+
+    When ``preview_imports`` is false, count staged ``*.xlsx`` files without
+    opening them. Failures are not distinguished on that cheap path.
+    """
+    if not preview_imports:
+        if not config.import_dir.is_dir():
+            return 0, 0
+        return len(list(config.import_dir.glob("*.xlsx"))), 0
+
     preview = preview_ingest_all_files(config.import_dir, config.csv_base_dir, archive=False)
     pending_files = 0
 

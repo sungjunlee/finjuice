@@ -17,7 +17,12 @@ from __future__ import annotations
 
 from datetime import date
 
-from finjuice.pipeline.checkup.models import CheckupBundle
+from finjuice.pipeline.checkup.models import (
+    FAST_SKIP_WARNING,
+    CheckupBundle,
+    skipped_obligation_confirmation_summary,
+    skipped_review_pressure_summary,
+)
 from finjuice.pipeline.checkup.named_collectors import (
     NAMED_COLLECTORS,
     run_named_collector,
@@ -36,8 +41,13 @@ def collect_checkup_bundle(
     today: date | None = None,
     stale_after_days: int = 35,
     review_sample_limit: int = 3,
+    fast: bool = False,
 ) -> CheckupBundle:
-    """Collect a unified read-only bundle across the main orchestration domains."""
+    """Collect a unified read-only bundle across the main orchestration domains.
+
+    ``fast=True`` keeps cheap posture collectors and skips full detectors.
+    The skip is explicit in domain status and warnings.
+    """
     if stale_after_days < 0:
         raise ValueError("stale_after_days must be >= 0")
 
@@ -49,12 +59,15 @@ def collect_checkup_bundle(
         config,
         today=resolved_today,
         stale_after_days=stale_after_days,
+        preview_imports=not fast,
     )
     review = run_named_collector(
         "review",
         NAMED_COLLECTORS["review"],
         config,
         sample_limit=review_sample_limit,
+        skip=fast,
+        skip_result=skipped_review_pressure_summary() if fast else None,
     )
     budget = run_named_collector(
         "budget",
@@ -67,6 +80,8 @@ def collect_checkup_bundle(
         "obligations",
         NAMED_COLLECTORS["obligations"],
         config,
+        skip=fast,
+        skip_result=skipped_obligation_confirmation_summary() if fast else None,
     )
 
     warnings = _collect_warnings(
@@ -74,6 +89,7 @@ def collect_checkup_bundle(
         budget.warning,
         networth.warning,
         obligations.warning,
+        FAST_SKIP_WARNING if fast else None,
     )
     next_actions = _build_next_actions(
         pipeline=pipeline,

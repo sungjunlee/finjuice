@@ -153,6 +153,25 @@ def test_run_named_collector_propagates_collector_failures() -> None:
         run_named_collector("pipeline", boom)
 
 
+def test_run_named_collector_skip_requires_explicit_result() -> None:
+    """A skip without skip_result must fail closed instead of inventing a summary."""
+
+    def boom() -> str:
+        raise RuntimeError("collector exploded")
+
+    with pytest.raises(ValueError, match="skip_result is required"):
+        run_named_collector("review", boom, skip=True)
+
+
+def test_run_named_collector_skip_returns_provided_result() -> None:
+    """An explicit skip must not invoke the collector."""
+
+    def boom() -> str:
+        raise RuntimeError("collector exploded")
+
+    assert run_named_collector("review", boom, skip=True, skip_result="skipped") == "skipped"
+
+
 def test_collector_failure_does_not_mark_partial_bundle_green(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

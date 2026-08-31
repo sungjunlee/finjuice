@@ -36,6 +36,8 @@ def run_named_collector(
     collector: Callable[..., T],
     /,
     *args: Any,
+    skip: bool = False,
+    skip_result: T | None = None,
     **kwargs: Any,
 ) -> T:
     """Run a named collector fail-closed.
@@ -44,5 +46,10 @@ def run_named_collector(
     summary for a failed collector, and it does not skip a collector unless a
     future caller adds an explicit skip that remains visible in warnings.
     """
+    if skip:
+        if skip_result is None:
+            raise ValueError(f"skip_result is required to skip checkup collector {name}")
+        logger.debug("Skipping checkup collector %s", name)
+        return skip_result
     logger.debug("Running checkup collector %s", name)
     return collector(*args, **kwargs)
