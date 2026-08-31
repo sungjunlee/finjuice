@@ -1,4 +1,12 @@
-"""Focused import command use case."""
+"""Focused import command use case.
+
+Owns import orchestration, dependency protocols, first-run init, and
+copy/pipeline execution. ZIP input splitting and per-archive extraction
+live in
+:mod:`finjuice.pipeline.cli.commands.import_cmd.use_case_helpers`
+and are re-exported here so existing callers can keep importing from this
+module.
+"""
 
 import logging
 from dataclasses import dataclass
@@ -27,6 +35,7 @@ from .rendering import (
     render_import_mode,
 )
 from .result import ImportFileResults, ImportResult
+from .use_case_helpers import _split_import_inputs
 from .zip_extraction import _cleanup_temp_dirs
 from .zip_inputs import (
     _extract_one_zip,  # noqa: F401 — re-exported for existing use_case imports
@@ -172,18 +181,6 @@ def _run_quick_doctor(options: ImportOptions) -> None:
                 rich_console.print()
     except Exception:
         logger.debug("Quick doctor check failed (non-fatal)", exc_info=True)
-
-
-def _split_import_inputs(resolved_files: list[Path]) -> tuple[list[Path], list[Path]]:
-    """Split resolved import inputs into XLSX and ZIP paths."""
-    xlsx_files: list[Path] = []
-    zip_files: list[Path] = []
-    for resolved_file in resolved_files:
-        if resolved_file.suffix.lower() == ".zip":
-            zip_files.append(resolved_file)
-        else:
-            xlsx_files.append(resolved_file)
-    return xlsx_files, zip_files
 
 
 def _copy_and_maybe_run_pipeline(

@@ -18,9 +18,10 @@ thin enough to ratchet separately.
 
 - `__init__.py` keeps the stable import path and Typer registration wrapper.
 - `options.py` and `result.py` define typed import use-case boundaries.
-- `use_case.py`, `inputs.py`, `zip_extraction.py`, `zip_policy.py`, `copying.py`,
-  `pipeline.py`, and `rendering.py` isolate orchestration, input resolution, archive
-  handling, ZIP member policy, file copy, full-pipeline callbacks, and output.
+- `use_case.py`, `use_case_helpers.py`, `inputs.py`, `zip_extraction.py`,
+  `zip_policy.py`, `copying.py`, `pipeline.py`, and `rendering.py` isolate
+  orchestration, ZIP input helpers, input resolution, archive handling, ZIP
+  member policy, file copy, full-pipeline callbacks, and output.
 
 `finjuice.pipeline.cli.commands.template_cmd` follows the same pattern for template analysis:
 
