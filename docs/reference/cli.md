@@ -180,6 +180,8 @@ finjuice --version
  Pattern:
      agent -> `finjuice checkup --json` -> choose the next explicit finjuice command
 
+ Use --fast for a cheap posture summary that skips full detectors.
+
  The finjuice CLI only emits structured data. It does not execute side effects here.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
@@ -187,6 +189,7 @@ finjuice --version
 │ --privacy            [raw|redacted|compact]  Privacy profile for JSON output: raw, redacted, or compact              │
 │                                              [default: raw]                                                          │
 │ --stale-after        INTEGER                 Days after which data is considered stale (default: 35) [default: 35]   │
+│ --fast                                       Cheap posture summary; skip full detectors.                             │
 │ --help                                       Show this message and exit.                                             │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
