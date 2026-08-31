@@ -2,9 +2,10 @@
 
 Owns required-string/list checks, match/fields pairing, condition parsing
 (including numeric ``between`` ranges), and logic-mode validation. The
-per-rule orchestrator :func:`_validate_rule` and conflict detection stay in
-:mod:`finjuice.pipeline.tagging.validator`, which re-exports the names that
-existing callers import from that module.
+per-rule orchestrator :func:`_validate_rule` stays in
+:mod:`finjuice.pipeline.tagging.validator` and conflict detection lives in
+:mod:`finjuice.pipeline.tagging.validator_conflicts`; both re-export the
+names that existing callers import from the validator module.
 """
 
 from __future__ import annotations
