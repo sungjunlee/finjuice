@@ -28,15 +28,28 @@ def _cast_int_flag_columns(df: pl.DataFrame) -> pl.DataFrame:
 
 
 def _serialize_list(x: Any) -> str:
-    """Serialize tag collections to JSON string without double-encoding."""
+    """Serialize tag collections to UTF-8 JSON without double-encoding.
+
+    Strings that already hold JSON (including legacy ``\\uXXXX``-escaped
+    partitions written before the UTF-8 storage fix) are parsed and
+    re-serialized with ``ensure_ascii=False`` so refreshes migrate
+    legacy cells to plain UTF-8.
+    """
     if x is None:
         return "[]"
     if isinstance(x, str):
         stripped = x.strip()
-        return "[]" if stripped == "" else stripped
-    if isinstance(x, Iterable) and not isinstance(x, (str, bytes)):
-        return json.dumps(list(x), ensure_ascii=False)
-    return json.dumps([x], ensure_ascii=False)
+        if stripped == "":
+            return "[]"
+        try:
+            parsed = json.loads(stripped)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, list):
+            return json.dumps(parsed, ensure_ascii=False)
+        return stripped
+    payload = list(x) if isinstance(x, Iterable) and not isinstance(x, (str, bytes)) else [x]
+    return json.dumps(payload, ensure_ascii=False)
 
 
 def _serialize_tag_columns(df: pl.DataFrame) -> pl.DataFrame:
