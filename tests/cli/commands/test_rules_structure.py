@@ -50,6 +50,9 @@ def test_rules_suggest_compute_lives_in_tagging_pipeline() -> None:
     compute_text = Path("src/finjuice/pipeline/tagging/suggest_compute.py").read_text(
         encoding="utf-8"
     )
+    compact_text = Path("src/finjuice/pipeline/tagging/suggest_compute_compact.py").read_text(
+        encoding="utf-8"
+    )
 
     assert "def suggest_rules_command" in suggest_text
     assert "def _compute_rules_suggest_json" not in suggest_text
@@ -57,9 +60,9 @@ def test_rules_suggest_compute_lives_in_tagging_pipeline() -> None:
     assert "def _compact_rule_suggestion" not in suggest_text
     assert "def _compact_rules_suggest_result" not in suggest_text
     assert "def _compute_rules_suggest_json" in compute_text
-    assert "def _compact_suggested_rule" in compute_text
-    assert "def _compact_rule_suggestion" in compute_text
-    assert "def _compact_rules_suggest_result" in compute_text
+    assert "def _compact_suggested_rule" in compact_text
+    assert "def _compact_rule_suggestion" in compact_text
+    assert "def _compact_rules_suggest_result" in compact_text
 
 
 def test_rules_suggest_rendering_lives_in_helper_module() -> None:
