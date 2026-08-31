@@ -2,7 +2,9 @@
 
 JSON payload assembly helpers live in
 :mod:`finjuice.pipeline.cli.commands.networth_payload` and are re-exported
-here so existing callers can keep importing from this module. JSON
+here so existing callers can keep importing from this module. Forecast
+scenario serialization helpers live in
+:mod:`finjuice.pipeline.cli.commands.networth_forecast`. JSON
 health/action guidance helpers live in
 :mod:`finjuice.pipeline.cli.commands.networth_guidance`. Validation and
 runtime error envelopes live in
@@ -26,6 +28,11 @@ from finjuice.pipeline.cli.commands.networth_errors import (
     _handle_networth_exception,
     _raise_goals_validation_error,
     _validation_issue_to_problem,
+)
+from finjuice.pipeline.cli.commands.networth_forecast import (
+    _build_all_scenario_forecasts,
+    _forecast_start_as_of,
+    _serialize_forecast_scenario,
 )
 from finjuice.pipeline.cli.commands.networth_guidance import (
     _build_networth_guidance,  # noqa: F401 — re-exported for existing networth imports
@@ -55,12 +62,7 @@ from finjuice.pipeline.cli.output import (
     success,
 )
 from finjuice.pipeline.cli.utils import get_config
-from finjuice.pipeline.forecast import (
-    SCENARIO_NAMES,
-    build_forecast,
-    load_scenarios_config,
-    serialize_forecast_result,
-)
+from finjuice.pipeline.forecast import load_scenarios_config
 from finjuice.pipeline.goals import load_goals_file
 from finjuice.pipeline.networth import (
     build_breakdown_rows,
@@ -238,23 +240,14 @@ def forecast(
         )
 
         if scenario == "all":
-            scenario_payloads = {
-                scenario_name: serialize_forecast_result(
-                    build_forecast(
-                        position,
-                        scenarios_config,
-                        scenario=cast(
-                            Literal["conservative", "neutral", "optimistic"],
-                            scenario_name,
-                        ),
-                        years=years,
-                        target_net_worth=target_net_worth,
-                    )
-                )
-                for scenario_name in SCENARIO_NAMES
-            }
+            scenario_payloads = _build_all_scenario_forecasts(
+                position,
+                scenarios_config,
+                years=years,
+                target_net_worth=target_net_worth,
+            )
             payload = {"scenarios": scenario_payloads}
-            start_as_of = position.as_of.isoformat() if position.as_of is not None else None
+            start_as_of = _forecast_start_as_of(position)
             total_events = sum(
                 scenario_payload["summary"]["events_count"]
                 for scenario_payload in scenario_payloads.values()
@@ -277,16 +270,14 @@ def forecast(
             return
 
         selected_scenario = cast(Literal["conservative", "neutral", "optimistic"], scenario)
-        result = serialize_forecast_result(
-            build_forecast(
-                position,
-                scenarios_config,
-                scenario=selected_scenario,
-                years=years,
-                target_net_worth=target_net_worth,
-            )
+        result = _serialize_forecast_scenario(
+            position,
+            scenarios_config,
+            scenario=selected_scenario,
+            years=years,
+            target_net_worth=target_net_worth,
         )
-        start_as_of = position.as_of.isoformat() if position.as_of is not None else None
+        start_as_of = _forecast_start_as_of(position)
         if json_output:
             _emit_networth_json(
                 result,
