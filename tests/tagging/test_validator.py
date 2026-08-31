@@ -436,17 +436,26 @@ def test_schema_helpers_live_in_helper_module() -> None:
     """Field/condition schema helpers should not live in validator.py."""
     validator_text = (TAGGING_DIR / "validator.py").read_text(encoding="utf-8")
     schema_text = (TAGGING_DIR / "validator_schema.py").read_text(encoding="utf-8")
+    conflicts_text = (TAGGING_DIR / "validator_conflicts.py").read_text(encoding="utf-8")
 
     assert "def _validate_rule" in validator_text
-    assert "def validate_rules" in validator_text
+    assert "def validate_rules" not in validator_text
     assert "def _validate_condition(" not in validator_text
     assert "def _parse_between_range" not in validator_text
     assert "def _validate_required_string" not in validator_text
     assert "def _validate_numeric_condition_value" not in validator_text
+    assert "def check_duplicate_names" not in validator_text
     assert "def _validate_condition(" in schema_text
     assert "def _parse_between_range" in schema_text
     assert "def _validate_required_string" in schema_text
     assert "def _validate_numeric_condition_value" in schema_text
+    assert "def validate_rules" in conflicts_text
+    assert "def check_duplicate_names" in conflicts_text
+    assert "def check_pattern_overlaps" in conflicts_text
+    assert "def check_priority_inversions" in conflicts_text
+    assert "def check_regex_validity" in conflicts_text
+    assert "class ValidationIssue" in conflicts_text
+    assert "class ValidationResult" in conflicts_text
 
 
 def test_schema_helpers_reexport_from_validator() -> None:
