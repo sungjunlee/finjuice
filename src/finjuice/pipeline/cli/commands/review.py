@@ -4,12 +4,14 @@ Filter predicates live in :mod:`finjuice.pipeline.cli.commands.review_filters`
 and are re-exported here so existing callers can keep importing from this
 module. Human rendering lives in
 :mod:`finjuice.pipeline.cli.commands.review_rendering`. JSON row projection
-lives in :mod:`finjuice.pipeline.cli.commands.review_serialize`.
+lives in :mod:`finjuice.pipeline.cli.commands.review_serialize`. Payload
+shaping helpers (sorting, rule notes, count syncing) live in
+:mod:`finjuice.pipeline.cli.commands.review_payload`.
 """
 
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 import polars as pl
 import typer
@@ -23,6 +25,11 @@ from finjuice.pipeline.cli.commands.review_filters import (
     _rule_matched_expr,
     _tags_present_expr,  # noqa: F401 — re-exported for existing review imports
     _untagged_expr,
+)
+from finjuice.pipeline.cli.commands.review_payload import (
+    _load_review_rule_notes,  # noqa: F401 — re-exported for existing review imports
+    _sort_review_rows,  # noqa: F401 — re-exported for existing review imports
+    _sync_review_page_counts,  # noqa: F401 — re-exported for existing review imports
 )
 from finjuice.pipeline.cli.commands.review_rendering import (
     _format_amount,  # noqa: F401 — re-exported for existing review imports
@@ -40,7 +47,6 @@ from finjuice.pipeline.cli.privacy import (
     privacy_meta,
 )
 from finjuice.pipeline.cli.utils import get_config
-from finjuice.pipeline.tagging.rules_yaml_io import summarize_rule_notes
 
 logger = logging.getLogger(__name__)
 
@@ -124,37 +130,6 @@ def _build_review_next_steps(
         )
 
     return steps
-
-
-def _load_review_rule_notes(rules_file: Path) -> list[dict[str, Any]]:
-    """Best-effort rule notes for review JSON output."""
-    try:
-        return summarize_rule_notes(rules_file, limit=5)
-    except (OSError, ValueError):
-        return []
-
-
-def _sort_review_rows(df: pl.DataFrame) -> pl.DataFrame:
-    """Sort review rows newest-first with a stable row_hash tie-breaker."""
-    sort_columns = [column for column in ("datetime", "date", "row_hash") if column in df.columns]
-    if not sort_columns:
-        return df
-    descending = [column != "row_hash" for column in sort_columns]
-    return df.sort(sort_columns, descending=descending)
-
-
-def _sync_review_page_counts(payload: dict[str, Any]) -> None:
-    """Keep count fields aligned after JSON byte truncation."""
-    returned_count = len(payload.get("transactions", []))
-    payload["total_count"] = returned_count
-    payload.pop("row_count", None)
-
-    signals = payload.get("signals")
-    if isinstance(signals, dict):
-        signals["returned_count"] = returned_count
-        pagination = payload.get("pagination")
-        if isinstance(pagination, dict):
-            signals["truncated"] = bool(pagination.get("has_more", False))
 
 
 def review_command(
