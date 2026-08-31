@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from finjuice.pipeline.transfer.detection import TransferCandidate
+    from finjuice.pipeline.transfer.detection_candidates import TransferCandidate
 
 CandidateOrderKey = tuple[datetime, int, float, str, str, str, str, str, int]
 PairOrderKey = tuple[float, float, datetime, datetime, CandidateOrderKey, CandidateOrderKey]

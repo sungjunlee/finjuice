@@ -7,8 +7,6 @@ prevent double-counting in expense reports.
 """
 
 import logging
-from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Set
 
@@ -17,6 +15,10 @@ import polars as pl
 from finjuice.pipeline.constants import (
     DEFAULT_TRANSFER_AMOUNT_TOLERANCE,
     DEFAULT_TRANSFER_TIME_WINDOW_MINUTES,
+)
+from finjuice.pipeline.transfer.detection_candidates import (
+    TransferCandidate,
+    _build_transfer_candidates,
 )
 from finjuice.pipeline.transfer.detection_helpers import (
     CandidateOrderKey,
@@ -43,20 +45,6 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class TransferCandidate:
-    """A transaction that might be part of a transfer pair."""
-
-    id: int
-    datetime: datetime
-    amount: float
-    account: str
-    counterparty: str
-    major_category: str
-    currency: str
-    row_hash: str = ""  # For deterministic sorting/group ID; empty triggers fallback ID
 
 
 def detect_transfer_pairs(
@@ -173,41 +161,6 @@ def detect_transfer_pairs(
             )
 
     return transfer_groups
-
-
-def _build_transfer_candidates(df_transfers: pl.DataFrame) -> tuple[list[TransferCandidate], int]:
-    """Build valid transfer candidates from transfer-like rows."""
-    candidates: list[TransferCandidate] = []
-    skipped_count = 0
-    for idx, row in enumerate(df_transfers.iter_rows(named=True)):
-        dt_str = row.get("datetime")
-        try:
-            if not dt_str:
-                logger.warning(f"Skipping transfer candidate at index {idx}: missing datetime")
-                skipped_count += 1
-                continue
-            dt = datetime.fromisoformat(dt_str)
-        except (ValueError, TypeError) as e:
-            logger.warning(
-                f"Skipping transfer candidate at index {idx}: invalid datetime '{dt_str}': {e}"
-            )
-            skipped_count += 1
-            continue
-
-        candidates.append(
-            TransferCandidate(
-                id=idx,  # Use enumeration index
-                datetime=dt,
-                amount=float(row.get("amount", 0)),
-                account=row.get("account") or "",
-                counterparty=row.get("merchant_raw") or "",
-                major_category=row.get("major_raw") or "",
-                currency=row.get("currency") or "KRW",
-                row_hash=row.get("row_hash") or "",
-            )
-        )
-
-    return candidates, skipped_count
 
 
 def run_transfer_detection(csv_base_dir: Path) -> Dict[str, int]:
