@@ -6,9 +6,7 @@ from finjuice.pipeline.tagging import suggest_compute, suggest_compute_error
 
 TAGGING_DIR = Path("src/finjuice/pipeline/tagging")
 
-ERROR_HELPER_NAMES = (
-    "_fail",
-)
+ERROR_HELPER_NAMES = ("_fail",)
 
 
 def test_suggest_error_helpers_live_in_sibling_module() -> None:
