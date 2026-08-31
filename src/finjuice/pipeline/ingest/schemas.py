@@ -3,12 +3,23 @@ Column Schema Mapping for Banksalad XLSX exports (Polars-only).
 
 Handles auto-detection of schema versions and mapping of Korean/English column names
 to standardized internal field names.
+
+Sheet-name matching helpers live in
+:mod:`finjuice.pipeline.ingest.schemas_helpers` and are re-exported here so
+existing callers can keep importing from this module.
 """
 
 from dataclasses import dataclass
 from typing import Final, List
 
 import polars as pl
+
+from finjuice.pipeline.ingest.schemas_helpers import (
+    ASSET_SHEET_NAME_CANDIDATES,  # noqa: F401 — re-exported for existing schemas imports
+    ASSET_SHEET_NAME_NORMALIZED,  # noqa: F401 — re-exported for existing schemas imports
+    is_asset_sheet_name,  # noqa: F401 — re-exported for existing schemas imports
+    normalize_sheet_name,  # noqa: F401 — re-exported for existing schemas imports
+)
 
 
 @dataclass
@@ -52,8 +63,6 @@ BANKSALAD_SCHEMAS = {
 REQUIRED_KOREAN_COLUMNS: Final[frozenset[str]] = frozenset(
     {"날짜", "시간", "타입", "금액", "결제수단"}
 )
-
-ASSET_SHEET_NAME_CANDIDATES = ("자산", "보유종목", "assets", "holdings")
 
 
 @dataclass
@@ -99,11 +108,6 @@ ASSET_SCHEMAS = {
         ],
         currency=["화폐", "통화", "currency"],
     ),
-}
-
-ASSET_SHEET_NAME_NORMALIZED = {
-    "".join(ch for ch in name.strip().lower() if ch not in {" ", "_", "-"})
-    for name in ASSET_SHEET_NAME_CANDIDATES
 }
 
 
@@ -201,32 +205,6 @@ def map_columns(df: pl.DataFrame) -> pl.DataFrame:
 
     # Rename columns (Polars)
     return df.rename(column_map)
-
-
-def normalize_sheet_name(sheet_name: str) -> str:
-    """
-    Normalize sheet name for case/space-insensitive matching.
-
-    Args:
-        sheet_name: Raw sheet name
-
-    Returns:
-        Normalized sheet name
-    """
-    return "".join(ch for ch in sheet_name.strip().lower() if ch not in {" ", "_", "-"})
-
-
-def is_asset_sheet_name(sheet_name: str) -> bool:
-    """
-    Check if a sheet name is an asset snapshot candidate.
-
-    Args:
-        sheet_name: Raw sheet name
-
-    Returns:
-        True if sheet likely contains asset snapshots
-    """
-    return normalize_sheet_name(sheet_name) in ASSET_SHEET_NAME_NORMALIZED
 
 
 def detect_asset_schema_version(df_columns: List[str]) -> AssetColumnSchema:
