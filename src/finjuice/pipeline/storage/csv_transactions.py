@@ -11,6 +11,11 @@ here so existing callers can keep importing from this module.
 Write-time integer-flag and tag JSON serialization live in
 :mod:`finjuice.pipeline.storage.csv_transactions_serialize` and are
 re-exported here so existing callers can keep importing from this module.
+
+Read-time DataFrame normalization (datetime derivation, column projection,
+tag JSON decoding, empty-schema fallback) lives in
+:mod:`finjuice.pipeline.storage.csv_transactions_read_normalize` and is
+re-exported here so existing callers can keep importing from this module.
 """
 
 from __future__ import annotations
@@ -23,7 +28,6 @@ from typing import Any
 import polars as pl
 
 from finjuice.pipeline.storage.csv_schema import (
-    CSV_COLUMNS,
     POLARS_SCHEMA,
     get_partition_path,
 )
@@ -31,6 +35,13 @@ from finjuice.pipeline.storage.csv_transactions_helpers import (
     _add_read_defaults,
     _ensure_schema_columns,
     _get_transaction_read_columns,
+)
+from finjuice.pipeline.storage.csv_transactions_read_normalize import (
+    TAG_JSON_COLUMNS,  # noqa: F401 — re-exported for existing csv_transactions imports
+    _decode_tag_columns,
+    _empty_transactions_df,
+    _normalize_datetime_column,
+    _project_existing_columns,
 )
 from finjuice.pipeline.storage.csv_transactions_serialize import (
     _cast_int_flag_columns,
@@ -69,8 +80,7 @@ def read_month(
     partition_path = get_partition_path(base_dir, year, month)
 
     if not partition_path.exists():
-        schema = {col: POLARS_SCHEMA.get(col, pl.Utf8) for col in (columns or CSV_COLUMNS)}
-        return pl.DataFrame(schema=schema)
+        return _empty_transactions_df(columns)
 
     lf = pl.scan_csv(
         partition_path,
@@ -79,24 +89,14 @@ def read_month(
     )
     df = lf.collect()
 
-    if "datetime" not in df.columns and "date" in df.columns:
-        if "time" in df.columns:
-            df = df.with_columns((pl.col("date") + "T" + pl.col("time")).alias("datetime"))
-        else:
-            df = df.with_columns((pl.col("date") + "T00:00:00").alias("datetime"))
+    df = _normalize_datetime_column(df)
 
     df = _add_read_defaults(df, columns)
 
-    if columns is not None:
-        existing_cols = [c for c in columns if c in df.columns]
-        if existing_cols:
-            df = df.select(existing_cols)
+    df = _project_existing_columns(df, columns)
 
     if parse_tags:
-        tag_columns = ["tags_rule", "tags_ai", "tags_manual", "tags_final"]
-        for col in tag_columns:
-            if col in df.columns:
-                df = df.with_columns(pl.col(col).str.json_decode(dtype=pl.List(pl.Utf8)).alias(col))
+        df = _decode_tag_columns(df)
 
     return df
 
@@ -129,13 +129,7 @@ def read_range(
                 null_values=["", "NA", "NULL"],
             )
 
-            if "datetime" not in part_df.columns and "date" in part_df.columns:
-                if "time" in part_df.columns:
-                    part_df = part_df.with_columns(
-                        (pl.col("date") + "T" + pl.col("time")).alias("datetime")
-                    )
-                else:
-                    part_df = part_df.with_columns((pl.col("date") + "T00:00:00").alias("datetime"))
+            part_df = _normalize_datetime_column(part_df)
 
             part_df = _add_read_defaults(part_df, columns)
 
@@ -150,24 +144,15 @@ def read_range(
             current = current.replace(month=current.month + 1)
 
     if not dfs:
-        schema = {col: POLARS_SCHEMA.get(col, pl.Utf8) for col in (columns or CSV_COLUMNS)}
-        return pl.DataFrame(schema=schema)
+        return _empty_transactions_df(columns)
 
     df = pl.concat(dfs)
     if "datetime" in df.columns:
         df = df.sort("datetime")
 
-    if columns is not None:
-        existing_cols = [c for c in columns if c in df.columns]
-        if existing_cols:
-            df = df.select(existing_cols)
+    df = _project_existing_columns(df, columns)
 
-    tag_columns = ["tags_rule", "tags_ai", "tags_manual", "tags_final"]
-    for col in tag_columns:
-        if col in df.columns:
-            df = df.with_columns(pl.col(col).str.json_decode(dtype=pl.List(pl.Utf8)).alias(col))
-
-    return df
+    return _decode_tag_columns(df)
 
 
 def write_month(
@@ -182,8 +167,7 @@ def write_month(
     partition_path.parent.mkdir(parents=True, exist_ok=True)
 
     if df.height == 0 and df.width == 0:
-        schema = {col: POLARS_SCHEMA.get(col, pl.Utf8) for col in CSV_COLUMNS}
-        df = pl.DataFrame(schema=schema)
+        df = _empty_transactions_df()
     else:
         df = _ensure_schema_columns(df)
 
@@ -368,8 +352,7 @@ def get_all_transactions(base_dir: Path, columns: list[str] | None = None) -> pl
     WARNING: For very large datasets, prefer read_range with date filters.
     """
     if not base_dir.exists():
-        schema = {col: POLARS_SCHEMA.get(col, pl.Utf8) for col in (columns or CSV_COLUMNS)}
-        return pl.DataFrame(schema=schema)
+        return _empty_transactions_df(columns)
 
     partition_paths = []
     for year_dir in sorted(base_dir.iterdir()):
@@ -383,8 +366,7 @@ def get_all_transactions(base_dir: Path, columns: list[str] | None = None) -> pl
                 partition_paths.append(partition_path)
 
     if not partition_paths:
-        schema = {col: POLARS_SCHEMA.get(col, pl.Utf8) for col in (columns or CSV_COLUMNS)}
-        return pl.DataFrame(schema=schema)
+        return _empty_transactions_df(columns)
 
     dfs = []
     for path in partition_paths:
@@ -395,35 +377,20 @@ def get_all_transactions(base_dir: Path, columns: list[str] | None = None) -> pl
             null_values=["", "NA", "NULL"],
             columns=read_columns,
         )
-        if "datetime" not in part_df.columns and "date" in part_df.columns:
-            if "time" in part_df.columns:
-                part_df = part_df.with_columns(
-                    (pl.col("date") + "T" + pl.col("time")).alias("datetime")
-                )
-            else:
-                part_df = part_df.with_columns((pl.col("date") + "T00:00:00").alias("datetime"))
+        part_df = _normalize_datetime_column(part_df)
         part_df = _add_read_defaults(part_df, columns)
         dfs.append(part_df)
 
     if not dfs:
-        schema = {col: POLARS_SCHEMA.get(col, pl.Utf8) for col in (columns or CSV_COLUMNS)}
-        return pl.DataFrame(schema=schema)
+        return _empty_transactions_df(columns)
 
     df = pl.concat(dfs, how="diagonal_relaxed")
     if "datetime" in df.columns:
         df = df.sort("datetime")
 
-    if columns is not None:
-        existing_cols = [c for c in columns if c in df.columns]
-        if existing_cols:
-            df = df.select(existing_cols)
+    df = _project_existing_columns(df, columns)
 
-    tag_columns = ["tags_rule", "tags_ai", "tags_manual", "tags_final"]
-    for col in tag_columns:
-        if col in df.columns:
-            df = df.with_columns(pl.col(col).str.json_decode(dtype=pl.List(pl.Utf8)).alias(col))
-
-    return df
+    return _decode_tag_columns(df)
 
 
 __all__ = [
