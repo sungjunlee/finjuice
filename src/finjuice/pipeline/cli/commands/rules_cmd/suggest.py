@@ -3,80 +3,39 @@
 Human rendering lives in
 :mod:`finjuice.pipeline.cli.commands.rules_cmd.suggest_rendering`.
 Interactive apply lives in
-:mod:`finjuice.pipeline.cli.commands.rules_cmd.suggest_apply` and is
-re-exported here so existing callers can keep importing from this module.
+:mod:`finjuice.pipeline.cli.commands.rules_cmd.suggest_apply`.
+JSON payload helpers live in
+:mod:`finjuice.pipeline.cli.commands.rules_cmd.suggest_json`.
+Those helpers are re-exported here so existing callers can keep
+importing from this module.
 """
 
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 import typer
 
 from finjuice.pipeline.cli.output import ErrorCode, ExitCode, emit, emit_error
 from finjuice.pipeline.cli.privacy import PrivacyProfile, apply_privacy_profile, privacy_meta
 from finjuice.pipeline.cli.utils import get_config
-from finjuice.pipeline.config import Config
 from finjuice.pipeline.tagging.suggest_compute import (
-    SuggestComputeError,
     _augment_suggestion_stats,
     _compact_rules_suggest_result,
-    _compute_rules_suggest_json,
     _stats_float,
     _stats_int,
 )
 
-from .shared import _append_rule_mutation_audit_event
 from .suggest_apply import _interactive_apply_suggestions
+from .suggest_json import (
+    _audit_applied_suggestion,  # noqa: F401 — re-exported for existing suggest imports
+    _emit_suggest_compute_error,  # noqa: F401 — re-exported for existing suggest imports
+    _rules_suggest_json_payload,
+)
 from .suggest_rendering import _render_apply_dry_run, _render_suggestion_context_table
 
 logger = logging.getLogger(__name__)
-
-
-def _audit_applied_suggestion(config: Config, rule_name: str) -> None:
-    _append_rule_mutation_audit_event(
-        config,
-        command="rules suggest",
-        action="applied",
-        rule_name=rule_name,
-        change_summary="suggestion rule applied",
-    )
-
-
-def _emit_suggest_compute_error(
-    exc: SuggestComputeError,
-    *,
-    json_output: bool,
-    privacy: PrivacyProfile,
-) -> None:
-    emit_error(
-        exc.message,
-        error_code=ErrorCode(exc.error_code),
-        exit_code=ExitCode(exc.exit_code),
-        suggestion=exc.suggestion,
-        json_output=json_output,
-        command="rules suggest",
-        privacy=privacy,
-    )
-
-
-def _rules_suggest_json_payload(
-    config: Config,
-    privacy: PrivacyProfile,
-    json_output: bool,
-    compute_kwargs: dict[str, Any],
-) -> dict[str, Any]:
-    try:
-        return _compute_rules_suggest_json(
-            config=config,
-            json_output=json_output,
-            on_applied=lambda rule_name: _audit_applied_suggestion(config, rule_name),
-            **compute_kwargs,
-        )
-    except SuggestComputeError as exc:
-        _emit_suggest_compute_error(exc, json_output=json_output, privacy=privacy)
-        raise
 
 
 def suggest_rules_command(
