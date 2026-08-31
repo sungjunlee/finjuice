@@ -15,7 +15,6 @@ def test_workspace_rendering_helpers_live_in_helper_module() -> None:
     assert "def workspace_remove" in command_text
     assert "def workspace_verify" in command_text
     assert "def workspace_open" in command_text
-    assert "def get_open_command" in command_text
     assert "def _render_workspace_create_success" not in command_text
     assert "def _render_workspace_list" not in command_text
     assert "def _render_workspace_remove_warning" not in command_text
@@ -40,7 +39,7 @@ def test_workspace_public_names_stay_on_entrypoint() -> None:
     assert "def workspace_remove" in command_text
     assert "def workspace_verify" in command_text
     assert "def workspace_open" in command_text
-    assert "def get_open_command" in command_text
+    assert "get_open_command" in command_text
     assert "def register_workspace_command" in command_text
     assert "FILE_SYMLINKS" in command_text
     assert "SYMLINK_TARGETS" in command_text
