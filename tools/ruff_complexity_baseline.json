@@ -111,8 +111,8 @@
       "column": 5,
       "limit": 10,
       "message": "`_build_next_actions` is too complex (15 > 10)",
-      "path": "src/finjuice/pipeline/checkup/compose.py",
-      "row": 137,
+      "path": "src/finjuice/pipeline/checkup/next_actions.py",
+      "row": 28,
       "symbol": "_build_next_actions",
       "value": 15
     },
@@ -121,8 +121,8 @@
       "column": 5,
       "limit": 12,
       "message": "Too many branches (14 > 12)",
-      "path": "src/finjuice/pipeline/checkup/compose.py",
-      "row": 137,
+      "path": "src/finjuice/pipeline/checkup/next_actions.py",
+      "row": 28,
       "symbol": "_build_next_actions",
       "value": 14
     },
