@@ -4,7 +4,9 @@ Workspace command: Manage symlink-based work directories.
 Provides user-friendly workspace creation for easy data access,
 especially useful for Claude Code and other AI tools (Issue #65).
 
-Human rendering lives in :mod:`finjuice.pipeline.cli.commands.workspace_rendering`.
+Path resolve/existence guards live in
+:mod:`finjuice.pipeline.cli.commands.workspace_paths`. Human rendering
+lives in :mod:`finjuice.pipeline.cli.commands.workspace_rendering`.
 """
 
 import logging
@@ -23,12 +25,17 @@ from finjuice.pipeline.cli.commands.workspace_helpers import (
     WORKSPACE_README_TEMPLATE,
     WORKSPACE_VERSION,
     create_symlinks,
-    is_valid_workspace,
+    is_valid_workspace,  # noqa: F401 — re-exported for existing workspace imports
     load_workspace_registry,
     register_workspace,
     unregister_workspace,
     validate_data_directories,
     verify_symlinks,
+)
+from finjuice.pipeline.cli.commands.workspace_paths import (
+    ensure_empty_workspace_directory,
+    require_existing_workspace,
+    resolve_workspace_path,
 )
 from finjuice.pipeline.cli.commands.workspace_rendering import (
     _render_workspace_create_success,
@@ -92,7 +99,7 @@ def workspace_create(
         raise typer.Exit(code=1)
 
     data_dir = config.data_dir
-    workspace_path = path.expanduser().resolve()
+    workspace_path = resolve_workspace_path(path)
     try:
         validate_not_program_repo_path(workspace_path, context="workspace directory")
     except ValueError as exc:
@@ -109,16 +116,7 @@ def workspace_create(
         console.print("\nRun 'finjuice init' to create required directories")
         raise typer.Exit(code=1)
 
-    # Check workspace doesn't already exist with content
-    if workspace_path.exists():
-        if any(workspace_path.iterdir()):
-            console.print(
-                f"Directory already exists and is not empty: {workspace_path}",
-                style="red",
-            )
-            raise typer.Exit(code=1)
-    else:
-        workspace_path.mkdir(parents=True)
+    ensure_empty_workspace_directory(workspace_path)
 
     # Create symlinks
     try:
@@ -206,20 +204,7 @@ def workspace_remove(
         raise typer.Exit(code=1)
 
     data_dir = config.data_dir
-    workspace_path = path.expanduser().resolve()
-
-    # Check workspace exists
-    if not workspace_path.exists():
-        console.print(f"Workspace not found: {workspace_path}", style="red")
-        raise typer.Exit(code=1)
-
-    # Check it's a valid workspace
-    if not is_valid_workspace(workspace_path):
-        console.print(
-            f"Not a valid workspace (missing .finjuice-workspace): {workspace_path}",
-            style="red",
-        )
-        raise typer.Exit(code=1)
+    workspace_path = require_existing_workspace(path)
 
     # Confirm removal
     if not force and not yes:
@@ -255,20 +240,7 @@ def workspace_verify(
 
     Checks that all symlinks in the workspace point to valid targets.
     """
-    workspace_path = path.expanduser().resolve()
-
-    # Check workspace exists
-    if not workspace_path.exists():
-        console.print(f"Workspace not found: {workspace_path}", style="red")
-        raise typer.Exit(code=1)
-
-    # Check it's a valid workspace
-    if not is_valid_workspace(workspace_path):
-        console.print(
-            f"Not a valid workspace (missing .finjuice-workspace): {workspace_path}",
-            style="red",
-        )
-        raise typer.Exit(code=1)
+    workspace_path = require_existing_workspace(path)
 
     # Verify symlinks
     results = verify_symlinks(workspace_path)
@@ -291,20 +263,7 @@ def workspace_open(
     Opens the workspace directory in your system's file manager
     (Finder on macOS, Explorer on Windows, etc.).
     """
-    workspace_path = path.expanduser().resolve()
-
-    # Check workspace exists
-    if not workspace_path.exists():
-        console.print(f"Workspace not found: {workspace_path}", style="red")
-        raise typer.Exit(code=1)
-
-    # Check it's a valid workspace
-    if not is_valid_workspace(workspace_path):
-        console.print(
-            f"Not a valid workspace (missing .finjuice-workspace): {workspace_path}",
-            style="red",
-        )
-        raise typer.Exit(code=1)
+    workspace_path = require_existing_workspace(path)
 
     # Open in file manager
     try:
