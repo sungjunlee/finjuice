@@ -1,7 +1,10 @@
 """Journal command group for snapshot-backed markdown notes.
 
 Topic slugs, collision-safe paths, and journal directory creation live in
-:mod:`finjuice.pipeline.cli.commands.journal_paths`.
+:mod:`finjuice.pipeline.cli.commands.journal_paths`. Gitignore safety
+helpers live in :mod:`finjuice.pipeline.cli.commands.journal_gitignore`
+and are re-exported here so existing callers can keep importing from this
+module.
 """
 
 from __future__ import annotations
@@ -19,6 +22,11 @@ import typer
 import yaml
 from rich.table import Table
 
+from finjuice.pipeline.cli.commands.journal_gitignore import (
+    _find_git_root,  # noqa: F401 — re-exported for existing journal imports
+    _gitignore_covers_journal_dir,  # noqa: F401 — re-exported for existing journal imports
+    _maybe_prompt_for_gitignore,
+)
 from finjuice.pipeline.cli.commands.journal_paths import (
     _ensure_journal_dir,
     _resolve_new_entry_path,
@@ -256,58 +264,6 @@ def _open_in_editor(path: Path) -> None:
         subprocess.run([*command, str(path)], check=False)
     except FileNotFoundError:
         warning(f"Editor not found: {editor}")
-
-
-def _maybe_prompt_for_gitignore(journal_dir: Path) -> None:
-    """Offer to add a local ignore rule for underscore-prefixed journal dirs."""
-    git_root = _find_git_root(journal_dir)
-    if git_root is None:
-        return
-
-    gitignore_path = git_root / ".gitignore"
-    if _gitignore_covers_journal_dir(gitignore_path, journal_dir.name):
-        return
-
-    prompt = f"Add '_*/' to {gitignore_path} so private journals stay out of git?"
-    if not typer.confirm(prompt, default=True):
-        return
-
-    existing = gitignore_path.read_text(encoding="utf-8") if gitignore_path.exists() else ""
-    prefix = "" if not existing or existing.endswith("\n") else "\n"
-    gitignore_path.write_text(f"{existing}{prefix}_*/\n", encoding="utf-8")
-
-
-def _find_git_root(start: Path) -> Optional[Path]:
-    """Return the nearest git root for the journal directory."""
-    current = start.resolve()
-    for candidate in (current, *current.parents):
-        if (candidate / ".git").exists():
-            return candidate
-    return None
-
-
-def _gitignore_covers_journal_dir(gitignore_path: Path, journal_dir_name: str) -> bool:
-    """Detect `_*/` or explicit journal dir ignore entries."""
-    if not gitignore_path.exists():
-        return False
-
-    expected_names = {
-        "_*/",
-        "/_*/",
-        "**/_*/",
-        f"{journal_dir_name}/",
-        f"/{journal_dir_name}/",
-        f"**/{journal_dir_name}/",
-    }
-
-    for raw_line in gitignore_path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or line.startswith("!"):
-            continue
-        if line in expected_names:
-            return True
-
-    return False
 
 
 def _now() -> datetime:
