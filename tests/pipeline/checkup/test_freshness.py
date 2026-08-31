@@ -75,6 +75,26 @@ def test_collect_pipeline_freshness_failed_preview_is_not_refreshable(tmp_path: 
     assert summary.failed_import_files == 1
 
 
+def test_collect_pipeline_freshness_fast_counts_staged_without_preview(
+    tmp_path: Path,
+) -> None:
+    """The cheap import path should count staged files without opening workbooks."""
+    data_dir = init_data_dir(tmp_path, "fast-imports")
+    (data_dir / "imports" / "broken.xlsx").write_text("not-a-valid-xlsx", encoding="utf-8")
+
+    summary = collect_pipeline_freshness(
+        Config(data_dir=data_dir),
+        today=date(2026, 4, 18),
+        stale_after_days=35,
+        preview_imports=False,
+    )
+
+    assert summary.status == "pending_imports"
+    assert summary.actionable is True
+    assert summary.pending_import_files == 1
+    assert summary.failed_import_files == 0
+
+
 def test_collect_pipeline_freshness_stale_after_threshold(tmp_path: Path) -> None:
     """Days since latest above the threshold should mark the pipeline stale."""
     data_dir = init_data_dir(tmp_path, "stale")

@@ -76,6 +76,11 @@ def register_checkup_command(app: typer.Typer) -> None:
             "--stale-after",
             help="Days after which data is considered stale (default: 35)",
         ),
+        fast: bool = typer.Option(
+            False,
+            "--fast",
+            help="Cheap posture summary; skip full detectors.",
+        ),
     ) -> None:
         """
         Emit the recommended read-only runtime snapshot for agent inspect/decide loops.
@@ -83,11 +88,13 @@ def register_checkup_command(app: typer.Typer) -> None:
         Pattern:
             agent -> `finjuice checkup --json` -> choose the next explicit finjuice command
 
+        Use --fast for a cheap posture summary that skips full detectors.
+
         The finjuice CLI only emits structured data. It does not execute side effects here.
         """
         config = get_config(ctx)
         facts = collect_checkup_facts(
-            CheckupOptions(config=config, stale_after_days=stale_after),
+            CheckupOptions(config=config, stale_after_days=stale_after, fast=fast),
             dependencies=_dependencies(),
         )
         diagnoses = detect_checkup_diagnoses(facts)
@@ -101,10 +108,13 @@ def register_checkup_command(app: typer.Typer) -> None:
             if json_output or privacy is not PrivacyProfile.RAW
             else result
         )
+        meta_extras = privacy_meta(privacy)
+        if fast:
+            meta_extras = {**meta_extras, "fast": True}
         emit(
             output_result,
             json_output,
             lambda result: typer.echo(_rendering._render_text(result)),
             command="checkup",
-            meta_extras=privacy_meta(privacy),
+            meta_extras=meta_extras,
         )

@@ -150,6 +150,40 @@ def empty_obligation_confirmation_summary() -> ObligationConfirmationSummary:
     )
 
 
+FAST_SKIP_WARNING = (
+    "Skipped full detectors in checkup --fast: review, obligations, import preview. "
+    "Run `finjuice checkup` for the complete snapshot."
+)
+
+
+def skipped_review_pressure_summary() -> ReviewPressureSummary:
+    """Return an explicit skip stand-in for checkup --fast."""
+    return ReviewPressureSummary(
+        status="skipped",
+        actionable=False,
+        month=None,
+        total_candidates=0,
+        needs_review_count=0,
+        untagged_count=0,
+        unclassified_count=0,
+        low_confidence_count=0,
+        samples=[],
+    )
+
+
+def skipped_obligation_confirmation_summary() -> ObligationConfirmationSummary:
+    """Return an explicit skip stand-in for checkup --fast."""
+    return ObligationConfirmationSummary(
+        status="skipped",
+        actionable=False,
+        threshold_monthly_krw=DEFAULT_LARGE_RECURRING_OBLIGATION_THRESHOLD,
+        candidate_count=0,
+        known_obligation_count=0,
+        candidates=[],
+        warning=FAST_SKIP_WARNING,
+    )
+
+
 @dataclass(frozen=True)
 class CheckupBundle:
     """Stable Python-level bundle for a future `finjuice checkup` surface."""

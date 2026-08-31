@@ -18,6 +18,7 @@ class CheckupOptions:
 
     config: Config
     stale_after_days: int = 35
+    fast: bool = False
 
 
 @dataclass(frozen=True)
@@ -44,5 +45,6 @@ def collect_checkup_facts(
         bundle=dependencies.collect_checkup_bundle(
             options.config,
             stale_after_days=options.stale_after_days,
+            fast=options.fast,
         )
     )

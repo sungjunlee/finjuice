@@ -304,7 +304,59 @@ def test_checkup_help(checkup_data_dir: Path) -> None:
     output = cli_text(result)
     assert "--json" in output
     assert "--privacy" in output
+    assert "--fast" in output
     assert "inspect/decide" in output
+
+
+def test_checkup_fast_json_marks_explicit_split_and_skips_detectors(
+    checkup_data_dir: Path,
+) -> None:
+    """checkup --fast --json should keep the payload shape and skip full detectors."""
+    result = runner.invoke(
+        app,
+        ["--data-dir", str(checkup_data_dir), "checkup", "--fast", "--json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["_meta"]["command"] == "checkup"
+    assert payload["_meta"]["fast"] is True
+    assert payload["summary"]["status"] in {"ok", "needs_attention"}
+    assert payload["domains"]["pipeline"]["status"] == "empty"
+    assert payload["domains"]["review"]["status"] == "skipped"
+    assert payload["domains"]["obligations"]["status"] == "skipped"
+    assert payload["domains"]["budget"]["status"] == "missing_config"
+    assert payload["domains"]["networth"]["status"] == "missing_data"
+    assert any("checkup --fast" in warning for warning in payload["warnings"])
+
+
+def test_checkup_fast_text_names_skipped_detectors(checkup_data_dir: Path) -> None:
+    """checkup --fast text should label the cheap path and skipped detectors."""
+    result = runner.invoke(app, ["--data-dir", str(checkup_data_dir), "checkup", "--fast"])
+
+    assert result.exit_code == 0, result.output
+    output = cli_text(result)
+    assert "finjuice checkup --fast" in output
+    assert "- review: skipped; run finjuice checkup for full detectors" in output
+    assert "- obligations: skipped; run finjuice checkup for full detectors" in output
+
+
+def test_checkup_fast_passes_fast_flag_to_bundle_collection(checkup_data_dir: Path) -> None:
+    """The CLI --fast flag should reach collect_checkup_bundle."""
+    with patch(
+        "finjuice.pipeline.cli.commands.checkup.collect_checkup_bundle",
+        return_value=_empty_bundle(checkup_data_dir),
+    ) as mock_collect:
+        result = runner.invoke(
+            app,
+            ["--data-dir", str(checkup_data_dir), "checkup", "--fast", "--json"],
+        )
+
+    assert result.exit_code == 0, result.output
+    mock_collect.assert_called_once()
+    assert mock_collect.call_args.kwargs["fast"] is True
+    payload = json.loads(result.output)
+    assert payload["_meta"]["fast"] is True
 
 
 def test_checkup_json_empty_state(checkup_data_dir: Path) -> None:
@@ -317,8 +369,10 @@ def test_checkup_json_empty_state(checkup_data_dir: Path) -> None:
 
     assert result.exit_code == 0
     mock_collect.assert_called_once()
+    assert mock_collect.call_args.kwargs.get("fast", False) is False
     payload = json.loads(result.output)
     assert payload["_meta"]["command"] == "checkup"
+    assert "fast" not in payload["_meta"]
     assert payload["data_dir"] == str(checkup_data_dir)
     assert payload["summary"] == {
         "status": "needs_attention",

@@ -224,7 +224,10 @@ def render_text(result: dict[str, Any]) -> str:
     next_actions = result["next_actions"]
     warnings = result["warnings"]
 
-    lines = ["finjuice checkup", ""]
+    fast_mode = any(
+        str(domains[name].get("status")) == "skipped" for name in ("review", "obligations")
+    )
+    lines = ["finjuice checkup --fast" if fast_mode else "finjuice checkup", ""]
     lines.extend(
         [
             "Summary",
@@ -291,6 +294,8 @@ def _summarize_review(review: dict[str, Any]) -> str:
     status = str(review["status"])
     if status == "empty":
         return "empty; no reviewable transactions"
+    if status == "skipped":
+        return "skipped; run finjuice checkup for full detectors"
     return (
         f"{status}; candidates={review['total_candidates']}, "
         f"untagged={review['untagged_count']}, "
@@ -340,6 +345,8 @@ def _summarize_obligations(obligations: dict[str, Any]) -> str:
     status = str(obligations["status"])
     if status == "empty":
         return "empty; no transaction history"
+    if status == "skipped":
+        return "skipped; run finjuice checkup for full detectors"
     threshold = obligations.get("threshold_monthly_krw")
     if status == "needs_confirmation":
         return (
