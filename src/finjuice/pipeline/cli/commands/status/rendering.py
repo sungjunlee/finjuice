@@ -20,6 +20,11 @@ from .rendering_detailed import (
     _render_structural_sources,  # noqa: F401 — re-exported for existing rendering imports
     _render_top_categories,  # noqa: F401 — re-exported for existing rendering imports
 )
+from .rendering_next_steps import (
+    TAGGING_TERMINOLOGY_REFERENCE,
+    _render_next_steps,
+    _render_status_footnotes,
+)
 from .rendering_table import (
     _add_data_rows,  # noqa: F401 — re-exported for existing rendering imports
     _add_import_row,  # noqa: F401 — re-exported for existing rendering imports
@@ -44,7 +49,6 @@ TRANSFER_EXCLUSION_DESCRIPTION = (
     "Only rows where is_transfer == 1 and transfer_group_id is present are excluded; "
     "unconfirmed transfer candidates remain reportable."
 )
-TAGGING_TERMINOLOGY_REFERENCE = "docs/reference/tagging-review-terminology.md"
 STATUS_SCHEMA_REFERENCE = "schemas/status.schema.json"
 TAGGING_TERMINOLOGY_DEFINITIONS = {
     "untagged": "tags_final is null or an empty tag array; transfer rows are included.",
@@ -187,58 +191,3 @@ def render_status(status_result: StatusResult) -> None:
         transfer_excluded_untagged_count=result["tagging"]["transfer_excluded_untagged_count"],
         schema_migration=result["schema"].get("migration"),
     )
-
-
-def _render_status_footnotes(filters_applied: int) -> None:
-    """Render filter and terminology notes under the main status table."""
-    if filters_applied > 0:
-        console.print(
-            f"[dim]active filters: {filters_applied} "
-            "(use --no-filter to compare full results)[/dim]"
-        )
-    console.print(
-        "[dim]Terminology: untagged = tags_final empty; "
-        "suggestable_untagged excludes confirmed transfers. "
-        f"See {TAGGING_TERMINOLOGY_REFERENCE}[/dim]"
-    )
-    console.print()
-
-
-def _render_next_steps(
-    *,
-    rules_exists: bool,
-    suggestable_untagged_count: int,
-    transfer_excluded_untagged_count: int,
-    schema_migration: dict[str, str] | None,
-) -> None:
-    """Render human next-step recommendations."""
-    next_steps: list[tuple[str, str]] = []
-
-    if schema_migration:
-        next_steps.append((schema_migration["command"], schema_migration["message"]))
-
-    if not rules_exists:
-        next_steps.append(("finjuice init", "Set up rules.yaml template"))
-    elif suggestable_untagged_count > 0:
-        desc = f"Get suggestions for {suggestable_untagged_count} suggestable untagged"
-        if transfer_excluded_untagged_count > 0:
-            desc += f" ({transfer_excluded_untagged_count} transfer-excluded)"
-        next_steps.append(("finjuice rules suggest", desc))
-        next_steps.append(("finjuice tag", "Apply existing rules to transactions"))
-    elif transfer_excluded_untagged_count > 0:
-        next_steps.append(
-            (
-                "finjuice review --untagged",
-                f"Review {transfer_excluded_untagged_count} transfer-excluded untagged",
-            )
-        )
-    else:
-        next_steps.append(("finjuice template list", "Browse curated SQL analyses"))
-        next_steps.append(("finjuice query --help", "Run custom SQL analysis"))
-        next_steps.append(("finjuice export", "Generate reports and master.xlsx"))
-
-    if next_steps:
-        console.print("[bold cyan]💡 Next Steps[/bold cyan]")
-        for cmd, desc in next_steps:
-            console.print(f"  [green]{cmd}[/green]  →  {desc}")
-        console.print()
