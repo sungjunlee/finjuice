@@ -2,9 +2,9 @@
 
 Owns the review output row contract: tag normalization, rule-matched flags,
 reason/severity labels, and compact privacy projection. Filter predicates
-and data loading stay in :mod:`finjuice.pipeline.cli.commands.review`.
-Human rendering lives in
-:mod:`finjuice.pipeline.cli.commands.review_rendering`.
+live in :mod:`finjuice.pipeline.cli.commands.review_filters`. Data loading
+stays in :mod:`finjuice.pipeline.cli.commands.review`. Human rendering
+lives in :mod:`finjuice.pipeline.cli.commands.review_rendering`.
 """
 
 from __future__ import annotations

@@ -1,9 +1,10 @@
 """Review command for transactions needing manual attention.
 
-Human rendering lives in :mod:`finjuice.pipeline.cli.commands.review_rendering`
-and is re-exported here so existing callers can keep importing from this
-module. JSON row projection lives in
-:mod:`finjuice.pipeline.cli.commands.review_serialize`.
+Filter predicates live in :mod:`finjuice.pipeline.cli.commands.review_filters`
+and are re-exported here so existing callers can keep importing from this
+module. Human rendering lives in
+:mod:`finjuice.pipeline.cli.commands.review_rendering`. JSON row projection
+lives in :mod:`finjuice.pipeline.cli.commands.review_serialize`.
 """
 
 import logging
@@ -15,6 +16,14 @@ import typer
 
 from finjuice.pipeline.cli import output as cli_output
 from finjuice.pipeline.cli.commands.export_helpers import validate_period
+from finjuice.pipeline.cli.commands.review_filters import (
+    _count_matches,
+    _default_review_expr,
+    _is_list_dtype,  # noqa: F401 — re-exported for existing review imports
+    _rule_matched_expr,
+    _tags_present_expr,  # noqa: F401 — re-exported for existing review imports
+    _untagged_expr,
+)
 from finjuice.pipeline.cli.commands.review_rendering import (
     _format_amount,  # noqa: F401 — re-exported for existing review imports
     _format_confidence,  # noqa: F401 — re-exported for existing review imports
@@ -61,56 +70,6 @@ def _load_all_history(csv_base_dir: Path) -> Optional[pl.DataFrame]:
         return None
 
     return get_all_transactions(csv_base_dir)
-
-
-def _is_list_dtype(dtype: pl.DataType | None) -> bool:
-    """Return True when the column is a Polars list type."""
-    return dtype == pl.List(pl.Utf8) or (dtype is not None and str(dtype).startswith("List"))
-
-
-def _untagged_expr(dtype: pl.DataType | None) -> pl.Expr:
-    """Return an expression matching empty or null tags."""
-    if _is_list_dtype(dtype):
-        return (pl.col("tags_final").list.len() == 0) | pl.col("tags_final").is_null()
-
-    return pl.col("tags_final").str.strip_chars().is_in(["[]", ""]) | pl.col("tags_final").is_null()
-
-
-def _tags_present_expr(column: str, dtype: pl.DataType | None) -> pl.Expr:
-    """Return an expression matching non-empty tag arrays stored as list or JSON text."""
-    if _is_list_dtype(dtype):
-        return (pl.col(column).list.len() > 0) & pl.col(column).is_not_null()
-
-    return pl.col(column).is_not_null() & ~pl.col(column).str.strip_chars().is_in(["[]", ""])
-
-
-def _rule_matched_expr(df: pl.DataFrame) -> pl.Expr:
-    """Return the canonical rule_matched predicate for review signals."""
-    expr = pl.lit(False)
-    if "tags_rule" in df.columns:
-        expr = expr | _tags_present_expr("tags_rule", df.schema.get("tags_rule"))
-    if "category_rule" in df.columns:
-        expr = expr | (
-            pl.col("category_rule").is_not_null()
-            & (pl.col("category_rule").str.strip_chars() != "")
-        )
-    return expr
-
-
-def _default_review_expr(dtype: pl.DataType | None) -> pl.Expr:
-    """Return the default review predicate used when no review flags are set."""
-    return (
-        (pl.col("needs_review") == 1)
-        | _untagged_expr(dtype)
-        | (pl.col("category_final") == "미분류")
-    )
-
-
-def _count_matches(df: pl.DataFrame, predicate: pl.Expr) -> int:
-    """Return the number of rows matching *predicate*."""
-    if df.is_empty():
-        return 0
-    return len(df.filter(predicate))
 
 
 def _build_review_next_steps(
