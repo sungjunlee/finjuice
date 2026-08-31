@@ -2,7 +2,9 @@
 
 JSON health/action guidance helpers live in
 :mod:`finjuice.pipeline.cli.commands.networth_guidance` and are re-exported
-here so existing callers can keep importing from this module.
+here so existing callers can keep importing from this module. Validation and
+runtime error envelopes live in
+:mod:`finjuice.pipeline.cli.commands.networth_errors`.
 """
 
 from __future__ import annotations
@@ -16,9 +18,13 @@ from typing import Any, Literal, cast
 import typer
 
 from finjuice.pipeline.asset_config import (
-    AssetsConfigValidationError,
     load_assets_config,
     validate_assets_config_file,
+)
+from finjuice.pipeline.cli.commands.networth_errors import (
+    _handle_networth_exception,
+    _raise_goals_validation_error,
+    _validation_issue_to_problem,
 )
 from finjuice.pipeline.cli.commands.networth_guidance import (
     _build_networth_guidance,
@@ -36,7 +42,6 @@ from finjuice.pipeline.cli.commands.networth_rendering import (
 )
 from finjuice.pipeline.cli.output import (
     ErrorCode,
-    ExitCode,
     _build_meta,
     emit_error,
     info,
@@ -45,12 +50,11 @@ from finjuice.pipeline.cli.output import (
 from finjuice.pipeline.cli.utils import get_config
 from finjuice.pipeline.forecast import (
     SCENARIO_NAMES,
-    ScenariosConfigValidationError,
     build_forecast,
     load_scenarios_config,
     serialize_forecast_result,
 )
-from finjuice.pipeline.goals import GoalsValidationProblem, load_goals_file
+from finjuice.pipeline.goals import load_goals_file
 from finjuice.pipeline.networth import (
     build_breakdown_rows,
     build_networth_position,
@@ -146,80 +150,6 @@ def _build_networth_result(
         "_liabilities": position.liabilities,
         "_filters_applied": 0,
     }
-
-
-def _validation_issue_to_problem(issue: Any) -> dict[str, Any]:
-    """Convert an assets.yaml validation issue to the shared validation envelope."""
-    return {
-        "severity": "error",
-        "type": "invalid_assets_config",
-        "path": issue.path,
-        "message": issue.message,
-        "line": issue.line,
-        "column": issue.column,
-        "formatted": issue.format(),
-    }
-
-
-def _raise_goals_validation_error(
-    *,
-    command: str,
-    problems: list[GoalsValidationProblem],
-    json_output: bool,
-) -> None:
-    """Raise a structured validation error for goals.yaml issues."""
-    message = "goals.yaml is invalid"
-    if problems:
-        message = message + ":\n" + "\n".join(problem.format() for problem in problems)
-    emit_error(
-        message,
-        error_code=ErrorCode.VALIDATION_FAILED,
-        exit_code=ExitCode.VALIDATION_ERROR,
-        json_output=json_output,
-        command=command,
-    )
-
-
-def _handle_networth_exception(
-    exc: Exception,
-    *,
-    json_output: bool,
-    command: str,
-) -> None:
-    """Convert runtime networth errors into CLI envelopes."""
-    if isinstance(exc, AssetsConfigValidationError):
-        emit_error(
-            str(exc),
-            error_code=ErrorCode.VALIDATION_FAILED,
-            exit_code=ExitCode.VALIDATION_ERROR,
-            json_output=json_output,
-            command=command,
-        )
-
-    if isinstance(exc, ScenariosConfigValidationError):
-        emit_error(
-            str(exc),
-            error_code=ErrorCode.VALIDATION_FAILED,
-            exit_code=ExitCode.VALIDATION_ERROR,
-            json_output=json_output,
-            command=command,
-        )
-
-    if isinstance(exc, ValueError):
-        emit_error(
-            str(exc),
-            error_code=ErrorCode.INVALID_ARGS,
-            exit_code=ExitCode.USAGE_ERROR,
-            json_output=json_output,
-            command=command,
-        )
-
-    emit_error(
-        f"Failed to compute net worth: {exc}",
-        error_code=ErrorCode.GENERAL_ERROR,
-        json_output=json_output,
-        command=command,
-    )
 
 
 @networth_app.callback(invoke_without_command=True)
