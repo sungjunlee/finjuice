@@ -4,7 +4,8 @@ JSON payload assembly helpers live in
 :mod:`finjuice.pipeline.cli.commands.networth_payload` and are re-exported
 here so existing callers can keep importing from this module. Forecast
 scenario serialization helpers live in
-:mod:`finjuice.pipeline.cli.commands.networth_forecast`. JSON
+:mod:`finjuice.pipeline.cli.commands.networth_forecast`. Monthly history-row
+helpers live in :mod:`finjuice.pipeline.cli.commands.networth_history`. JSON
 health/action guidance helpers live in
 :mod:`finjuice.pipeline.cli.commands.networth_guidance`. Validation and
 runtime error envelopes live in
@@ -16,7 +17,7 @@ from __future__ import annotations
 import importlib.resources
 import json
 import logging
-from typing import Any, Literal, cast
+from typing import Literal, cast
 
 import typer
 
@@ -39,6 +40,10 @@ from finjuice.pipeline.cli.commands.networth_guidance import (
     _build_networth_signals,  # noqa: F401 — re-exported for existing networth imports
     _build_source_flags,  # noqa: F401 — re-exported for existing networth imports
     _resolve_snapshot_status,  # noqa: F401 — re-exported for existing networth imports
+)
+from finjuice.pipeline.cli.commands.networth_history import (
+    _build_history_rows,
+    _history_as_of,
 )
 from finjuice.pipeline.cli.commands.networth_payload import (
     _build_networth_result,
@@ -67,9 +72,6 @@ from finjuice.pipeline.goals import load_goals_file
 from finjuice.pipeline.networth import (
     build_breakdown_rows,
     build_networth_position,
-    list_history_snapshots,
-    merge_asset_sources,
-    snapshot_assets_from_selection,
 )
 
 logger = logging.getLogger(__name__)
@@ -170,23 +172,12 @@ def history(
     try:
         config = get_config(ctx)
         assets_config = load_assets_config(config.assets_file, allow_missing_file=True)
-
-        rows: list[dict[str, Any]] = []
-        for snapshot in list_history_snapshots(config.data_dir / "assets" / "snapshots", months):
-            assets = merge_asset_sources(
-                snapshot_assets_from_selection(snapshot),
-                assets_config.manual_assets,
-            )
-            total_assets = sum(asset.value for asset in assets)
-            total_liabilities = sum(liability.principal for liability in assets_config.liabilities)
-            rows.append(
-                {
-                    "as_of": snapshot.snapshot_date.isoformat(),
-                    "net_worth": total_assets - total_liabilities,
-                }
-            )
-
-        as_of = rows[-1]["as_of"] if rows else None
+        rows = _build_history_rows(
+            config.data_dir / "assets" / "snapshots",
+            assets_config,
+            months=months,
+        )
+        as_of = _history_as_of(rows)
         payload = {"history": rows}
         if json_output:
             _emit_networth_json(
