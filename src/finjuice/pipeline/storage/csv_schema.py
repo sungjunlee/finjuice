@@ -3,13 +3,26 @@
 Shared by ``csv_transactions`` and ``csv_assets``. Kept separate from the CRUD
 modules so changing partition geometry (paths) or schema column lists does not
 require touching read/write logic.
+
+Partition path helpers live in
+:mod:`finjuice.pipeline.storage.csv_schema_helpers` and are re-exported
+here so existing callers can keep importing from this module.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import polars as pl
+
+from finjuice.pipeline.storage.csv_schema_helpers import (
+    get_asset_snapshot_partition_path,
+    get_banksalad_balance_partition_path,
+    get_banksalad_cashflow_partition_path,
+    get_banksalad_insurance_partition_path,
+    get_banksalad_investment_partition_path,
+    get_banksalad_loan_partition_path,
+    get_banksalad_overview_facts_partition_path,
+    get_partition_path,
+)
 
 # CSV Schema (v4 - with manual row-level notes)
 # Changes from v3:
@@ -282,51 +295,6 @@ BANKSALAD_LOAN_POLARS_SCHEMA = {
     "file_id": pl.Utf8,
     "source_row": pl.Int64,
 }
-
-
-def get_partition_path(base_dir: Path, year: int, month: int) -> Path:
-    """Return CSV partition file path for the given transaction year/month.
-
-    Example:
-        >>> get_partition_path(Path('data/transactions'), 2024, 10)
-        PosixPath('data/transactions/2024/10/transactions.csv')
-    """
-    return base_dir / str(year) / f"{month:02d}" / "transactions.csv"
-
-
-def get_asset_snapshot_partition_path(base_dir: Path, year: int, month: int) -> Path:
-    """Return CSV partition file path for the given asset snapshot year/month."""
-    return base_dir / str(year) / f"{month:02d}" / "snapshots.csv"
-
-
-def get_banksalad_overview_facts_partition_path(base_dir: Path, year: int, month: int) -> Path:
-    """Return Banksalad overview facts partition path for the given snapshot year/month."""
-    return base_dir / str(year) / f"{month:02d}" / "facts.csv"
-
-
-def get_banksalad_balance_partition_path(base_dir: Path, year: int, month: int) -> Path:
-    """Return Banksalad balance projection partition path for the given snapshot year/month."""
-    return base_dir / str(year) / f"{month:02d}" / "balance.csv"
-
-
-def get_banksalad_cashflow_partition_path(base_dir: Path, year: int, month: int) -> Path:
-    """Return Banksalad cashflow projection partition path for the given period year/month."""
-    return base_dir / str(year) / f"{month:02d}" / "cashflow.csv"
-
-
-def get_banksalad_insurance_partition_path(base_dir: Path, year: int, month: int) -> Path:
-    """Return Banksalad insurance partition path for the given snapshot year/month."""
-    return base_dir / str(year) / f"{month:02d}" / "insurance.csv"
-
-
-def get_banksalad_investment_partition_path(base_dir: Path, year: int, month: int) -> Path:
-    """Return Banksalad investment partition path for the given snapshot year/month."""
-    return base_dir / str(year) / f"{month:02d}" / "investments.csv"
-
-
-def get_banksalad_loan_partition_path(base_dir: Path, year: int, month: int) -> Path:
-    """Return Banksalad loan partition path for the given snapshot year/month."""
-    return base_dir / str(year) / f"{month:02d}" / "loans.csv"
 
 
 __all__ = [
