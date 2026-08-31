@@ -9,7 +9,9 @@ Read-only SQL validation helpers live in
 existing callers can keep importing from this module. Optional-dependency
 detection helpers live in
 :mod:`finjuice.pipeline.analytics.duckdb_layer_helpers`; the install hint is
-re-exported here for the same reason.
+re-exported here for the same reason. Transactions-view SQL construction
+helpers live in :mod:`finjuice.pipeline.analytics.transactions_view_sql` and
+are re-exported here as well.
 
 Performance characteristics:
 - Native multi-file CSV reading with parallel scan
@@ -39,6 +41,11 @@ from finjuice.pipeline.analytics.readonly_sql import (
     RESTRICTED_KEYWORDS,  # noqa: F401 — re-exported for existing duckdb_layer imports
     RESTRICTED_TABLE_FUNCTIONS,  # noqa: F401 — re-exported for existing duckdb_layer imports
     validate_readonly_sql,
+)
+from finjuice.pipeline.analytics.transactions_view_sql import (
+    build_transactions_source_projection,  # noqa: F401 — re-exported for duckdb_layer imports
+    build_transactions_source_sql,
+    build_transfer_normalization_exprs,  # noqa: F401 — re-exported for duckdb_layer imports
 )
 from finjuice.pipeline.filters import exclude_transfers_sql
 from finjuice.pipeline.sql_utils import (
@@ -152,71 +159,10 @@ class DuckDBAnalytics:
         try:
             self.conn.execute(raw_sql)
             source_columns = self._view_columns("transactions_raw")
-            source_column_set = set(source_columns)
 
             self._validate_csv_schema(source_columns)
 
-            is_transfer_expr = (
-                f"TRY_CAST({quote_duckdb_identifier('is_transfer')} AS BIGINT)"
-                if "is_transfer" in source_column_set
-                else "CAST(0 AS BIGINT)"
-            )
-            transfer_group_expr = (
-                f"CAST({quote_duckdb_identifier('transfer_group_id')} AS VARCHAR)"
-                if "transfer_group_id" in source_column_set
-                else "CAST(NULL AS VARCHAR)"
-            )
-            candidate_default_expr = f"COALESCE({is_transfer_expr}, 0)"
-
-            source_projection = []
-            for column in source_columns:
-                quoted_column = quote_duckdb_identifier(column)
-                if column == "transfer_group_id":
-                    source_projection.append(f"{transfer_group_expr} AS {quoted_column}")
-                elif column == "is_transfer_candidate":
-                    source_projection.append(
-                        "COALESCE("
-                        f"TRY_CAST({quoted_column} AS BIGINT), {candidate_default_expr}"
-                        f") AS {quoted_column}"
-                    )
-                else:
-                    source_projection.append(quoted_column)
-
-            if "transfer_group_id" not in source_column_set:
-                source_projection.append(
-                    f"{transfer_group_expr} AS {quote_duckdb_identifier('transfer_group_id')}"
-                )
-            if "is_transfer_candidate" not in source_column_set:
-                source_projection.append(
-                    f"{candidate_default_expr} AS "
-                    f"{quote_duckdb_identifier('is_transfer_candidate')}"
-                )
-
-            # Note on JSON: DuckDB's JSON support in read_csv can be tricky.
-            # We start with basic normalization.
-            # Issue #185: Complete type normalization
-            # Projection entries are quoted identifiers from DuckDB's internal
-            # transactions_raw introspection, plus static expressions over those identifiers.
-            duckdb_varchar_list_type = quote_duckdb_string_literal('["VARCHAR"]')
-            tags_list_expr = (
-                f"from_json({quote_duckdb_identifier('tags_final')}, "
-                f"{duckdb_varchar_list_type}) AS tags_list"
-            )
-            source_sql = "\n".join(
-                [
-                    "CREATE OR REPLACE VIEW transactions_source AS",
-                    "SELECT",
-                    *(f"    {projection}," for projection in source_projection),
-                    "    (",
-                    f"        COALESCE({is_transfer_expr}, 0) = 1",
-                    f"        AND {transfer_group_expr} IS NOT NULL",
-                    f"        AND TRIM({transfer_group_expr}) <> ''",
-                    "    ) AS is_transfer_bool,",
-                    "    -- Convert JSON string to DuckDB LIST",
-                    f"    {tags_list_expr}",
-                    "FROM transactions_raw",
-                ]
-            )
+            source_sql = build_transactions_source_sql(source_columns)
             self.conn.execute(source_sql)
             filter_where = build_report_filter_duckdb_where(self.report_filters)
             view_sql = "CREATE OR REPLACE VIEW transactions AS SELECT * FROM transactions_source"
