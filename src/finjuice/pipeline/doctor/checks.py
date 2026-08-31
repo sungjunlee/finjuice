@@ -7,14 +7,16 @@ existing callers can keep importing from this module.
 Next-step suggestion helpers live in
 :mod:`finjuice.pipeline.doctor.next_step` and are re-exported here so
 existing callers can keep importing from this module.
+
+System environment checks live in
+:mod:`finjuice.pipeline.doctor.system` and are re-exported here so
+existing callers can keep importing from this module.
 """
 
 from __future__ import annotations
 
 import importlib
 import importlib.metadata
-import platform
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -34,46 +36,17 @@ from finjuice.pipeline.doctor.next_step import (
     _next_step_from_schema,  # noqa: F401 — re-exported for existing checks imports
     _suggest_next_step,
 )
+from finjuice.pipeline.doctor.system import (
+    _check_finjuice_version,
+    _check_os_info,
+    _check_python_version,
+)
 
 SKILL_RUNTIME_REQUIRED_VERSION = "0.7.1"
 SKILL_RUNTIME_UPDATE_COMMAND = "skills/finjuice/scripts/ensure_finjuice_cli.sh --update --json"
 KNOWN_SKILL_CAPABILITIES = {
     "tag.edit": "finjuice tag --edit",
 }
-
-
-def _check_python_version() -> CheckResult:
-    """Check Python version meets requirements (3.10+)."""
-    version = sys.version_info
-    version_str = f"{version.major}.{version.minor}.{version.micro}"
-
-    if version >= (3, 10):
-        return CheckResult(status="ok", message=f"Python {version_str}", name="python_version")
-    else:
-        return CheckResult(
-            status="error",
-            message=f"Python {version_str}",
-            detail="Python 3.10+ required",
-            suggestion="Install Python 3.10 or higher",
-            name="python_version",
-        )
-
-
-def _check_finjuice_version() -> CheckResult:
-    """Check finjuice version."""
-    version = get_version()
-    return CheckResult(status="ok", message=f"finjuice v{version}", name="finjuice_version")
-
-
-def _check_os_info() -> CheckResult:
-    """Get OS information."""
-    system = platform.system()
-    release = platform.release()
-
-    os_names = {"Darwin": "macOS", "Linux": "Linux", "Windows": "Windows"}
-    os_display = os_names.get(system, system)
-
-    return CheckResult(status="ok", message=f"OS: {os_display} {release}", name="operating_system")
 
 
 def _parse_version_tuple(version: str) -> tuple[int, int, int] | None:
