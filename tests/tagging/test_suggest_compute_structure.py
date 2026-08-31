@@ -21,7 +21,7 @@ def test_suggest_stats_helpers_live_in_sibling_module() -> None:
     stats_text = (TAGGING_DIR / "suggest_compute_stats.py").read_text(encoding="utf-8")
 
     assert "def _compute_rules_suggest_json" in compute_text
-    assert "class SuggestComputeError" in compute_text
+    assert "def _append_applied_suggestion_audit" in compute_text
     assert "TRANSFER_EXCLUSION_DESCRIPTION =" not in compute_text
     for name in STATS_HELPER_NAMES:
         assert f"def {name}" not in compute_text

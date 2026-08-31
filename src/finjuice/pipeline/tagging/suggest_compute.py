@@ -2,10 +2,11 @@
 
 The Typer command module owns interactive apply and terminal rendering.
 This module owns the `--json` payload used by `rules suggest`. Coverage-stat
-shaping helpers live in :mod:`finjuice.pipeline.tagging.suggest_compute_stats`
-and compact privacy projection lives in
-:mod:`finjuice.pipeline.tagging.suggest_compute_compact`; both are re-exported
-here so existing callers can keep importing from this module.
+shaping helpers live in :mod:`finjuice.pipeline.tagging.suggest_compute_stats`,
+compact privacy projection lives in
+:mod:`finjuice.pipeline.tagging.suggest_compute_compact`, and the domain error
+lives in :mod:`finjuice.pipeline.tagging.suggest_compute_error`; all are
+re-exported here so existing callers can keep importing from this module.
 """
 
 from __future__ import annotations
@@ -20,6 +21,10 @@ from finjuice.pipeline.tagging.suggest_compute_compact import (
     _compact_rules_suggest_result,  # noqa: F401 — re-exported for existing suggest_compute imports
     _compact_suggested_rule,  # noqa: F401 — re-exported for existing suggest_compute imports
 )
+from finjuice.pipeline.tagging.suggest_compute_error import (
+    SuggestComputeError,  # noqa: F401 — re-exported for existing suggest_compute imports
+    _fail,
+)
 from finjuice.pipeline.tagging.suggest_compute_stats import (
     TRANSFER_EXCLUSION_DESCRIPTION,  # noqa: F401 — re-exported for existing suggest_compute imports
     _augment_suggestion_stats,
@@ -30,39 +35,6 @@ from finjuice.pipeline.tagging.suggest_compute_stats import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-class SuggestComputeError(Exception):
-    """Domain failure for `rules suggest` compute; CLI maps it to emit_error."""
-
-    def __init__(
-        self,
-        message: str,
-        *,
-        error_code: str,
-        exit_code: int,
-        suggestion: str | None = None,
-    ) -> None:
-        super().__init__(message)
-        self.message = message
-        self.error_code = error_code
-        self.exit_code = exit_code
-        self.suggestion = suggestion
-
-
-def _fail(
-    message: str,
-    *,
-    error_code: str,
-    exit_code: int,
-    suggestion: str | None = None,
-) -> None:
-    raise SuggestComputeError(
-        message,
-        error_code=error_code,
-        exit_code=exit_code,
-        suggestion=suggestion,
-    )
 
 
 def _append_applied_suggestion_audit(

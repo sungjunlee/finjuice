@@ -19,7 +19,7 @@ def test_suggest_compact_helpers_live_in_sibling_module() -> None:
     compact_text = (TAGGING_DIR / "suggest_compute_compact.py").read_text(encoding="utf-8")
 
     assert "def _compute_rules_suggest_json" in compute_text
-    assert "class SuggestComputeError" in compute_text
+    assert "def _append_applied_suggestion_audit" in compute_text
     for name in COMPACT_HELPER_NAMES:
         assert f"def {name}" not in compute_text
         assert f"def {name}" in compact_text
