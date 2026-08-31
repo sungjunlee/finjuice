@@ -40,12 +40,6 @@ from finjuice.pipeline.doctor.next_step import (
     _next_step_from_schema,  # noqa: F401 — re-exported for existing checks imports
     _suggest_next_step,
 )
-from finjuice.pipeline.doctor.system import (
-    _check_finjuice_version,
-    _check_os_info,
-    _check_python_version,
-)
-
 from finjuice.pipeline.doctor.skill_runtime import (
     KNOWN_SKILL_CAPABILITIES,
     SKILL_RUNTIME_REQUIRED_VERSION,
@@ -58,6 +52,12 @@ from finjuice.pipeline.doctor.skill_runtime import (
     _probe_cli_capabilities,  # noqa: F401 — re-exported for existing checks imports
     _version_gte,  # noqa: F401 — re-exported for existing checks imports
 )
+from finjuice.pipeline.doctor.system import (
+    _check_finjuice_version,
+    _check_os_info,
+    _check_python_version,
+)
+
 
 def _check_dependencies() -> list[CheckResult]:
     """Check package dependencies."""
