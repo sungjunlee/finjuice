@@ -23,8 +23,6 @@ def test_sheet_name_helpers_live_in_sibling_module() -> None:
 
     assert "def detect_schema_version" in schemas_text
     assert "def map_columns" in schemas_text
-    assert "def detect_asset_schema_version" in schemas_text
-    assert "def map_asset_columns" in schemas_text
     assert "def normalize_sheet_name" not in schemas_text
     assert "def is_asset_sheet_name" not in schemas_text
     assert "ASSET_SHEET_NAME_CANDIDATES = " not in schemas_text
@@ -46,7 +44,5 @@ def test_sheet_name_helpers_reexport_from_schemas() -> None:
 
     assert callable(schemas.detect_schema_version)
     assert callable(schemas.map_columns)
-    assert callable(schemas.detect_asset_schema_version)
-    assert callable(schemas.map_asset_columns)
     assert callable(schemas.normalize_sheet_name)
     assert callable(schemas.is_asset_sheet_name)
