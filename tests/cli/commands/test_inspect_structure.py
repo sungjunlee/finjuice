@@ -21,11 +21,16 @@ def test_inspect_structure_helpers_live_in_helper_module() -> None:
     assert "def _collect_allowlisted_anchors" not in command_text
     assert "def _detect_roles" not in command_text
     assert "def _detect_blocks" not in command_text
+    assert "def _is_cashflow_anchor" not in command_text
     assert "def inspect_xlsx_structure" in helpers_text
     assert "def _inspect_worksheet" in helpers_text
     assert "def _collect_allowlisted_anchors" in helpers_text
     assert "def _detect_roles" in helpers_text
     assert "def _detect_blocks" in helpers_text
+    assert "def _is_cashflow_anchor" in helpers_text
+    assert "def _overview_section_anchor" in helpers_text
+    assert "def _is_transaction_sheet" in helpers_text
+    assert "def _is_overview_sheet" in helpers_text
 
 
 def test_inspect_public_names_stay_on_entrypoint() -> None:
@@ -46,5 +51,9 @@ def test_inspect_public_names_stay_on_entrypoint() -> None:
     )
     assert inspect_module._detect_roles is inspect_helpers._detect_roles
     assert inspect_module._detect_blocks is inspect_helpers._detect_blocks
+    assert inspect_module._is_cashflow_anchor is inspect_helpers._is_cashflow_anchor
+    assert inspect_module._overview_section_anchor is inspect_helpers._overview_section_anchor
+    assert inspect_module._is_transaction_sheet is inspect_helpers._is_transaction_sheet
+    assert inspect_module._is_overview_sheet is inspect_helpers._is_overview_sheet
     assert callable(inspect_module.inspect_xlsx_command)
     assert callable(inspect_module.inspect_xlsx_structure)

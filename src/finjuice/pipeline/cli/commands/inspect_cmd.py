@@ -21,6 +21,10 @@ from finjuice.pipeline.cli.commands.inspect_helpers import (
     _detect_blocks,  # noqa: F401 — re-exported for existing inspect imports
     _detect_roles,  # noqa: F401 — re-exported for existing inspect imports
     _inspect_worksheet,  # noqa: F401 — re-exported for existing inspect imports
+    _is_cashflow_anchor,  # noqa: F401 — re-exported for existing inspect imports
+    _is_overview_sheet,  # noqa: F401 — re-exported for existing inspect imports
+    _is_transaction_sheet,  # noqa: F401 — re-exported for existing inspect imports
+    _overview_section_anchor,  # noqa: F401 — re-exported for existing inspect imports
     inspect_xlsx_structure,
 )
 from finjuice.pipeline.cli.output import ErrorCode, ExitCode
