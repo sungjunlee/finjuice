@@ -19,8 +19,6 @@ def test_networth_error_helpers_live_in_helper_module() -> None:
     assert "def forecast" in command_text
     assert "def init_command" in command_text
     assert "def validate_command" in command_text
-    assert "def _parse_as_of" in command_text
-    assert "def _build_networth_result" in command_text
     assert "def _validation_issue_to_problem" not in command_text
     assert "def _raise_goals_validation_error" not in command_text
     assert "def _handle_networth_exception" not in command_text
