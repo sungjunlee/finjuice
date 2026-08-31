@@ -5,13 +5,14 @@ Provides user-friendly workspace creation for easy data access,
 especially useful for Claude Code and other AI tools (Issue #65).
 
 Path resolve/existence guards live in
-:mod:`finjuice.pipeline.cli.commands.workspace_paths`. Human rendering
+:mod:`finjuice.pipeline.cli.commands.workspace_paths`. File-manager
+launch helpers live in
+:mod:`finjuice.pipeline.cli.commands.workspace_launch`. Human rendering
 lives in :mod:`finjuice.pipeline.cli.commands.workspace_rendering`.
 """
 
 import logging
 import shutil
-import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Optional
@@ -32,6 +33,10 @@ from finjuice.pipeline.cli.commands.workspace_helpers import (
     validate_data_directories,
     verify_symlinks,
 )
+from finjuice.pipeline.cli.commands.workspace_launch import (
+    get_open_command,  # noqa: F401 — re-exported for existing workspace imports
+    open_workspace_path,
+)
 from finjuice.pipeline.cli.commands.workspace_paths import (
     ensure_empty_workspace_directory,
     require_existing_workspace,
@@ -49,21 +54,6 @@ from finjuice.pipeline.cli.output import console
 logger = logging.getLogger(__name__)
 
 workspace_app = typer.Typer(help="Manage workspace directories (symlink-based)")
-
-
-def get_open_command() -> str:
-    """Get platform-specific command to open files/directories."""
-    import platform
-
-    system = platform.system()
-    if system == "Darwin":
-        return "open"
-    elif system == "Linux":
-        return "xdg-open"
-    elif system == "Windows":
-        return "explorer"
-    else:
-        raise NotImplementedError(f"Unsupported platform: {system}")
 
 
 @workspace_app.command("create")
@@ -267,10 +257,7 @@ def workspace_open(
 
     # Open in file manager
     try:
-        from finjuice.pipeline.constants import SUBPROCESS_TIMEOUT_SHORT
-
-        command = get_open_command()
-        subprocess.run([command, str(workspace_path)], timeout=SUBPROCESS_TIMEOUT_SHORT)
+        open_workspace_path(workspace_path)
         console.print(f"Opened: {workspace_path}")
     except Exception as e:  # intended catch-all for CLI robustness
         console.print(f"Failed to open: {e}", style="red")
