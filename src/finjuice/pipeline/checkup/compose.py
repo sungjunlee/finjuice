@@ -3,55 +3,26 @@
 Next-action builders live in
 :mod:`finjuice.pipeline.checkup.next_actions` and are re-exported here so
 existing callers can keep importing from this module.
+
+The named collector registry lives in
+:mod:`finjuice.pipeline.checkup.named_collectors` and is re-exported here
+so existing callers can keep importing from this module.
 """
 
 from __future__ import annotations
 
-import logging
-from collections.abc import Callable
 from datetime import date
-from typing import Any, TypeVar
 
-from finjuice.pipeline.checkup.budget import collect_budget_posture
-from finjuice.pipeline.checkup.freshness import collect_pipeline_freshness
 from finjuice.pipeline.checkup.models import CheckupBundle
-from finjuice.pipeline.checkup.networth import collect_networth_posture
+from finjuice.pipeline.checkup.named_collectors import (
+    NAMED_COLLECTORS,
+    run_named_collector,
+)
 from finjuice.pipeline.checkup.next_actions import (
     _PRIORITY_ORDER,  # noqa: F401 — re-exported for existing compose imports
     _build_next_actions,
 )
-from finjuice.pipeline.checkup.obligations import collect_obligation_confirmation
-from finjuice.pipeline.checkup.review import collect_review_pressure
 from finjuice.pipeline.config import Config
-
-logger = logging.getLogger(__name__)
-
-T = TypeVar("T")
-
-NAMED_COLLECTORS: dict[str, Callable[..., Any]] = {
-    "pipeline": collect_pipeline_freshness,
-    "review": collect_review_pressure,
-    "budget": collect_budget_posture,
-    "networth": collect_networth_posture,
-    "obligations": collect_obligation_confirmation,
-}
-
-
-def run_named_collector(
-    name: str,
-    collector: Callable[..., T],
-    /,
-    *args: Any,
-    **kwargs: Any,
-) -> T:
-    """Run a named collector fail-closed.
-
-    Exceptions propagate. The composer never substitutes a healthy or empty
-    summary for a failed collector, and it does not skip a collector unless a
-    future caller adds an explicit skip that remains visible in warnings.
-    """
-    logger.debug("Running checkup collector %s", name)
-    return collector(*args, **kwargs)
 
 
 def collect_checkup_bundle(
