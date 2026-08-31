@@ -126,7 +126,7 @@ asks for the named high-scope workflow.
 
 - The rules file lives at `<data-dir>/rules.yaml`; confirm the resolved path with `finjuice status --json`.
 - Rules are YAML objects with `name`, `match`, `fields`, `tags`, optional `category`, and `priority`.
-- `match` uses Python-style regex; join alternate merchant spellings with `|`.
+- `match` is a case-insensitive substring match; join alternate merchant spellings with `|` (a literal separator, not regex). Do not use `^...$` or regex metacharacters unless `match_type: regex` is set.
 - `fields` usually target `merchant_raw`, `memo_raw`, `major_raw`, or `minor_raw`.
 - Higher `priority` is checked first; rule evaluation is descending and first match wins.
 - Use `finjuice rules validate --json` after edits to catch duplicate names, overlaps, regex errors, and priority inversions.

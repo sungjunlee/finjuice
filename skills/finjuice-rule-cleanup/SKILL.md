@@ -111,7 +111,7 @@ Use:
 Look for:
 - Stale rules: old merchant patterns no longer matching the current merchant string variants.
 - Duplicate rules: multiple rule names producing the same outcome for the same merchant family.
-- Overly broad rules: one regex swallowing unrelated merchants or setting the wrong category.
+- Overly broad rules: one loose substring pattern swallowing unrelated merchants or setting the wrong category.
 - Priority problems: a broad rule firing before a more specific rule.
 
 ## Phase 3 — CLEAN UP ONE DECISION AT A TIME
