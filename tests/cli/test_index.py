@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any, cast
 
 from typer.testing import CliRunner
 
@@ -12,17 +13,43 @@ from finjuice.pipeline.cli.main import app
 runner = CliRunner()
 
 
-def _index_payload(data_dir: Path, *args: str) -> dict[str, object]:
+def _as_object(value: object, *, field: str) -> dict[str, Any]:
+    assert isinstance(value, dict), f"{field} must be a JSON object, got {type(value).__name__}"
+    return cast(dict[str, Any], value)
+
+
+def _as_array(value: object, *, field: str) -> list[Any]:
+    assert isinstance(value, list), f"{field} must be a JSON array, got {type(value).__name__}"
+    return cast(list[Any], value)
+
+
+def _index_payload(data_dir: Path, *args: str) -> dict[str, Any]:
     result = runner.invoke(app, ["--data-dir", str(data_dir), "index", "--json", *args])
     assert result.exit_code == 0, result.output
-    return json.loads(result.output)
+    return _as_object(json.loads(result.output), field="index payload")
 
 
-def _collections(payload: dict[str, object]) -> dict[str, dict[str, object]]:
-    return {
-        str(collection["name"]): collection
-        for collection in payload["collections"]  # type: ignore[index]
-    }
+def _collections(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    collections: dict[str, dict[str, Any]] = {}
+    for collection in _as_array(payload["collections"], field="collections"):
+        entry = _as_object(collection, field="collection")
+        name = entry["name"]
+        assert isinstance(name, str)
+        collections[name] = entry
+    return collections
+
+
+def _workspace(payload: dict[str, Any]) -> dict[str, Any]:
+    return _as_object(payload["workspace"], field="workspace")
+
+
+def _meta(payload: dict[str, Any]) -> dict[str, Any]:
+    return _as_object(payload["_meta"], field="_meta")
+
+
+def _privacy_profile(payload: dict[str, Any]) -> object:
+    privacy = _as_object(_meta(payload)["privacy"], field="_meta.privacy")
+    return privacy["profile"]
 
 
 def test_index_json_handles_uninitialized_workspace(tmp_path: Path) -> None:
@@ -35,13 +62,15 @@ def test_index_json_handles_uninitialized_workspace(tmp_path: Path) -> None:
     collections = _collections(payload)
 
     # Assert
-    assert payload["_meta"]["command"] == "index"  # type: ignore[index]
-    assert payload["workspace"]["status"] == "uninitialized"  # type: ignore[index]
-    assert payload["workspace"]["path"] is None  # type: ignore[index]
+    workspace = _workspace(payload)
+    recommended_next = _as_array(payload["recommended_next"], field="recommended_next")
+    assert _meta(payload)["command"] == "index"
+    assert workspace["status"] == "uninitialized"
+    assert workspace["path"] is None
     assert collections["transactions"]["status"] == "missing"
     assert collections["transactions"]["count"] is None
     assert collections["rules"]["status"] == "missing"
-    assert "finjuice init" in payload["recommended_next"]  # type: ignore[operator]
+    assert "finjuice init" in recommended_next
 
 
 def test_index_json_handles_initialized_empty_workspace(tmp_path: Path) -> None:
@@ -67,14 +96,15 @@ def test_index_json_handles_initialized_empty_workspace(tmp_path: Path) -> None:
     collections = _collections(payload)
 
     # Assert
-    assert payload["workspace"]["status"] == "initialized_empty"  # type: ignore[index]
+    workspace = _workspace(payload)
+    assert workspace["status"] == "initialized_empty"
     assert collections["transactions"]["status"] == "empty"
     assert collections["transactions"]["count"] == 0
     assert collections["rules"]["status"] == "populated"
     assert collections["rules"]["count"] == 0
     assert collections["goals"]["status"] == "populated"
     assert collections["scenarios"]["status"] == "populated"
-    assert payload["workspace"]["path_included"] is False  # type: ignore[index]
+    assert workspace["path_included"] is False
     assert collections["transactions"]["path"] is None
 
 
@@ -87,7 +117,8 @@ def test_index_json_catalogs_populated_fixture_without_paths(
     collections = _collections(payload)
 
     # Assert
-    assert payload["workspace"]["status"] == "populated"  # type: ignore[index]
+    template_count = collections["templates"]["count"]
+    assert _workspace(payload)["status"] == "populated"
     assert payload["schema_ref"] == "schemas/index.schema.json"
     assert collections["transactions"]["count"] == 4
     assert collections["transactions"]["count_label"] == "transaction_rows"
@@ -97,7 +128,8 @@ def test_index_json_catalogs_populated_fixture_without_paths(
     assert collections["rules"]["count"] == 2
     assert collections["reports"]["count"] == 2
     assert collections["assets"]["count"] == 2
-    assert collections["templates"]["count"] > 0  # type: ignore[operator]
+    assert isinstance(template_count, int)
+    assert template_count > 0
 
 
 def test_index_json_default_raw_profile_includes_privacy_meta(
@@ -108,7 +140,7 @@ def test_index_json_default_raw_profile_includes_privacy_meta(
     payload = _index_payload(json_output_data_dir)
 
     # Assert
-    assert payload["_meta"]["privacy"]["profile"] == "raw"  # type: ignore[index]
+    assert _privacy_profile(payload) == "raw"
 
 
 def test_index_json_redacted_suppresses_paths_even_when_requested(
@@ -120,9 +152,10 @@ def test_index_json_redacted_suppresses_paths_even_when_requested(
     collections = _collections(payload)
 
     # Assert
-    assert payload["_meta"]["privacy"]["profile"] == "redacted"  # type: ignore[index]
-    assert payload["workspace"]["path"] is None  # type: ignore[index]
-    assert payload["workspace"]["path_included"] is False  # type: ignore[index]
+    workspace = _workspace(payload)
+    assert _privacy_profile(payload) == "redacted"
+    assert workspace["path"] is None
+    assert workspace["path_included"] is False
     for collection in collections.values():
         assert collection["path"] is None
         assert collection["path_included"] is False
@@ -138,9 +171,10 @@ def test_index_json_compact_suppresses_paths_and_operational_detail(
     collections = _collections(payload)
 
     # Assert
-    assert payload["_meta"]["privacy"]["profile"] == "compact"  # type: ignore[index]
-    assert payload["workspace"]["path"] is None  # type: ignore[index]
-    assert payload["workspace"]["path_included"] is False  # type: ignore[index]
+    workspace = _workspace(payload)
+    assert _privacy_profile(payload) == "compact"
+    assert workspace["path"] is None
+    assert workspace["path_included"] is False
     assert payload["recommended_next"] == []
     assert collections["transactions"]["status"] == "populated"
     assert collections["transactions"]["count"] == 4
@@ -206,8 +240,9 @@ def test_index_json_includes_paths_only_when_requested(json_output_data_dir: Pat
     collections = _collections(payload)
 
     # Assert
-    assert payload["workspace"]["path"] == str(json_output_data_dir.resolve())  # type: ignore[index]
-    assert payload["workspace"]["path_included"] is True  # type: ignore[index]
+    workspace = _workspace(payload)
+    assert workspace["path"] == str(json_output_data_dir.resolve())
+    assert workspace["path_included"] is True
     assert collections["transactions"]["path"] == str(
         (json_output_data_dir / "transactions").resolve()
     )

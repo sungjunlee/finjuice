@@ -3,11 +3,18 @@ Validation functions for Banksalad XLSX files (Polars-only).
 
 Provides comprehensive validation with clear error messages and suggestions
 for fixing common issues.
+
+Column-name matching helpers live in
+:mod:`finjuice.pipeline.validation.validators_helpers` and are re-exported
+here so existing callers can keep importing from this module.
+
+Pre-load file and sheet-name guards live in
+:mod:`finjuice.pipeline.validation.validators_preflight` and are re-exported
+here so existing callers can keep importing from this module.
 """
 
 import logging
 from dataclasses import dataclass
-from difflib import get_close_matches
 from pathlib import Path
 from typing import Optional
 from zipfile import BadZipFile
@@ -15,12 +22,19 @@ from zipfile import BadZipFile
 import polars as pl
 
 from finjuice.pipeline.ingest.schemas import REQUIRED_KOREAN_COLUMNS
+from finjuice.pipeline.validation.validators_helpers import (
+    MAX_COLUMN_NAME_LENGTH,  # noqa: F401 — re-exported for existing validators imports
+    _sanitize_column_names,
+    _suggest_column_mapping,
+)
+from finjuice.pipeline.validation.validators_preflight import (
+    MAX_FILE_SIZE_MB,  # noqa: F401 — re-exported for existing validators imports
+    _missing_file_error_message,
+    _oversized_file_error_message,
+    _sheet_name_error_message,
+)
 
 logger = logging.getLogger(__name__)
-
-# Security constants
-MAX_FILE_SIZE_MB = 100  # Maximum file size to prevent memory exhaustion
-MAX_COLUMN_NAME_LENGTH = 50  # Maximum column name length in error messages
 
 
 class ValidationError(ValueError):
@@ -76,35 +90,27 @@ def validate_banksalad_xlsx(
         ...     print("Suggestions:", result.suggestions)
     """
     # 0. Validate sheet_name parameter
-    if isinstance(sheet_name, int):
-        if sheet_name < 0:
-            return ValidationResult(
-                is_valid=False,
-                error_message="❌ sheet_name은 0 이상이어야 합니다.",
-            )
-        if sheet_name > 100:  # Reasonable upper bound
-            return ValidationResult(
-                is_valid=False,
-                error_message="❌ sheet_name이 너무 큽니다 (최대: 100).",
-            )
-
-    # 1. File existence check
-    if not file_path.exists():
+    sheet_name_error = _sheet_name_error_message(sheet_name)
+    if sheet_name_error:
         return ValidationResult(
             is_valid=False,
-            error_message=f"❌ 파일을 찾을 수 없습니다: {file_path.name}",
+            error_message=sheet_name_error,
+        )
+
+    # 1. File existence check
+    missing_file_error = _missing_file_error_message(file_path)
+    if missing_file_error:
+        return ValidationResult(
+            is_valid=False,
+            error_message=missing_file_error,
         )
 
     # 2. File size check (prevent memory exhaustion)
-    file_size_mb = file_path.stat().st_size / (1024 * 1024)
-    if file_size_mb > MAX_FILE_SIZE_MB:
+    oversized_file_error = _oversized_file_error_message(file_path)
+    if oversized_file_error:
         return ValidationResult(
             is_valid=False,
-            error_message=(
-                f"❌ 파일 크기가 너무 큽니다: {file_size_mb:.1f}MB "
-                f"(최대: {MAX_FILE_SIZE_MB}MB)\n"
-                f"💡 파일을 분할하거나 기간을 나누어 export 해주세요."
-            ),
+            error_message=oversized_file_error,
         )
 
     # 3. Try to load Excel file (Polars)
@@ -230,60 +236,6 @@ def validate_banksalad_xlsx(
         sheet_name=str(actual_sheet),
         row_count=len(df),
     )
-
-
-def _suggest_column_mapping(
-    missing_cols: set[str],
-    actual_cols: set[str],
-    cutoff: float = 0.5,
-) -> dict[str, str]:
-    """
-    Suggest mappings for missing columns based on fuzzy string matching.
-
-    Uses difflib.get_close_matches to find similar column names.
-    Uses a moderate cutoff (0.5) to catch Korean character typos.
-
-    Args:
-        missing_cols: Set of required columns that are missing
-        actual_cols: Set of actual column names from the DataFrame
-        cutoff: Similarity threshold (0.0-1.0, default: 0.5)
-
-    Returns:
-        dict: Mapping of missing column to suggested column name
-
-    Example:
-        >>> _suggest_column_mapping({'날짜'}, {'날자', '시간'})
-        {'날짜': '날자'}
-        >>> _suggest_column_mapping({'결제수단'}, {'결제방법', '카드'})
-        {'결제수단': '결제방법'}
-    """
-    suggestions = {}
-
-    for missing in missing_cols:
-        # Try to find close matches
-        matches = get_close_matches(missing, actual_cols, n=1, cutoff=cutoff)
-        if matches and matches[0] != missing:
-            # Only suggest if it's not an exact match (shouldn't happen, but just in case)
-            suggestions[missing] = matches[0]
-
-    return suggestions
-
-
-def _sanitize_column_names(cols: set[str], max_length: int = MAX_COLUMN_NAME_LENGTH) -> str:
-    """
-    Sanitize column names for error messages.
-
-    Limits column name length to prevent exposing excessive information.
-
-    Args:
-        cols: Set of column names
-        max_length: Maximum length per column name (default: 50)
-
-    Returns:
-        str: Comma-separated sanitized column names
-    """
-    sanitized = [col[:max_length] for col in sorted(cols)]
-    return ", ".join(sanitized)
 
 
 def validate_banksalad_xlsx_polars(

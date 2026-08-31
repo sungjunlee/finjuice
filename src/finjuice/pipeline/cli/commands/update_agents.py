@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 def update_agents_command(ctx: typer.Context) -> None:
     """Update AGENTS.md to the latest template version."""
-    from finjuice.pipeline.cli.commands.init_cmd import copy_template_file
+    from finjuice.pipeline.cli.commands.init_helpers import copy_template_file
 
     config = get_config(ctx)
     agents_file = config.data_dir / "AGENTS.md"

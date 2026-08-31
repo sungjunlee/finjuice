@@ -4,6 +4,15 @@ This module provides a DuckDB-based analytics layer that integrates with
 the existing CSV partition storage via zero-copy Apache Arrow conversion
 to Polars DataFrames.
 
+Read-only SQL validation helpers live in
+:mod:`finjuice.pipeline.analytics.readonly_sql` and are re-exported here so
+existing callers can keep importing from this module. Optional-dependency
+detection helpers live in
+:mod:`finjuice.pipeline.analytics.duckdb_layer_helpers`; the install hint is
+re-exported here for the same reason. Transactions-view SQL construction
+helpers live in :mod:`finjuice.pipeline.analytics.transactions_view_sql` and
+are re-exported here as well.
+
 Performance characteristics:
 - Native multi-file CSV reading with parallel scan
 - Vectorized SQL execution
@@ -13,14 +22,31 @@ Performance characteristics:
 See: https://duckdb.org/docs/guides/python/polars
 """
 
+from __future__ import annotations
+
 import logging
-import re
 from pathlib import Path
 from types import TracebackType
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
-from finjuice.pipeline.analytics.install_hints import DUCKDB_DOCTOR_HINT
+if TYPE_CHECKING:
+    import polars as pl
+
+from finjuice.pipeline.analytics.duckdb_layer_helpers import (
+    DUCKDB_INSTALL_HINT,
+    detect_analytics_dependencies,
+)
 from finjuice.pipeline.analytics.query_builder import build_report_filter_duckdb_where
+from finjuice.pipeline.analytics.readonly_sql import (
+    RESTRICTED_KEYWORDS,  # noqa: F401 — re-exported for existing duckdb_layer imports
+    RESTRICTED_TABLE_FUNCTIONS,  # noqa: F401 — re-exported for existing duckdb_layer imports
+    validate_readonly_sql,
+)
+from finjuice.pipeline.analytics.transactions_view_sql import (
+    build_transactions_source_projection,  # noqa: F401 — re-exported for duckdb_layer imports
+    build_transactions_source_sql,
+    build_transfer_normalization_exprs,  # noqa: F401 — re-exported for duckdb_layer imports
+)
 from finjuice.pipeline.filters import exclude_transfers_sql
 from finjuice.pipeline.sql_utils import (
     quote_duckdb_identifier,
@@ -30,101 +56,9 @@ from finjuice.pipeline.sql_utils import (
 from finjuice.pipeline.storage.schema_registry import get_current_schema
 from finjuice.pipeline.tagging.rules import ReportFilters
 
-try:
-    import duckdb
-    import polars as pl
-
-    DUCKDB_AVAILABLE = True
-except ImportError:
-    DUCKDB_AVAILABLE = False
-    duckdb = None  # type: ignore[assignment]  # optional dependency sentinel
-    pl = None  # type: ignore[assignment]  # optional dependency sentinel
+DUCKDB_AVAILABLE, duckdb, pl = detect_analytics_dependencies()
 
 logger = logging.getLogger(__name__)
-DUCKDB_INSTALL_HINT = DUCKDB_DOCTOR_HINT
-
-RESTRICTED_KEYWORDS = [
-    "DELETE",
-    "DROP",
-    "UPDATE",
-    "INSERT",
-    "ALTER",
-    "TRUNCATE",
-    "COPY",
-    "READ_CSV",
-    "READ_PARQUET",
-    "READ_JSON",
-    "READ_BLOB",
-    "INSTALL",
-    "LOAD",
-]
-
-RESTRICTED_TABLE_FUNCTIONS = [
-    "READ_BLOB",
-    "READ_CSV",
-    "READ_CSV_AUTO",
-    "READ_JSON",
-    "READ_JSON_AUTO",
-    "READ_JSON_OBJECTS",
-    "READ_JSON_OBJECTS_AUTO",
-    "READ_NDJSON",
-    "READ_NDJSON_AUTO",
-    "READ_NDJSON_OBJECTS",
-    "READ_PARQUET",
-    "READ_TEXT",
-    "PARQUET_BLOOM_PROBE",
-    "PARQUET_FILE_METADATA",
-    "PARQUET_KV_METADATA",
-    "PARQUET_METADATA",
-    "PARQUET_SCAN",
-    "PARQUET_SCHEMA",
-    "SNIFF_CSV",
-]
-
-
-def _contains_restricted_keyword(sql_upper: str, keyword: str) -> bool:
-    """Return True when restricted keyword appears as a standalone SQL token."""
-    pattern = rf"(?<![A-Z0-9_]){re.escape(keyword)}(?![A-Z0-9_])"
-    return re.search(pattern, sql_upper) is not None
-
-
-def _contains_restricted_table_function(sql_upper: str, function_name: str) -> bool:
-    """Return True when a restricted DuckDB table function is called."""
-    pattern = rf"(?<![A-Z0-9_]){re.escape(function_name)}\s*\("
-    return re.search(pattern, sql_upper) is not None
-
-
-def validate_readonly_sql(sql: str) -> str:
-    """Validate SQL string for read-only query execution.
-
-    Args:
-        sql: Raw SQL string.
-
-    Returns:
-        Normalized SQL string (uppercased) for downstream checks.
-
-    Raises:
-        ValueError: If SQL violates read-only constraints.
-    """
-    if ";" in sql.rstrip(";\n\r\t "):
-        raise ValueError("Multi-statement queries are not allowed (semicolons detected).")
-
-    normalized_sql = sql.strip().upper()
-    if not (normalized_sql.startswith("SELECT") or normalized_sql.startswith("WITH")):
-        raise ValueError("Only SELECT or WITH queries are allowed.")
-
-    for function_name in RESTRICTED_TABLE_FUNCTIONS:
-        if _contains_restricted_table_function(normalized_sql, function_name):
-            raise ValueError(
-                "Security violation: Query calls restricted DuckDB table function "
-                f"'{function_name}'."
-            )
-
-    for keyword in RESTRICTED_KEYWORDS:
-        if _contains_restricted_keyword(normalized_sql, keyword):
-            raise ValueError(f"Security violation: Query contains restricted keyword '{keyword}'.")
-
-    return normalized_sql
 
 
 class DuckDBAnalytics:
@@ -225,71 +159,10 @@ class DuckDBAnalytics:
         try:
             self.conn.execute(raw_sql)
             source_columns = self._view_columns("transactions_raw")
-            source_column_set = set(source_columns)
 
             self._validate_csv_schema(source_columns)
 
-            is_transfer_expr = (
-                f"TRY_CAST({quote_duckdb_identifier('is_transfer')} AS BIGINT)"
-                if "is_transfer" in source_column_set
-                else "CAST(0 AS BIGINT)"
-            )
-            transfer_group_expr = (
-                f"CAST({quote_duckdb_identifier('transfer_group_id')} AS VARCHAR)"
-                if "transfer_group_id" in source_column_set
-                else "CAST(NULL AS VARCHAR)"
-            )
-            candidate_default_expr = f"COALESCE({is_transfer_expr}, 0)"
-
-            source_projection = []
-            for column in source_columns:
-                quoted_column = quote_duckdb_identifier(column)
-                if column == "transfer_group_id":
-                    source_projection.append(f"{transfer_group_expr} AS {quoted_column}")
-                elif column == "is_transfer_candidate":
-                    source_projection.append(
-                        "COALESCE("
-                        f"TRY_CAST({quoted_column} AS BIGINT), {candidate_default_expr}"
-                        f") AS {quoted_column}"
-                    )
-                else:
-                    source_projection.append(quoted_column)
-
-            if "transfer_group_id" not in source_column_set:
-                source_projection.append(
-                    f"{transfer_group_expr} AS {quote_duckdb_identifier('transfer_group_id')}"
-                )
-            if "is_transfer_candidate" not in source_column_set:
-                source_projection.append(
-                    f"{candidate_default_expr} AS "
-                    f"{quote_duckdb_identifier('is_transfer_candidate')}"
-                )
-
-            # Note on JSON: DuckDB's JSON support in read_csv can be tricky.
-            # We start with basic normalization.
-            # Issue #185: Complete type normalization
-            # Projection entries are quoted identifiers from DuckDB's internal
-            # transactions_raw introspection, plus static expressions over those identifiers.
-            duckdb_varchar_list_type = quote_duckdb_string_literal('["VARCHAR"]')
-            tags_list_expr = (
-                f"from_json({quote_duckdb_identifier('tags_final')}, "
-                f"{duckdb_varchar_list_type}) AS tags_list"
-            )
-            source_sql = "\n".join(
-                [
-                    "CREATE OR REPLACE VIEW transactions_source AS",
-                    "SELECT",
-                    *(f"    {projection}," for projection in source_projection),
-                    "    (",
-                    f"        COALESCE({is_transfer_expr}, 0) = 1",
-                    f"        AND {transfer_group_expr} IS NOT NULL",
-                    f"        AND TRIM({transfer_group_expr}) <> ''",
-                    "    ) AS is_transfer_bool,",
-                    "    -- Convert JSON string to DuckDB LIST",
-                    f"    {tags_list_expr}",
-                    "FROM transactions_raw",
-                ]
-            )
+            source_sql = build_transactions_source_sql(source_columns)
             self.conn.execute(source_sql)
             filter_where = build_report_filter_duckdb_where(self.report_filters)
             view_sql = "CREATE OR REPLACE VIEW transactions AS SELECT * FROM transactions_source"
@@ -509,7 +382,8 @@ class DuckDBAnalytics:
             f"LIMIT {top_n}"  # nosec B608
         )
         logger.debug(f"Calculating top {top_n} tags with DuckDB unnest")
-        return self.conn.execute(sql).pl()
+        result: "pl.DataFrame" = self.conn.execute(sql).pl()
+        return result
 
     def __enter__(self) -> "DuckDBAnalytics":
         """Context manager entry."""

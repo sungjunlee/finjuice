@@ -1,25 +1,52 @@
-"""Review command for transactions needing manual attention."""
+"""Review command for transactions needing manual attention.
 
-import json
+Filter predicates live in :mod:`finjuice.pipeline.cli.commands.review_filters`
+and are re-exported here so existing callers can keep importing from this
+module. Human rendering lives in
+:mod:`finjuice.pipeline.cli.commands.review_rendering`. JSON row projection
+lives in :mod:`finjuice.pipeline.cli.commands.review_serialize`. Payload
+shaping helpers (sorting, rule notes, count syncing) live in
+:mod:`finjuice.pipeline.cli.commands.review_payload`.
+"""
+
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 import polars as pl
 import typer
-from rich.table import Table
 
 from finjuice.pipeline.cli import output as cli_output
 from finjuice.pipeline.cli.commands.export_helpers import validate_period
-from finjuice.pipeline.cli.output import ErrorCode, ExitCode, console, emit, emit_error
+from finjuice.pipeline.cli.commands.review_filters import (
+    _count_matches,
+    _default_review_expr,
+    _is_list_dtype,  # noqa: F401 — re-exported for existing review imports
+    _rule_matched_expr,
+    _tags_present_expr,  # noqa: F401 — re-exported for existing review imports
+    _untagged_expr,
+)
+from finjuice.pipeline.cli.commands.review_payload import (
+    _load_review_rule_notes,  # noqa: F401 — re-exported for existing review imports
+    _sort_review_rows,  # noqa: F401 — re-exported for existing review imports
+    _sync_review_page_counts,  # noqa: F401 — re-exported for existing review imports
+)
+from finjuice.pipeline.cli.commands.review_rendering import (
+    _format_amount,  # noqa: F401 — re-exported for existing review imports
+    _format_confidence,  # noqa: F401 — re-exported for existing review imports
+    _render_review,
+)
+from finjuice.pipeline.cli.commands.review_serialize import (
+    _compact_review_result,
+    _serialize_transaction,
+)
+from finjuice.pipeline.cli.output import ErrorCode, ExitCode, emit, emit_error
 from finjuice.pipeline.cli.privacy import (
     PrivacyProfile,
     apply_privacy_profile,
-    compact_rule_notes,
     privacy_meta,
 )
 from finjuice.pipeline.cli.utils import get_config
-from finjuice.pipeline.tagging.rules_yaml_io import summarize_rule_notes
 
 logger = logging.getLogger(__name__)
 
@@ -49,210 +76,6 @@ def _load_all_history(csv_base_dir: Path) -> Optional[pl.DataFrame]:
         return None
 
     return get_all_transactions(csv_base_dir)
-
-
-def _is_list_dtype(dtype: pl.DataType | None) -> bool:
-    """Return True when the column is a Polars list type."""
-    return dtype == pl.List(pl.Utf8) or (dtype is not None and str(dtype).startswith("List"))
-
-
-def _untagged_expr(dtype: pl.DataType | None) -> pl.Expr:
-    """Return an expression matching empty or null tags."""
-    if _is_list_dtype(dtype):
-        return (pl.col("tags_final").list.len() == 0) | pl.col("tags_final").is_null()
-
-    return pl.col("tags_final").str.strip_chars().is_in(["[]", ""]) | pl.col("tags_final").is_null()
-
-
-def _tags_present_expr(column: str, dtype: pl.DataType | None) -> pl.Expr:
-    """Return an expression matching non-empty tag arrays stored as list or JSON text."""
-    if _is_list_dtype(dtype):
-        return (pl.col(column).list.len() > 0) & pl.col(column).is_not_null()
-
-    return pl.col(column).is_not_null() & ~pl.col(column).str.strip_chars().is_in(["[]", ""])
-
-
-def _rule_matched_expr(df: pl.DataFrame) -> pl.Expr:
-    """Return the canonical rule_matched predicate for review signals."""
-    expr = pl.lit(False)
-    if "tags_rule" in df.columns:
-        expr = expr | _tags_present_expr("tags_rule", df.schema.get("tags_rule"))
-    if "category_rule" in df.columns:
-        expr = expr | (
-            pl.col("category_rule").is_not_null()
-            & (pl.col("category_rule").str.strip_chars() != "")
-        )
-    return expr
-
-
-def _default_review_expr(dtype: pl.DataType | None) -> pl.Expr:
-    """Return the default review predicate used when no review flags are set."""
-    return (
-        (pl.col("needs_review") == 1)
-        | _untagged_expr(dtype)
-        | (pl.col("category_final") == "미분류")
-    )
-
-
-def _normalize_tags(value: Any) -> list[str]:
-    """Normalize tags into a JSON-safe list."""
-    if isinstance(value, list):
-        return [str(tag) for tag in value if tag is not None and str(tag)]
-
-    if isinstance(value, str):
-        stripped = value.strip()
-        if not stripped or stripped == "[]":
-            return []
-        try:
-            decoded = json.loads(stripped)
-        except json.JSONDecodeError:
-            return [stripped]
-        if isinstance(decoded, list):
-            return [str(tag) for tag in decoded if tag is not None and str(tag)]
-
-    return []
-
-
-def _row_rule_matched(row: dict[str, Any]) -> bool:
-    """Return whether a serialized row has rule-derived tags or category."""
-    category_rule = row.get("category_rule")
-    if category_rule is not None and str(category_rule).strip():
-        return True
-    return bool(_normalize_tags(row.get("tags_rule")))
-
-
-def _format_amount(amount: Any) -> str:
-    """Format a transaction amount as Korean won."""
-    if amount is None:
-        return "-"
-
-    amount_value = float(amount)
-    formatted = f"₩{abs(amount_value):,.0f}"
-    return f"-{formatted}" if amount_value < 0 else formatted
-
-
-def _format_confidence(confidence: Any) -> str:
-    """Format a confidence score for table output."""
-    if confidence is None:
-        return "-"
-    return f"{float(confidence):.2f}"
-
-
-def _is_low_confidence(confidence: Any, threshold: float | None) -> bool:
-    """Return whether *confidence* matches the active low-confidence filter."""
-    if threshold is None:
-        return False
-    if confidence is None:
-        return True
-    try:
-        return float(confidence) < threshold
-    except (TypeError, ValueError):
-        return False
-
-
-def _review_reasons_for_row(
-    row: dict[str, Any],
-    *,
-    low_confidence_threshold: float | None,
-) -> list[str]:
-    """Derive machine-readable review reason labels from a transaction row."""
-    reasons: list[str] = []
-    if row.get("needs_review") == 1:
-        reasons.append("needs_review")
-    if not _normalize_tags(row.get("tags_final")):
-        reasons.append("untagged")
-    if row.get("category_final") == "미분류":
-        reasons.append("unclassified")
-    if _is_low_confidence(row.get("confidence"), low_confidence_threshold):
-        reasons.append("low_confidence")
-    return reasons
-
-
-def _review_severity(reasons: list[str]) -> str:
-    """Return the highest review severity for a set of review reasons."""
-    if "needs_review" in reasons:
-        return "high"
-    if "untagged" in reasons or "unclassified" in reasons:
-        return "medium"
-    return "low"
-
-
-def _serialize_transaction(
-    row: dict[str, Any],
-    *,
-    low_confidence_threshold: float | None,
-) -> dict[str, Any]:
-    """Project a transaction row into the review output contract."""
-    reasons = _review_reasons_for_row(
-        row,
-        low_confidence_threshold=low_confidence_threshold,
-    )
-    return {
-        "row_hash": row.get("row_hash"),
-        "date": row.get("date"),
-        "merchant_raw": row.get("merchant_raw"),
-        "amount": row.get("amount"),
-        "category_final": row.get("category_final"),
-        "tags_final": _normalize_tags(row.get("tags_final")),
-        "confidence": row.get("confidence"),
-        "needs_review": row.get("needs_review"),
-        "rule_matched": _row_rule_matched(row),
-        "reasons": reasons,
-        "severity": _review_severity(reasons),
-    }
-
-
-def _review_reasons_for_serialized(
-    row: dict[str, Any],
-    *,
-    low_confidence_threshold: float | None,
-) -> list[str]:
-    """Derive compact review reason labels from a serialized review row."""
-    existing = row.get("reasons")
-    if isinstance(existing, list):
-        return [str(reason) for reason in existing if reason is not None]
-
-    reasons: list[str] = []
-    if row.get("needs_review") == 1:
-        reasons.append("needs_review")
-    if not row.get("tags_final"):
-        reasons.append("untagged")
-    if row.get("category_final") == "미분류":
-        reasons.append("unclassified")
-    if _is_low_confidence(row.get("confidence"), low_confidence_threshold):
-        reasons.append("low_confidence")
-    return reasons
-
-
-def _compact_review_result(result: dict[str, Any]) -> dict[str, Any]:
-    """Return review JSON with row-level PII removed."""
-    compact = dict(result)
-    signals = result.get("signals")
-    low_confidence_threshold = (
-        signals.get("low_confidence_threshold") if isinstance(signals, dict) else None
-    )
-    compact["transactions"] = [
-        {
-            "row_hash": row.get("row_hash"),
-            "needs_review": row.get("needs_review"),
-            "rule_matched": row.get("rule_matched"),
-            "reasons": _review_reasons_for_serialized(
-                row,
-                low_confidence_threshold=low_confidence_threshold,
-            ),
-            "severity": row.get("severity"),
-        }
-        for row in result.get("transactions", [])
-    ]
-    compact["rule_notes"] = compact_rule_notes(result.get("rule_notes"))
-    return compact
-
-
-def _count_matches(df: pl.DataFrame, predicate: pl.Expr) -> int:
-    """Return the number of rows matching *predicate*."""
-    if df.is_empty():
-        return 0
-    return len(df.filter(predicate))
 
 
 def _build_review_next_steps(
@@ -307,87 +130,6 @@ def _build_review_next_steps(
         )
 
     return steps
-
-
-def _load_review_rule_notes(rules_file: Path) -> list[dict[str, Any]]:
-    """Best-effort rule notes for review JSON output."""
-    try:
-        return summarize_rule_notes(rules_file, limit=5)
-    except (OSError, ValueError):
-        return []
-
-
-def _render_review(result: dict[str, Any]) -> None:
-    """Render review results as a Rich table."""
-    transactions = result["transactions"]
-    filters = result.get("filters") or {}
-    month_label = "all history" if filters.get("all_history") else result.get("month") or "latest"
-
-    if not transactions:
-        typer.echo("📝 No transactions match the review filters.")
-        return
-
-    table = Table(title=f"Transactions Requiring Review ({month_label})")
-    table.add_column("Date", style="cyan")
-    table.add_column("Merchant", style="yellow")
-    table.add_column("Amount", justify="right", style="green")
-    table.add_column("Category", style="magenta")
-    table.add_column("Tags", style="blue")
-    table.add_column("Confidence", justify="right", style="white")
-
-    for row in transactions:
-        merchant = row.get("merchant_raw") or "N/A"
-        if len(merchant) > 30:
-            merchant = merchant[:27] + "..."
-
-        tags = row.get("tags_final") or []
-        tags_display = ", ".join(tags) if tags else "-"
-
-        table.add_row(
-            str(row.get("date") or "-"),
-            merchant,
-            _format_amount(row.get("amount")),
-            str(row.get("category_final") or "미분류"),
-            tags_display,
-            _format_confidence(row.get("confidence")),
-        )
-
-    console.print(table)
-    typer.echo(f"\n📊 Showing {result['total_count']} transactions")
-    pagination_dict = result.get("pagination")
-    if isinstance(pagination_dict, dict):
-        pagination = cli_output.Pagination(
-            limit=int(pagination_dict.get("limit", 0)),
-            cursor=str(pagination_dict.get("cursor", "0")),
-            next_cursor=pagination_dict.get("next_cursor"),
-            has_more=bool(pagination_dict.get("has_more", False)),
-            total_estimate=pagination_dict.get("total_estimate"),
-            truncated_by_bytes=bool(pagination_dict.get("truncated_by_bytes", False)),
-        )
-        cli_output.render_pagination_footer(len(transactions), pagination)
-
-
-def _sort_review_rows(df: pl.DataFrame) -> pl.DataFrame:
-    """Sort review rows newest-first with a stable row_hash tie-breaker."""
-    sort_columns = [column for column in ("datetime", "date", "row_hash") if column in df.columns]
-    if not sort_columns:
-        return df
-    descending = [column != "row_hash" for column in sort_columns]
-    return df.sort(sort_columns, descending=descending)
-
-
-def _sync_review_page_counts(payload: dict[str, Any]) -> None:
-    """Keep count fields aligned after JSON byte truncation."""
-    returned_count = len(payload.get("transactions", []))
-    payload["total_count"] = returned_count
-    payload.pop("row_count", None)
-
-    signals = payload.get("signals")
-    if isinstance(signals, dict):
-        signals["returned_count"] = returned_count
-        pagination = payload.get("pagination")
-        if isinstance(pagination, dict):
-            signals["truncated"] = bool(pagination.get("has_more", False))
 
 
 def review_command(

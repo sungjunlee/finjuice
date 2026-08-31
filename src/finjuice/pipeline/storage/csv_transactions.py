@@ -3,14 +3,24 @@
 Extracted from ``csv_partition_polars`` so transaction read/write logic is
 separable from asset snapshots and report-filter expression building. Public
 helpers remain importable through the original module via re-export.
+
+Schema/column helpers live in
+:mod:`finjuice.pipeline.storage.csv_transactions_helpers` and are re-exported
+here so existing callers can keep importing from this module.
+
+Write-time integer-flag and tag JSON serialization live in
+:mod:`finjuice.pipeline.storage.csv_transactions_serialize` and are
+re-exported here so existing callers can keep importing from this module.
+
+Read-time DataFrame normalization (datetime derivation, column projection,
+tag JSON decoding, empty-schema fallback) lives in
+:mod:`finjuice.pipeline.storage.csv_transactions_read_normalize` and is
+re-exported here so existing callers can keep importing from this module.
 """
 
 from __future__ import annotations
 
-import csv
-import json
 import logging
-from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -18,9 +28,25 @@ from typing import Any
 import polars as pl
 
 from finjuice.pipeline.storage.csv_schema import (
-    CSV_COLUMNS,
     POLARS_SCHEMA,
     get_partition_path,
+)
+from finjuice.pipeline.storage.csv_transactions_helpers import (
+    _add_read_defaults,
+    _ensure_schema_columns,
+    _get_transaction_read_columns,
+)
+from finjuice.pipeline.storage.csv_transactions_read_normalize import (
+    TAG_JSON_COLUMNS,  # noqa: F401 — re-exported for existing csv_transactions imports
+    _decode_tag_columns,
+    _empty_transactions_df,
+    _normalize_datetime_column,
+    _project_existing_columns,
+)
+from finjuice.pipeline.storage.csv_transactions_serialize import (
+    _cast_int_flag_columns,
+    _serialize_list,  # noqa: F401 — re-exported for existing csv_transactions imports
+    _serialize_tag_columns,
 )
 
 logger = logging.getLogger(__name__)
@@ -54,8 +80,7 @@ def read_month(
     partition_path = get_partition_path(base_dir, year, month)
 
     if not partition_path.exists():
-        schema = {col: POLARS_SCHEMA.get(col, pl.Utf8) for col in (columns or CSV_COLUMNS)}
-        return pl.DataFrame(schema=schema)
+        return _empty_transactions_df(columns)
 
     lf = pl.scan_csv(
         partition_path,
@@ -64,24 +89,14 @@ def read_month(
     )
     df = lf.collect()
 
-    if "datetime" not in df.columns and "date" in df.columns:
-        if "time" in df.columns:
-            df = df.with_columns((pl.col("date") + "T" + pl.col("time")).alias("datetime"))
-        else:
-            df = df.with_columns((pl.col("date") + "T00:00:00").alias("datetime"))
+    df = _normalize_datetime_column(df)
 
     df = _add_read_defaults(df, columns)
 
-    if columns is not None:
-        existing_cols = [c for c in columns if c in df.columns]
-        if existing_cols:
-            df = df.select(existing_cols)
+    df = _project_existing_columns(df, columns)
 
     if parse_tags:
-        tag_columns = ["tags_rule", "tags_ai", "tags_manual", "tags_final"]
-        for col in tag_columns:
-            if col in df.columns:
-                df = df.with_columns(pl.col(col).str.json_decode(dtype=pl.List(pl.Utf8)).alias(col))
+        df = _decode_tag_columns(df)
 
     return df
 
@@ -114,13 +129,7 @@ def read_range(
                 null_values=["", "NA", "NULL"],
             )
 
-            if "datetime" not in part_df.columns and "date" in part_df.columns:
-                if "time" in part_df.columns:
-                    part_df = part_df.with_columns(
-                        (pl.col("date") + "T" + pl.col("time")).alias("datetime")
-                    )
-                else:
-                    part_df = part_df.with_columns((pl.col("date") + "T00:00:00").alias("datetime"))
+            part_df = _normalize_datetime_column(part_df)
 
             part_df = _add_read_defaults(part_df, columns)
 
@@ -135,43 +144,15 @@ def read_range(
             current = current.replace(month=current.month + 1)
 
     if not dfs:
-        schema = {col: POLARS_SCHEMA.get(col, pl.Utf8) for col in (columns or CSV_COLUMNS)}
-        return pl.DataFrame(schema=schema)
+        return _empty_transactions_df(columns)
 
     df = pl.concat(dfs)
     if "datetime" in df.columns:
         df = df.sort("datetime")
 
-    if columns is not None:
-        existing_cols = [c for c in columns if c in df.columns]
-        if existing_cols:
-            df = df.select(existing_cols)
+    df = _project_existing_columns(df, columns)
 
-    tag_columns = ["tags_rule", "tags_ai", "tags_manual", "tags_final"]
-    for col in tag_columns:
-        if col in df.columns:
-            df = df.with_columns(pl.col(col).str.json_decode(dtype=pl.List(pl.Utf8)).alias(col))
-
-    return df
-
-
-def _serialize_tag_json(x: Any) -> str:
-    """Serialize tag collections to UTF-8 JSON without double-encoding."""
-    if x is None:
-        return "[]"
-    if isinstance(x, str):
-        stripped = x.strip()
-        if stripped == "":
-            return "[]"
-        try:
-            parsed = json.loads(stripped)
-        except json.JSONDecodeError:
-            parsed = None
-        if isinstance(parsed, list):
-            return json.dumps(parsed, ensure_ascii=False)
-        return stripped
-    payload = list(x) if isinstance(x, Iterable) and not isinstance(x, (str, bytes)) else [x]
-    return json.dumps(payload, ensure_ascii=False)
+    return _decode_tag_columns(df)
 
 
 def write_month(
@@ -186,28 +167,15 @@ def write_month(
     partition_path.parent.mkdir(parents=True, exist_ok=True)
 
     if df.height == 0 and df.width == 0:
-        schema = {col: POLARS_SCHEMA.get(col, pl.Utf8) for col in CSV_COLUMNS}
-        df = pl.DataFrame(schema=schema)
+        df = _empty_transactions_df()
     else:
         df = _ensure_schema_columns(df)
 
     if sort_by in df.columns:
         df = df.sort(sort_by)
 
-    int_columns = ["needs_review", "is_transfer_candidate", "is_transfer", "source_row"]
-    for col in int_columns:
-        if col in df.columns:
-            column_expr = pl.col(col).cast(pl.Int64, strict=False)
-            if col in {"is_transfer_candidate", "is_transfer"}:
-                column_expr = column_expr.fill_null(0)
-            df = df.with_columns(column_expr.alias(col))
-
-    tag_columns = ["tags_rule", "tags_ai", "tags_manual", "tags_final"]
-    for col in tag_columns:
-        if col in df.columns:
-            df = df.with_columns(
-                pl.col(col).map_elements(_serialize_tag_json, return_dtype=pl.Utf8).alias(col)
-            )
+    df = _cast_int_flag_columns(df)
+    df = _serialize_tag_columns(df)
 
     tmp_path = partition_path.with_suffix(".tmp")
     df.write_csv(
@@ -384,8 +352,7 @@ def get_all_transactions(base_dir: Path, columns: list[str] | None = None) -> pl
     WARNING: For very large datasets, prefer read_range with date filters.
     """
     if not base_dir.exists():
-        schema = {col: POLARS_SCHEMA.get(col, pl.Utf8) for col in (columns or CSV_COLUMNS)}
-        return pl.DataFrame(schema=schema)
+        return _empty_transactions_df(columns)
 
     partition_paths = []
     for year_dir in sorted(base_dir.iterdir()):
@@ -399,8 +366,7 @@ def get_all_transactions(base_dir: Path, columns: list[str] | None = None) -> pl
                 partition_paths.append(partition_path)
 
     if not partition_paths:
-        schema = {col: POLARS_SCHEMA.get(col, pl.Utf8) for col in (columns or CSV_COLUMNS)}
-        return pl.DataFrame(schema=schema)
+        return _empty_transactions_df(columns)
 
     dfs = []
     for path in partition_paths:
@@ -411,185 +377,20 @@ def get_all_transactions(base_dir: Path, columns: list[str] | None = None) -> pl
             null_values=["", "NA", "NULL"],
             columns=read_columns,
         )
-        if "datetime" not in part_df.columns and "date" in part_df.columns:
-            if "time" in part_df.columns:
-                part_df = part_df.with_columns(
-                    (pl.col("date") + "T" + pl.col("time")).alias("datetime")
-                )
-            else:
-                part_df = part_df.with_columns((pl.col("date") + "T00:00:00").alias("datetime"))
+        part_df = _normalize_datetime_column(part_df)
         part_df = _add_read_defaults(part_df, columns)
         dfs.append(part_df)
 
     if not dfs:
-        schema = {col: POLARS_SCHEMA.get(col, pl.Utf8) for col in (columns or CSV_COLUMNS)}
-        return pl.DataFrame(schema=schema)
+        return _empty_transactions_df(columns)
 
     df = pl.concat(dfs, how="diagonal_relaxed")
     if "datetime" in df.columns:
         df = df.sort("datetime")
 
-    if columns is not None:
-        existing_cols = [c for c in columns if c in df.columns]
-        if existing_cols:
-            df = df.select(existing_cols)
+    df = _project_existing_columns(df, columns)
 
-    tag_columns = ["tags_rule", "tags_ai", "tags_manual", "tags_final"]
-    for col in tag_columns:
-        if col in df.columns:
-            df = df.with_columns(pl.col(col).str.json_decode(dtype=pl.List(pl.Utf8)).alias(col))
-
-    return df
-
-
-def _get_transaction_read_columns(path: Path, columns: list[str] | None) -> list[str] | None:
-    """Return CSV columns needed for output projection plus datetime sorting."""
-    if columns is None:
-        return None
-
-    with path.open(newline="", encoding="utf-8") as handle:
-        header = next(csv.reader(handle), [])
-
-    available = set(header)
-    read_columns = [column for column in columns if column in available]
-    if "is_transfer_candidate" in columns and "is_transfer_candidate" not in available:
-        if "is_transfer" in available:
-            read_columns.append("is_transfer")
-
-    if "datetime" in available:
-        read_columns.append("datetime")
-    elif "date" in available:
-        read_columns.append("date")
-        if "time" in available:
-            read_columns.append("time")
-
-    return list(dict.fromkeys(read_columns)) or None
-
-
-def _add_read_defaults(df: pl.DataFrame, columns: list[str] | None = None) -> pl.DataFrame:
-    """Backfill additive read-time defaults for older compatible partitions."""
-    defaults: list[pl.Expr] = []
-    needs_notes = columns is None or "notes_manual" in columns
-    needs_candidate = columns is None or "is_transfer_candidate" in columns
-    needs_group_id = columns is None or "transfer_group_id" in columns
-
-    if needs_notes and "notes_manual" not in df.columns:
-        defaults.append(pl.lit("").cast(pl.Utf8).alias("notes_manual"))
-    elif needs_notes:
-        defaults.append(pl.col("notes_manual").cast(pl.Utf8, strict=False).fill_null(""))
-
-    if needs_candidate and "is_transfer_candidate" not in df.columns:
-        if "is_transfer" in df.columns:
-            defaults.append(
-                pl.col("is_transfer")
-                .cast(pl.Int64, strict=False)
-                .fill_null(0)
-                .alias("is_transfer_candidate")
-            )
-        else:
-            defaults.append(pl.lit(0).cast(pl.Int64).alias("is_transfer_candidate"))
-
-    if needs_group_id and "transfer_group_id" not in df.columns:
-        defaults.append(pl.lit(None).cast(pl.Utf8).alias("transfer_group_id"))
-
-    if not defaults:
-        return df
-    return df.with_columns(defaults)
-
-
-def _ensure_schema_columns(df: pl.DataFrame) -> pl.DataFrame:
-    """Ensure all CSV schema columns exist with appropriate defaults.
-
-    Handles test data or incomplete DataFrames by adding missing columns with
-    sensible defaults (empty lists for tags, None for optional fields, etc.).
-    """
-    defaults = {
-        "row_hash": pl.lit(None).cast(pl.Utf8),
-        "date": pl.lit(None).cast(pl.Utf8),
-        "time": pl.lit(None).cast(pl.Utf8),
-        "type_raw": pl.lit(None).cast(pl.Utf8),
-        "type_norm": pl.lit(None).cast(pl.Utf8),
-        "major_raw": pl.lit(None).cast(pl.Utf8),
-        "minor_raw": pl.lit(None).cast(pl.Utf8),
-        "merchant_raw": pl.lit(None).cast(pl.Utf8),
-        "memo_raw": pl.lit(None).cast(pl.Utf8),
-        "notes_manual": pl.lit("").cast(pl.Utf8),
-        "account": pl.lit(None).cast(pl.Utf8),
-        "currency": pl.lit("KRW").cast(pl.Utf8),
-        "counterparty": pl.lit(None).cast(pl.Utf8),
-        "datetime": pl.lit(None).cast(pl.Utf8),
-        "category_rule": pl.lit(None).cast(pl.Utf8),
-        "category_final": pl.lit("미분류").cast(pl.Utf8),
-        "transfer_group_id": pl.lit(None).cast(pl.Utf8),
-        "file_id": pl.lit(None).cast(pl.Utf8),
-        "amount": pl.lit(None).cast(pl.Float64),
-        "confidence": pl.lit(None).cast(pl.Float64),
-        "needs_review": pl.lit(0).cast(pl.Int64),
-        "is_transfer_candidate": pl.lit(0).cast(pl.Int64),
-        "is_transfer": pl.lit(0).cast(pl.Int64),
-        "source_row": pl.lit(None).cast(pl.Int64),
-        "tags_rule": pl.lit("[]").cast(pl.Utf8),
-        "tags_ai": pl.lit("[]").cast(pl.Utf8),
-        "tags_manual": pl.lit("[]").cast(pl.Utf8),
-        "tags_final": pl.lit("[]").cast(pl.Utf8),
-    }
-
-    tag_columns = ["tags_rule", "tags_ai", "tags_manual", "tags_final"]
-    for col in tag_columns:
-        if col in df.columns:
-            col_dtype = df.schema[col]
-            if isinstance(col_dtype, pl.List):
-                df = df.with_columns(
-                    pl.col(col)
-                    .map_elements(
-                        lambda x: json.dumps(
-                            list(x) if x is not None else [],
-                            ensure_ascii=False,
-                        ),
-                        return_dtype=pl.Utf8,
-                    )
-                    .alias(col)
-                )
-
-    def _null_if_blank(column_name: str) -> pl.Expr:
-        """Convert blank strings to null for category fallback chain."""
-        return pl.col(column_name).cast(pl.Utf8, strict=False).str.strip_chars().replace("", None)
-
-    if "category_rule" not in df.columns:
-        df = df.with_columns(defaults["category_rule"].alias("category_rule"))
-    else:
-        df = df.with_columns(_null_if_blank("category_rule").alias("category_rule"))
-
-    fallback_candidates: list[pl.Expr] = [_null_if_blank("category_rule")]
-    fallback_candidates.append(
-        _null_if_blank("minor_raw") if "minor_raw" in df.columns else pl.lit(None).cast(pl.Utf8)
-    )
-    fallback_candidates.append(
-        _null_if_blank("major_raw") if "major_raw" in df.columns else pl.lit(None).cast(pl.Utf8)
-    )
-    fallback_candidates.append(pl.lit("미분류").cast(pl.Utf8))
-    fallback_expr = pl.coalesce(fallback_candidates)
-
-    if "category_final" not in df.columns:
-        df = df.with_columns(fallback_expr.alias("category_final"))
-    else:
-        df = df.with_columns(
-            pl.when(_null_if_blank("category_final").is_not_null())
-            .then(pl.col("category_final").cast(pl.Utf8, strict=False))
-            .otherwise(fallback_expr)
-            .alias("category_final")
-        )
-
-    for col in CSV_COLUMNS:
-        if col not in df.columns:
-            if col in defaults:
-                df = df.with_columns(defaults[col].alias(col))
-            else:
-                df = df.with_columns(pl.lit(None).cast(pl.Utf8).alias(col))
-
-    schema_columns = [col for col in CSV_COLUMNS if col in df.columns]
-    extra_columns = [col for col in df.columns if col not in CSV_COLUMNS]
-    return df.select(schema_columns + extra_columns)
+    return _decode_tag_columns(df)
 
 
 __all__ = [

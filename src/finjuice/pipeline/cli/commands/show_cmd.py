@@ -1,6 +1,7 @@
 """finjuice CLI: ``show`` command for displaying transactions with filters.
 
 Extracted from ``cli/commands/init.py`` as part of Batch 3a of Epic #707.
+Human rendering lives in :mod:`finjuice.pipeline.cli.commands.show_rendering`.
 The Polars data-loading helpers remain inline for now; the optional
 extraction into a dedicated use-case layer (#700 deeper rework) is a
 follow-on.
@@ -12,10 +13,10 @@ from typing import Optional
 
 import polars as pl
 import typer
-from rich.table import Table
 
 from finjuice.pipeline.cli import output
-from finjuice.pipeline.cli.output import ErrorCode, ExitCode, console, emit_error
+from finjuice.pipeline.cli.commands.show_rendering import _render_show_table
+from finjuice.pipeline.cli.output import ErrorCode, ExitCode, emit_error
 from finjuice.pipeline.cli.report_filters import apply_report_filters, load_cli_report_filters
 from finjuice.pipeline.cli.utils import get_config
 
@@ -239,58 +240,12 @@ def show_command(
             )
             return
 
-        if len(df) == 0:
-            typer.echo("📝 No transactions match the filters.")
-            return
-
-        # Create Rich table
-        table = Table(title=table_title)
-        table.add_column("Date", style="cyan")
-        table.add_column("Merchant", style="yellow")
-        table.add_column("Amount", justify="right", style="green")
-        table.add_column("Tags", style="blue")
-        table.add_column("Account", style="magenta")
-
-        for row in df.iter_rows(named=True):
-            # Format amount with Korean won
-            amount = row["amount"]
-            amount_str = f"₩{abs(amount):,.0f}"
-            if amount < 0:
-                amount_str = f"-{amount_str}"
-
-            # Truncate merchant name
-            merchant_display = row.get("merchant_raw") or "N/A"
-            if len(merchant_display) > 30:
-                merchant_display = merchant_display[:27] + "..."
-
-            # tags_final is now a List type from Polars schema
-            tags = row.get("tags_final")
-            if tags and isinstance(tags, list) and len(tags) > 0:
-                tags_display = ", ".join(str(t) for t in tags)
-            else:
-                tags_display = "-"
-
-            # Truncate account
-            account = row.get("account") or "N/A"
-            if len(account) > 15:
-                account = account[:12] + "..."
-
-            table.add_row(
-                row["date"],
-                merchant_display,
-                amount_str,
-                tags_display,
-                account,
-            )
-
-        console.print(table)
-
-        # Summary
-        total = len(df)
-        total_amount = df["amount"].sum()
-        typer.echo(f"\n📊 Showing {total} transactions{scope_hint}")
-        typer.echo(f"💰 Total: ₩{abs(total_amount):,.0f}")
-        output.render_pagination_footer(total, pagination)
+        _render_show_table(
+            df,
+            table_title=table_title,
+            scope_hint=scope_hint,
+            pagination=pagination,
+        )
 
     except typer.Exit:
         raise

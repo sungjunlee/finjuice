@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import Any, TypedDict, cast
 
-from finjuice.pipeline.checkup import ActionPriority, CheckupBundle
+from finjuice.pipeline.checkup import ActionPriority
 from finjuice.pipeline.cli.privacy import compact_rule_notes
 
 from .compute import CheckupFacts
-from .detector import CheckupDiagnoses, detect_checkup_diagnoses
+from .detector import CheckupDiagnoses
 
 
 class CheckupSummaryPayload(TypedDict):
@@ -104,18 +104,6 @@ def serialize_checkup(
 ) -> dict[str, Any]:
     """Return the legacy dict payload shape expected by emit/apply_privacy_profile."""
     return cast(dict[str, Any], serialize_checkup_payload(facts, diagnoses))
-
-
-def _serialize_checkup_payload(bundle: CheckupBundle) -> CheckupPayload:
-    """Legacy helper preserving the typed checkup payload test surface."""
-    facts = CheckupFacts(bundle=bundle)
-    diagnoses = detect_checkup_diagnoses(facts)
-    return serialize_checkup_payload(facts, diagnoses)
-
-
-def _serialize_checkup(bundle: CheckupBundle) -> dict[str, Any]:
-    """Return the legacy dict payload shape expected by emit/apply_privacy_profile."""
-    return cast(dict[str, Any], _serialize_checkup_payload(bundle))
 
 
 def _compact_checkup_payload(result: CheckupPayload) -> CompactCheckupPayload:

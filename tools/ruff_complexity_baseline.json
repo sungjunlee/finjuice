@@ -111,8 +111,8 @@
       "column": 5,
       "limit": 10,
       "message": "`_build_next_actions` is too complex (15 > 10)",
-      "path": "src/finjuice/pipeline/checkup/compose.py",
-      "row": 137,
+      "path": "src/finjuice/pipeline/checkup/next_actions.py",
+      "row": 28,
       "symbol": "_build_next_actions",
       "value": 15
     },
@@ -121,8 +121,8 @@
       "column": 5,
       "limit": 12,
       "message": "Too many branches (14 > 12)",
-      "path": "src/finjuice/pipeline/checkup/compose.py",
-      "row": 137,
+      "path": "src/finjuice/pipeline/checkup/next_actions.py",
+      "row": 28,
       "symbol": "_build_next_actions",
       "value": 14
     },
@@ -137,12 +137,22 @@
       "value": 11
     },
     {
+      "code": "C901",
+      "column": 5,
+      "limit": 10,
+      "message": "`clear` is too complex (11 > 10)",
+      "path": "src/finjuice/pipeline/cli/commands/audit.py",
+      "row": 275,
+      "symbol": "clear",
+      "value": 11
+    },
+    {
       "code": "PLR0911",
       "column": 5,
       "limit": 6,
       "message": "Too many return statements (9 > 6)",
-      "path": "src/finjuice/pipeline/cli/commands/audit.py",
-      "row": 358,
+      "path": "src/finjuice/pipeline/cli/commands/audit_rendering.py",
+      "row": 86,
       "symbol": "_build_audit_log_details",
       "value": 9
     },
@@ -151,20 +161,10 @@
       "column": 5,
       "limit": 5,
       "message": "Too many arguments in function definition (6 > 5)",
-      "path": "src/finjuice/pipeline/cli/commands/audit.py",
-      "row": 165,
+      "path": "src/finjuice/pipeline/cli/commands/audit_template_metrics.py",
+      "row": 145,
       "symbol": "_build_template_metrics",
       "value": 6
-    },
-    {
-      "code": "C901",
-      "column": 5,
-      "limit": 10,
-      "message": "`clear` is too complex (11 > 10)",
-      "path": "src/finjuice/pipeline/cli/commands/audit.py",
-      "row": 665,
-      "symbol": "clear",
-      "value": 11
     },
     {
       "code": "C901",
@@ -221,8 +221,8 @@
       "column": 5,
       "limit": 10,
       "message": "`_discover_downloads` is too complex (14 > 10)",
-      "path": "src/finjuice/pipeline/cli/commands/import_cmd/use_case.py",
-      "row": 164,
+      "path": "src/finjuice/pipeline/cli/commands/import_cmd/inputs.py",
+      "row": 62,
       "symbol": "_discover_downloads",
       "value": 14
     },
@@ -231,8 +231,8 @@
       "column": 5,
       "limit": 6,
       "message": "Too many return statements (9 > 6)",
-      "path": "src/finjuice/pipeline/cli/commands/import_cmd/use_case.py",
-      "row": 164,
+      "path": "src/finjuice/pipeline/cli/commands/import_cmd/inputs.py",
+      "row": 62,
       "symbol": "_discover_downloads",
       "value": 9
     },
@@ -241,8 +241,8 @@
       "column": 5,
       "limit": 12,
       "message": "Too many branches (13 > 12)",
-      "path": "src/finjuice/pipeline/cli/commands/import_cmd/use_case.py",
-      "row": 164,
+      "path": "src/finjuice/pipeline/cli/commands/import_cmd/inputs.py",
+      "row": 62,
       "symbol": "_discover_downloads",
       "value": 13
     },
@@ -540,76 +540,6 @@
       "code": "C901",
       "column": 5,
       "limit": 10,
-      "message": "`_compute_rules_suggest_json` is too complex (15 > 10)",
-      "path": "src/finjuice/pipeline/cli/commands/rules_cmd/suggest.py",
-      "row": 181,
-      "symbol": "_compute_rules_suggest_json",
-      "value": 15
-    },
-    {
-      "code": "PLR0912",
-      "column": 5,
-      "limit": 12,
-      "message": "Too many branches (16 > 12)",
-      "path": "src/finjuice/pipeline/cli/commands/rules_cmd/suggest.py",
-      "row": 181,
-      "symbol": "_compute_rules_suggest_json",
-      "value": 16
-    },
-    {
-      "code": "PLR0913",
-      "column": 5,
-      "limit": 5,
-      "message": "Too many arguments in function definition (11 > 5)",
-      "path": "src/finjuice/pipeline/cli/commands/rules_cmd/suggest.py",
-      "row": 181,
-      "symbol": "_compute_rules_suggest_json",
-      "value": 11
-    },
-    {
-      "code": "C901",
-      "column": 5,
-      "limit": 10,
-      "message": "`_interactive_apply_suggestions` is too complex (17 > 10)",
-      "path": "src/finjuice/pipeline/cli/commands/rules_cmd/suggest.py",
-      "row": 691,
-      "symbol": "_interactive_apply_suggestions",
-      "value": 17
-    },
-    {
-      "code": "PLR0912",
-      "column": 5,
-      "limit": 12,
-      "message": "Too many branches (18 > 12)",
-      "path": "src/finjuice/pipeline/cli/commands/rules_cmd/suggest.py",
-      "row": 691,
-      "symbol": "_interactive_apply_suggestions",
-      "value": 18
-    },
-    {
-      "code": "PLR0913",
-      "column": 5,
-      "limit": 5,
-      "message": "Too many arguments in function definition (6 > 5)",
-      "path": "src/finjuice/pipeline/cli/commands/rules_cmd/suggest.py",
-      "row": 691,
-      "symbol": "_interactive_apply_suggestions",
-      "value": 6
-    },
-    {
-      "code": "PLR0915",
-      "column": 5,
-      "limit": 50,
-      "message": "Too many statements (87 > 50)",
-      "path": "src/finjuice/pipeline/cli/commands/rules_cmd/suggest.py",
-      "row": 691,
-      "symbol": "_interactive_apply_suggestions",
-      "value": 87
-    },
-    {
-      "code": "C901",
-      "column": 5,
-      "limit": 10,
       "message": "`suggest_rules_command` is too complex (22 > 10)",
       "path": "src/finjuice/pipeline/cli/commands/rules_cmd/suggest.py",
       "row": 444,
@@ -647,6 +577,46 @@
       "value": 77
     },
     {
+      "code": "C901",
+      "column": 5,
+      "limit": 10,
+      "message": "`_interactive_apply_suggestions` is too complex (17 > 10)",
+      "path": "src/finjuice/pipeline/cli/commands/rules_cmd/suggest_apply.py",
+      "row": 18,
+      "symbol": "_interactive_apply_suggestions",
+      "value": 17
+    },
+    {
+      "code": "PLR0912",
+      "column": 5,
+      "limit": 12,
+      "message": "Too many branches (18 > 12)",
+      "path": "src/finjuice/pipeline/cli/commands/rules_cmd/suggest_apply.py",
+      "row": 18,
+      "symbol": "_interactive_apply_suggestions",
+      "value": 18
+    },
+    {
+      "code": "PLR0913",
+      "column": 5,
+      "limit": 5,
+      "message": "Too many arguments in function definition (6 > 5)",
+      "path": "src/finjuice/pipeline/cli/commands/rules_cmd/suggest_apply.py",
+      "row": 18,
+      "symbol": "_interactive_apply_suggestions",
+      "value": 6
+    },
+    {
+      "code": "PLR0915",
+      "column": 5,
+      "limit": 50,
+      "message": "Too many statements (87 > 50)",
+      "path": "src/finjuice/pipeline/cli/commands/rules_cmd/suggest_apply.py",
+      "row": 18,
+      "symbol": "_interactive_apply_suggestions",
+      "value": 87
+    },
+    {
       "code": "PLR0913",
       "column": 5,
       "limit": 5,
@@ -660,21 +630,21 @@
       "code": "C901",
       "column": 5,
       "limit": 10,
-      "message": "`show_command` is too complex (18 > 10)",
+      "message": "`show_command` is too complex (12 > 10)",
       "path": "src/finjuice/pipeline/cli/commands/show_cmd.py",
-      "row": 64,
+      "row": 65,
       "symbol": "show_command",
-      "value": 18
+      "value": 12
     },
     {
       "code": "PLR0912",
       "column": 5,
       "limit": 12,
-      "message": "Too many branches (20 > 12)",
+      "message": "Too many branches (13 > 12)",
       "path": "src/finjuice/pipeline/cli/commands/show_cmd.py",
-      "row": 64,
+      "row": 65,
       "symbol": "show_command",
-      "value": 20
+      "value": 13
     },
     {
       "code": "PLR0913",
@@ -682,7 +652,7 @@
       "limit": 5,
       "message": "Too many arguments in function definition (9 > 5)",
       "path": "src/finjuice/pipeline/cli/commands/show_cmd.py",
-      "row": 64,
+      "row": 65,
       "symbol": "show_command",
       "value": 9
     },
@@ -690,21 +660,11 @@
       "code": "PLR0915",
       "column": 5,
       "limit": 50,
-      "message": "Too many statements (85 > 50)",
+      "message": "Too many statements (56 > 50)",
       "path": "src/finjuice/pipeline/cli/commands/show_cmd.py",
-      "row": 64,
+      "row": 65,
       "symbol": "show_command",
-      "value": 85
-    },
-    {
-      "code": "PLR0913",
-      "column": 5,
-      "limit": 5,
-      "message": "Too many arguments in function definition (7 > 5)",
-      "path": "src/finjuice/pipeline/cli/commands/tag.py",
-      "row": 154,
-      "symbol": "_compute_tag_edit",
-      "value": 7
+      "value": 56
     },
     {
       "code": "C901",
@@ -725,6 +685,16 @@
       "row": 281,
       "symbol": "tag_command",
       "value": 8
+    },
+    {
+      "code": "PLR0913",
+      "column": 5,
+      "limit": 5,
+      "message": "Too many arguments in function definition (7 > 5)",
+      "path": "src/finjuice/pipeline/cli/commands/tag_edit.py",
+      "row": 78,
+      "symbol": "_compute_tag_edit",
+      "value": 7
     },
     {
       "code": "PLR0913",
@@ -751,8 +721,8 @@
       "column": 5,
       "limit": 5,
       "message": "Too many arguments in function definition (7 > 5)",
-      "path": "src/finjuice/pipeline/cli/commands/template_cmd/execution.py",
-      "row": 166,
+      "path": "src/finjuice/pipeline/cli/commands/template_cmd/execution_helpers.py",
+      "row": 128,
       "symbol": "_discover_pivot_columns",
       "value": 7
     },
@@ -851,8 +821,8 @@
       "column": 5,
       "limit": 5,
       "message": "Too many arguments in function definition (6 > 5)",
-      "path": "src/finjuice/pipeline/cli/output.py",
-      "row": 283,
+      "path": "src/finjuice/pipeline/cli/output_pagination.py",
+      "row": 157,
       "symbol": "truncate_rows_to_max_bytes",
       "value": 6
     },
@@ -861,8 +831,8 @@
       "column": 5,
       "limit": 10,
       "message": "`_check_configuration` is too complex (12 > 10)",
-      "path": "src/finjuice/pipeline/doctor/checks.py",
-      "row": 310,
+      "path": "src/finjuice/pipeline/doctor/configuration.py",
+      "row": 16,
       "symbol": "_check_configuration",
       "value": 12
     },
@@ -871,8 +841,8 @@
       "column": 5,
       "limit": 12,
       "message": "Too many branches (13 > 12)",
-      "path": "src/finjuice/pipeline/doctor/checks.py",
-      "row": 310,
+      "path": "src/finjuice/pipeline/doctor/configuration.py",
+      "row": 16,
       "symbol": "_check_configuration",
       "value": 13
     },
@@ -881,8 +851,8 @@
       "column": 5,
       "limit": 10,
       "message": "`_check_data_status` is too complex (14 > 10)",
-      "path": "src/finjuice/pipeline/doctor/checks.py",
-      "row": 416,
+      "path": "src/finjuice/pipeline/doctor/data_status.py",
+      "row": 19,
       "symbol": "_check_data_status",
       "value": 14
     },
@@ -891,20 +861,10 @@
       "column": 5,
       "limit": 12,
       "message": "Too many branches (14 > 12)",
-      "path": "src/finjuice/pipeline/doctor/checks.py",
-      "row": 416,
+      "path": "src/finjuice/pipeline/doctor/data_status.py",
+      "row": 19,
       "symbol": "_check_data_status",
       "value": 14
-    },
-    {
-      "code": "PLR0913",
-      "column": 5,
-      "limit": 5,
-      "message": "Too many arguments in function definition (6 > 5)",
-      "path": "src/finjuice/pipeline/export/html_report.py",
-      "row": 358,
-      "symbol": "_render_html_report",
-      "value": 6
     },
     {
       "code": "PLR0913",
@@ -914,6 +874,16 @@
       "path": "src/finjuice/pipeline/export/html_report.py",
       "row": 538,
       "symbol": "generate_html_report",
+      "value": 6
+    },
+    {
+      "code": "PLR0913",
+      "column": 5,
+      "limit": 5,
+      "message": "Too many arguments in function definition (6 > 5)",
+      "path": "src/finjuice/pipeline/export/html_report_render.py",
+      "row": 321,
+      "symbol": "_render_html_report",
       "value": 6
     },
     {
@@ -1110,16 +1080,6 @@
       "code": "C901",
       "column": 5,
       "limit": 10,
-      "message": "`_rule_to_map` is too complex (12 > 10)",
-      "path": "src/finjuice/pipeline/tagging/rules_yaml_io.py",
-      "row": 80,
-      "symbol": "_rule_to_map",
-      "value": 12
-    },
-    {
-      "code": "C901",
-      "column": 5,
-      "limit": 10,
       "message": "`save_rules` is too complex (13 > 10)",
       "path": "src/finjuice/pipeline/tagging/rules_yaml_io.py",
       "row": 377,
@@ -1134,6 +1094,46 @@
       "path": "src/finjuice/pipeline/tagging/rules_yaml_io.py",
       "row": 391,
       "symbol": "save_rules.rule_to_dict",
+      "value": 11
+    },
+    {
+      "code": "C901",
+      "column": 5,
+      "limit": 10,
+      "message": "`_rule_to_map` is too complex (12 > 10)",
+      "path": "src/finjuice/pipeline/tagging/rules_yaml_roundtrip.py",
+      "row": 45,
+      "symbol": "_rule_to_map",
+      "value": 12
+    },
+    {
+      "code": "C901",
+      "column": 5,
+      "limit": 10,
+      "message": "`_compute_rules_suggest_json` is too complex (15 > 10)",
+      "path": "src/finjuice/pipeline/tagging/suggest_compute.py",
+      "row": 115,
+      "symbol": "_compute_rules_suggest_json",
+      "value": 15
+    },
+    {
+      "code": "PLR0912",
+      "column": 5,
+      "limit": 12,
+      "message": "Too many branches (16 > 12)",
+      "path": "src/finjuice/pipeline/tagging/suggest_compute.py",
+      "row": 115,
+      "symbol": "_compute_rules_suggest_json",
+      "value": 16
+    },
+    {
+      "code": "PLR0913",
+      "column": 5,
+      "limit": 5,
+      "message": "Too many arguments in function definition (11 > 5)",
+      "path": "src/finjuice/pipeline/tagging/suggest_compute.py",
+      "row": 115,
+      "symbol": "_compute_rules_suggest_json",
       "value": 11
     },
     {

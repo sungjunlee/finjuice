@@ -3,17 +3,26 @@ Audit command: Inspect and manage audit logs.
 
 Shows command execution history from .execution_audit.jsonl.
 Useful for security review and debugging.
+
+Human rendering lives in :mod:`finjuice.pipeline.cli.commands.audit_rendering`.
 """
 
 import json
 import logging
-from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any
 
 import typer
-from rich.table import Table
 
+from finjuice.pipeline.cli.commands.audit_rendering import (
+    _render_audit_clear,
+    _render_audit_log,
+    _render_audit_stats,
+)
+from finjuice.pipeline.cli.commands.audit_template_metrics import (
+    _serialize_template_run_summary,
+    _summarize_template_runs,
+)
 from finjuice.pipeline.cli.output import (
     ErrorCode,
     ExitCode,
@@ -21,7 +30,6 @@ from finjuice.pipeline.cli.output import (
     emit,
     emit_error,
     error,
-    success,
     warning,
 )
 from finjuice.pipeline.config import Config
@@ -32,292 +40,6 @@ app = typer.Typer(
     name="audit",
     help="Inspect and manage audit logs",
 )
-
-TemplateDomain = Literal["asset", "transaction"]
-
-
-@dataclass(frozen=True)
-class TemplateMetrics:
-    """Aggregated metrics for template_run events."""
-
-    total: int
-    success: int
-    failed: int
-    success_rate: float
-    avg_duration: float
-    retry_attempts: int
-    retry_recovery: float
-
-
-@dataclass(frozen=True)
-class TemplateRunSummary:
-    """Computed metrics and usage counters for template_run output rendering."""
-
-    overall: TemplateMetrics
-    asset: TemplateMetrics
-    transaction: TemplateMetrics
-    usage_counts: dict[str, int]
-    domain_usage_counts: dict[TemplateDomain, dict[str, int]]
-
-
-def _parse_duration(event: dict[str, Any]) -> float | None:
-    """Parse duration value from audit event."""
-    raw = event.get("duration")
-    if raw is None:
-        return 0.0
-    try:
-        return float(raw)
-    except (TypeError, ValueError):
-        logger.warning("Invalid duration value in audit event: %r", raw)
-        return None
-
-
-def _compute_template_retry_stats(template_runs: list[dict[str, Any]]) -> tuple[int, int]:
-    """Compute retry attempts and recovered retries from ordered template_run events.
-
-    Retry attempt is counted when a failed run is immediately followed by another run
-    with the same template_name and param_fingerprint.
-    """
-    retry_attempts = 0
-    recovered_retries = 0
-    for previous, current in zip(template_runs, template_runs[1:]):
-        same_template = previous.get("template_name") == current.get("template_name")
-        same_params = previous.get("param_fingerprint") == current.get("param_fingerprint")
-        if same_template and same_params and previous.get("success") is False:
-            retry_attempts += 1
-            if current.get("success") is True:
-                recovered_retries += 1
-    return retry_attempts, recovered_retries
-
-
-def _resolve_template_domain(event: dict[str, Any]) -> TemplateDomain:
-    """Resolve template domain, falling back to a default when unset."""
-    raw_domain = event.get("template_domain")
-    if isinstance(raw_domain, str):
-        normalized = raw_domain.strip().lower()
-        if normalized in {"asset", "transaction"}:
-            return cast(TemplateDomain, normalized)
-        logger.debug(
-            "Invalid template_domain value '%s'; falling back to template_name prefix",
-            raw_domain,
-        )
-
-    template_name = str(event.get("template_name", ""))
-    return "asset" if template_name.startswith("asset_") else "transaction"
-
-
-def _compute_domain_template_retry_stats(
-    template_runs: list[dict[str, Any]],
-) -> dict[TemplateDomain, tuple[int, int]]:
-    """Compute domain retry stats from the full ordered template event stream."""
-    attempts: dict[TemplateDomain, int] = {"asset": 0, "transaction": 0}
-    recovered: dict[TemplateDomain, int] = {"asset": 0, "transaction": 0}
-
-    for previous, current in zip(template_runs, template_runs[1:]):
-        same_template = previous.get("template_name") == current.get("template_name")
-        same_params = previous.get("param_fingerprint") == current.get("param_fingerprint")
-        if same_template and same_params and previous.get("success") is False:
-            domain = _resolve_template_domain(previous)
-            attempts[domain] += 1
-            if current.get("success") is True:
-                recovered[domain] += 1
-
-    return {
-        "asset": (attempts["asset"], recovered["asset"]),
-        "transaction": (attempts["transaction"], recovered["transaction"]),
-    }
-
-
-def _count_template_outcomes(template_runs: list[dict[str, Any]]) -> tuple[int, int, int]:
-    """Count total/success/failed outcomes from template events."""
-    total = len(template_runs)
-    success = sum(1 for event in template_runs if event.get("success") is True)
-    failed = total - success
-    return total, success, failed
-
-
-def _compute_success_rate(success: int, total: int) -> float:
-    """Compute success rate percentage."""
-    return (success / total) * 100 if total > 0 else 0.0
-
-
-def _compute_average_duration(template_runs: list[dict[str, Any]], total: int) -> float:
-    """Compute average duration for template events."""
-    if total == 0:
-        return 0.0
-    durations = [value for event in template_runs if (value := _parse_duration(event)) is not None]
-    return sum(durations) / len(durations) if durations else 0.0
-
-
-def _resolve_retry_stats(
-    template_runs: list[dict[str, Any]],
-    retry_stats: tuple[int, int] | None,
-) -> tuple[int, int]:
-    """Resolve retry stats from override or by computing from event stream."""
-    return _compute_template_retry_stats(template_runs) if retry_stats is None else retry_stats
-
-
-def _compute_retry_recovery_rate(retry_attempts: int, recovered_retries: int) -> float:
-    """Compute retry recovery percentage."""
-    return (recovered_retries / retry_attempts) * 100 if retry_attempts > 0 else 0.0
-
-
-def _build_template_metrics(
-    *,
-    total: int,
-    success: int,
-    failed: int,
-    avg_duration: float,
-    retry_attempts: int,
-    recovered_retries: int,
-) -> TemplateMetrics:
-    """Build TemplateMetrics from computed scalar values."""
-    return TemplateMetrics(
-        total=total,
-        success=success,
-        failed=failed,
-        success_rate=_compute_success_rate(success, total),
-        avg_duration=avg_duration,
-        retry_attempts=retry_attempts,
-        retry_recovery=_compute_retry_recovery_rate(retry_attempts, recovered_retries),
-    )
-
-
-def _compute_template_metrics(
-    template_runs: list[dict[str, Any]],
-    retry_stats: tuple[int, int] | None = None,
-) -> TemplateMetrics:
-    """Compute aggregate metrics for a template_run event group."""
-    total, success, failed = _count_template_outcomes(template_runs)
-    retry_attempts, recovered_retries = _resolve_retry_stats(template_runs, retry_stats)
-    return _build_template_metrics(
-        total=total,
-        success=success,
-        failed=failed,
-        avg_duration=_compute_average_duration(template_runs, total),
-        retry_attempts=retry_attempts,
-        recovered_retries=recovered_retries,
-    )
-
-
-def _collect_template_usage(
-    template_runs: list[dict[str, Any]],
-) -> tuple[
-    dict[TemplateDomain, list[dict[str, Any]]],
-    dict[str, int],
-    dict[TemplateDomain, dict[str, int]],
-]:
-    """Collect per-domain runs and usage counters in a single pass."""
-    domain_runs: dict[TemplateDomain, list[dict[str, Any]]] = {"asset": [], "transaction": []}
-    usage_counts: dict[str, int] = {}
-    domain_usage_counts: dict[TemplateDomain, dict[str, int]] = {"asset": {}, "transaction": {}}
-    for event in template_runs:
-        template_name = str(event.get("template_name", "unknown"))
-        usage_counts[template_name] = usage_counts.get(template_name, 0) + 1
-        domain = _resolve_template_domain(event)
-        domain_runs[domain].append(event)
-        domain_usage = domain_usage_counts[domain]
-        domain_usage[template_name] = domain_usage.get(template_name, 0) + 1
-    return domain_runs, usage_counts, domain_usage_counts
-
-
-def _build_domain_metrics(
-    template_runs: list[dict[str, Any]],
-    domain_runs: dict[TemplateDomain, list[dict[str, Any]]],
-) -> tuple[TemplateMetrics, TemplateMetrics]:
-    """Build domain-specific template metrics using global-adjacency retry attribution."""
-    retry_stats = _compute_domain_template_retry_stats(template_runs)
-    asset_metrics = _compute_template_metrics(
-        domain_runs["asset"],
-        retry_stats=retry_stats["asset"],
-    )
-    transaction_metrics = _compute_template_metrics(
-        domain_runs["transaction"],
-        retry_stats=retry_stats["transaction"],
-    )
-    return asset_metrics, transaction_metrics
-
-
-def _summarize_template_runs(template_runs: list[dict[str, Any]]) -> TemplateRunSummary:
-    """Compute template metrics and usage counters for rendering."""
-    domain_runs, usage_counts, domain_usage_counts = _collect_template_usage(template_runs)
-    asset_metrics, transaction_metrics = _build_domain_metrics(template_runs, domain_runs)
-    return TemplateRunSummary(
-        overall=_compute_template_metrics(template_runs),
-        asset=asset_metrics,
-        transaction=transaction_metrics,
-        usage_counts=usage_counts,
-        domain_usage_counts=domain_usage_counts,
-    )
-
-
-def _render_top_template_section(title: str, usage_counts: dict[str, int]) -> None:
-    """Render a top-template usage section with a fixed top-5 limit."""
-    console.print(f"\n[bold]{title}[/bold]")
-    top_templates = sorted(usage_counts.items(), key=lambda x: x[1], reverse=True)[:5]
-    if top_templates:
-        for template_name, count in top_templates:
-            console.print(f"  {count:3d}× {template_name}")
-    else:
-        console.print("  (none)")
-
-
-def _new_metrics_table() -> Table:
-    """Create a Rich table for template metrics output."""
-    template_table = Table(show_header=False, box=None, padding=(0, 2))
-    template_table.add_column("Metric", style="bold")
-    template_table.add_column("Value")
-    return template_table
-
-
-def _add_overall_metric_rows(table: Table, metrics: TemplateMetrics) -> None:
-    """Add overall template metric rows."""
-    table.add_row("Template runs", str(metrics.total))
-    table.add_row("  ├─ Successful", f"[green]{metrics.success}[/green]")
-    table.add_row("  └─ Failed", f"[red]{metrics.failed}[/red]")
-    table.add_row("Success rate", f"{metrics.success_rate:.1f}%")
-    table.add_row("Avg duration", f"{metrics.avg_duration:.2f}s")
-    table.add_row("Retry attempts", str(metrics.retry_attempts))
-    table.add_row("Retry recovery", f"{metrics.retry_recovery:.1f}%")
-    table.add_row("", "")
-
-
-def _add_domain_metric_rows(table: Table, label: str, metrics: TemplateMetrics) -> None:
-    """Add per-domain template metric rows."""
-    table.add_row(f"{label} runs", str(metrics.total))
-    table.add_row(f"  ├─ {label} successful", f"[green]{metrics.success}[/green]")
-    table.add_row(f"  └─ {label} failed", f"[red]{metrics.failed}[/red]")
-    table.add_row(f"{label} success rate", f"{metrics.success_rate:.1f}%")
-    table.add_row(f"{label} retry attempts", str(metrics.retry_attempts))
-    table.add_row(f"{label} retry recovery", f"{metrics.retry_recovery:.1f}%")
-    table.add_row("", "")
-
-
-def _build_template_metrics_table(summary: TemplateRunSummary) -> Table:
-    """Build a rendered table for template metrics."""
-    table = _new_metrics_table()
-    _add_overall_metric_rows(table, summary.overall)
-    _add_domain_metric_rows(table, "Asset", summary.asset)
-    _add_domain_metric_rows(table, "Transaction", summary.transaction)
-    return table
-
-
-def _render_template_run_metrics(summary: TemplateRunSummary) -> None:
-    """Render template metrics table and top-usage sections."""
-    console.print("\n[bold cyan]📈 Template Run Metrics[/bold cyan]\n")
-    console.print(_build_template_metrics_table(summary))
-
-    _render_top_template_section("Top Templates:", summary.usage_counts)
-    _render_top_template_section("Top Asset Templates:", summary.domain_usage_counts["asset"])
-    _render_top_template_section(
-        "Top Transaction Templates:",
-        summary.domain_usage_counts["transaction"],
-    )
-
-
-def _serialize_template_run_summary(summary: TemplateRunSummary) -> dict[str, Any]:
-    """Serialize template metrics summary for JSON output."""
-    return cast(dict[str, Any], asdict(summary))
 
 
 def _read_audit_events_with_skip(audit_log_path: Path) -> tuple[list[dict[str, Any]], int]:
@@ -353,118 +75,6 @@ def _write_audit_events_atomically(audit_log_path: Path, events: list[dict[str, 
     except OSError:
         temp_path.unlink(missing_ok=True)
         raise
-
-
-def _build_audit_log_details(event: dict[str, Any]) -> str:
-    """Build the details column text for a single audit event."""
-    event_name = event.get("event", "unknown")
-
-    if event_name == "command_suggested":
-        confirmed = event.get("user_confirmed")
-        if confirmed is True:
-            return "[green]✓ Confirmed[/green]"
-        if confirmed is False:
-            return "[yellow]✗ Declined[/yellow]"
-        return "[dim]Pending[/dim]"
-
-    if event_name == "command_executed":
-        success = event.get("success", False)
-        duration = event.get("duration", 0)
-        returncode = event.get("returncode", 0)
-
-        if success:
-            return f"[green]✓ Success ({duration:.1f}s)[/green]"
-        return f"[red]✗ Failed (code: {returncode})[/red]"
-
-    if event_name == "command_error":
-        stage = event.get("stage", "unknown")
-        error_message = event.get("error_message", "Unknown error")
-        return f"[red]{stage}: {error_message[:40]}...[/red]"
-
-    if event_name == "template_run":
-        template_name = event.get("template_name", "unknown")
-        success = event.get("success") is True
-        duration = _parse_duration(event)
-        if success:
-            return f"[green]✓ {template_name} ({duration:.1f}s)[/green]"
-        error_type = event.get("error_type", "Error")
-        return f"[red]✗ {template_name} ({error_type})[/red]"
-
-    return ""
-
-
-def _render_audit_log(result: dict[str, Any]) -> None:
-    """Render human-readable audit log output."""
-    events = cast(list[dict[str, Any]], result["events"])
-    count = int(result["count"])
-
-    if not events:
-        console.print("[dim]No events found matching filters.[/dim]")
-        return
-
-    console.print(f"\n[bold cyan]📋 Audit Log ({count} events)[/bold cyan]\n")
-
-    table = Table(show_header=True)
-    table.add_column("Timestamp", style="dim")
-    table.add_column("Event", style="bold")
-    table.add_column("Command", style="cyan")
-    table.add_column("Details")
-
-    for event in events:
-        timestamp = str(event.get("timestamp", "N/A"))[:19]
-        event_name = str(event.get("event", "unknown"))
-        command = str(event.get("command", "N/A"))
-        details = _build_audit_log_details(event)
-        table.add_row(timestamp, event_name, command, details)
-
-    console.print(table)
-    console.print()
-
-
-def _render_audit_stats(result: dict[str, Any]) -> None:
-    """Render human-readable audit statistics output."""
-    suggestions = cast(dict[str, int], result["suggestions"])
-    executions = cast(dict[str, int], result["executions"])
-    success_rate = cast(float | None, result["success_rate"])
-    top_commands = cast(list[dict[str, Any]], result["top_commands"])
-
-    console.print("\n[bold cyan]📊 Audit Log Statistics[/bold cyan]\n")
-
-    table = Table(show_header=False, box=None, padding=(0, 2))
-    table.add_column("Metric", style="bold")
-    table.add_column("Value")
-
-    table.add_row("Total suggestions", str(suggestions["total"]))
-    table.add_row("  ├─ Confirmed", f"[green]{suggestions['confirmed']}[/green]")
-    table.add_row("  └─ Declined", f"[yellow]{suggestions['declined']}[/yellow]")
-    table.add_row("", "")
-    table.add_row("Total executions", str(executions["total"]))
-    table.add_row("  ├─ Successful", f"[green]{executions['successful']}[/green]")
-    table.add_row("  └─ Failed", f"[red]{executions['failed']}[/red]")
-
-    if success_rate is not None:
-        table.add_row("Success rate", f"{success_rate:.1f}%")
-
-    console.print(table)
-
-    if top_commands:
-        console.print("\n[bold]Top Commands:[/bold]")
-        for top_command in top_commands:
-            command = str(top_command["command"])
-            count = int(top_command["count"])
-            console.print(f"  {count:3d}× {command}")
-
-    template_summary = cast(TemplateRunSummary | None, result.get("_template_summary"))
-    if template_summary is not None:
-        _render_template_run_metrics(template_summary)
-
-    console.print()
-
-
-def _render_audit_clear(result: dict[str, Any]) -> None:
-    """Render human-readable audit clear output."""
-    entries_kept = int(result["entries_kept"])
-    success(f"Cleared audit log (kept last {entries_kept} entries)", prefix="✓")
 
 
 @app.command()

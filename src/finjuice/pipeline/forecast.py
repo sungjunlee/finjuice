@@ -1,4 +1,10 @@
-"""Deterministic net worth forecasting with scenarios.yaml inputs."""
+"""Deterministic net worth forecasting with scenarios.yaml inputs.
+
+Pure date and money math helpers live in :mod:`finjuice.pipeline.forecast_helpers`,
+mutable portfolio state and its monthly mutations live in
+:mod:`finjuice.pipeline.forecast_state`, and both are re-exported here so
+existing call sites keep importing them unchanged.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +13,23 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+from finjuice.pipeline.forecast_helpers import (
+    _add_months,
+    _calculate_cagr,
+    _days_in_month,  # noqa: F401 — re-exported for existing forecast imports
+    _normalize_liability_rate,  # noqa: F401 — re-exported for existing forecast imports
+    _round_money,
+)
+from finjuice.pipeline.forecast_state import (
+    _FORECAST_SAVINGS_ASSET_CATEGORY,  # noqa: F401 — re-exported for existing forecast imports
+    _FORECAST_SAVINGS_ASSET_NAME,  # noqa: F401 — re-exported for existing forecast imports
+    _apply_asset_growth,
+    _apply_asset_swap,
+    _apply_cashflow_asset,
+    _apply_liability_growth,
+    _MutableForecastAsset,
+    _MutableForecastLiability,
+)
 from finjuice.pipeline.forecast_validators import (
     SCENARIO_NAMES,
     SCENARIOS_CONFIG_VERSION,
@@ -24,9 +47,6 @@ from finjuice.pipeline.forecast_validators import (
     validate_scenarios_config_file,
 )
 from finjuice.pipeline.networth import NetWorthPosition, normalize_asset_name
-
-_FORECAST_SAVINGS_ASSET_NAME = "Projected savings"
-_FORECAST_SAVINGS_ASSET_CATEGORY = "financial"
 
 __all__ = [
     "SCENARIO_NAMES",
@@ -96,24 +116,6 @@ class ForecastResult:
     scenario: ScenarioName
     projections: list[ForecastProjection]
     summary: ForecastSummary
-
-
-@dataclass
-class _MutableForecastAsset:
-    """Mutable internal asset representation."""
-
-    name: str
-    category: str
-    value: float
-
-
-@dataclass
-class _MutableForecastLiability:
-    """Mutable internal liability representation."""
-
-    name: str
-    principal: float
-    rate: float | None = None
 
 
 def load_scenarios_config(
@@ -274,48 +276,6 @@ def _snapshot_projection(
     )
 
 
-def _apply_asset_growth(
-    assets: Any,
-    assumptions: ScenarioAssumptions,
-    scenario: ScenarioName,
-) -> None:
-    """Apply one month of asset growth in place."""
-    for asset in assets:
-        annual_return = assumptions.asset_returns.get(asset.category, {}).get(scenario, 0.0)
-        asset.value = _round_money(asset.value * (1.0 + (annual_return / 12.0)))
-
-
-def _apply_liability_growth(
-    liabilities: list[_MutableForecastLiability],
-    assumptions: ScenarioAssumptions,
-) -> None:
-    """Apply one month of liability growth in place."""
-    for liability in liabilities:
-        rate = _normalize_liability_rate(liability.rate)
-        if liability.rate is not None:
-            rate += assumptions.liability_rate_delta
-        monthly_rate = max(rate, 0.0) / 12.0
-        liability.principal = _round_money(liability.principal * (1.0 + monthly_rate))
-
-
-def _apply_cashflow_asset(
-    assets: dict[str, _MutableForecastAsset],
-    amount: int,
-) -> None:
-    """Apply net cashflow into the synthetic projected savings bucket."""
-    if amount == 0:
-        return
-
-    key = normalize_asset_name(_FORECAST_SAVINGS_ASSET_NAME)
-    if key not in assets:
-        assets[key] = _MutableForecastAsset(
-            name=_FORECAST_SAVINGS_ASSET_NAME,
-            category=_FORECAST_SAVINGS_ASSET_CATEGORY,
-            value=0.0,
-        )
-    assets[key].value = _round_money(assets[key].value + float(amount))
-
-
 def _apply_opening_one_shot_events(
     assets: dict[str, _MutableForecastAsset],
     events: list[LifecycleEvent],
@@ -420,26 +380,6 @@ def _apply_lifecycle_events(
     return hits
 
 
-def _apply_asset_swap(
-    assets: dict[str, _MutableForecastAsset],
-    event: AssetSwapEvent,
-) -> None:
-    """Replace one asset with another, failing fast when the source asset is missing."""
-    remove_key = normalize_asset_name(event.remove)
-    if remove_key not in assets:
-        raise ValueError(
-            f"Asset swap '{event.name}' cannot remove missing asset "
-            f"'{event.remove}' on {event.date.isoformat()}."
-        )
-
-    assets.pop(remove_key)
-    assets[normalize_asset_name(event.add.name)] = _MutableForecastAsset(
-        name=event.add.name,
-        category=event.add.category,
-        value=float(event.add.value),
-    )
-
-
 def _monthly_event_is_active(
     event: MonthlyNetExpenseEvent,
     *,
@@ -461,42 +401,3 @@ def _resolve_target_reached_at(
         if projection.net_worth >= target_net_worth:
             return projection.date
     return None
-
-
-def _calculate_cagr(start_value: float, end_value: float, years: int) -> float | None:
-    """Calculate CAGR when the start value is positive."""
-    if years <= 0 or start_value <= 0 or end_value <= 0:
-        return None
-    ratio = end_value / start_value
-    return round(float((ratio ** (1.0 / years)) - 1.0), 6)
-
-
-def _add_months(start_date: date, months: int) -> date:
-    """Return *start_date* shifted by a fixed number of months."""
-    month_index = (start_date.month - 1) + months
-    year = start_date.year + (month_index // 12)
-    month = (month_index % 12) + 1
-    day = min(start_date.day, _days_in_month(year, month))
-    return date(year, month, day)
-
-
-def _days_in_month(year: int, month: int) -> int:
-    """Return the number of days in a calendar month."""
-    if month == 2:
-        is_leap = year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
-        return 29 if is_leap else 28
-    if month in {4, 6, 9, 11}:
-        return 30
-    return 31
-
-
-def _round_money(value: float) -> float:
-    """Round money values to two decimals for deterministic output."""
-    return round(value, 2)
-
-
-def _normalize_liability_rate(raw_rate: float | None) -> float:
-    """Normalize liability rates expressed as decimals or human percentages."""
-    if raw_rate is None:
-        return 0.0
-    return raw_rate / 100.0 if abs(raw_rate) > 1.0 else raw_rate

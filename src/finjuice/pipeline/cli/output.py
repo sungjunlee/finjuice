@@ -3,28 +3,51 @@ CLI output helper module for standardized terminal output.
 
 Provides consistent formatting, colors, and icons across all CLI commands.
 Replaces scattered typer.echo calls with semantic output functions.
+
+Pagination and JSON ``_meta`` envelope helpers live in
+:mod:`finjuice.pipeline.cli.output_pagination` and are re-exported here.
+Rich semantic message helpers live in
+:mod:`finjuice.pipeline.cli.output_messages` and are re-exported here.
 """
 
 import json
-from dataclasses import dataclass
-from datetime import datetime, timezone
 from enum import Enum, IntEnum
 from types import MappingProxyType
 from typing import Any, Callable, Mapping, NoReturn, Optional
 
 import typer
 from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
 
-from finjuice import get_version
+from finjuice.pipeline.cli.output_messages import (  # noqa: F401
+    bullet_list,
+    error,
+    error_with_ai_hint,
+    hr,
+    info,
+    newline,
+    panel_info,
+    progress_indicator,
+    section,
+    step,
+    success,
+    table_summary,
+    warning,
+)
+from finjuice.pipeline.cli.output_pagination import (  # noqa: F401
+    DEFAULT_MAX_BYTES,
+    DEFAULT_PAGINATION_LIMIT,
+    MAX_PAGINATION_LIMIT,
+    Pagination,
+    _build_meta,
+    build_offset_pagination,
+    render_pagination_footer,
+    truncate_rows_to_max_bytes,
+    validate_pagination_args,
+    wrap_paginated_result,
+)
 
 # Global console instance (can be overridden for testing)
 console = Console(stderr=True)
-
-DEFAULT_PAGINATION_LIMIT = 100
-DEFAULT_MAX_BYTES = 1_048_576
-MAX_PAGINATION_LIMIT = 10_000
 
 
 # ---------------------------------------------------------------------------
@@ -125,23 +148,6 @@ def _normalize_exit_code(exit_code: ExitCode | int) -> int:
     return int(exit_code)
 
 
-def _build_meta(
-    command: str,
-    schema_version: str = "1.0",
-    extras: Optional[dict[str, Any]] = None,
-) -> dict[str, Any]:
-    """Build _meta envelope for JSON output."""
-    meta: dict[str, Any] = {
-        "schema_version": schema_version,
-        "finjuice_version": get_version(),
-        "command": command,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
-    if extras:
-        meta.update(extras)
-    return meta
-
-
 def emit(
     result: dict[str, Any],
     json_output: bool,
@@ -162,173 +168,6 @@ def emit(
         typer.echo(json.dumps(result, ensure_ascii=False, indent=2, default=str))
     else:
         render_fn(result)
-
-
-@dataclass
-class Pagination:
-    """Pagination envelope for bounded read commands.
-
-    The cursor is intentionally opaque to callers. The current implementation
-    stores an integer offset string, but this may switch to keyset pagination.
-    """
-
-    limit: int
-    cursor: str = "0"
-    next_cursor: Optional[str] = None
-    has_more: bool = False
-    total_estimate: Optional[int] = None
-    truncated_by_bytes: bool = False
-
-    def to_dict(self) -> dict[str, Any]:
-        """Return the JSON-serializable pagination envelope."""
-        return {
-            "limit": self.limit,
-            "cursor": self.cursor,
-            "next_cursor": self.next_cursor,
-            "has_more": self.has_more,
-            "total_estimate": self.total_estimate,
-            "truncated_by_bytes": self.truncated_by_bytes,
-        }
-
-
-def wrap_paginated_result(
-    payload: dict[str, Any],
-    *,
-    pagination: Pagination,
-) -> dict[str, Any]:
-    """Inject `pagination` key into a payload prior to emit()."""
-    payload["pagination"] = pagination.to_dict()
-    return payload
-
-
-def validate_pagination_args(
-    limit: int,
-    cursor: str,
-    max_bytes: int,
-    *,
-    json_output: bool = False,
-    command: str = "",
-) -> tuple[int, int, int]:
-    """Validate common pagination flags and return normalized values."""
-    if limit < 0:
-        emit_error(
-            "--limit must be greater than or equal to 0.",
-            error_code=ErrorCode.VALIDATION_FAILED,
-            exit_code=ExitCode.VALIDATION_ERROR,
-            json_output=json_output,
-            command=command,
-        )
-    if limit > MAX_PAGINATION_LIMIT:
-        emit_error(
-            f"--limit must be <= {MAX_PAGINATION_LIMIT}.",
-            error_code=ErrorCode.VALIDATION_FAILED,
-            exit_code=ExitCode.VALIDATION_ERROR,
-            json_output=json_output,
-            command=command,
-        )
-    if max_bytes < 0:
-        emit_error(
-            "--max-bytes must be greater than or equal to 0.",
-            error_code=ErrorCode.VALIDATION_FAILED,
-            exit_code=ExitCode.VALIDATION_ERROR,
-            json_output=json_output,
-            command=command,
-        )
-
-    try:
-        cursor_offset = int(cursor)
-    except ValueError:
-        emit_error(
-            "--cursor must be a valid pagination cursor.",
-            error_code=ErrorCode.VALIDATION_FAILED,
-            exit_code=ExitCode.VALIDATION_ERROR,
-            json_output=json_output,
-            command=command,
-        )
-    if cursor_offset < 0:
-        emit_error(
-            "--cursor must not be negative.",
-            error_code=ErrorCode.VALIDATION_FAILED,
-            exit_code=ExitCode.VALIDATION_ERROR,
-            json_output=json_output,
-            command=command,
-        )
-
-    return limit, cursor_offset, max_bytes
-
-
-def build_offset_pagination(
-    *,
-    limit: int,
-    cursor_offset: int,
-    total_estimate: Optional[int],
-    fetched_count: int,
-) -> Pagination:
-    """Build offset-backed pagination while keeping cursor format opaque."""
-    has_more = False
-    if limit > 0:
-        if total_estimate is not None:
-            has_more = cursor_offset + fetched_count < total_estimate
-        else:
-            has_more = fetched_count == limit
-    return Pagination(
-        limit=limit,
-        cursor=str(cursor_offset),
-        next_cursor=str(cursor_offset + fetched_count) if has_more else None,
-        has_more=has_more,
-        total_estimate=total_estimate,
-    )
-
-
-def truncate_rows_to_max_bytes(
-    payload: dict[str, Any],
-    *,
-    pagination: Pagination,
-    max_bytes: int,
-    command: str,
-    meta_extras: Optional[dict[str, Any]] = None,
-    rows_key: str = "rows",
-) -> dict[str, Any]:
-    """Drop trailing rows until the serialized JSON envelope fits `max_bytes`."""
-    rows = payload.get(rows_key)
-    if not isinstance(rows, list):
-        return wrap_paginated_result(payload, pagination=pagination)
-
-    original_count = len(rows)
-
-    def serialized_size() -> int:
-        candidate = wrap_paginated_result(payload, pagination=pagination)
-        envelope = {"_meta": _build_meta(command, extras=meta_extras), **candidate}
-        return len(json.dumps(envelope, ensure_ascii=False, indent=2, default=str).encode())
-
-    while serialized_size() > max_bytes and rows:
-        rows.pop()
-        pagination.truncated_by_bytes = True
-        payload["row_count"] = len(rows)
-        if original_count > len(rows):
-            pagination.has_more = True
-            try:
-                cursor_offset = int(pagination.cursor)
-            except ValueError:
-                cursor_offset = 0
-            pagination.next_cursor = str(cursor_offset + len(rows))
-
-    if original_count > len(rows):
-        pagination.truncated_by_bytes = True
-        payload["row_count"] = len(rows)
-
-    return wrap_paginated_result(payload, pagination=pagination)
-
-
-def render_pagination_footer(row_count: int, pagination: Pagination) -> None:
-    """Render a dim next-page hint for text-mode paginated output."""
-    if not pagination.has_more or pagination.next_cursor is None:
-        return
-    total = pagination.total_estimate if pagination.total_estimate is not None else "more"
-    console.print(
-        f"[dim]... (showing {row_count} of {total}, "
-        f"use --cursor {pagination.next_cursor} for next page)[/dim]"
-    )
 
 
 def emit_list(
@@ -415,230 +254,6 @@ def emit_error(
     else:
         console.print(f"[red]❌ {message}[/red]")
     raise typer.Exit(code=exit_code_value)
-
-
-def success(message: str, prefix: str = "✅") -> None:
-    """Print success message in green with checkmark icon.
-
-    Args:
-        message: Success message to display
-        prefix: Icon prefix (default: ✅)
-
-    Example:
-        >>> success("Validation complete!")
-        ✅ Validation complete!
-    """
-    console.print(f"[green]{prefix} {message}[/green]")
-
-
-def info(message: str, prefix: str = "ℹ️") -> None:
-    """Print informational message in blue.
-
-    Args:
-        message: Info message to display
-        prefix: Icon prefix (default: ℹ️)
-
-    Example:
-        >>> info("Processing 150 transactions...")
-        ℹ️  Processing 150 transactions...
-    """
-    console.print(f"[blue]{prefix}  {message}[/blue]")
-
-
-def warning(message: str, prefix: str = "⚠️") -> None:
-    """Print warning message in yellow.
-
-    Args:
-        message: Warning message to display
-        prefix: Icon prefix (default: ⚠️)
-
-    Example:
-        >>> warning("No rules matched this transaction")
-        ⚠️  No rules matched this transaction
-    """
-    console.print(f"[yellow]{prefix}  {message}[/yellow]")
-
-
-def error(message: str, prefix: str = "❌") -> None:
-    """Print error message in red.
-
-    Args:
-        message: Error message to display
-        prefix: Icon prefix (default: ❌)
-
-    Example:
-        >>> error("Failed to load rules.yaml")
-        ❌ Failed to load rules.yaml
-    """
-    console.print(f"[red]{prefix} {message}[/red]")
-
-
-def error_with_ai_hint(message: str, ai_prompt: str, prefix: str = "❌") -> None:
-    """Print error message with AI troubleshooting hint.
-
-    Args:
-        message: Error message to display
-        ai_prompt: Suggested prompt for Claude/ChatGPT
-        prefix: Icon prefix (default: ❌)
-
-    Example:
-        >>> error_with_ai_hint(
-        ...     "No XLSX files found",
-        ...     "뱅크샐러드에서 파일을 어떻게 내보내고 어디에 넣어야 하지?"
-        ... )
-        ❌ No XLSX files found
-
-        💡 AI에게 물어보기:
-        ┌─ Claude/ChatGPT 프롬프트 ─┐
-        │ 뱅크샐러드에서 파일을...    │
-        └─────────────────────────────┘
-    """
-    console.print(f"[red]{prefix} {message}[/red]")
-    console.print()
-    console.print("[dim]💡 AI에게 물어보기:[/dim]")
-    console.print(
-        Panel(
-            ai_prompt.strip(),
-            title="Claude/ChatGPT 프롬프트",
-            border_style="blue",
-            padding=(0, 1),
-        )
-    )
-
-
-def step(number: int, message: str) -> None:
-    """Print numbered step message.
-
-    Args:
-        number: Step number
-        message: Step description
-
-    Example:
-        >>> step(1, "Validating rules...")
-        [1/3] Validating rules...
-    """
-    console.print(f"[cyan][{number}][/cyan] {message}")
-
-
-def section(title: str) -> None:
-    """Print section header with separator.
-
-    Args:
-        title: Section title
-
-    Example:
-        >>> section("Validation Results")
-
-        ════════════════════════════════════════
-        Validation Results
-        ════════════════════════════════════════
-    """
-    console.print()
-    console.rule(f"[bold]{title}[/bold]")
-    console.print()
-
-
-def panel_info(content: str, title: Optional[str] = None, border_style: str = "blue") -> None:
-    """Print content in a bordered panel.
-
-    Args:
-        content: Panel content (can be multi-line)
-        title: Optional panel title
-        border_style: Rich color name for border (default: blue)
-
-    Example:
-        >>> panel_info("Next steps:\\n1. Edit rules.yaml\\n2. Run finjuice tag", title="Next Steps")
-        ╭─ Next Steps ─────────────────────╮
-        │ Next steps:                      │
-        │ 1. Edit rules.yaml               │
-        │ 2. Run finjuice tag               │
-        ╰──────────────────────────────────╯
-    """
-    console.print(Panel(content, title=title, border_style=border_style))
-
-
-def table_summary(
-    title: str,
-    rows: list[tuple[str, str]],
-    columns: tuple[str, str] = ("Item", "Value"),
-) -> None:
-    """Print summary table with key-value pairs.
-
-    Args:
-        title: Table title
-        rows: List of (key, value) tuples
-        columns: Column headers (default: ("Item", "Value"))
-
-    Example:
-        >>> table_summary(
-        ...     "Validation Summary",
-        ...     [("Total Rules", "15"), ("Passed", "12"), ("Warnings", "3")]
-        ... )
-        ┏━━━━━━━━━━━━━┳━━━━━━━┓
-        ┃ Item        ┃ Value ┃
-        ┡━━━━━━━━━━━━━╇━━━━━━━┩
-        │ Total Rules │ 15    │
-        │ Passed      │ 12    │
-        │ Warnings    │ 3     │
-        └─────────────┴───────┘
-    """
-    table = Table(title=title, show_header=True)
-    table.add_column(columns[0], style="cyan")
-    table.add_column(columns[1], style="green")
-
-    for key, value in rows:
-        table.add_row(key, value)
-
-    console.print(table)
-
-
-def bullet_list(items: list[str], style: str = "dim") -> None:
-    """Print bulleted list.
-
-    Args:
-        items: List of items to display
-        style: Rich style for bullets (default: dim)
-
-    Example:
-        >>> bullet_list(["Item 1", "Item 2", "Item 3"])
-        • Item 1
-        • Item 2
-        • Item 3
-    """
-    for item in items:
-        console.print(f"[{style}]•[/{style}] {item}")
-
-
-def progress_indicator(current: int, total: int, description: str = "") -> None:
-    """Print progress indicator (simple percentage).
-
-    Args:
-        current: Current progress value
-        total: Total value
-        description: Optional description
-
-    Example:
-        >>> progress_indicator(7, 10, "Processing files")
-        [70%] Processing files (7/10)
-    """
-    percentage = int((current / total) * 100) if total > 0 else 0
-    progress_text = f"[{percentage}%]"
-
-    if description:
-        progress_text += f" {description}"
-
-    progress_text += f" ({current}/{total})"
-    console.print(f"[cyan]{progress_text}[/cyan]")
-
-
-def newline() -> None:
-    """Print a blank line for spacing."""
-    console.print()
-
-
-def hr() -> None:
-    """Print horizontal rule separator."""
-    console.rule(style="dim")
 
 
 def _render_markdown_cell(value: Any) -> str:

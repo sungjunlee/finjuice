@@ -7,7 +7,11 @@ Extracted from ``tagging/rules.py`` as the matcher half of the Epic #707
 * :mod:`finjuice.pipeline.tagging.validator` — per-rule schema validation and
   conflict detection.
 * :mod:`finjuice.pipeline.tagging.rules_yaml_io` — reading/writing
-  ``rules.yaml`` and loading the ``report_filters`` block.
+  ``rules.yaml`` and the public ``report_filters`` loader.
+* :mod:`finjuice.pipeline.tagging.rules_yaml_filters` — ``report_filters``
+  schema parsing used by ``rules_yaml_io``.
+* :mod:`finjuice.pipeline.tagging.rules_yaml_roundtrip` — ruamel.yaml
+  round-trip dump helpers re-exported from ``rules_yaml_io``.
 * :mod:`finjuice.pipeline.tagging.rules` — thin backwards-compatibility shim
   that re-exports the small documented public API surface.
 """
@@ -15,9 +19,14 @@ Extracted from ``tagging/rules.py`` as the matcher half of the Epic #707
 from __future__ import annotations
 
 import logging
-import re
 from typing import Any, Dict, List
 
+from finjuice.pipeline.tagging.matcher_helpers import (
+    _check_greater_than,  # noqa: F401
+    _check_less_than,  # noqa: F401
+    _check_numeric_condition,
+    _check_regex,
+)
 from finjuice.pipeline.tagging.models import (
     NUMERIC_CONDITION_OPERATORS as _NUMERIC_CONDITION_OPERATORS,
 )
@@ -30,7 +39,6 @@ from finjuice.pipeline.tagging.models import (
 from finjuice.pipeline.tagging.models import (
     TagRule,
 )
-from finjuice.pipeline.tagging.validator import _parse_between_range
 
 logger = logging.getLogger(__name__)
 
@@ -71,47 +79,6 @@ def _check_condition(field_value: Any, condition: _Condition) -> bool:
     if op == "regex":
         return _check_regex(condition.value, text, condition.field)
     return False
-
-
-def _check_numeric_condition(field_value: Any, condition: _Condition) -> bool:
-    """Evaluate numeric conditions against amount-like values."""
-    if field_value is None:
-        return False
-    try:
-        num = float(field_value)
-    except (TypeError, ValueError):
-        return False
-    if condition.op == "less_than":
-        return _check_less_than(num, condition.value)
-    if condition.op == "greater_than":
-        return _check_greater_than(num, condition.value)
-    minimum, maximum = _parse_between_range(condition.value)
-    return minimum is not None and maximum is not None and minimum <= num <= maximum
-
-
-def _check_less_than(num: float, value: str) -> bool:
-    """Evaluate a less-than condition safely."""
-    try:
-        return num < float(value)
-    except (TypeError, ValueError):
-        return False
-
-
-def _check_greater_than(num: float, value: str) -> bool:
-    """Evaluate a greater-than condition safely."""
-    try:
-        return num > float(value)
-    except (TypeError, ValueError):
-        return False
-
-
-def _check_regex(pattern: str, text: str, field: str) -> bool:
-    """Evaluate a regex condition, logging invalid patterns."""
-    try:
-        return re.search(pattern, text, re.IGNORECASE) is not None
-    except re.error:
-        logger.warning("Invalid regex for field '%s': %s", field, pattern)
-        return False
 
 
 def _check_conditions(

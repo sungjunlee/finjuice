@@ -648,3 +648,102 @@ class TestSuggestedRuleField:
         names = [s["suggested_rule"]["name"] for s in suggestions]
         # All names should be unique
         assert len(names) == len(set(names))
+
+
+class TestNewModuleKoreanRoundTrip:
+    """Korean tag round-trip coverage against the split scoring/format modules."""
+
+    def test_scoring_preserves_korean_merchant_pattern_and_name(self) -> None:
+        """Scoring helpers should keep Korean merchant text in patterns and names."""
+        from finjuice.pipeline.tagging.suggestion_scoring import (
+            _generate_match_pattern,
+            _sanitize_rule_name,
+            build_suggested_rule_field,
+            get_suggested_rule_name,
+        )
+
+        merchant = "스타벅스 강남점"
+        assert _sanitize_rule_name(merchant) == "스타벅스_강남점"
+        assert get_suggested_rule_name(merchant) == "suggested_스타벅스_강남점"
+        assert _generate_match_pattern(merchant) == "스타벅스|스타벅스 강남점"
+
+        rule = build_suggested_rule_field(
+            {
+                "merchant": merchant,
+                "pattern": _generate_match_pattern(merchant),
+                "banksalad_category": {"major": "식비", "minor": "카페"},
+                "is_recurring": False,
+            },
+            set(),
+        )
+        assert rule["name"] == "suggested_스타벅스_강남점"
+        assert rule["match"] == "스타벅스|스타벅스 강남점"
+        assert rule["category"] == "카페"
+        assert rule["tags"] == ["카페", "식비"]
+
+    def test_format_round_trips_korean_tags_through_rules_yaml(self, tmp_path: Path) -> None:
+        """Format-module apply should persist Korean tags and reload them intact."""
+        from finjuice.pipeline.tagging.rules_yaml_io import load_rules
+        from finjuice.pipeline.tagging.suggestion_format import (
+            apply_suggestion_to_rules,
+            build_rule_dict_from_suggestion,
+            format_suggestions_report,
+        )
+        from finjuice.pipeline.tagging.suggestion_scoring import _generate_match_pattern
+
+        merchant = "스타벅스 강남점"
+        suggestion = _sample_suggestion()
+        suggestion["merchant"] = merchant
+        suggestion["pattern"] = _generate_match_pattern(merchant)
+        suggestion["banksalad_category"] = {"major": "식비", "minor": "카페"}
+        suggestion["suggested_rule"] = {
+            "name": "suggested_스타벅스_강남점",
+            "match": suggestion["pattern"],
+            "category": "카페",
+            "tags": ["카페", "식비"],
+            "priority": 80,
+        }
+
+        rule_dict = build_rule_dict_from_suggestion(suggestion, modified_tags=["카페", "커피"])
+        assert rule_dict["name"] == "suggested_스타벅스_강남점"
+        assert rule_dict["match"] == "스타벅스|스타벅스 강남점"
+        assert rule_dict["tags"] == ["카페", "커피"]
+        assert rule_dict["category"] == "카페"
+
+        report = format_suggestions_report([suggestion])
+        assert "스타벅스 강남점" in report
+        assert "카페, 식비" in report
+
+        rules_path = tmp_path / "rules.yaml"
+        rules_path.write_text("version: 1\nrules: []\n", encoding="utf-8")
+        result = apply_suggestion_to_rules(
+            suggestion,
+            rules_path,
+            modified_tags=["카페", "커피"],
+        )
+        assert result.tags == ["카페", "커피"]
+        assert result.match == "스타벅스|스타벅스 강남점"
+
+        loaded = load_rules(rules_path)
+        assert len(loaded) == 1
+        assert loaded[0].name == "suggested_스타벅스_강남점"
+        assert loaded[0].match == "스타벅스|스타벅스 강남점"
+        assert loaded[0].tags == ["카페", "커피"]
+        assert loaded[0].category == "카페"
+
+
+def test_merchant_context_queries_live_in_helper_module() -> None:
+    """DuckDB merchant-context SQL belongs to suggestion_queries, not scoring."""
+    tagging_dir = Path("src/finjuice/pipeline/tagging")
+    scoring_text = (tagging_dir / "suggestion_scoring.py").read_text(encoding="utf-8")
+    queries_text = (tagging_dir / "suggestion_queries.py").read_text(encoding="utf-8")
+
+    assert "def generate_merchant_context" in scoring_text
+    assert "def classify_merchant_kind" in scoring_text
+    assert "def build_suggested_rule_field" in scoring_text
+    assert "def get_suggestion_coverage_stats" not in scoring_text
+    assert "def _merchant_context_query" not in scoring_text
+    assert "def _similar_merchants_query" not in scoring_text
+    assert "def get_suggestion_coverage_stats" in queries_text
+    assert "def _merchant_context_query" in queries_text
+    assert "def _similar_merchants_query" in queries_text

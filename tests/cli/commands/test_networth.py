@@ -6,7 +6,7 @@ from pathlib import Path
 import polars as pl
 from typer.testing import CliRunner
 
-from finjuice.pipeline.cli.commands.networth import _select_projection_rows
+from finjuice.pipeline.cli.commands.networth_rendering import _select_projection_rows
 from finjuice.pipeline.cli.main import app
 
 runner = CliRunner()

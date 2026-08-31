@@ -1,0 +1,332 @@
+"""Signal collectors for one-shot workflow automation.
+
+Owns tagging-pressure, large-transaction, and next-step helpers.
+Pending-import preview helpers live in
+:mod:`finjuice.pipeline.automation_pending_imports` and are re-exported here so
+existing callers can keep importing from this module. Public
+``collect_automation_signals`` stays in :mod:`finjuice.pipeline.automation`.
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
+from typing import Any
+
+try:
+    import duckdb
+except ImportError:
+    duckdb = None  # type: ignore[assignment]  # optional dependency sentinel
+
+from finjuice.pipeline.analytics.duckdb_layer import DuckDBAnalytics
+from finjuice.pipeline.automation_pending_imports import (
+    PendingImportFailure,  # noqa: F401 — re-exported for existing automation imports
+    PendingImportFile,  # noqa: F401 — re-exported for existing automation imports
+    PendingImportsSignal,
+    SignalStatus,
+    _basename,  # noqa: F401 — re-exported for existing automation imports
+    _collect_pending_imports,  # noqa: F401 — re-exported for existing automation imports
+)
+from finjuice.pipeline.config import Config
+from finjuice.pipeline.tagging.suggestions import (
+    generate_merchant_context,
+    get_suggestion_coverage_stats,
+)
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class AutomationHint:
+    """Existing commands a caller can surface as next-step guidance."""
+
+    signal: str
+    message: str
+    command: str
+
+
+@dataclass(frozen=True)
+class MerchantPressureSample:
+    """Compact merchant-level sample for untagged pressure."""
+
+    merchant: str
+    transaction_count: int
+    total_amount: float
+    avg_amount: float
+    sample_memos: list[str]
+
+
+@dataclass(frozen=True)
+class TaggingPressureSignal:
+    """Signal summarizing untagged transaction and merchant pressure."""
+
+    status: SignalStatus
+    total_transactions: int
+    untagged_transactions: int
+    coverage_pct: float
+    suggestable_untagged_transactions: int
+    suggestable_coverage_pct: float
+    transfer_excluded_untagged_transactions: int
+    merchant_pressure: list[MerchantPressureSample]
+
+
+@dataclass(frozen=True)
+class LargeTransactionSample:
+    """Large expense sample mirroring anomaly_large_txn semantics."""
+
+    date: str
+    merchant: str | None
+    account: str | None
+    category: str | None
+    amount_krw: float
+
+
+@dataclass(frozen=True)
+class LargeTransactionSignal:
+    """Signal summarizing large expense anomalies at an explicit threshold."""
+
+    status: SignalStatus
+    threshold: int
+    count: int
+    samples: list[LargeTransactionSample]
+
+
+def _collect_tagging_pressure(
+    *,
+    config: Config,
+    sample_limit: int,
+    min_count: int,
+) -> tuple[TaggingPressureSignal, str | None]:
+    """Reuse rules-suggest surfaces to summarize untagged pressure."""
+    try:
+        stats = get_suggestion_coverage_stats(config.data_dir)
+        suggestions = generate_merchant_context(
+            config.data_dir,
+            rules_file=config.rules_file,
+            top_n=sample_limit,
+            min_count=min_count,
+        )
+    except FileNotFoundError:
+        stats = {
+            "total_count": 0,
+            "untagged_count": 0,
+            "suggestable_untagged_count": 0,
+            "transfer_excluded_untagged_count": 0,
+            "coverage_before_pct": 0.0,
+            "suggestable_coverage_before_pct": 0.0,
+        }
+        suggestions = []
+    except ImportError as exc:
+        logger.warning("Tagging pressure unavailable: %s", exc)
+        return (
+            TaggingPressureSignal(
+                status="unavailable",
+                total_transactions=0,
+                untagged_transactions=0,
+                coverage_pct=0.0,
+                suggestable_untagged_transactions=0,
+                suggestable_coverage_pct=0.0,
+                transfer_excluded_untagged_transactions=0,
+                merchant_pressure=[],
+            ),
+            "Tagging pressure unavailable; check DuckDB analytics setup.",
+        )
+    except duckdb.Error as exc:
+        logger.warning("Tagging pressure collection failed: %s", exc)
+        return (
+            TaggingPressureSignal(
+                status="unavailable",
+                total_transactions=0,
+                untagged_transactions=0,
+                coverage_pct=0.0,
+                suggestable_untagged_transactions=0,
+                suggestable_coverage_pct=0.0,
+                transfer_excluded_untagged_transactions=0,
+                merchant_pressure=[],
+            ),
+            "Tagging pressure unavailable; check DuckDB analytics setup.",
+        )
+
+    merchant_pressure = [
+        MerchantPressureSample(
+            merchant=str(suggestion["merchant"]),
+            transaction_count=int(suggestion.get("transaction_count") or 0),
+            total_amount=float(suggestion.get("total_amount") or 0.0),
+            avg_amount=float(suggestion.get("avg_amount") or 0.0),
+            sample_memos=list(suggestion.get("sample_memos") or []),
+        )
+        for suggestion in suggestions
+    ]
+
+    untagged_transactions = int(stats.get("untagged_count") or 0)
+    suggestable_untagged_transactions = int(
+        stats.get("suggestable_untagged_count", untagged_transactions) or 0
+    )
+    transfer_excluded_untagged_transactions = int(
+        stats.get(
+            "transfer_excluded_untagged_count",
+            max(untagged_transactions - suggestable_untagged_transactions, 0),
+        )
+        or 0
+    )
+    coverage_pct = float(stats.get("coverage_before_pct") or 0.0)
+    suggestable_coverage_pct = float(
+        stats.get("suggestable_coverage_before_pct", coverage_pct) or 0.0
+    )
+    status: SignalStatus = "present" if suggestable_untagged_transactions > 0 else "clear"
+    return (
+        TaggingPressureSignal(
+            status=status,
+            total_transactions=int(stats.get("total_count") or 0),
+            untagged_transactions=untagged_transactions,
+            coverage_pct=coverage_pct,
+            suggestable_untagged_transactions=suggestable_untagged_transactions,
+            suggestable_coverage_pct=suggestable_coverage_pct,
+            transfer_excluded_untagged_transactions=transfer_excluded_untagged_transactions,
+            merchant_pressure=merchant_pressure,
+        ),
+        None,
+    )
+
+
+def _collect_large_transactions(
+    *,
+    config: Config,
+    threshold: int,
+    sample_limit: int,
+) -> tuple[LargeTransactionSignal, str | None]:
+    """Collect large-expense counts and samples using explicit threshold input."""
+    count_sql = """
+        SELECT COUNT(*) AS anomaly_count
+        FROM transactions
+        WHERE amount < 0
+          AND is_transfer_bool = FALSE
+          AND abs(amount) >= ?
+    """
+    sample_sql = """
+        SELECT
+            CAST(date AS VARCHAR) AS date,
+            merchant_raw,
+            account,
+            category_final,
+            abs(amount) AS amount_krw
+        FROM transactions
+        WHERE amount < 0
+          AND is_transfer_bool = FALSE
+          AND abs(amount) >= ?
+        ORDER BY amount_krw DESC, date DESC, merchant_raw
+        LIMIT ?
+    """
+
+    try:
+        with DuckDBAnalytics(config.data_dir) as analytics:
+            count_row = analytics.conn.execute(count_sql, [threshold]).fetchone()
+            sample_rows = (
+                analytics.conn.execute(sample_sql, [threshold, sample_limit]).pl().to_dicts()
+            )
+    except FileNotFoundError:
+        return (
+            LargeTransactionSignal(
+                status="clear",
+                threshold=threshold,
+                count=0,
+                samples=[],
+            ),
+            None,
+        )
+    except ImportError as exc:
+        logger.warning("Large transaction signal unavailable: %s", exc)
+        return (
+            LargeTransactionSignal(
+                status="unavailable",
+                threshold=threshold,
+                count=0,
+                samples=[],
+            ),
+            "Large-transaction signal unavailable; check DuckDB analytics setup.",
+        )
+    except duckdb.Error as exc:
+        logger.warning("Large transaction collection failed: %s", exc)
+        return (
+            LargeTransactionSignal(
+                status="unavailable",
+                threshold=threshold,
+                count=0,
+                samples=[],
+            ),
+            "Large-transaction signal unavailable; check transaction data and analytics setup.",
+        )
+
+    count = int((count_row or [0])[0] or 0)
+    samples = [
+        LargeTransactionSample(
+            date=str(row.get("date") or ""),
+            merchant=_optional_text(row.get("merchant_raw")),
+            account=_optional_text(row.get("account")),
+            category=_optional_text(row.get("category_final")),
+            amount_krw=float(row.get("amount_krw") or 0.0),
+        )
+        for row in sample_rows
+    ]
+    status: SignalStatus = "present" if count > 0 else "clear"
+    return (
+        LargeTransactionSignal(
+            status=status,
+            threshold=threshold,
+            count=count,
+            samples=samples,
+        ),
+        None,
+    )
+
+
+def _build_next_steps(
+    *,
+    pending_imports: PendingImportsSignal,
+    tagging_pressure: TaggingPressureSignal,
+    large_transactions: LargeTransactionSignal,
+) -> list[AutomationHint]:
+    """Build CLI-oriented next-step hints without inventing new commands."""
+    next_steps: list[AutomationHint] = []
+
+    if pending_imports.status == "present":
+        next_steps.append(
+            AutomationHint(
+                signal="pending_imports",
+                message="New import files look ready for a one-shot pipeline pass.",
+                command="finjuice refresh",
+            )
+        )
+
+    if tagging_pressure.status == "present":
+        next_steps.append(
+            AutomationHint(
+                signal="tagging_pressure",
+                message=(
+                    "Rule-suggestable untagged transactions are accumulating and need rule review."
+                ),
+                command="finjuice rules suggest",
+            )
+        )
+
+    if large_transactions.status == "present":
+        next_steps.append(
+            AutomationHint(
+                signal="large_transactions",
+                message="Review large-expense anomalies with the existing template surface.",
+                command=(
+                    "finjuice template run anomaly_large_txn "
+                    f"--param threshold={large_transactions.threshold}"
+                ),
+            )
+        )
+
+    return next_steps
+
+
+def _optional_text(value: Any) -> str | None:
+    """Normalize blank values into None."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None

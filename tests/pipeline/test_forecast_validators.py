@@ -7,6 +7,22 @@ from finjuice.pipeline.forecast_validators import (
     ScenariosConfigValidationResult,
     validate_scenarios_config_file,
 )
+from finjuice.pipeline.forecast_validators.fields import (
+    _add_issue as fields_add_issue,
+)
+from finjuice.pipeline.forecast_validators.fields import (
+    _build_path_locations as fields_build_path_locations,
+)
+from finjuice.pipeline.forecast_validators.fields import (
+    _require_string as fields_require_string,
+)
+from finjuice.pipeline.forecast_validators.validate import (
+    _add_issue,
+    _build_path_locations,
+    _require_string,
+)
+
+FORECAST_VALIDATORS_DIR = Path("src/finjuice/pipeline/forecast_validators")
 
 
 def _write_scenarios(path: Path, lifecycle_events: str, *, liability_delta: str = "0.0") -> None:
@@ -100,3 +116,27 @@ def test_validate_scenarios_config_reports_asset_swap_missing_source(
     assert [(issue.path, issue.message) for issue in result.issues] == [
         ("lifecycle_events[0].asset_swap.remove", "must be a non-empty string")
     ]
+
+
+def test_field_helpers_live_in_helper_module() -> None:
+    """Scalar field helpers should not live in validate.py."""
+    validate_text = (FORECAST_VALIDATORS_DIR / "validate.py").read_text(encoding="utf-8")
+    fields_text = (FORECAST_VALIDATORS_DIR / "fields.py").read_text(encoding="utf-8")
+
+    assert "def validate_scenarios_config_file" in validate_text
+    assert "def _validate_assumptions" in validate_text
+    assert "def _require_string(" not in validate_text
+    assert "def _add_issue(" not in validate_text
+    assert "def _build_path_locations(" not in validate_text
+    assert "def _is_number(" not in validate_text
+    assert "def _require_string(" in fields_text
+    assert "def _add_issue(" in fields_text
+    assert "def _build_path_locations(" in fields_text
+    assert "def _is_number(" in fields_text
+
+
+def test_field_helpers_reexport_from_validate() -> None:
+    """Existing validate.py imports should keep resolving to the field helpers."""
+    assert _add_issue is fields_add_issue
+    assert _build_path_locations is fields_build_path_locations
+    assert _require_string is fields_require_string

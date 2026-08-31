@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from finjuice.pipeline.asset_config import Liability, ManualAsset
 from finjuice.pipeline.forecast import (
     SCENARIO_NAMES,
     AssetSwapEvent,
@@ -17,7 +18,7 @@ from finjuice.pipeline.forecast import (
     build_forecast,
     load_scenarios_config,
 )
-from finjuice.pipeline.networth import AggregatedAsset, Liability, ManualAsset, NetWorthPosition
+from finjuice.pipeline.networth import AggregatedAsset, NetWorthPosition
 
 
 def _position(

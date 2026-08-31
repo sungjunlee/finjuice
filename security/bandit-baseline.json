@@ -124,16 +124,16 @@
     },
     {
       "test_id": "B608",
-      "filename": "src/finjuice/pipeline/cli/commands/rules_cmd/mutations.py",
+      "filename": "src/finjuice/pipeline/cli/commands/rules_cmd/mutations_helpers.py",
       "function": "_compute_rule_impact_preview",
       "issue_severity": "MEDIUM",
       "issue_confidence": "LOW",
       "test_name": "hardcoded_sql_expressions",
-      "rationale": "DuckDB query uses placeholders for user rule patterns; field names are already schema-validated and quoted with quote_duckdb_identifier before predicate assembly; see src/finjuice/pipeline/cli/commands/rules_cmd/mutations.py:_compute_rule_impact_preview."
+      "rationale": "DuckDB query uses placeholders for user rule patterns; field names are already schema-validated and quoted with quote_duckdb_identifier before predicate assembly; see src/finjuice/pipeline/cli/commands/rules_cmd/mutations_helpers.py:_compute_rule_impact_preview."
     },
     {
       "test_id": "B608",
-      "filename": "src/finjuice/pipeline/cli/commands/template_cmd/execution.py",
+      "filename": "src/finjuice/pipeline/cli/commands/template_cmd/execution_helpers.py",
       "function": "_build_pivot_base_rows_sql",
       "issue_severity": "MEDIUM",
       "issue_confidence": "LOW",
@@ -142,7 +142,7 @@
     },
     {
       "test_id": "B608",
-      "filename": "src/finjuice/pipeline/cli/commands/template_cmd/execution.py",
+      "filename": "src/finjuice/pipeline/cli/commands/template_cmd/execution_helpers.py",
       "function": "_build_pivot_base_rows_sql",
       "issue_severity": "MEDIUM",
       "issue_confidence": "LOW",
@@ -151,7 +151,7 @@
     },
     {
       "test_id": "B608",
-      "filename": "src/finjuice/pipeline/cli/commands/template_cmd/execution.py",
+      "filename": "src/finjuice/pipeline/cli/commands/template_cmd/execution_helpers.py",
       "function": "_discover_pivot_columns",
       "issue_severity": "MEDIUM",
       "issue_confidence": "LOW",
@@ -160,7 +160,7 @@
     },
     {
       "test_id": "B608",
-      "filename": "src/finjuice/pipeline/tagging/suggestions.py",
+      "filename": "src/finjuice/pipeline/tagging/suggestion_queries.py",
       "function": "_merchant_context_query",
       "issue_severity": "MEDIUM",
       "issue_confidence": "LOW",
@@ -169,7 +169,7 @@
     },
     {
       "test_id": "B608",
-      "filename": "src/finjuice/pipeline/tagging/suggestions.py",
+      "filename": "src/finjuice/pipeline/tagging/suggestion_queries.py",
       "function": "_similar_merchants_query",
       "issue_severity": "MEDIUM",
       "issue_confidence": "LOW",
@@ -178,7 +178,7 @@
     },
     {
       "test_id": "B608",
-      "filename": "src/finjuice/pipeline/tagging/suggestions.py",
+      "filename": "src/finjuice/pipeline/tagging/suggestion_queries.py",
       "function": "get_suggestion_coverage_stats",
       "issue_severity": "MEDIUM",
       "issue_confidence": "LOW",

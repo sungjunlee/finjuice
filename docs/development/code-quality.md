@@ -18,8 +18,10 @@ thin enough to ratchet separately.
 
 - `__init__.py` keeps the stable import path and Typer registration wrapper.
 - `options.py` and `result.py` define typed import use-case boundaries.
-- `use_case.py`, `zip_extraction.py`, `copying.py`, `pipeline.py`, and `rendering.py`
-  isolate orchestration, archive handling, file copy, full-pipeline callbacks, and output.
+- `use_case.py`, `use_case_helpers.py`, `inputs.py`, `zip_extraction.py`,
+  `zip_policy.py`, `copying.py`, `pipeline.py`, and `rendering.py` isolate
+  orchestration, ZIP input helpers, input resolution, archive handling, ZIP
+  member policy, file copy, full-pipeline callbacks, and output.
 
 `finjuice.pipeline.cli.commands.template_cmd` follows the same pattern for template analysis:
 
@@ -41,8 +43,8 @@ paths while focused validation contracts live in sibling modules:
 
 - `goals_validators.py` owns `GoalsValidationProblem`, `ValidationProblems`, goals payload
   dataclasses, and section-level validators.
-- `forecast_validators.py` owns scenarios config validation contracts and lifecycle-event
-  shape validators.
+- `forecast_validators` owns scenarios config validation contracts (`models.py`) and
+  lifecycle-event shape validators (`validate.py`).
 
 ## Rebasing baseline paths after a refactor
 

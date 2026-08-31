@@ -9,6 +9,12 @@ This module provides 2-5x faster report generation using Polars for:
 - Transfer audit logs
 
 All functions maintain identical API and output format to pandas version.
+
+CSV load/write helpers live in
+:mod:`finjuice.pipeline.export.reports_polars_helpers` and the shared
+export-error translation lives in
+:mod:`finjuice.pipeline.export.reports_polars_errors`; both are re-exported
+here so existing callers can keep importing from this module.
 """
 
 import logging
@@ -22,47 +28,15 @@ except ImportError:
     POLARS_AVAILABLE = False
     pl = None  # type: ignore[assignment]  # optional dep fallback; guarded before use
 
-from finjuice.pipeline.export.spreadsheet_security import neutralize_spreadsheet_strings
+from finjuice.pipeline.export.reports_polars_errors import _translate_export_errors
+from finjuice.pipeline.export.reports_polars_helpers import (
+    UTF8_BOM,  # noqa: F401 — re-exported for existing reports_polars imports
+    _load_report_source_df,
+    _write_csv_with_bom,
+)
 from finjuice.pipeline.filters import exclude_transfers_for, only_transfers
 
 logger = logging.getLogger(__name__)
-
-# UTF-8 BOM bytes for Excel compatibility
-UTF8_BOM = b"\xef\xbb\xbf"
-
-
-def _write_csv_with_bom(df: "pl.DataFrame", output_path: Path) -> None:
-    """
-    Write Polars DataFrame to CSV with UTF-8 BOM for Korean Excel compatibility.
-
-    Polars write_csv() doesn't support utf-8-sig encoding like pandas,
-    so we manually prepend the BOM bytes.
-
-    Args:
-        df: Polars DataFrame to write
-        output_path: Path to output CSV file
-    """
-    # Get CSV content as bytes
-    export_df = neutralize_spreadsheet_strings(df)
-    csv_bytes = export_df.write_csv(separator=",").encode("utf-8")
-
-    # Write BOM + CSV content
-    with open(output_path, "wb") as f:
-        f.write(UTF8_BOM)
-        f.write(csv_bytes)
-
-
-def _load_report_source_df(
-    csv_base_dir: Path,
-    source_df: "pl.DataFrame | None" = None,
-) -> "pl.DataFrame":
-    """Resolve the source DataFrame for report generation."""
-    if source_df is not None:
-        return source_df
-
-    from finjuice.pipeline.storage import csv_transactions
-
-    return csv_transactions.get_all_transactions(csv_base_dir)
 
 
 def export_monthly_spend_polars(
@@ -83,7 +57,7 @@ def export_monthly_spend_polars(
     if not POLARS_AVAILABLE or pl is None:
         raise RuntimeError("Polars is not available. Install with: pip install polars")
 
-    try:
+    with _translate_export_errors("monthly_spend"):
         df = _load_report_source_df(csv_base_dir, source_df)
 
         if df.is_empty():
@@ -114,18 +88,6 @@ def export_monthly_spend_polars(
         logger.info("Exported monthly_spend: %s rows", row_count)
         return row_count
 
-    except (PermissionError, OSError) as e:
-        logger.error("Cannot write monthly_spend report (%s)", type(e).__name__)
-        raise RuntimeError(f"Failed to export monthly_spend report: {e}") from e
-    except (ValueError, KeyError) as e:
-        logger.error(f"Invalid data for monthly_spend aggregation: {e}", exc_info=True)
-        raise RuntimeError(f"Data validation failed for monthly_spend: {e}") from e
-    except pl.exceptions.PolarsError as e:
-        logger.error(
-            f"Polars error in monthly_spend export: {type(e).__name__}: {e}", exc_info=True
-        )
-        raise RuntimeError(f"Polars computation failed for monthly_spend: {e}") from e
-
 
 def export_by_tag_polars(
     csv_base_dir: Path,
@@ -145,7 +107,7 @@ def export_by_tag_polars(
     if not POLARS_AVAILABLE or pl is None:
         raise RuntimeError("Polars is not available. Install with: pip install polars")
 
-    try:
+    with _translate_export_errors("by_tag"):
         df = _load_report_source_df(csv_base_dir, source_df)
 
         if df.is_empty():
@@ -187,16 +149,6 @@ def export_by_tag_polars(
         logger.info("Exported by_tag: %s rows", row_count)
         return row_count
 
-    except (PermissionError, OSError) as e:
-        logger.error("Cannot write by_tag report (%s)", type(e).__name__)
-        raise RuntimeError(f"Failed to export by_tag report: {e}") from e
-    except (ValueError, KeyError) as e:
-        logger.error(f"Invalid data for by_tag aggregation: {e}", exc_info=True)
-        raise RuntimeError(f"Data validation failed for by_tag: {e}") from e
-    except pl.exceptions.PolarsError as e:
-        logger.error(f"Polars error in by_tag export: {type(e).__name__}: {e}", exc_info=True)
-        raise RuntimeError(f"Polars computation failed for by_tag: {e}") from e
-
 
 def export_by_category_polars(
     csv_base_dir: Path,
@@ -220,7 +172,7 @@ def export_by_category_polars(
     if not POLARS_AVAILABLE or pl is None:
         raise RuntimeError("Polars is not available. Install with: pip install polars")
 
-    try:
+    with _translate_export_errors("by_category"):
         df = _load_report_source_df(csv_base_dir, source_df)
 
         if df.is_empty():
@@ -269,16 +221,6 @@ def export_by_category_polars(
         logger.info("Exported by_category: %s rows", row_count)
         return row_count
 
-    except (PermissionError, OSError) as e:
-        logger.error("Cannot write by_category report (%s)", type(e).__name__)
-        raise RuntimeError(f"Failed to export by_category report: {e}") from e
-    except (ValueError, KeyError) as e:
-        logger.error(f"Invalid data for by_category aggregation: {e}", exc_info=True)
-        raise RuntimeError(f"Data validation failed for by_category: {e}") from e
-    except pl.exceptions.PolarsError as e:
-        logger.error(f"Polars error in by_category export: {type(e).__name__}: {e}", exc_info=True)
-        raise RuntimeError(f"Polars computation failed for by_category: {e}") from e
-
 
 def export_by_account_polars(
     csv_base_dir: Path,
@@ -298,7 +240,7 @@ def export_by_account_polars(
     if not POLARS_AVAILABLE or pl is None:
         raise RuntimeError("Polars is not available. Install with: pip install polars")
 
-    try:
+    with _translate_export_errors("by_account"):
         df = _load_report_source_df(csv_base_dir, source_df)
 
         if df.is_empty():
@@ -326,16 +268,6 @@ def export_by_account_polars(
         logger.info("Exported by_account: %s rows", row_count)
         return row_count
 
-    except (PermissionError, OSError) as e:
-        logger.error("Cannot write by_account report (%s)", type(e).__name__)
-        raise RuntimeError(f"Failed to export by_account report: {e}") from e
-    except (ValueError, KeyError) as e:
-        logger.error(f"Invalid data for by_account aggregation: {e}", exc_info=True)
-        raise RuntimeError(f"Data validation failed for by_account: {e}") from e
-    except pl.exceptions.PolarsError as e:
-        logger.error(f"Polars error in by_account export: {type(e).__name__}: {e}", exc_info=True)
-        raise RuntimeError(f"Polars computation failed for by_account: {e}") from e
-
 
 def export_transfers_polars(
     csv_base_dir: Path,
@@ -355,7 +287,7 @@ def export_transfers_polars(
     if not POLARS_AVAILABLE or pl is None:
         raise RuntimeError("Polars is not available. Install with: pip install polars")
 
-    try:
+    with _translate_export_errors("transfers"):
         columns = [
             "datetime",
             "amount",
@@ -405,13 +337,3 @@ def export_transfers_polars(
 
         logger.info("Exported transfers: %s rows", row_count)
         return row_count
-
-    except (PermissionError, OSError) as e:
-        logger.error("Cannot write transfers report (%s)", type(e).__name__)
-        raise RuntimeError(f"Failed to export transfers report: {e}") from e
-    except (ValueError, KeyError) as e:
-        logger.error(f"Invalid data for transfers report: {e}", exc_info=True)
-        raise RuntimeError(f"Data validation failed for transfers: {e}") from e
-    except pl.exceptions.PolarsError as e:
-        logger.error(f"Polars error in transfers export: {type(e).__name__}: {e}", exc_info=True)
-        raise RuntimeError(f"Polars computation failed for transfers: {e}") from e

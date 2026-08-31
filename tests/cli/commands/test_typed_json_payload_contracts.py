@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import jsonschema
 from referencing import Registry, Resource
@@ -34,9 +34,11 @@ from finjuice.pipeline.cli.commands.automation import (
     _compact_automation_run_payload,
     _serialize_automation_run_payload,
 )
+from finjuice.pipeline.cli.commands.checkup.compute import CheckupFacts
+from finjuice.pipeline.cli.commands.checkup.detector import detect_checkup_diagnoses
 from finjuice.pipeline.cli.commands.checkup.rendering import (
     _compact_checkup,
-    _serialize_checkup_payload,
+    serialize_checkup_payload,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -241,6 +243,13 @@ def _checkup_bundle() -> CheckupBundle:
     )
 
 
+def _serialize_bundle(bundle: CheckupBundle) -> dict[str, Any]:
+    """Run compute -> detector -> rendering over a fixed bundle."""
+    facts = CheckupFacts(bundle=bundle)
+    diagnoses = detect_checkup_diagnoses(facts)
+    return cast(dict[str, Any], serialize_checkup_payload(facts, diagnoses))
+
+
 def test_automation_run_typed_payload_validates_existing_schema() -> None:
     """The internal automation-run payload contract should match public JSON schema."""
     payload = _serialize_automation_run_payload(
@@ -287,7 +296,7 @@ def test_automation_run_compact_typed_payload_validates_existing_schema() -> Non
 
 def test_checkup_typed_payload_validates_existing_schema() -> None:
     """The internal checkup payload contract should match public JSON schema."""
-    payload = _serialize_checkup_payload(_checkup_bundle())
+    payload = _serialize_bundle(_checkup_bundle())
 
     assert payload["summary"] == {
         "status": "needs_attention",
@@ -310,7 +319,7 @@ def test_checkup_typed_payload_validates_existing_schema() -> None:
 
 def test_checkup_compact_typed_payload_validates_existing_schema() -> None:
     """The compact checkup payload contract should preserve orchestration fields."""
-    raw_payload = _serialize_checkup_payload(_checkup_bundle())
+    raw_payload = _serialize_bundle(_checkup_bundle())
     compact_payload = _compact_checkup(raw_payload)
 
     assert "data_dir" not in compact_payload

@@ -1,45 +1,75 @@
-"""Aggregated net worth CLI commands."""
+"""Aggregated net worth CLI commands.
+
+JSON payload assembly helpers live in
+:mod:`finjuice.pipeline.cli.commands.networth_payload` and are re-exported
+here so existing callers can keep importing from this module. Forecast
+scenario serialization helpers live in
+:mod:`finjuice.pipeline.cli.commands.networth_forecast`. JSON
+health/action guidance helpers live in
+:mod:`finjuice.pipeline.cli.commands.networth_guidance`. Validation and
+runtime error envelopes live in
+:mod:`finjuice.pipeline.cli.commands.networth_errors`.
+"""
 
 from __future__ import annotations
 
 import importlib.resources
 import json
 import logging
-from datetime import date
 from typing import Any, Literal, cast
 
 import typer
-from rich.table import Table
 
+from finjuice.pipeline.asset_config import (
+    load_assets_config,
+    validate_assets_config_file,
+)
+from finjuice.pipeline.cli.commands.networth_errors import (
+    _handle_networth_exception,
+    _raise_goals_validation_error,
+    _validation_issue_to_problem,
+)
+from finjuice.pipeline.cli.commands.networth_forecast import (
+    _build_all_scenario_forecasts,
+    _forecast_start_as_of,
+    _serialize_forecast_scenario,
+)
+from finjuice.pipeline.cli.commands.networth_guidance import (
+    _build_networth_guidance,  # noqa: F401 — re-exported for existing networth imports
+    _build_networth_signals,  # noqa: F401 — re-exported for existing networth imports
+    _build_source_flags,  # noqa: F401 — re-exported for existing networth imports
+    _resolve_snapshot_status,  # noqa: F401 — re-exported for existing networth imports
+)
+from finjuice.pipeline.cli.commands.networth_payload import (
+    _build_networth_result,
+    _emit_networth_json,
+    _parse_as_of,
+    _resolve_as_of,
+)
+from finjuice.pipeline.cli.commands.networth_rendering import (
+    _render_breakdown,
+    _render_forecast,
+    _render_forecast_comparison,
+    _render_history,
+    _render_overview,
+    _render_validate,
+)
 from finjuice.pipeline.cli.output import (
     ErrorCode,
-    ExitCode,
     _build_meta,
-    console,
     emit_error,
     info,
-    section,
     success,
-    table_summary,
 )
 from finjuice.pipeline.cli.utils import get_config
-from finjuice.pipeline.forecast import (
-    SCENARIO_NAMES,
-    ScenariosConfigValidationError,
-    build_forecast,
-    load_scenarios_config,
-    serialize_forecast_result,
-)
-from finjuice.pipeline.goals import GoalsValidationProblem, load_goals_file
+from finjuice.pipeline.forecast import load_scenarios_config
+from finjuice.pipeline.goals import load_goals_file
 from finjuice.pipeline.networth import (
-    AssetsConfigValidationError,
     build_breakdown_rows,
     build_networth_position,
     list_history_snapshots,
-    load_assets_config,
     merge_asset_sources,
     snapshot_assets_from_selection,
-    validate_assets_config_file,
 )
 
 logger = logging.getLogger(__name__)
@@ -53,463 +83,6 @@ networth_app = typer.Typer(
     invoke_without_command=True,
     no_args_is_help=False,
 )
-
-
-def _format_krw(amount: float) -> str:
-    """Format amount as KRW."""
-    sign = "-" if amount < 0 else ""
-    return f"{sign}₩{abs(amount):,.0f}"
-
-
-def _parse_as_of(raw_value: str | None) -> date | None:
-    """Parse an ISO date option."""
-    if raw_value is None:
-        return None
-    return date.fromisoformat(raw_value)
-
-
-def _resolve_as_of(ctx: typer.Context, date_value: str | None) -> date | None:
-    """Resolve the effective as-of date for networth subcommands."""
-    if date_value is not None:
-        return _parse_as_of(date_value)
-
-    parent_ctx = ctx.parent
-    if parent_ctx is None:
-        return None
-
-    parent_date_value = parent_ctx.params.get("date_value")
-    if parent_date_value is None:
-        return None
-
-    return _parse_as_of(str(parent_date_value))
-
-
-def _emit_networth_json(
-    payload: dict[str, Any],
-    *,
-    command: str,
-    as_of: str | None,
-    filters_applied: int,
-    extras: dict[str, Any] | None = None,
-) -> None:
-    """Emit JSON with the custom networth envelope."""
-    meta_extras = {
-        "filters_applied": filters_applied,
-        "as_of": as_of,
-    }
-    if extras:
-        meta_extras.update(extras)
-    meta = _build_meta(command, extras=meta_extras)
-    typer.echo(json.dumps({"_meta": meta, **payload}, ensure_ascii=False, indent=2))
-
-
-def _build_networth_guidance(
-    *,
-    assets: list[Any],
-    liabilities: list[Any],
-    net_worth: float,
-    primary_source: str = "manual",
-) -> dict[str, Any]:
-    """Build additive health/action cues for top-level networth JSON."""
-    source_flags = _build_source_flags(assets=assets, primary_source=primary_source)
-    has_manual_assets = any(getattr(asset, "source", None) == "manual" for asset in assets)
-    has_liabilities = bool(liabilities)
-    snapshot_status = _resolve_snapshot_status(
-        has_overview_data=source_flags["has_overview_data"],
-        has_snapshot_data=source_flags["has_snapshot_data"],
-        has_manual_assets=has_manual_assets,
-        has_liabilities=has_liabilities,
-    )
-
-    reasons: list[str] = []
-    if snapshot_status in {"manual_only", "liabilities_only"}:
-        reasons.append("snapshot_missing")
-    elif snapshot_status == "snapshot_only":
-        reasons.append("snapshot_only")
-    elif snapshot_status == "empty":
-        reasons.append("no_asset_data")
-
-    if net_worth < 0:
-        reasons.append("negative_net_worth")
-
-    next_steps: list[dict[str, str]] = []
-    if snapshot_status in {"snapshot_only", "manual_only", "liabilities_only", "empty"}:
-        message = (
-            "Add manual assets or liabilities if snapshots do not cover the full balance sheet."
-            if snapshot_status == "snapshot_only"
-            else "Capture an asset snapshot or confirm assets.yaml coverage."
-        )
-        next_steps.append(
-            {
-                "signal": reasons[0],
-                "message": message,
-                "command": "finjuice assets status --json",
-            }
-        )
-    if net_worth < 0:
-        next_steps.append(
-            {
-                "signal": "negative_net_worth",
-                "message": "Inspect the balance-sheet mix behind the negative position.",
-                "command": "finjuice networth breakdown --by category --json",
-            }
-        )
-
-    return {
-        "health": {
-            "status": "critical" if snapshot_status == "empty" else "warning" if reasons else "ok",
-            "reasons": reasons,
-        },
-        "actionable": bool(reasons),
-        "signals": _build_networth_signals(
-            snapshot_status=snapshot_status,
-            source_flags=source_flags,
-            assets=assets,
-            liabilities=liabilities,
-            net_worth=net_worth,
-        ),
-        "next_steps": next_steps,
-    }
-
-
-def _build_source_flags(*, assets: list[Any], primary_source: str) -> dict[str, bool]:
-    """Return source booleans for networth guidance."""
-    return {
-        "has_overview_data": primary_source == "overview"
-        or any(getattr(asset, "source", None) == "overview" for asset in assets),
-        "has_snapshot_data": any(getattr(asset, "source", None) == "snapshot" for asset in assets),
-    }
-
-
-def _resolve_snapshot_status(
-    *,
-    has_overview_data: bool,
-    has_snapshot_data: bool,
-    has_manual_assets: bool,
-    has_liabilities: bool,
-) -> str:
-    """Resolve the public networth source status label."""
-    candidates = (
-        (has_overview_data and has_manual_assets, "overview_and_manual"),
-        (has_overview_data, "overview_only"),
-        (has_snapshot_data and has_manual_assets, "snapshot_and_manual"),
-        (has_snapshot_data, "snapshot_only"),
-        (has_manual_assets, "manual_only"),
-        (has_liabilities, "liabilities_only"),
-    )
-    return next((status for condition, status in candidates if condition), "empty")
-
-
-def _build_networth_signals(
-    *,
-    snapshot_status: str,
-    source_flags: dict[str, bool],
-    assets: list[Any],
-    liabilities: list[Any],
-    net_worth: float,
-) -> dict[str, Any]:
-    """Build JSON signals while preserving legacy keys when overview is absent."""
-    signals = {
-        "snapshot_status": snapshot_status,
-        "has_snapshot_data": source_flags["has_snapshot_data"],
-        "has_manual_assets": any(getattr(asset, "source", None) == "manual" for asset in assets),
-        "has_liabilities": bool(liabilities),
-        "asset_count": len(assets),
-        "liability_count": len(liabilities),
-        "net_worth_negative": net_worth < 0,
-    }
-    if source_flags["has_overview_data"]:
-        signals["has_overview_balance_data"] = True
-    return signals
-
-
-def _build_networth_result(
-    ctx: typer.Context,
-    *,
-    as_of: date | None,
-    json_output: bool,
-    command: str,
-) -> dict[str, Any]:
-    """Build the aggregated net worth payload."""
-    config = get_config(ctx)
-    position = build_networth_position(
-        config.data_dir / "assets" / "snapshots",
-        config.assets_file,
-        as_of=as_of,
-        balance_dir=config.data_dir / "banksalad" / "balance",
-    )
-    resolved_as_of = position.as_of.isoformat() if position.as_of is not None else None
-
-    return {
-        "as_of": resolved_as_of,
-        "total_assets": position.total_assets,
-        "total_liabilities": position.total_liabilities,
-        "net_worth": position.net_worth,
-        **_build_networth_guidance(
-            assets=position.assets,
-            liabilities=position.liabilities,
-            net_worth=position.net_worth,
-            primary_source=position.primary_source,
-        ),
-        "_assets": position.assets,
-        "_liabilities": position.liabilities,
-        "_filters_applied": 0,
-    }
-
-
-def _render_overview(result: dict[str, Any]) -> None:
-    """Render the top-level net worth summary."""
-    section("Net Worth")
-    table_summary(
-        "Aggregated Position",
-        [
-            ("As Of", result["as_of"] or "-"),
-            ("Total Assets", _format_krw(result["total_assets"])),
-            ("Total Liabilities", _format_krw(result["total_liabilities"])),
-            ("Net Worth", _format_krw(result["net_worth"])),
-        ],
-    )
-
-    if not result["_assets"] and not result["_liabilities"]:
-        info("자산 스냅샷과 assets.yaml 항목이 없어 총액은 0원입니다.")
-        return
-
-    success(
-        f"Aggregated {len(result['_assets'])} assets and {len(result['_liabilities'])} liabilities"
-    )
-
-
-def _render_breakdown(as_of: str | None, rows: list[dict[str, Any]], *, by: str) -> None:
-    """Render a breakdown table."""
-    section("Net Worth Breakdown")
-
-    if not rows:
-        info("집계할 자산이 없습니다.")
-        return
-
-    table = Table(title=f"As Of {as_of or '-'}")
-    table.add_column("Category" if by == "category" else "Asset", style="cyan")
-    table.add_column("Value", justify="right", style="green")
-    table.add_column("Share", justify="right")
-
-    label_key = "category" if by == "category" else "asset_name"
-    for row in rows:
-        table.add_row(
-            str(row[label_key]),
-            _format_krw(float(row["value"])),
-            f"{float(row['share_pct']):.2f}%",
-        )
-
-    console.print(table)
-    success(f"{len(rows)} breakdown rows")
-
-
-def _render_history(rows: list[dict[str, Any]]) -> None:
-    """Render history rows."""
-    section("Net Worth History")
-
-    if not rows:
-        info(
-            "가용한 자산 스냅샷 이력이 없습니다."
-            " 자산 스냅샷을 추가하려면 finjuice assets status 를 확인하거나"
-            " assets.yaml 을 생성하세요."
-        )
-        return
-
-    table = Table(title="Monthly Snapshot History")
-    table.add_column("As Of", style="cyan")
-    table.add_column("Net Worth", justify="right", style="green")
-    for row in rows:
-        table.add_row(str(row["as_of"]), _format_krw(float(row["net_worth"])))
-
-    console.print(table)
-    success(f"{len(rows)} historical points")
-
-
-def _render_forecast(result: dict[str, Any]) -> None:
-    """Render one scenario forecast result."""
-    summary = result["summary"]
-    section("Net Worth Forecast")
-    summary_rows = [
-        ("Scenario", str(result["scenario"])),
-        ("Start", str(summary["start"])),
-        ("End", str(summary["end"])),
-        ("Years", str(summary["years"])),
-        ("Start Net Worth", _format_krw(float(summary["start_net_worth"]))),
-        ("End Net Worth", _format_krw(float(summary["end_net_worth"]))),
-        (
-            "CAGR",
-            "-" if summary["cagr"] is None else f"{float(summary['cagr']) * 100:.2f}%",
-        ),
-        ("Events Fired", str(summary["events_count"])),
-    ]
-    if summary.get("target_net_worth") is not None:
-        summary_rows.append(("Target", _format_krw(float(summary["target_net_worth"]))))
-        reached_label = summary.get("target_reached_at") if summary.get("target_reached") else "No"
-        summary_rows.append(("Reached", str(reached_label)))
-    table_summary("Scenario Summary", summary_rows)
-
-    checkpoints = _select_projection_rows(result["projections"])
-    if not checkpoints:
-        info("투영할 데이터가 없습니다.")
-        return
-
-    table = Table(title="Projection Checkpoints")
-    table.add_column("Date", style="cyan")
-    table.add_column("Net Worth", justify="right", style="green")
-    table.add_column("Assets", justify="right")
-    table.add_column("Liabilities", justify="right")
-    table.add_column("Events")
-
-    for row in checkpoints:
-        events = ", ".join(event["name"] for event in row["events_fired"]) or "-"
-        table.add_row(
-            str(row["date"]),
-            _format_krw(float(row["net_worth"])),
-            _format_krw(float(row["total_assets"])),
-            _format_krw(float(row["total_liabilities"])),
-            events,
-        )
-
-    console.print(table)
-    success(f"{len(result['projections'])} forecast points")
-
-
-def _render_forecast_comparison(
-    scenarios: dict[str, dict[str, Any]],
-    *,
-    years: int,
-) -> None:
-    """Render the multi-scenario comparison view."""
-    show_goal_status = any(
-        scenario_result["summary"].get("target_net_worth") is not None
-        for scenario_result in scenarios.values()
-    )
-    section("Net Worth Forecast")
-    table = Table(title=f"Scenario Comparison ({years}y)")
-    table.add_column("Scenario", style="cyan")
-    table.add_column("End Net Worth", justify="right", style="green")
-    table.add_column("CAGR", justify="right")
-    if show_goal_status:
-        table.add_column("Reached", justify="center")
-    table.add_column("Events", justify="right")
-
-    for scenario_name in SCENARIO_NAMES:
-        scenario_result = scenarios[scenario_name]
-        summary = scenario_result["summary"]
-        row = [
-            scenario_name,
-            _format_krw(float(summary["end_net_worth"])),
-            "-" if summary["cagr"] is None else f"{float(summary['cagr']) * 100:.2f}%",
-        ]
-        if show_goal_status:
-            reached_label = (
-                summary.get("target_reached_at") if summary.get("target_reached") else "No"
-            )
-            row.append(str(reached_label))
-        row.append(str(summary["events_count"]))
-        table.add_row(*row)
-
-    console.print(table)
-    success(f"Compared {len(scenarios)} scenarios")
-
-
-def _render_validate(result: dict[str, Any]) -> None:
-    """Render assets.yaml validation output."""
-    section("assets.yaml Validation")
-
-    if not result["exists"]:
-        info("assets.yaml 없음. networth는 자산 스냅샷만으로 계속 동작합니다.")
-        return
-
-    if result["valid"]:
-        table_summary(
-            "Schema Summary",
-            [
-                ("Version", str(result["version"])),
-                ("Manual Assets", str(result["manual_assets"])),
-                ("Liabilities", str(result["liabilities"])),
-            ],
-        )
-        success("assets.yaml is valid")
-        return
-
-    for issue in result["problems"]:
-        console.print(f"[red]❌ {issue['formatted']}[/red]")
-
-
-def _validation_issue_to_problem(issue: Any) -> dict[str, Any]:
-    """Convert an assets.yaml validation issue to the shared validation envelope."""
-    return {
-        "severity": "error",
-        "type": "invalid_assets_config",
-        "path": issue.path,
-        "message": issue.message,
-        "line": issue.line,
-        "column": issue.column,
-        "formatted": issue.format(),
-    }
-
-
-def _raise_goals_validation_error(
-    *,
-    command: str,
-    problems: list[GoalsValidationProblem],
-    json_output: bool,
-) -> None:
-    """Raise a structured validation error for goals.yaml issues."""
-    message = "goals.yaml is invalid"
-    if problems:
-        message = message + ":\n" + "\n".join(problem.format() for problem in problems)
-    emit_error(
-        message,
-        error_code=ErrorCode.VALIDATION_FAILED,
-        exit_code=ExitCode.VALIDATION_ERROR,
-        json_output=json_output,
-        command=command,
-    )
-
-
-def _handle_networth_exception(
-    exc: Exception,
-    *,
-    json_output: bool,
-    command: str,
-) -> None:
-    """Convert runtime networth errors into CLI envelopes."""
-    if isinstance(exc, AssetsConfigValidationError):
-        emit_error(
-            str(exc),
-            error_code=ErrorCode.VALIDATION_FAILED,
-            exit_code=ExitCode.VALIDATION_ERROR,
-            json_output=json_output,
-            command=command,
-        )
-
-    if isinstance(exc, ScenariosConfigValidationError):
-        emit_error(
-            str(exc),
-            error_code=ErrorCode.VALIDATION_FAILED,
-            exit_code=ExitCode.VALIDATION_ERROR,
-            json_output=json_output,
-            command=command,
-        )
-
-    if isinstance(exc, ValueError):
-        emit_error(
-            str(exc),
-            error_code=ErrorCode.INVALID_ARGS,
-            exit_code=ExitCode.USAGE_ERROR,
-            json_output=json_output,
-            command=command,
-        )
-
-    emit_error(
-        f"Failed to compute net worth: {exc}",
-        error_code=ErrorCode.GENERAL_ERROR,
-        json_output=json_output,
-        command=command,
-    )
 
 
 @networth_app.callback(invoke_without_command=True)
@@ -667,23 +240,14 @@ def forecast(
         )
 
         if scenario == "all":
-            scenario_payloads = {
-                scenario_name: serialize_forecast_result(
-                    build_forecast(
-                        position,
-                        scenarios_config,
-                        scenario=cast(
-                            Literal["conservative", "neutral", "optimistic"],
-                            scenario_name,
-                        ),
-                        years=years,
-                        target_net_worth=target_net_worth,
-                    )
-                )
-                for scenario_name in SCENARIO_NAMES
-            }
+            scenario_payloads = _build_all_scenario_forecasts(
+                position,
+                scenarios_config,
+                years=years,
+                target_net_worth=target_net_worth,
+            )
             payload = {"scenarios": scenario_payloads}
-            start_as_of = position.as_of.isoformat() if position.as_of is not None else None
+            start_as_of = _forecast_start_as_of(position)
             total_events = sum(
                 scenario_payload["summary"]["events_count"]
                 for scenario_payload in scenario_payloads.values()
@@ -706,16 +270,14 @@ def forecast(
             return
 
         selected_scenario = cast(Literal["conservative", "neutral", "optimistic"], scenario)
-        result = serialize_forecast_result(
-            build_forecast(
-                position,
-                scenarios_config,
-                scenario=selected_scenario,
-                years=years,
-                target_net_worth=target_net_worth,
-            )
+        result = _serialize_forecast_scenario(
+            position,
+            scenarios_config,
+            scenario=selected_scenario,
+            years=years,
+            target_net_worth=target_net_worth,
         )
-        start_as_of = position.as_of.isoformat() if position.as_of is not None else None
+        start_as_of = _forecast_start_as_of(position)
         if json_output:
             _emit_networth_json(
                 result,
@@ -834,16 +396,3 @@ def validate_command(
 
     if not validation.is_valid:
         raise typer.Exit(code=1)
-
-
-def _select_projection_rows(projections: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Keep text output readable for long forecast horizons."""
-    if len(projections) <= 24:
-        return projections
-
-    selected: list[dict[str, Any]] = [projections[0]]
-    last_index = len(projections) - 1
-    for index, row in enumerate(projections[1:], start=1):
-        if index == last_index or index % 12 == 0 or row["events_fired"]:
-            selected.append(row)
-    return selected

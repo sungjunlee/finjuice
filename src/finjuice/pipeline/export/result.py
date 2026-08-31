@@ -1,9 +1,14 @@
-"""Core export result computation shared by CLI pipeline entry points."""
+"""Core export result computation shared by CLI pipeline entry points.
+
+Size formatting, JSON artifact entries, and dry-run plan helpers live in
+:mod:`finjuice.pipeline.export.result_helpers`. XLSX, HTML, and Markdown
+output generators live in :mod:`finjuice.pipeline.export.result_outputs`.
+Those names are re-exported here so existing callers can keep importing
+from this module.
+"""
 
 from __future__ import annotations
 
-import importlib
-import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -11,19 +16,21 @@ from typing import Any, Callable, Optional
 
 import polars as pl
 
-from finjuice.pipeline.analytics.duckdb_layer import DUCKDB_INSTALL_HINT
-from finjuice.pipeline.constants import STANDARD_CSV_REPORTS
+from finjuice.pipeline.export.result_helpers import (
+    _REPORT_OUTPUTS,  # noqa: F401 — re-exported for existing result imports
+    build_export_plan,
+    build_output_entry,  # noqa: F401 — re-exported for existing result imports
+    estimate_output_size_bytes,  # noqa: F401 — re-exported for existing result imports
+    format_size_bytes,  # noqa: F401 — re-exported for existing result imports
+)
+from finjuice.pipeline.export.result_outputs import (
+    _generate_html_outputs,
+    _generate_markdown_outputs,
+    _generate_xlsx_outputs,
+)
 from finjuice.pipeline.report_filters import apply_report_filters
 from finjuice.pipeline.tagging.models import ReportFilters
 from finjuice.pipeline.tagging.rules_yaml_io import load_report_filters
-
-logger = logging.getLogger(__name__)
-
-# Derived from the canonical registry so it cannot drift from
-# generate_all_reports() output (Issue #746).
-_REPORT_OUTPUTS = tuple(
-    (filename, f"{report_key}_report") for report_key, filename in STANDARD_CSV_REPORTS
-)
 
 InfoFn = Callable[[str], None]
 WarningFn = Callable[[str], None]
@@ -80,143 +87,6 @@ def configure_export_result_runtime(
         open_file=open_file,
         report_filters_loader=report_filters_loader,
     )
-
-
-def format_size_bytes(size_bytes: int | None) -> str | None:
-    """Convert a byte count to a concise human-readable string."""
-    if size_bytes is None:
-        return None
-    if size_bytes < 1024:
-        return f"{size_bytes} B"
-    if size_bytes < 1024 * 1024:
-        return f"{size_bytes / 1024:.1f} KB"
-    return f"{size_bytes / (1024 * 1024):.2f} MB"
-
-
-def estimate_output_size_bytes(path: Path) -> int | None:
-    """Estimate output size from an existing artifact when one is available."""
-    if path.exists():
-        return path.stat().st_size
-
-    if path.suffix == ".xlsx" and path.parent.exists():
-        candidates = sorted(path.parent.glob("master_*.xlsx"))
-        if candidates:
-            return candidates[-1].stat().st_size
-
-    return None
-
-
-def build_output_entry(  # noqa: PLR0913 - JSON artifact entries expose these stable fields.
-    path: Path,
-    kind: str,
-    *,
-    estimated_size_bytes: int | None = None,
-    row_count: int | None = None,
-    available: bool = True,
-    reason: str | None = None,
-) -> dict[str, Any]:
-    """Build a JSON-friendly description of an export artifact."""
-    return {
-        "path": str(path),
-        "kind": kind,
-        "would_overwrite": path.exists(),
-        "estimated_size_bytes": estimated_size_bytes,
-        "estimated_size_human": format_size_bytes(estimated_size_bytes),
-        "row_count": row_count,
-        "available": available,
-        "reason": reason,
-    }
-
-
-def build_export_plan(
-    data_dir: Path,
-    csv_base_dir: Path,
-    format_lower: str,
-    period: str | None,
-) -> dict[str, Any]:
-    """Build a read-only export manifest for text and JSON dry-run output."""
-    from finjuice.pipeline.storage import csv_partition
-
-    export_dir = data_dir / "exports"
-    reports_dir = export_dir / "reports"
-    today = datetime.now().strftime("%Y%m%d")
-    transaction_count = len(csv_partition.get_all_transactions(csv_base_dir, columns=["row_hash"]))
-    output_files: list[dict[str, Any]] = []
-    skipped_outputs: list[dict[str, Any]] = []
-
-    if format_lower in {"xlsx", "all"}:
-        master_path = export_dir / f"master_{today}.xlsx"
-        output_files.append(
-            build_output_entry(
-                master_path,
-                "master_xlsx",
-                estimated_size_bytes=estimate_output_size_bytes(master_path),
-                row_count=transaction_count,
-            )
-        )
-        for filename, kind in _REPORT_OUTPUTS:
-            report_path = reports_dir / filename
-            output_files.append(
-                build_output_entry(
-                    report_path,
-                    kind,
-                    estimated_size_bytes=estimate_output_size_bytes(report_path),
-                )
-            )
-
-    if format_lower in {"html", "all"}:
-        html_path = reports_dir / f"report_{period or today}.html"
-        try:
-            importlib.import_module("finjuice.pipeline.export.html_report")
-        except ImportError as exc:
-            reason = str(exc) if str(exc) == DUCKDB_INSTALL_HINT else f"missing dependency: {exc}"
-            skipped_outputs.append(
-                build_output_entry(
-                    html_path,
-                    "html_report",
-                    available=False,
-                    reason=reason,
-                )
-            )
-        else:
-            output_files.append(
-                build_output_entry(
-                    html_path,
-                    "html_report",
-                    estimated_size_bytes=estimate_output_size_bytes(html_path),
-                )
-            )
-
-    if format_lower in {"md", "all"}:
-        md_path = reports_dir / f"report_{period or today}.md"
-        try:
-            importlib.import_module("finjuice.pipeline.export.markdown_report")
-        except ImportError as exc:
-            reason = str(exc) if str(exc) == DUCKDB_INSTALL_HINT else f"missing dependency: {exc}"
-            skipped_outputs.append(
-                build_output_entry(
-                    md_path,
-                    "markdown_report",
-                    available=False,
-                    reason=reason,
-                )
-            )
-        else:
-            output_files.append(
-                build_output_entry(
-                    md_path,
-                    "markdown_report",
-                    estimated_size_bytes=estimate_output_size_bytes(md_path),
-                )
-            )
-
-    return {
-        "format": format_lower,
-        "period": period,
-        "transaction_count": transaction_count,
-        "output_files": output_files,
-        "skipped_outputs": skipped_outputs,
-    }
 
 
 def _no_filter_requested(ctx: Any) -> bool:
@@ -292,163 +162,6 @@ def _build_export_paths(config: Any) -> ExportPaths:
         reports_dir=export_dir / "reports",
         today=datetime.now().strftime("%Y%m%d"),
     )
-
-
-def _generate_xlsx_outputs(run: ExportRunContext) -> tuple[int, list[dict[str, Any]]]:
-    """Generate master XLSX and CSV reports."""
-    from finjuice.pipeline.constants import REPORTS_COUNT
-    from finjuice.pipeline.export.master import export_master_xlsx
-    from finjuice.pipeline.export.reports import generate_all_reports
-
-    master_path = run.paths.export_dir / f"master_{run.paths.today}.xlsx"
-    logger.info(f"Exporting master file to: {master_path}")
-
-    _emit_info(f"Exporting master file: {master_path}", emit_text=run.emit_text)
-    row_count = export_master_xlsx(run.config.csv_base_dir, master_path)
-    generated_artifacts = [
-        build_output_entry(
-            master_path,
-            "master_xlsx",
-            estimated_size_bytes=master_path.stat().st_size if master_path.exists() else None,
-            row_count=row_count,
-        )
-    ]
-
-    _emit_info(f"Generating {REPORTS_COUNT} CSV reports...", emit_text=run.emit_text)
-    report_summary = generate_all_reports(
-        run.config.csv_base_dir,
-        run.paths.reports_dir,
-        source_df=run.report_source_df,
-    )
-    for filename, kind in _REPORT_OUTPUTS:
-        report_path = run.paths.reports_dir / filename
-        if report_path.exists():
-            generated_artifacts.append(
-                build_output_entry(
-                    report_path,
-                    kind,
-                    estimated_size_bytes=report_path.stat().st_size,
-                    row_count=int(report_summary.get(filename.removesuffix(".csv"), 0) or 0),
-                )
-            )
-
-    return row_count, generated_artifacts
-
-
-def _generate_html_outputs(
-    run: ExportRunContext,
-    *,
-    auto_open: bool,
-    format_lower: str,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Generate HTML report output or a skipped-output entry."""
-    generated_artifacts: list[dict[str, Any]] = []
-    skipped_outputs: list[dict[str, Any]] = []
-    html_path = run.paths.reports_dir / f"report_{run.period or run.paths.today}.html"
-    try:
-        from finjuice.pipeline.export.html_report import generate_html_report
-
-        logger.info(f"Generating HTML report: {html_path} (online=%s)", run.online)
-
-        _emit_info(f"Generating HTML report: {html_path}", emit_text=run.emit_text)
-        generate_html_report(
-            csv_base_dir=run.config.csv_base_dir,
-            output_path=html_path,
-            period=run.period,
-            include_charts=True,
-            source_df=run.report_source_df,
-            offline=not run.online,
-        )
-        generated_artifacts.append(
-            build_output_entry(
-                html_path,
-                "html_report",
-                estimated_size_bytes=html_path.stat().st_size if html_path.exists() else None,
-            )
-        )
-
-        if auto_open and format_lower == "html":
-            opened = _runtime.open_file(html_path) if _runtime.open_file is not None else False
-            if opened:
-                _emit_info("   📂 Opened in browser", emit_text=run.emit_text)
-            else:
-                _emit_info(f"   📂 Open manually: {html_path}", emit_text=run.emit_text)
-
-    except ImportError as e:
-        skipped_outputs.append(
-            build_output_entry(
-                html_path,
-                "html_report",
-                available=False,
-                reason=str(e) if str(e) == DUCKDB_INSTALL_HINT else f"missing dependency: {e}",
-            )
-        )
-        _emit_warning(
-            str(e)
-            if str(e) == DUCKDB_INSTALL_HINT
-            else f"⚠️  HTML export skipped (missing dependency): {e}",
-            emit_text=run.emit_text,
-        )
-        _emit_info(
-            "   Run 'finjuice doctor' for the exact analytics install command."
-            if str(e) == DUCKDB_INSTALL_HINT
-            else "   Install with: uv sync --extra templates",
-            emit_text=run.emit_text,
-        )
-
-    return generated_artifacts, skipped_outputs
-
-
-def _generate_markdown_outputs(
-    run: ExportRunContext,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Generate Markdown report output or a skipped-output entry."""
-    generated_artifacts: list[dict[str, Any]] = []
-    skipped_outputs: list[dict[str, Any]] = []
-    md_path = run.paths.reports_dir / f"report_{run.period or run.paths.today}.md"
-    try:
-        from finjuice.pipeline.export.markdown_report import generate_markdown_report
-
-        logger.info(f"Generating Markdown report: {md_path}")
-
-        _emit_info(f"Generating Markdown report: {md_path}", emit_text=run.emit_text)
-        generate_markdown_report(
-            csv_base_dir=run.config.csv_base_dir,
-            output_path=md_path,
-            period=run.period,
-            source_df=run.report_source_df,
-        )
-        generated_artifacts.append(
-            build_output_entry(
-                md_path,
-                "markdown_report",
-                estimated_size_bytes=md_path.stat().st_size if md_path.exists() else None,
-            )
-        )
-
-    except ImportError as e:
-        skipped_outputs.append(
-            build_output_entry(
-                md_path,
-                "markdown_report",
-                available=False,
-                reason=str(e) if str(e) == DUCKDB_INSTALL_HINT else f"missing dependency: {e}",
-            )
-        )
-        _emit_warning(
-            str(e)
-            if str(e) == DUCKDB_INSTALL_HINT
-            else f"⚠️  Markdown export skipped (missing dependency): {e}",
-            emit_text=run.emit_text,
-        )
-        _emit_info(
-            "   Run 'finjuice doctor' for the exact analytics install command."
-            if str(e) == DUCKDB_INSTALL_HINT
-            else "   Install with: uv sync --extra templates",
-            emit_text=run.emit_text,
-        )
-
-    return generated_artifacts, skipped_outputs
 
 
 def _resolve_transaction_count(

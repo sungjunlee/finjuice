@@ -11,7 +11,7 @@ from io import StringIO
 import pytest
 from rich.console import Console
 
-from finjuice.pipeline.cli import output
+from finjuice.pipeline.cli import output, output_messages, output_pagination
 
 
 @pytest.fixture
@@ -23,6 +23,48 @@ def mock_console():
     output.console = mock_console
     yield string_io
     output.console = original_console
+
+
+class TestPublicNames:
+    """Public emit/error/exit names stay on the output module after the split."""
+
+    def test_emit_error_exit_names_remain_on_output_module(self) -> None:
+        """Issue #78: callers can keep importing emit/error/exit helpers from output."""
+        assert callable(output.emit)
+        assert callable(output.emit_error)
+        assert callable(output.emit_list)
+        assert callable(output.error)
+        assert output.ErrorCode.GENERAL_ERROR == "GENERAL_ERROR"
+        assert int(output.ExitCode.GENERAL_ERROR) == 1
+
+    def test_pagination_meta_helpers_are_reexported(self) -> None:
+        """Pagination/meta helpers remain importable from output via re-export."""
+        assert output._build_meta is output_pagination._build_meta
+        assert output.Pagination is output_pagination.Pagination
+        assert output.validate_pagination_args is output_pagination.validate_pagination_args
+        assert output.build_offset_pagination is output_pagination.build_offset_pagination
+        assert output.truncate_rows_to_max_bytes is output_pagination.truncate_rows_to_max_bytes
+        assert output.wrap_paginated_result is output_pagination.wrap_paginated_result
+        assert output.render_pagination_footer is output_pagination.render_pagination_footer
+        assert output.DEFAULT_PAGINATION_LIMIT is output_pagination.DEFAULT_PAGINATION_LIMIT
+        assert output.DEFAULT_MAX_BYTES is output_pagination.DEFAULT_MAX_BYTES
+        assert output.MAX_PAGINATION_LIMIT is output_pagination.MAX_PAGINATION_LIMIT
+
+    def test_message_helpers_are_reexported(self) -> None:
+        """Issue #163: Rich message helpers remain importable from output."""
+        assert output.success is output_messages.success
+        assert output.info is output_messages.info
+        assert output.warning is output_messages.warning
+        assert output.error is output_messages.error
+        assert output.error_with_ai_hint is output_messages.error_with_ai_hint
+        assert output.step is output_messages.step
+        assert output.section is output_messages.section
+        assert output.panel_info is output_messages.panel_info
+        assert output.table_summary is output_messages.table_summary
+        assert output.bullet_list is output_messages.bullet_list
+        assert output.progress_indicator is output_messages.progress_indicator
+        assert output.newline is output_messages.newline
+        assert output.hr is output_messages.hr
 
 
 class TestOutputHelpers:
