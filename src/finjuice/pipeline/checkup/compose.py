@@ -7,6 +7,10 @@ existing callers can keep importing from this module.
 The named collector registry lives in
 :mod:`finjuice.pipeline.checkup.named_collectors` and is re-exported here
 so existing callers can keep importing from this module.
+
+Warning aggregation helpers live in
+:mod:`finjuice.pipeline.checkup.warnings` and are re-exported here so
+existing callers can keep importing from this module.
 """
 
 from __future__ import annotations
@@ -22,6 +26,7 @@ from finjuice.pipeline.checkup.next_actions import (
     _PRIORITY_ORDER,  # noqa: F401 — re-exported for existing compose imports
     _build_next_actions,
 )
+from finjuice.pipeline.checkup.warnings import _collect_warnings
 from finjuice.pipeline.config import Config
 
 
@@ -97,15 +102,3 @@ def collect_checkup_bundle(
         networth=networth,
         obligations=obligations,
     )
-
-
-def _collect_warnings(*messages: str | None) -> list[str]:
-    """Return de-duplicated warnings in stable order."""
-    warnings: list[str] = []
-    seen: set[str] = set()
-    for message in messages:
-        if not message or message in seen:
-            continue
-        warnings.append(message)
-        seen.add(message)
-    return warnings
