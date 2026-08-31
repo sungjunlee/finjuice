@@ -11,6 +11,10 @@ here so existing callers can keep importing from this module.
 Pre-load file and sheet-name guards live in
 :mod:`finjuice.pipeline.validation.validators_preflight` and are re-exported
 here so existing callers can keep importing from this module.
+
+Workbook load helpers live in
+:mod:`finjuice.pipeline.validation.validators_load` and are re-exported
+here so existing callers can keep importing from this module.
 """
 
 import logging
@@ -26,6 +30,10 @@ from finjuice.pipeline.validation.validators_helpers import (
     MAX_COLUMN_NAME_LENGTH,  # noqa: F401 — re-exported for existing validators imports
     _sanitize_column_names,
     _suggest_column_mapping,
+)
+from finjuice.pipeline.validation.validators_load import (
+    _load_banksalad_xlsx,
+    _xlsx_load_error_message,
 )
 from finjuice.pipeline.validation.validators_preflight import (
     MAX_FILE_SIZE_MB,  # noqa: F401 — re-exported for existing validators imports
@@ -114,35 +122,13 @@ def validate_banksalad_xlsx(
         )
 
     # 3. Try to load Excel file (Polars)
-    # Note: Polars sheet_id is 1-indexed (1=first sheet, 2=second sheet)
-    # Polars sheet_name parameter accepts string names
     try:
-        if isinstance(sheet_name, str):
-            # Use sheet_name parameter for string names
-            df = pl.read_excel(
-                file_path, sheet_name=sheet_name, engine="openpyxl", raise_if_empty=False
-            )
-        else:
-            # Convert 0-indexed to 1-indexed for sheet_id
-            sheet_id = sheet_name + 1 if sheet_name >= 0 else 1
-            df = pl.read_excel(
-                file_path, sheet_id=sheet_id, engine="openpyxl", raise_if_empty=False
-            )
+        df = _load_banksalad_xlsx(file_path, sheet_name)
         actual_sheet = sheet_name
     except (PermissionError, OSError, ValueError, BadZipFile, pl.exceptions.PolarsError) as e:
-        error_str = str(e)
-        # Sheet doesn't exist - try to suggest correct sheet
-        if "Worksheet" in error_str or "sheet" in error_str.lower():
-            return ValidationResult(
-                is_valid=False,
-                error_message=f"❌ 시트를 찾을 수 없습니다: {sheet_name}\n"
-                f"💡 뱅크샐러드 export 파일의 거래 내역은 보통 2번째 시트 (index 1)에 있습니다.\n"
-                f"   sheet_name=1 또는 sheet_name='가계부 내역'을 사용해보세요.",
-            )
         return ValidationResult(
             is_valid=False,
-            error_message=f"❌ 파일 읽기 실패: {e}\n"
-            f"💡 파일이 손상되었거나 Excel 형식이 아닐 수 있습니다.",
+            error_message=_xlsx_load_error_message(e, sheet_name),
         )
 
     # 3. Check required columns (shares REQUIRED_KOREAN_COLUMNS with ingest schemas
