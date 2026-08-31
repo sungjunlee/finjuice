@@ -39,7 +39,7 @@ VERSION_LOCATIONS = [
         '__version__ = "{version}"',
     ),
     (
-        "src/finjuice/pipeline/doctor/checks.py",
+        "src/finjuice/pipeline/doctor/skill_runtime.py",
         r'^SKILL_RUNTIME_REQUIRED_VERSION\s*=\s*"[^"]*"',
         'SKILL_RUNTIME_REQUIRED_VERSION = "{version}"',
     ),

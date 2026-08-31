@@ -354,7 +354,7 @@ class TestDoctorSkillRuntimeChecks:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Runtime checks should be read-only and expose known skill capabilities."""
-        import finjuice.pipeline.doctor.checks as doctor
+        import finjuice.pipeline.doctor.skill_runtime as doctor
 
         helper = tmp_path / "skills/finjuice/scripts/ensure_finjuice_cli.sh"
         helper.parent.mkdir(parents=True)
@@ -388,7 +388,7 @@ class TestDoctorSkillRuntimeChecks:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Stale or missing runtime support should suggest explicit update only."""
-        import finjuice.pipeline.doctor.checks as doctor
+        import finjuice.pipeline.doctor.skill_runtime as doctor
 
         monkeypatch.setattr(doctor, "get_version", lambda: "0.6.1")
         monkeypatch.setattr(doctor, "_discover_skill_runtime_helper", lambda: None)
@@ -421,7 +421,7 @@ class TestDoctorSkillRuntimeChecks:
         self, doctor_data_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """doctor --json should include deterministic skill runtime sanity checks."""
-        import finjuice.pipeline.doctor.checks as doctor
+        import finjuice.pipeline.doctor.skill_runtime as doctor
 
         helper = tmp_path / "ensure_finjuice_cli.sh"
         helper.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
@@ -451,7 +451,7 @@ class TestDoctorSkillRuntimeChecks:
         self, doctor_data_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Human doctor output should show runtime sanity without network checks."""
-        import finjuice.pipeline.doctor.checks as doctor
+        import finjuice.pipeline.doctor.skill_runtime as doctor
 
         monkeypatch.setattr(doctor, "get_version", lambda: "0.6.1")
         monkeypatch.setattr(doctor, "_discover_skill_runtime_helper", lambda: None)
