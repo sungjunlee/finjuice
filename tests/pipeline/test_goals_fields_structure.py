@@ -20,8 +20,7 @@ def test_problem_helpers_live_in_sibling_module() -> None:
 
     assert "def _validate_required_label" in fields_text
     assert "def _validate_required_amount" in fields_text
-    assert "def _validate_month_range" in fields_text
-    assert "def _validate_date_range" in fields_text
+    assert "def _validate_frequency" in fields_text
     assert "def _validate_optional_tags" in fields_text
     for name in PROBLEM_HELPER_NAMES:
         assert f"def {name}" not in fields_text
