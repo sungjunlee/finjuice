@@ -22,7 +22,7 @@ Each rule is a YAML object with these common fields:
 ```
 
 - `name`: unique identifier used for validation and debugging.
-- `match`: Python-style regex pattern.
+- `match`: substring pattern. Matching is case-insensitive; `|` separates alternative spellings and each alternative is matched independently.
 - `fields`: transaction fields to search, usually `merchant_raw`, `memo_raw`, `major_raw`, or `minor_raw`.
 - `tags`: attribute tags to merge into `tags_final`.
 - `category`: optional single aggregation category written to `category_rule`.
@@ -30,10 +30,14 @@ Each rule is a YAML object with these common fields:
 
 ## Match Pattern Syntax
 
-- Use regex alternation with `|` for spelling variants: `"투썸플레이스|투썸|TWOSOME"`.
-- Escape regex metacharacters when matching literal punctuation: `"\\(주\\)카카오"`.
-- Prefer targeted patterns over broad `.*...*` catch-alls to reduce false positives.
+- Plain `match` uses case-insensitive substring matching (contains).
+- Use `|` as a literal alternation separator for spelling variants: `"투썸플레이스|투썸|TWOSOME"`. Each segment is matched as a plain substring.
+- Punctuation is matched literally; no escaping needed: `"(주)카카오"`.
+- Prefer specific substrings over very short ones to reduce false positives.
 - Match can be applied to multiple fields when one source column is not enough.
+- Other match modes (`contains`, `exact`, `regex`) are available as explicit `match_type` options where supported (e.g. report filters).
+
+> **Pitfall:** Do not use `^...$` anchors or regex metacharacters (`.*`, `\d`, `[]`, etc.) in a plain `match` — they are treated as literal characters unless `match_type: regex` is set.
 
 ## Priority Semantics
 
