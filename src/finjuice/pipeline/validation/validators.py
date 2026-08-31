@@ -7,6 +7,10 @@ for fixing common issues.
 Column-name matching helpers live in
 :mod:`finjuice.pipeline.validation.validators_helpers` and are re-exported
 here so existing callers can keep importing from this module.
+
+Pre-load file and sheet-name guards live in
+:mod:`finjuice.pipeline.validation.validators_preflight` and are re-exported
+here so existing callers can keep importing from this module.
 """
 
 import logging
@@ -23,11 +27,14 @@ from finjuice.pipeline.validation.validators_helpers import (
     _sanitize_column_names,
     _suggest_column_mapping,
 )
+from finjuice.pipeline.validation.validators_preflight import (
+    MAX_FILE_SIZE_MB,  # noqa: F401 — re-exported for existing validators imports
+    _missing_file_error_message,
+    _oversized_file_error_message,
+    _sheet_name_error_message,
+)
 
 logger = logging.getLogger(__name__)
-
-# Security constants
-MAX_FILE_SIZE_MB = 100  # Maximum file size to prevent memory exhaustion
 
 
 class ValidationError(ValueError):
@@ -83,35 +90,27 @@ def validate_banksalad_xlsx(
         ...     print("Suggestions:", result.suggestions)
     """
     # 0. Validate sheet_name parameter
-    if isinstance(sheet_name, int):
-        if sheet_name < 0:
-            return ValidationResult(
-                is_valid=False,
-                error_message="❌ sheet_name은 0 이상이어야 합니다.",
-            )
-        if sheet_name > 100:  # Reasonable upper bound
-            return ValidationResult(
-                is_valid=False,
-                error_message="❌ sheet_name이 너무 큽니다 (최대: 100).",
-            )
-
-    # 1. File existence check
-    if not file_path.exists():
+    sheet_name_error = _sheet_name_error_message(sheet_name)
+    if sheet_name_error:
         return ValidationResult(
             is_valid=False,
-            error_message=f"❌ 파일을 찾을 수 없습니다: {file_path.name}",
+            error_message=sheet_name_error,
+        )
+
+    # 1. File existence check
+    missing_file_error = _missing_file_error_message(file_path)
+    if missing_file_error:
+        return ValidationResult(
+            is_valid=False,
+            error_message=missing_file_error,
         )
 
     # 2. File size check (prevent memory exhaustion)
-    file_size_mb = file_path.stat().st_size / (1024 * 1024)
-    if file_size_mb > MAX_FILE_SIZE_MB:
+    oversized_file_error = _oversized_file_error_message(file_path)
+    if oversized_file_error:
         return ValidationResult(
             is_valid=False,
-            error_message=(
-                f"❌ 파일 크기가 너무 큽니다: {file_size_mb:.1f}MB "
-                f"(최대: {MAX_FILE_SIZE_MB}MB)\n"
-                f"💡 파일을 분할하거나 기간을 나누어 export 해주세요."
-            ),
+            error_message=oversized_file_error,
         )
 
     # 3. Try to load Excel file (Polars)
