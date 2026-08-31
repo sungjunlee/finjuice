@@ -18,7 +18,7 @@ def test_named_collector_helpers_live_in_helper_module() -> None:
     helpers_text = (CHECKUP_DIR / "named_collectors.py").read_text(encoding="utf-8")
 
     assert "def collect_checkup_bundle" in compose_text
-    assert "def _collect_warnings" in compose_text
+    assert "def _collect_warnings" not in compose_text
     assert "def _build_next_actions" not in compose_text
     assert "def run_named_collector" not in compose_text
     assert "NAMED_COLLECTORS: dict[str, Callable[..., Any]] =" not in compose_text
