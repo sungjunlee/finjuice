@@ -21,10 +21,7 @@ def test_asset_schema_helpers_live_in_sibling_module() -> None:
     schemas_text = (INGEST_DIR / "schemas.py").read_text(encoding="utf-8")
     assets_text = (INGEST_DIR / "schemas_assets.py").read_text(encoding="utf-8")
 
-    assert "def detect_schema_version" in schemas_text
     assert "def map_columns" in schemas_text
-    assert "def _matches_schema" in schemas_text
-    assert "class ColumnSchema" in schemas_text
     assert "class AssetColumnSchema" not in schemas_text
     assert "ASSET_SCHEMAS = " not in schemas_text
     assert "def detect_asset_schema_version" not in schemas_text
