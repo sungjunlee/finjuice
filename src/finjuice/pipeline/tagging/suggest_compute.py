@@ -4,18 +4,23 @@ The Typer command module owns interactive apply and terminal rendering.
 This module owns the `--json` payload used by `rules suggest`. Coverage-stat
 shaping helpers live in :mod:`finjuice.pipeline.tagging.suggest_compute_stats`,
 compact privacy projection lives in
-:mod:`finjuice.pipeline.tagging.suggest_compute_compact`, and the domain error
-lives in :mod:`finjuice.pipeline.tagging.suggest_compute_error`; all are
-re-exported here so existing callers can keep importing from this module.
+:mod:`finjuice.pipeline.tagging.suggest_compute_compact`, the domain error
+lives in :mod:`finjuice.pipeline.tagging.suggest_compute_error`, and the
+headless auto-apply loop lives in
+:mod:`finjuice.pipeline.tagging.suggest_compute_apply`; all are re-exported
+here so existing callers can keep importing from this module.
 """
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
+from functools import partial
 from typing import Any
 
 from finjuice.pipeline.config import Config
+from finjuice.pipeline.tagging.suggest_compute_apply import (
+    _apply_auto_apply_suggestions,
+)
 from finjuice.pipeline.tagging.suggest_compute_compact import (
     _compact_rule_suggestion,  # noqa: F401 — re-exported for existing suggest_compute imports
     _compact_rules_suggest_result,  # noqa: F401 — re-exported for existing suggest_compute imports
@@ -33,8 +38,6 @@ from finjuice.pipeline.tagging.suggest_compute_stats import (
     _stats_int,
     _suggest_transfer_exclusions,  # noqa: F401 — re-exported for existing suggest_compute imports
 )
-
-logger = logging.getLogger(__name__)
 
 
 def _append_applied_suggestion_audit(
@@ -61,7 +64,6 @@ def _compute_rules_suggest_json(
 ) -> dict[str, Any]:
     """Compute JSON payload for `rules suggest`."""
     from finjuice.pipeline.tagging.suggestions import (
-        apply_suggestion_to_rules,
         build_rule_dict_from_suggestion,
         generate_merchant_context,
         get_suggestion_coverage_stats,
@@ -178,25 +180,11 @@ def _compute_rules_suggest_json(
     if apply and yes:
         from finjuice.pipeline.tagging.pipeline import run_tagging
 
-        applied_count = 0
-        skipped_count = 0
-
-        for suggestion_idx, suggestion in enumerate(suggestions, start=1):
-            if not is_auto_apply_eligible(suggestion):
-                skipped_count += 1
-                continue
-            try:
-                applied_rule = apply_suggestion_to_rules(suggestion, config.rules_file)
-                _append_applied_suggestion_audit(on_applied, applied_rule.name)
-                applied_count += 1
-            except (OSError, ValueError) as exc:
-                logger.warning(
-                    "Failed to auto-apply suggestion %s/%s (%s)",
-                    suggestion_idx,
-                    len(suggestions),
-                    type(exc).__name__,
-                )
-                skipped_count += 1
+        applied_count, skipped_count = _apply_auto_apply_suggestions(
+            suggestions,
+            rules_file=config.rules_file,
+            audit_applied=partial(_append_applied_suggestion_audit, on_applied),
+        )
 
         coverage_after = coverage_before
         if tag_after and applied_count > 0:
