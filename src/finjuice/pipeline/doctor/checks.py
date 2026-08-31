@@ -3,6 +3,10 @@
 Data-directory existence, permission, and structure checks live in
 :mod:`finjuice.pipeline.doctor.data_directory` and are re-exported here so
 existing callers can keep importing from this module.
+
+Next-step suggestion helpers live in
+:mod:`finjuice.pipeline.doctor.next_step` and are re-exported here so
+existing callers can keep importing from this module.
 """
 
 from __future__ import annotations
@@ -24,6 +28,12 @@ from finjuice.pipeline.doctor.configuration import _check_configuration
 from finjuice.pipeline.doctor.data_directory import _check_data_directory
 from finjuice.pipeline.doctor.data_status import _check_data_status
 from finjuice.pipeline.doctor.models import CheckResult, DoctorResult
+from finjuice.pipeline.doctor.next_step import (
+    _next_step_from_data_dir,  # noqa: F401 — re-exported for existing checks imports
+    _next_step_from_data_status,  # noqa: F401 — re-exported for existing checks imports
+    _next_step_from_schema,  # noqa: F401 — re-exported for existing checks imports
+    _suggest_next_step,
+)
 
 SKILL_RUNTIME_REQUIRED_VERSION = "0.7.1"
 SKILL_RUNTIME_UPDATE_COMMAND = "skills/finjuice/scripts/ensure_finjuice_cli.sh --update --json"
@@ -278,60 +288,6 @@ def _check_analytics_duckdb(
         [],
         install_hint,
     )
-
-
-def _next_step_from_schema(data_results: list[CheckResult]) -> str | None:
-    """Suggest a step when a transaction schema compatibility warning is set."""
-    for result in data_results:
-        if (
-            result.name == "transaction_schema_compatibility"
-            and result.status == "warning"
-            and result.suggestion
-        ):
-            return result.suggestion
-    return None
-
-
-def _next_step_from_data_dir(data_dir_results: list[CheckResult]) -> str | None:
-    """Suggest a step when the data directory is missing."""
-    for result in data_dir_results:
-        if "존재하지 않음" in result.message or (
-            result.detail and "존재하지 않음" in result.detail
-        ):
-            return "finjuice import"
-    return None
-
-
-def _next_step_from_data_status(data_results: list[CheckResult]) -> str | None:
-    """Suggest a step based on transaction data availability."""
-    for result in data_results:
-        if "트랜잭션 데이터 없음" in result.message or "CSV 파티션 없음" in result.message:
-            return "finjuice import"
-    for result in data_results:
-        if "처리되지 않은 XLSX" in result.message:
-            return "finjuice refresh"
-    return None
-
-
-def _suggest_next_step(
-    data_dir_results: list[CheckResult],
-    config_results: list[CheckResult],
-    data_results: list[CheckResult],
-) -> str:
-    """Determine the suggested next step based on check results."""
-    step = (
-        _next_step_from_schema(data_results)
-        or _next_step_from_data_dir(data_dir_results)
-        or _next_step_from_data_status(data_results)
-    )
-    if step:
-        return step
-
-    for result in config_results:
-        if "규칙 충돌" in result.message:
-            return "finjuice rules validate"
-
-    return "finjuice status"
 
 
 def _build_doctor_result(config: Config) -> DoctorResult:
