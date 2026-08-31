@@ -1,11 +1,12 @@
 """Coverage-stat shaping helpers for `finjuice rules suggest`.
 
 Owns typed stat readers, transfer-exclusion augmentation, and the shared
-additive count payload. JSON compute and the domain error stay in
+additive count payload. JSON compute stays in
 :mod:`finjuice.pipeline.tagging.suggest_compute`, which re-exports these
 names so existing callers can keep importing from that module. Compact
 privacy projection lives in
-:mod:`finjuice.pipeline.tagging.suggest_compute_compact`.
+:mod:`finjuice.pipeline.tagging.suggest_compute_compact`. The domain error
+lives in :mod:`finjuice.pipeline.tagging.suggest_compute_error`.
 """
 
 from __future__ import annotations
