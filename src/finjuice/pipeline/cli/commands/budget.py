@@ -2,13 +2,13 @@
 
 Human rendering lives in :mod:`finjuice.pipeline.cli.commands.budget_rendering`
 and is re-exported here so existing callers can keep importing from this
-module.
+module. Validation error envelopes live in
+:mod:`finjuice.pipeline.cli.commands.budget_errors`.
 """
 
 from __future__ import annotations
 
 import json
-from typing import NoReturn
 
 import typer
 
@@ -20,6 +20,7 @@ from finjuice.pipeline.budget_compute import (
     compute_budget_status,
     compute_budget_validate,
 )
+from finjuice.pipeline.cli.commands.budget_errors import _raise_goals_validation_error
 from finjuice.pipeline.cli.commands.budget_period import resolve_budget_period
 from finjuice.pipeline.cli.commands.budget_rendering import (
     BUDGET_SPEND_INCLUSION,
@@ -35,7 +36,6 @@ from finjuice.pipeline.cli.commands.budget_rendering import (
 from finjuice.pipeline.cli.output import ErrorCode, ExitCode, _build_meta, emit_error
 from finjuice.pipeline.cli.report_filters import load_cli_report_filters
 from finjuice.pipeline.cli.utils import get_config
-from finjuice.pipeline.goals import GoalsValidationProblem
 
 budget_app = typer.Typer(
     name="budget",
@@ -177,22 +177,3 @@ def budget_validate_command(
 
     if result["_has_errors"]:
         raise typer.Exit(ExitCode.VALIDATION_ERROR)
-
-
-def _raise_goals_validation_error(
-    *,
-    command: str,
-    problems: list[GoalsValidationProblem],
-    json_output: bool,
-) -> NoReturn:
-    """Raise a structured validation error for goals.yaml issues."""
-    message = "goals.yaml is invalid"
-    if problems:
-        message = message + ":\n" + "\n".join(problem.format() for problem in problems)
-    emit_error(
-        message,
-        error_code=ErrorCode.VALIDATION_FAILED,
-        exit_code=ExitCode.VALIDATION_ERROR,
-        json_output=json_output,
-        command=command,
-    )
