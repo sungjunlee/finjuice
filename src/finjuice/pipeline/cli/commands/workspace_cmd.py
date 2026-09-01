@@ -7,24 +7,28 @@ especially useful for Claude Code and other AI tools (Issue #65).
 Path resolve/existence guards live in
 :mod:`finjuice.pipeline.cli.commands.workspace_paths`. File-manager
 launch helpers live in
-:mod:`finjuice.pipeline.cli.commands.workspace_launch`. Human rendering
-lives in :mod:`finjuice.pipeline.cli.commands.workspace_rendering`.
+:mod:`finjuice.pipeline.cli.commands.workspace_launch`. Identity-file
+writers live in :mod:`finjuice.pipeline.cli.commands.workspace_files`.
+Human rendering lives in
+:mod:`finjuice.pipeline.cli.commands.workspace_rendering`.
 """
 
 import logging
 import shutil
-from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
-import yaml
 
+from finjuice.pipeline.cli.commands.workspace_files import (
+    write_workspace_metadata,
+    write_workspace_readme,
+)
 from finjuice.pipeline.cli.commands.workspace_helpers import (
     FILE_SYMLINKS,  # noqa: F401 — re-exported for existing workspace imports
     SYMLINK_TARGETS,  # noqa: F401 — re-exported for existing workspace imports
-    WORKSPACE_README_TEMPLATE,
-    WORKSPACE_VERSION,
+    WORKSPACE_README_TEMPLATE,  # noqa: F401 — re-exported for existing workspace imports
+    WORKSPACE_VERSION,  # noqa: F401 — re-exported for existing workspace imports
     create_symlinks,
     is_valid_workspace,  # noqa: F401 — re-exported for existing workspace imports
     load_workspace_registry,
@@ -115,18 +119,8 @@ def workspace_create(
         console.print(f"Failed to create symlinks: {e}", style="red")
         raise typer.Exit(code=1)
 
-    # Write metadata
-    metadata = {
-        "version": WORKSPACE_VERSION,
-        "data_dir": str(data_dir),
-        "created_at": datetime.now().isoformat(),
-    }
-    metadata_file = workspace_path / ".finjuice-workspace"
-    metadata_file.write_text(yaml.dump(metadata, default_flow_style=False))
-
-    # Write README
-    readme_file = workspace_path / "README.md"
-    readme_file.write_text(WORKSPACE_README_TEMPLATE)
+    write_workspace_metadata(workspace_path, data_dir)
+    write_workspace_readme(workspace_path)
 
     # Register workspace
     register_workspace(data_dir, workspace_path)
