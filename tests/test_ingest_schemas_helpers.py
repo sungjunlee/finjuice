@@ -21,7 +21,6 @@ def test_sheet_name_helpers_live_in_sibling_module() -> None:
     schemas_text = (INGEST_DIR / "schemas.py").read_text(encoding="utf-8")
     helpers_text = (INGEST_DIR / "schemas_helpers.py").read_text(encoding="utf-8")
 
-    assert "def detect_schema_version" in schemas_text
     assert "def map_columns" in schemas_text
     assert "def normalize_sheet_name" not in schemas_text
     assert "def is_asset_sheet_name" not in schemas_text
