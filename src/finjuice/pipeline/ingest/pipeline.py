@@ -5,6 +5,10 @@ Provides end-to-end ingestion pipeline that reads Banksalad XLSX files,
 maps columns, calculates row hashes for deduplication, and writes to CSV partitions.
 
 Public API: preview_ingest_paths, preview_ingest_all_files, ingest_file, ingest_all_files
+
+Write-path summary helpers live in
+:mod:`finjuice.pipeline.ingest.pipeline_helpers` and are re-exported here
+so existing callers can keep importing from this module.
 """
 
 import logging
@@ -19,8 +23,6 @@ from ..storage import csv_partition
 from ..validation import ValidationError
 from ._asset_processor import ingest_asset_snapshots
 from ._overview_io import (
-    _empty_overview_write_summary,
-    _merge_overview_write_totals,
     _overview_has_writes,
     _write_banksalad_overview,
 )
@@ -35,6 +37,13 @@ from ._preview import (
 from ._transaction_processor import (
     _build_transaction_dataframe,
     _load_transaction_source,
+)
+from .pipeline_helpers import (
+    _accumulate_ingest_file,
+    _empty_ingest_all_summary,
+    _empty_ingest_file_summary,  # noqa: F401 — re-exported for existing pipeline imports
+    _finalize_ingest_all_summary,
+    _IngestTotals,
 )
 
 logger = logging.getLogger(__name__)
@@ -252,21 +261,18 @@ def ingest_all_files(import_dir: Path, csv_base_dir: Path, archive: bool = False
 
     if not xlsx_files:
         logger.warning(f"No XLSX files found in {import_dir}")
-        return {"files": 0, "inserted": 0, "updated": 0, "failed": 0}
+        return _empty_ingest_all_summary()
 
     logger.info(f"Found {len(xlsx_files)} XLSX file(s)")
 
-    total_inserted = 0
-    total_updated = 0
-    overview_totals = _empty_overview_write_summary()
-    failed_files = []
+    totals = _IngestTotals()
+    failed_files: list[tuple[str, str]] = []
 
     for file_path in xlsx_files:
         try:
-            result = ingest_file_detailed(file_path, csv_base_dir, archive=archive)
-            total_inserted += int(result["transactions"]["inserted"])
-            total_updated += int(result["transactions"]["dedup_skips"])
-            _merge_overview_write_totals(overview_totals, result["banksalad_overview"])
+            _accumulate_ingest_file(
+                totals, ingest_file_detailed(file_path, csv_base_dir, archive=archive)
+            )
         except (FileNotFoundError, PermissionError) as e:
             # File access errors - expected during file processing
             logger.error("Cannot access source workbook (%s)", type(e).__name__)
@@ -294,15 +300,7 @@ def ingest_all_files(import_dir: Path, csv_base_dir: Path, archive: bool = False
             failed_files.append((file_path.name, f"Unexpected error: {type(e).__name__}: {str(e)}"))
             # Continue processing remaining files despite unexpected errors
 
-    # Build summary report
-    summary = {
-        "files": len(xlsx_files),
-        "inserted": total_inserted,
-        "updated": total_updated,
-        "banksalad_overview": overview_totals,
-        "failed": len(failed_files),
-        "failed_files": failed_files,
-    }
+    summary = _finalize_ingest_all_summary(xlsx_files, totals, failed_files)
 
     logger.info(
         f"Ingestion summary: {summary['files']} files, "
@@ -311,16 +309,3 @@ def ingest_all_files(import_dir: Path, csv_base_dir: Path, archive: bool = False
     )
 
     return summary
-
-
-def _empty_ingest_file_summary() -> dict[str, Any]:
-    return {
-        "transactions": {
-            "inserted": 0,
-            "dedup_skips": 0,
-            "validation_skips": 0,
-            "skipped_rows": [],
-        },
-        "asset_snapshots": {"inserted": 0, "dedup_skips": 0, "warnings": []},
-        "banksalad_overview": _empty_overview_write_summary(),
-    }
