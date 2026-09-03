@@ -6,6 +6,9 @@ and asset snapshot partition API while keeping the overview contracts isolated.
 
 Table-driven partition I/O lives in
 :mod:`finjuice.pipeline.storage.csv_banksalad_overview_helpers`.
+Cashflow partition-source helpers live in
+:mod:`finjuice.pipeline.storage.csv_banksalad_overview_cashflow` and are
+re-exported here so existing callers can keep importing from this module.
 """
 
 from __future__ import annotations
@@ -15,6 +18,10 @@ from typing import Any
 
 import polars as pl
 
+from finjuice.pipeline.storage.csv_banksalad_overview_cashflow import (
+    _cashflow_partition_source_expr,
+    _validate_cashflow_partition_source,
+)
 from finjuice.pipeline.storage.csv_banksalad_overview_helpers import (
     _append_partitioned,
     _empty_append_result,
@@ -367,28 +374,6 @@ def append_banksalad_loans(
         partition_column="snapshot_date",
         deduplicate=deduplicate,
     )
-
-
-def _cashflow_partition_source_expr() -> pl.Expr:
-    period_month = pl.col("period_month").cast(pl.Utf8, strict=False).str.strip_chars()
-    snapshot_month = pl.col("snapshot_date").cast(pl.Utf8, strict=False).str.slice(0, 7)
-    return (
-        pl.when(period_month.is_not_null() & (period_month != ""))
-        .then(period_month)
-        .otherwise(snapshot_month)
-    )
-
-
-def _validate_cashflow_partition_source(df: pl.DataFrame) -> None:
-    valid_source = (
-        pl.col("_partition_source")
-        .cast(pl.Utf8, strict=False)
-        .str.contains(r"^\d{4}-\d{2}$")
-        .fill_null(False)
-    )
-    invalid_count = df.select((~valid_source).sum().alias("invalid_count")).item()
-    if invalid_count:
-        raise ValueError("Cashflow partition source must be populated as YYYY-MM")
 
 
 __all__ = [
