@@ -124,7 +124,7 @@ def test_field_helpers_live_in_helper_module() -> None:
     fields_text = (FORECAST_VALIDATORS_DIR / "fields.py").read_text(encoding="utf-8")
 
     assert "def validate_scenarios_config_file" in validate_text
-    assert "def _validate_assumptions" in validate_text
+    assert "def _validate_scenarios_payload" in validate_text
     assert "def _require_string(" not in validate_text
     assert "def _add_issue(" not in validate_text
     assert "def _build_path_locations(" not in validate_text

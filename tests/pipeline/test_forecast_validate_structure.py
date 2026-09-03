@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from finjuice.pipeline.forecast_validators import lifecycle, validate
+from finjuice.pipeline.forecast_validators import assumptions, lifecycle, validate
 
 FORECAST_VALIDATORS_DIR = Path("src/finjuice/pipeline/forecast_validators")
 
@@ -14,7 +14,6 @@ def test_lifecycle_helpers_live_in_helper_module() -> None:
 
     assert "def validate_scenarios_config_file" in validate_text
     assert "def _validate_scenarios_payload" in validate_text
-    assert "def _validate_assumptions" in validate_text
     assert "def _validate_lifecycle_events" not in validate_text
     assert "def _validate_lifecycle_event" not in validate_text
     assert "def _select_lifecycle_event_shape" not in validate_text
@@ -45,5 +44,35 @@ def test_lifecycle_helpers_reexport_from_validate() -> None:
     assert validate._ASSET_SWAP_KEYS is lifecycle._ASSET_SWAP_KEYS
     assert validate._ASSET_SWAP_ADD_KEYS is lifecycle._ASSET_SWAP_ADD_KEYS
     assert callable(validate.validate_scenarios_config_file)
-    assert callable(validate._validate_assumptions)
-    assert callable(validate._validate_asset_returns)
+    assert callable(validate._validate_scenarios_payload)
+
+
+def test_assumption_helpers_live_in_helper_module() -> None:
+    """Assumptions-section validators should not live in validate.py."""
+    validate_text = (FORECAST_VALIDATORS_DIR / "validate.py").read_text(encoding="utf-8")
+    assumptions_text = (FORECAST_VALIDATORS_DIR / "assumptions.py").read_text(encoding="utf-8")
+
+    assert "def validate_scenarios_config_file" in validate_text
+    assert "def _validate_scenarios_payload" in validate_text
+    assert "def _validate_assumptions" not in validate_text
+    assert "def _validate_asset_returns" not in validate_text
+    assert "_SCENARIO_NAME_SET = set(SCENARIO_NAMES)" not in validate_text
+    assert "_SCENARIO_ASSUMPTION_KEYS = {" not in validate_text
+    assert "def _validate_assumptions" in assumptions_text
+    assert "def _validate_asset_returns" in assumptions_text
+    assert "_SCENARIO_NAME_SET = set(SCENARIO_NAMES)" in assumptions_text
+    assert "_SCENARIO_ASSUMPTION_KEYS = {" in assumptions_text
+    assert "def validate_scenarios_config_file" not in assumptions_text
+    assert "def _validate_scenarios_payload" not in assumptions_text
+    assert "def _validate_lifecycle_events" not in assumptions_text
+
+
+def test_assumption_helpers_reexport_from_validate() -> None:
+    """Existing validate.py imports should keep resolving to the assumption helpers."""
+    assert validate._validate_assumptions is assumptions._validate_assumptions
+    assert validate._validate_asset_returns is assumptions._validate_asset_returns
+    assert validate._SCENARIO_NAME_SET is assumptions._SCENARIO_NAME_SET
+    assert validate._SCENARIO_ASSUMPTION_KEYS is assumptions._SCENARIO_ASSUMPTION_KEYS
+    assert callable(validate.validate_scenarios_config_file)
+    assert callable(validate._validate_scenarios_payload)
+    assert callable(validate._validate_lifecycle_events)
