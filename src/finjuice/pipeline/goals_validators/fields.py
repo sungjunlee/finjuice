@@ -2,16 +2,16 @@
 
 Section validators stay in ``validate.py``. Monthly-budget section helpers
 live in ``budget.py``. Financial-context section helpers live in
-``context.py``. This module owns scalar field checks and date/month ranges.
+``context.py``. This module owns scalar field checks.
 
 Problem construction with source locations lives in
-:mod:`finjuice.pipeline.goals_validators.fields_helpers` and is re-exported
-here so existing callers can keep importing from this module.
+:mod:`finjuice.pipeline.goals_validators.fields_helpers`. Date/month ranges
+live in :mod:`finjuice.pipeline.goals_validators.fields_ranges`. Both are
+re-exported here so existing callers can keep importing from this module.
 """
 
 from __future__ import annotations
 
-from datetime import date
 from typing import Any
 
 from finjuice.pipeline.goals_validators.fields_helpers import (
@@ -19,9 +19,13 @@ from finjuice.pipeline.goals_validators.fields_helpers import (
     _position,  # noqa: F401 — re-exported for existing fields imports
     _problem,
 )
+from finjuice.pipeline.goals_validators.fields_ranges import (
+    _validate_date_range,  # noqa: F401 — re-exported for existing fields imports
+    _validate_month_range,  # noqa: F401 — re-exported for existing fields imports
+    _validate_optional_date,  # noqa: F401 — re-exported for existing fields imports
+    _validate_optional_month,  # noqa: F401 — re-exported for existing fields imports
+)
 from finjuice.pipeline.goals_validators.models import (
-    DATE_LITERAL_PATTERN,
-    MONTH_LITERAL_PATTERN,
     RECURRING_SAVINGS_FREQUENCIES,
     ValidationProblems,
 )
@@ -84,46 +88,6 @@ def _validate_frequency(
     return frequency_value
 
 
-def _validate_month_range(
-    item: dict[Any, Any],
-    path: str,
-    problems: ValidationProblems,
-) -> tuple[str | None, str | None]:
-    """Validate optional start_month/end_month fields."""
-    start_month = _validate_optional_month(item, "start_month", path, problems)
-    end_month = _validate_optional_month(item, "end_month", path, problems)
-    if start_month is not None and end_month is not None and end_month < start_month:
-        problems.append(
-            _problem(
-                f"{path}.end_month",
-                "must be the same as or after start_month",
-                item,
-                key="end_month",
-            )
-        )
-    return start_month, end_month
-
-
-def _validate_date_range(
-    item: dict[Any, Any],
-    path: str,
-    problems: ValidationProblems,
-) -> tuple[str | None, str | None]:
-    """Validate optional start_date/end_date fields."""
-    start_date = _validate_optional_date(item, "start_date", path, problems)
-    end_date = _validate_optional_date(item, "end_date", path, problems)
-    if start_date is not None and end_date is not None and end_date < start_date:
-        problems.append(
-            _problem(
-                f"{path}.end_date",
-                "must be the same as or after start_date",
-                item,
-                key="end_date",
-            )
-        )
-    return start_date, end_date
-
-
 def _validate_optional_non_negative_int(
     item: dict[Any, Any],
     key: str,
@@ -168,50 +132,6 @@ def _validate_optional_string(
         return None
     if not isinstance(value, str):
         problems.append(_problem(f"{path}.{key}", "must be a string", item, key=key))
-        return None
-    return value
-
-
-def _validate_optional_month(
-    item: dict[Any, Any],
-    key: str,
-    path: str,
-    problems: ValidationProblems,
-) -> str | None:
-    """Validate an optional YYYY-MM field from a recurring_savings entry."""
-    value = item.get(key)
-    if value is None:
-        return None
-    if not isinstance(value, str) or not MONTH_LITERAL_PATTERN.match(value):
-        problems.append(_problem(f"{path}.{key}", "must use YYYY-MM format", item, key=key))
-        return None
-    return value
-
-
-def _validate_optional_date(
-    item: dict[Any, Any],
-    key: str,
-    path: str,
-    problems: ValidationProblems,
-) -> str | None:
-    """Validate an optional YYYY-MM-DD field from a recurring_savings entry."""
-    value = item.get(key)
-    if value is None:
-        return None
-    if not isinstance(value, str) or not DATE_LITERAL_PATTERN.match(value):
-        problems.append(_problem(f"{path}.{key}", "must use YYYY-MM-DD format", item, key=key))
-        return None
-    try:
-        date.fromisoformat(value)
-    except ValueError:
-        problems.append(
-            _problem(
-                f"{path}.{key}",
-                "must be a real calendar date in YYYY-MM-DD format",
-                item,
-                key=key,
-            )
-        )
         return None
     return value
 
