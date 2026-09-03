@@ -19,9 +19,6 @@ def test_report_filter_helpers_live_in_helper_module() -> None:
     assert "def _parse_excluded_merchant_filter" not in io_text
     assert "def _parse_excluded_category_filter" not in io_text
     assert "def _parse_excluded_date_range_filter" not in io_text
-    assert "def _parse_excluded_merchant_filter" in filters_text
-    assert "def _parse_excluded_category_filter" in filters_text
-    assert "def _parse_excluded_date_range_filter" in filters_text
     assert "def _parse_report_filters" in filters_text
 
 

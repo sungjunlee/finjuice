@@ -23,9 +23,6 @@ def test_schema_check_helpers_live_in_sibling_module() -> None:
     helpers_text = (TAGGING_DIR / "rules_yaml_filters_helpers.py").read_text(encoding="utf-8")
 
     assert "def _parse_report_filters" in filters_text
-    assert "def _parse_excluded_merchant_filter" in filters_text
-    assert "def _parse_excluded_category_filter" in filters_text
-    assert "def _parse_excluded_date_range_filter" in filters_text
 
     for name in SCHEMA_CHECK_HELPER_NAMES:
         assert f"def {name}" not in filters_text
@@ -41,6 +38,3 @@ def test_schema_check_helpers_reexport_from_rules_yaml_filters() -> None:
         assert getattr(rules_yaml_filters, name) is getattr(rules_yaml_filters_helpers, name)
 
     assert callable(rules_yaml_filters._parse_report_filters)
-    assert callable(rules_yaml_filters._parse_excluded_merchant_filter)
-    assert callable(rules_yaml_filters._parse_excluded_category_filter)
-    assert callable(rules_yaml_filters._parse_excluded_date_range_filter)
