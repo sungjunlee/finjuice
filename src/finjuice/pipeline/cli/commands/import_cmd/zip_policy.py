@@ -2,7 +2,9 @@
 
 Owns extraction limits, member-type/size/compression checks, ignored OS
 metadata, XLSX member listing, and path-traversal validation. Password
-prompts and archive extraction stay in
+prompts live in
+:mod:`finjuice.pipeline.cli.commands.import_cmd.zip_extraction_helpers`.
+Archive extraction stays in
 :mod:`finjuice.pipeline.cli.commands.import_cmd.zip_extraction`.
 """
 
