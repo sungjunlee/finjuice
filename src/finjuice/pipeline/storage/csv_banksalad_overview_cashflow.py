@@ -1,9 +1,11 @@
 """Cashflow partition-source helpers for Banksalad overview CSV tables.
 
 Owns period_month vs snapshot_date partition-key derivation and YYYY-MM
-validation. Public cashflow CRUD wrappers stay in
+validation. Public cashflow readers stay in
 :mod:`finjuice.pipeline.storage.csv_banksalad_overview`, which re-exports
 these helpers so existing callers can keep importing from that module.
+Write/append wrappers live in
+:mod:`finjuice.pipeline.storage.csv_banksalad_overview_write`.
 """
 
 from __future__ import annotations

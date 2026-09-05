@@ -16,10 +16,7 @@ def test_cashflow_partition_helpers_live_in_helper_module() -> None:
     overview_text = (STORAGE_DIR / "csv_banksalad_overview.py").read_text(encoding="utf-8")
     cashflow_text = (STORAGE_DIR / "csv_banksalad_overview_cashflow.py").read_text(encoding="utf-8")
 
-    assert "def append_banksalad_cashflow" in overview_text
     assert "def read_banksalad_cashflow_month" in overview_text
-    assert "def write_banksalad_cashflow_month" in overview_text
-    assert "def append_banksalad_overview_facts" in overview_text
     assert "def _cashflow_partition_source_expr" not in overview_text
     assert "def _validate_cashflow_partition_source" not in overview_text
     assert "def _cashflow_partition_source_expr" in cashflow_text
