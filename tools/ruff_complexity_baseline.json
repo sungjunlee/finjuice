@@ -1331,8 +1331,8 @@
       "column": 5,
       "limit": 10,
       "message": "`schema_from_python_annotation` is too complex (11 > 10)",
-      "path": "tools/generate_schemas.py",
-      "row": 109,
+      "path": "tools/generate_schemas_helpers.py",
+      "row": 99,
       "symbol": "schema_from_python_annotation",
       "value": 11
     },
@@ -1341,8 +1341,8 @@
       "column": 5,
       "limit": 6,
       "message": "Too many return statements (10 > 6)",
-      "path": "tools/generate_schemas.py",
-      "row": 109,
+      "path": "tools/generate_schemas_helpers.py",
+      "row": 99,
       "symbol": "schema_from_python_annotation",
       "value": 10
     },
