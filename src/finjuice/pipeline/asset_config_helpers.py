@@ -1,7 +1,8 @@
-"""YAML path-location helpers for assets.yaml validation.
+"""YAML path-location helpers and assets.yaml file validation.
 
-Owns composing path -> (line, column) lookups from a YAML document and
-resolving the nearest recorded location for a dotted/indexed path.
+Owns composing path -> (line, column) lookups from a YAML document,
+resolving the nearest recorded location for a dotted/indexed path, and
+reading/parsing assets.yaml into a structured validation result.
 Payload validation lives in :mod:`finjuice.pipeline.asset_config_validate`.
 The public load API stays in :mod:`finjuice.pipeline.asset_config`, which
 re-exports these names so existing callers can keep importing from that
@@ -10,7 +11,14 @@ module.
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+import yaml
 from yaml.nodes import MappingNode, Node, ScalarNode, SequenceNode
+
+if TYPE_CHECKING:
+    from finjuice.pipeline.asset_config import AssetsConfigValidationResult
 
 
 def _build_path_locations(node: Node | None) -> dict[str, tuple[int, int]]:
@@ -64,3 +72,62 @@ def _parent_path(path: str) -> str:
     if path.endswith("]") and "[" in path:
         return path[: path.rfind("[")]
     return ""
+
+
+def validate_assets_config_file(
+    assets_file: Path,
+    *,
+    allow_missing_file: bool = True,
+) -> AssetsConfigValidationResult:
+    """Validate assets.yaml and return structured issues."""
+    from finjuice.pipeline.asset_config import (
+        AssetsConfig,
+        AssetsConfigIssue,
+        AssetsConfigValidationResult,
+    )
+    from finjuice.pipeline.asset_config_validate import _validate_assets_payload
+
+    if not assets_file.exists():
+        return AssetsConfigValidationResult(
+            path=assets_file,
+            exists=False,
+            config=AssetsConfig(),
+            issues=(
+                []
+                if allow_missing_file
+                else [AssetsConfigIssue(path="assets.yaml", message="file not found")]
+            ),
+        )
+
+    raw_text = assets_file.read_text(encoding="utf-8")
+    try:
+        document = yaml.compose(raw_text)
+        payload = yaml.safe_load(raw_text)
+    except yaml.YAMLError as exc:
+        mark = getattr(exc, "problem_mark", None)
+        issue = AssetsConfigIssue(
+            path="assets.yaml",
+            message="invalid YAML syntax",
+            line=(mark.line + 1) if mark is not None else None,
+            column=(mark.column + 1) if mark is not None else None,
+        )
+        return AssetsConfigValidationResult(
+            path=assets_file,
+            exists=True,
+            config=AssetsConfig(),
+            issues=[issue],
+        )
+
+    if payload is None:
+        payload = {}
+
+    locations = _build_path_locations(document)
+    issues: list[AssetsConfigIssue] = []
+    config = _validate_assets_payload(payload, locations, issues)
+
+    return AssetsConfigValidationResult(
+        path=assets_file,
+        exists=True,
+        config=config,
+        issues=issues,
+    )

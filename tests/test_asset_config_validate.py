@@ -27,7 +27,6 @@ def test_payload_validators_live_in_validate_module() -> None:
     validate_text = (PIPELINE_DIR / "asset_config_validate.py").read_text(encoding="utf-8")
 
     assert "def load_assets_config" in config_text
-    assert "def validate_assets_config_file" in config_text
     assert "class ManualAsset" in config_text
     assert "class Liability" in config_text
     assert "class AssetsConfig" in config_text
@@ -41,6 +40,7 @@ def test_payload_validators_live_in_validate_module() -> None:
 
     assert "def load_assets_config" not in validate_text
     assert "def validate_assets_config_file" not in validate_text
+    assert "def validate_assets_config_file" not in config_text
     assert "class ManualAsset" not in validate_text
     assert "class AssetsConfig" not in validate_text
     assert "def _build_path_locations" not in validate_text
@@ -79,7 +79,10 @@ def test_payload_validators_are_the_unique_home() -> None:
     assert asset_config_validate._add_issue.__module__ == canonical
     assert asset_config._validate_assets_payload.__module__ == canonical
     assert asset_config.load_assets_config.__module__ == "finjuice.pipeline.asset_config"
-    assert asset_config.validate_assets_config_file.__module__ == "finjuice.pipeline.asset_config"
+    assert (
+        asset_config.validate_assets_config_file.__module__
+        == "finjuice.pipeline.asset_config_helpers"
+    )
     assert asset_config.AssetsConfig.__module__ == "finjuice.pipeline.asset_config"
     assert asset_config.ManualAsset.__module__ == "finjuice.pipeline.asset_config"
     assert asset_config.Liability.__module__ == "finjuice.pipeline.asset_config"

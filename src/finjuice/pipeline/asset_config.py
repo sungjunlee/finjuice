@@ -1,6 +1,6 @@
 """Typed assets.yaml load/parse contracts and validators.
 
-YAML path-location helpers live in
+YAML path-location helpers and assets.yaml file validation live in
 :mod:`finjuice.pipeline.asset_config_helpers` and are re-exported here so
 existing callers can keep importing from this module.
 
@@ -13,10 +13,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import yaml
-
 from finjuice.pipeline.asset_config_helpers import (
-    _build_path_locations,
+    _build_path_locations as _build_path_locations,
 )
 from finjuice.pipeline.asset_config_helpers import (
     _lookup_location as _lookup_location,
@@ -26,6 +24,9 @@ from finjuice.pipeline.asset_config_helpers import (
 )
 from finjuice.pipeline.asset_config_helpers import (
     _walk_node as _walk_node,
+)
+from finjuice.pipeline.asset_config_helpers import (
+    validate_assets_config_file as validate_assets_config_file,
 )
 
 ASSET_CONFIG_VERSION = 1
@@ -127,7 +128,7 @@ from finjuice.pipeline.asset_config_validate import (  # noqa: E402, I001
     _optional_string as _optional_string,
     _require_number as _require_number,
     _require_string as _require_string,
-    _validate_assets_payload,
+    _validate_assets_payload as _validate_assets_payload,
     _validate_liabilities as _validate_liabilities,
     _validate_manual_assets as _validate_manual_assets,
 )
@@ -143,55 +144,3 @@ def load_assets_config(
     if not result.is_valid:
         raise AssetsConfigValidationError(assets_file, result.issues)
     return result.config
-
-
-def validate_assets_config_file(
-    assets_file: Path,
-    *,
-    allow_missing_file: bool = True,
-) -> AssetsConfigValidationResult:
-    """Validate assets.yaml and return structured issues."""
-    if not assets_file.exists():
-        return AssetsConfigValidationResult(
-            path=assets_file,
-            exists=False,
-            config=AssetsConfig(),
-            issues=(
-                []
-                if allow_missing_file
-                else [AssetsConfigIssue(path="assets.yaml", message="file not found")]
-            ),
-        )
-
-    raw_text = assets_file.read_text(encoding="utf-8")
-    try:
-        document = yaml.compose(raw_text)
-        payload = yaml.safe_load(raw_text)
-    except yaml.YAMLError as exc:
-        mark = getattr(exc, "problem_mark", None)
-        issue = AssetsConfigIssue(
-            path="assets.yaml",
-            message="invalid YAML syntax",
-            line=(mark.line + 1) if mark is not None else None,
-            column=(mark.column + 1) if mark is not None else None,
-        )
-        return AssetsConfigValidationResult(
-            path=assets_file,
-            exists=True,
-            config=AssetsConfig(),
-            issues=[issue],
-        )
-
-    if payload is None:
-        payload = {}
-
-    locations = _build_path_locations(document)
-    issues: list[AssetsConfigIssue] = []
-    config = _validate_assets_payload(payload, locations, issues)
-
-    return AssetsConfigValidationResult(
-        path=assets_file,
-        exists=True,
-        config=config,
-        issues=issues,
-    )

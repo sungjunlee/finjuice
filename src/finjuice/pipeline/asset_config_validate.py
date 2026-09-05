@@ -1,10 +1,11 @@
 """Payload validators for assets.yaml.
 
 Owns mapping/list checks for the parsed assets.yaml document, including
-manual-asset and liability entries. YAML path-location helpers stay in
-:mod:`finjuice.pipeline.asset_config_helpers`. Dataclasses and the public
-load API stay in :mod:`finjuice.pipeline.asset_config`, which re-exports
-these names so existing callers can keep importing from that module.
+manual-asset and liability entries. YAML path-location helpers and file
+validation stay in :mod:`finjuice.pipeline.asset_config_helpers`.
+Dataclasses and the public load API stay in
+:mod:`finjuice.pipeline.asset_config`, which re-exports these names so
+existing callers can keep importing from that module.
 """
 
 from __future__ import annotations
