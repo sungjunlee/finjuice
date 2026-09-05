@@ -1,8 +1,9 @@
 """Polars filter predicates for ``finjuice review``.
 
 Owns list-dtype detection, untagged/rule-matched/default review
-expressions, and match counting. Data loading, JSON row projection, and
-the Typer command stay in :mod:`finjuice.pipeline.cli.commands.review`,
+expressions, and match counting. Data loading and next-step cues live in
+:mod:`finjuice.pipeline.cli.commands.review_helpers`. JSON row projection
+and the Typer command stay in :mod:`finjuice.pipeline.cli.commands.review`,
 which re-exports these names so existing callers can keep importing from
 that module. Human rendering lives in
 :mod:`finjuice.pipeline.cli.commands.review_rendering`.

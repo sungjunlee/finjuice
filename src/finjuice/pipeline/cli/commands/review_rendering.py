@@ -2,9 +2,10 @@
 
 Owns KRW formatting, confidence formatting, and the review table. Filter
 predicates live in :mod:`finjuice.pipeline.cli.commands.review_filters`.
-Data loading, JSON row projection, and the Typer command stay in
-:mod:`finjuice.pipeline.cli.commands.review`, which re-exports the names
-used by existing callers.
+Data loading and next-step cues live in
+:mod:`finjuice.pipeline.cli.commands.review_helpers`. JSON row projection
+and the Typer command stay in :mod:`finjuice.pipeline.cli.commands.review`,
+which re-exports the names used by existing callers.
 """
 
 from __future__ import annotations

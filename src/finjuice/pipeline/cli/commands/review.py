@@ -6,11 +6,11 @@ module. Human rendering lives in
 :mod:`finjuice.pipeline.cli.commands.review_rendering`. JSON row projection
 lives in :mod:`finjuice.pipeline.cli.commands.review_serialize`. Payload
 shaping helpers (sorting, rule notes, count syncing) live in
-:mod:`finjuice.pipeline.cli.commands.review_payload`.
+:mod:`finjuice.pipeline.cli.commands.review_payload`. Data loading and
+next-step cues live in :mod:`finjuice.pipeline.cli.commands.review_helpers`.
 """
 
 import logging
-from pathlib import Path
 from typing import Optional
 
 import polars as pl
@@ -25,6 +25,11 @@ from finjuice.pipeline.cli.commands.review_filters import (
     _rule_matched_expr,
     _tags_present_expr,  # noqa: F401 — re-exported for existing review imports
     _untagged_expr,
+)
+from finjuice.pipeline.cli.commands.review_helpers import (
+    _build_review_next_steps,
+    _load_all_history,
+    _load_latest_month,
 )
 from finjuice.pipeline.cli.commands.review_payload import (
     _load_review_rule_notes,  # noqa: F401 — re-exported for existing review imports
@@ -49,87 +54,6 @@ from finjuice.pipeline.cli.privacy import (
 from finjuice.pipeline.cli.utils import get_config
 
 logger = logging.getLogger(__name__)
-
-
-def _load_latest_month(csv_base_dir: Path) -> tuple[Optional[pl.DataFrame], Optional[str]]:
-    """Load the most recent transaction month from CSV partitions."""
-    from finjuice.pipeline.storage.csv_transactions import read_month
-
-    partitions = sorted(csv_base_dir.glob("*/*/transactions.csv"))
-    if not partitions:
-        return None, None
-
-    latest = partitions[-1]
-    year = int(latest.parts[-3])
-    month = int(latest.parts[-2])
-    month_label = f"{year:04d}-{month:02d}"
-
-    return read_month(csv_base_dir, year, month), month_label
-
-
-def _load_all_history(csv_base_dir: Path) -> Optional[pl.DataFrame]:
-    """Load every transaction partition for all-history review mode."""
-    from finjuice.pipeline.storage.csv_transactions import get_all_transactions
-
-    partitions = sorted(csv_base_dir.glob("*/*/transactions.csv"))
-    if not partitions:
-        return None
-
-    return get_all_transactions(csv_base_dir)
-
-
-def _build_review_next_steps(
-    *,
-    month_label: str | None,
-    all_history: bool,
-    untagged: bool,
-    low_confidence: float | None,
-    untagged_count: int,
-    limit: int,
-    next_cursor: str | None,
-    matched_count: int,
-) -> list[dict[str, str]]:
-    """Return additive next-step cues for agent consumers."""
-    if matched_count == 0:
-        return []
-
-    steps: list[dict[str, str]] = []
-    active_filters: list[str] = []
-    if untagged:
-        active_filters.append("--untagged")
-    if all_history:
-        active_filters.append("--all-history")
-    elif month_label:
-        active_filters.extend(["--month", month_label])
-    if low_confidence is not None:
-        active_filters.extend(["--low-confidence", str(low_confidence)])
-    current_filter_suffix = f" {' '.join(active_filters)}" if active_filters else ""
-
-    if untagged_count > 0 and not untagged:
-        untagged_filter_suffix = " --untagged"
-        if active_filters:
-            untagged_filter_suffix += f" {' '.join(active_filters)}"
-        steps.append(
-            {
-                "signal": "untagged_transactions",
-                "message": "Focus on empty-tag rows first.",
-                "command": f"finjuice review --json{untagged_filter_suffix}",
-            }
-        )
-
-    if next_cursor is not None:
-        steps.append(
-            {
-                "signal": "truncated_queue",
-                "message": "Fetch the next page of the review queue.",
-                "command": (
-                    f"finjuice review --json{current_filter_suffix} "
-                    f"--limit {limit} --cursor {next_cursor}"
-                ),
-            }
-        )
-
-    return steps
 
 
 def review_command(
