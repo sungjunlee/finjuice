@@ -930,21 +930,21 @@
       "code": "PLR0911",
       "column": 5,
       "limit": 6,
-      "message": "Too many return statements (7 > 6)",
-      "path": "src/finjuice/pipeline/insights.py",
-      "row": 310,
-      "symbol": "_count_active_filters",
-      "value": 7
-    },
-    {
-      "code": "PLR0911",
-      "column": 5,
-      "limit": 6,
       "message": "Too many return statements (8 > 6)",
       "path": "src/finjuice/pipeline/insights.py",
       "row": 126,
       "symbol": "collect_status_snapshot",
       "value": 8
+    },
+    {
+      "code": "PLR0911",
+      "column": 5,
+      "limit": 6,
+      "message": "Too many return statements (7 > 6)",
+      "path": "src/finjuice/pipeline/insights_cluster.py",
+      "row": 40,
+      "symbol": "_count_active_filters",
+      "value": 7
     },
     {
       "code": "PLR0913",
