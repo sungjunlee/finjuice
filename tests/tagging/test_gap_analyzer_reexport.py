@@ -25,7 +25,7 @@ def test_gap_analyzer_reexports_mismatch_classification_helpers() -> None:
 
 
 def test_gap_analyzer_keeps_public_analysis_api() -> None:
-    """Analysis, simulation, and reporting API stay defined on gap_analyzer."""
+    """Analysis, simulation, and reporting API stay importable from gap_analyzer."""
     gap_analyzer = importlib.import_module("finjuice.pipeline.tagging.gap_analyzer")
 
     for name in (
@@ -38,4 +38,14 @@ def test_gap_analyzer_keeps_public_analysis_api() -> None:
         "simulate_coverage_improvement",
         "format_gap_analysis_report",
     ):
-        assert getattr(gap_analyzer, name).__module__ == "finjuice.pipeline.tagging.gap_analyzer"
+        assert hasattr(gap_analyzer, name)
+
+    assert gap_analyzer.CoverageSimulation.__module__ == "finjuice.pipeline.tagging.gap_analyzer"
+    assert (
+        gap_analyzer.simulate_coverage_improvement.__module__
+        == "finjuice.pipeline.tagging.gap_analyzer"
+    )
+    assert (
+        gap_analyzer.format_gap_analysis_report.__module__
+        == "finjuice.pipeline.tagging.gap_analyzer"
+    )
