@@ -1,8 +1,10 @@
 """Table-driven CSV partition I/O for Banksalad overview tables.
 
 Owns the generic read/write/append engine keyed by ``_OverviewTableSpec``.
-Public overview CRUD wrappers and table contracts stay in
+Public overview readers and table contracts stay in
 :mod:`finjuice.pipeline.storage.csv_banksalad_overview`.
+Write/append wrappers live in
+:mod:`finjuice.pipeline.storage.csv_banksalad_overview_write`.
 """
 
 from __future__ import annotations
