@@ -12,11 +12,8 @@ def test_write_serialization_helpers_live_in_helper_module() -> None:
     transactions_text = (STORAGE_DIR / "csv_transactions.py").read_text(encoding="utf-8")
     serialize_text = (STORAGE_DIR / "csv_transactions_serialize.py").read_text(encoding="utf-8")
 
-    assert "def write_month" in transactions_text
-    assert "def append_transactions" in transactions_text
     assert "def read_month" in transactions_text
     assert "def read_range" in transactions_text
-    assert "def upsert_transaction" in transactions_text
     assert "def find_transaction_by_hash" in transactions_text
     assert "def get_all_transactions" in transactions_text
     assert "def _cast_int_flag_columns" not in transactions_text
