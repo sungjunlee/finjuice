@@ -3,19 +3,23 @@
 YAML path-location helpers live in
 :mod:`finjuice.pipeline.asset_config_helpers` and are re-exported here so
 existing callers can keep importing from this module.
+
+Payload validators live in :mod:`finjuice.pipeline.asset_config_validate`
+and are re-exported here for the same reason.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 import yaml
 
 from finjuice.pipeline.asset_config_helpers import (
     _build_path_locations,
-    _lookup_location,
+)
+from finjuice.pipeline.asset_config_helpers import (
+    _lookup_location as _lookup_location,
 )
 from finjuice.pipeline.asset_config_helpers import (
     _parent_path as _parent_path,
@@ -26,9 +30,6 @@ from finjuice.pipeline.asset_config_helpers import (
 
 ASSET_CONFIG_VERSION = 1
 ASSET_CATEGORIES = ("real_estate", "deposit", "financial", "cash", "other")
-_ASSET_TOP_LEVEL_KEYS = {"version", "manual_assets", "liabilities"}
-_MANUAL_ASSET_KEYS = {"name", "category", "value"}
-_LIABILITY_KEYS = {"name", "principal", "rate", "type"}
 
 __all__ = [
     "ASSET_CATEGORIES",
@@ -117,6 +118,21 @@ class AssetsConfigValidationError(ValueError):
         super().__init__(f"Invalid assets.yaml at {path}:\n{lines}")
 
 
+from finjuice.pipeline.asset_config_validate import (  # noqa: E402, I001
+    _ASSET_TOP_LEVEL_KEYS as _ASSET_TOP_LEVEL_KEYS,
+    _LIABILITY_KEYS as _LIABILITY_KEYS,
+    _MANUAL_ASSET_KEYS as _MANUAL_ASSET_KEYS,
+    _add_issue as _add_issue,
+    _optional_number as _optional_number,
+    _optional_string as _optional_string,
+    _require_number as _require_number,
+    _require_string as _require_string,
+    _validate_assets_payload,
+    _validate_liabilities as _validate_liabilities,
+    _validate_manual_assets as _validate_manual_assets,
+)
+
+
 def load_assets_config(
     assets_file: Path,
     *,
@@ -179,216 +195,3 @@ def validate_assets_config_file(
         config=config,
         issues=issues,
     )
-
-
-def _validate_assets_payload(
-    payload: Any,
-    locations: dict[str, tuple[int, int]],
-    issues: list[AssetsConfigIssue],
-) -> AssetsConfig:
-    """Validate the parsed assets.yaml payload."""
-    if not isinstance(payload, dict):
-        _add_issue(issues, locations, "assets.yaml", "top-level document must be a mapping")
-        return AssetsConfig()
-
-    unknown_top_level = sorted(set(payload) - _ASSET_TOP_LEVEL_KEYS)
-    for key in unknown_top_level:
-        _add_issue(issues, locations, key, "unknown top-level field")
-
-    version = payload.get("version")
-    if version != ASSET_CONFIG_VERSION:
-        _add_issue(
-            issues,
-            locations,
-            "version",
-            f"must be {ASSET_CONFIG_VERSION}",
-        )
-
-    manual_assets_raw = payload.get("manual_assets", [])
-    liabilities_raw = payload.get("liabilities", [])
-
-    manual_assets = _validate_manual_assets(manual_assets_raw, locations, issues)
-    liabilities = _validate_liabilities(liabilities_raw, locations, issues)
-
-    if issues:
-        return AssetsConfig()
-
-    return AssetsConfig(
-        version=ASSET_CONFIG_VERSION,
-        manual_assets=manual_assets,
-        liabilities=liabilities,
-    )
-
-
-def _validate_manual_assets(
-    value: Any,
-    locations: dict[str, tuple[int, int]],
-    issues: list[AssetsConfigIssue],
-) -> list[ManualAsset]:
-    """Validate the manual_assets block."""
-    if value is None:
-        return []
-    if not isinstance(value, list):
-        _add_issue(issues, locations, "manual_assets", "must be a list")
-        return []
-
-    assets: list[ManualAsset] = []
-    for index, item in enumerate(value):
-        path = f"manual_assets[{index}]"
-        if not isinstance(item, dict):
-            _add_issue(issues, locations, path, "must be a mapping")
-            continue
-
-        unknown_keys = sorted(set(item) - _MANUAL_ASSET_KEYS)
-        for key in unknown_keys:
-            _add_issue(issues, locations, f"{path}.{key}", "unknown field")
-
-        name = _require_string(item, path, "name", locations, issues)
-        category = _require_string(item, path, "category", locations, issues)
-        value_raw = _require_number(item, path, "value", locations, issues)
-
-        if category is not None and category not in ASSET_CATEGORIES:
-            allowed = ", ".join(ASSET_CATEGORIES)
-            _add_issue(
-                issues,
-                locations,
-                f"{path}.category",
-                f"must be one of: {allowed}",
-            )
-
-        if name is None or category is None or value_raw is None:
-            continue
-
-        assets.append(ManualAsset(name=name, category=category, value=value_raw))
-
-    return assets
-
-
-def _validate_liabilities(
-    value: Any,
-    locations: dict[str, tuple[int, int]],
-    issues: list[AssetsConfigIssue],
-) -> list[Liability]:
-    """Validate the liabilities block."""
-    if value is None:
-        return []
-    if not isinstance(value, list):
-        _add_issue(issues, locations, "liabilities", "must be a list")
-        return []
-
-    liabilities: list[Liability] = []
-    for index, item in enumerate(value):
-        path = f"liabilities[{index}]"
-        if not isinstance(item, dict):
-            _add_issue(issues, locations, path, "must be a mapping")
-            continue
-
-        unknown_keys = sorted(set(item) - _LIABILITY_KEYS)
-        for key in unknown_keys:
-            _add_issue(issues, locations, f"{path}.{key}", "unknown field")
-
-        name = _require_string(item, path, "name", locations, issues)
-        principal = _require_number(item, path, "principal", locations, issues)
-        rate = _optional_number(item, path, "rate", locations, issues)
-        liability_type = _optional_string(item, path, "type", locations, issues)
-
-        if name is None or principal is None:
-            continue
-
-        liabilities.append(
-            Liability(
-                name=name,
-                principal=principal,
-                rate=rate,
-                type=liability_type,
-            )
-        )
-
-    return liabilities
-
-
-def _require_string(
-    payload: dict[str, Any],
-    parent_path: str,
-    field_name: str,
-    locations: dict[str, tuple[int, int]],
-    issues: list[AssetsConfigIssue],
-) -> str | None:
-    """Validate a required non-empty string field."""
-    path = f"{parent_path}.{field_name}"
-    if field_name not in payload:
-        _add_issue(issues, locations, path, "is required")
-        return None
-
-    value = payload[field_name]
-    if not isinstance(value, str) or not value.strip():
-        _add_issue(issues, locations, path, "must be a non-empty string")
-        return None
-    return value.strip()
-
-
-def _optional_string(
-    payload: dict[str, Any],
-    parent_path: str,
-    field_name: str,
-    locations: dict[str, tuple[int, int]],
-    issues: list[AssetsConfigIssue],
-) -> str | None:
-    """Validate an optional string field."""
-    if field_name not in payload or payload[field_name] is None:
-        return None
-
-    value = payload[field_name]
-    if not isinstance(value, str) or not value.strip():
-        _add_issue(issues, locations, f"{parent_path}.{field_name}", "must be a non-empty string")
-        return None
-    return value.strip()
-
-
-def _require_number(
-    payload: dict[str, Any],
-    parent_path: str,
-    field_name: str,
-    locations: dict[str, tuple[int, int]],
-    issues: list[AssetsConfigIssue],
-) -> float | None:
-    """Validate a required numeric field."""
-    path = f"{parent_path}.{field_name}"
-    if field_name not in payload:
-        _add_issue(issues, locations, path, "is required")
-        return None
-
-    value = payload[field_name]
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        _add_issue(issues, locations, path, "must be a number")
-        return None
-    return float(value)
-
-
-def _optional_number(
-    payload: dict[str, Any],
-    parent_path: str,
-    field_name: str,
-    locations: dict[str, tuple[int, int]],
-    issues: list[AssetsConfigIssue],
-) -> float | None:
-    """Validate an optional numeric field."""
-    if field_name not in payload or payload[field_name] is None:
-        return None
-
-    value = payload[field_name]
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        _add_issue(issues, locations, f"{parent_path}.{field_name}", "must be a number")
-        return None
-    return float(value)
-
-
-def _add_issue(
-    issues: list[AssetsConfigIssue],
-    locations: dict[str, tuple[int, int]],
-    path: str,
-    message: str,
-) -> None:
-    """Append a validation issue with the best available YAML location."""
-    line, column = _lookup_location(locations, path)
-    issues.append(AssetsConfigIssue(path=path, message=message, line=line, column=column))

@@ -14,7 +14,7 @@ def test_location_helpers_live_in_helper_module() -> None:
 
     assert "def load_assets_config" in config_text
     assert "def validate_assets_config_file" in config_text
-    assert "def _validate_assets_payload" in config_text
+    assert "class AssetsConfig" in config_text
     assert "def _build_path_locations" not in config_text
     assert "def _walk_node" not in config_text
     assert "def _lookup_location" not in config_text
