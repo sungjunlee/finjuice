@@ -9,26 +9,23 @@ helpers live in :mod:`finjuice.pipeline.cli.commands.networth_history`. JSON
 health/action guidance helpers live in
 :mod:`finjuice.pipeline.cli.commands.networth_guidance`. Validation and
 runtime error envelopes live in
-:mod:`finjuice.pipeline.cli.commands.networth_errors`.
+:mod:`finjuice.pipeline.cli.commands.networth_errors`. assets.yaml
+init/validate helpers live in
+:mod:`finjuice.pipeline.cli.commands.networth_helpers`.
 """
 
 from __future__ import annotations
 
-import importlib.resources
-import json
 import logging
 from typing import Literal, cast
 
 import typer
 
-from finjuice.pipeline.asset_config import (
-    load_assets_config,
-    validate_assets_config_file,
-)
+from finjuice.pipeline.asset_config import load_assets_config
 from finjuice.pipeline.cli.commands.networth_errors import (
     _handle_networth_exception,
     _raise_goals_validation_error,
-    _validation_issue_to_problem,
+    _validation_issue_to_problem,  # noqa: F401 — re-exported for existing networth imports
 )
 from finjuice.pipeline.cli.commands.networth_forecast import (
     _build_all_scenario_forecasts,
@@ -40,6 +37,14 @@ from finjuice.pipeline.cli.commands.networth_guidance import (
     _build_networth_signals,  # noqa: F401 — re-exported for existing networth imports
     _build_source_flags,  # noqa: F401 — re-exported for existing networth imports
     _resolve_snapshot_status,  # noqa: F401 — re-exported for existing networth imports
+)
+from finjuice.pipeline.cli.commands.networth_helpers import (
+    _assets_init_payload,  # noqa: F401 — re-exported for existing networth imports
+    _build_validate_payload,  # noqa: F401 — re-exported for existing networth imports
+    _emit_assets_file_json,  # noqa: F401 — re-exported for existing networth imports
+    _run_init_command,
+    _run_validate_command,
+    _write_starter_assets_yaml,  # noqa: F401 — re-exported for existing networth imports
 )
 from finjuice.pipeline.cli.commands.networth_history import (
     _build_history_rows,
@@ -57,14 +62,6 @@ from finjuice.pipeline.cli.commands.networth_rendering import (
     _render_forecast_comparison,
     _render_history,
     _render_overview,
-    _render_validate,
-)
-from finjuice.pipeline.cli.output import (
-    ErrorCode,
-    _build_meta,
-    emit_error,
-    info,
-    success,
 )
 from finjuice.pipeline.cli.utils import get_config
 from finjuice.pipeline.forecast import load_scenarios_config
@@ -297,59 +294,7 @@ def init_command(
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
     """Create a starter assets.yaml from the built-in template."""
-    config = get_config(ctx)
-    dest_path = config.assets_file
-
-    if dest_path.exists():
-        payload = {
-            "path": str(dest_path),
-            "created": False,
-            "message": f"assets.yaml already exists at {dest_path}",
-        }
-        if json_output:
-            typer.echo(
-                json.dumps(
-                    {"_meta": _build_meta("networth init"), **payload},
-                    ensure_ascii=False,
-                    indent=2,
-                )
-            )
-        else:
-            info(f"assets.yaml already exists at {dest_path}")
-            info("Run 'finjuice networth validate' to check, or 'finjuice networth' to view.")
-        return
-
-    try:
-        template_files = importlib.resources.files("finjuice.templates")
-        template = template_files.joinpath("assets.yaml.example").read_text(encoding="utf-8")
-        dest_path.parent.mkdir(parents=True, exist_ok=True)
-        dest_path.write_text(template, encoding="utf-8")
-    except Exception as exc:
-        logger.error("Failed to create assets.yaml: %s", exc, exc_info=True)
-        emit_error(
-            f"Failed to create assets.yaml: {exc}",
-            error_code=ErrorCode.FILE_ACCESS_ERROR,
-            json_output=json_output,
-            command="networth init",
-        )
-
-    payload = {
-        "path": str(dest_path),
-        "created": True,
-        "message": f"Created starter assets.yaml at {dest_path}",
-    }
-    if json_output:
-        typer.echo(
-            json.dumps(
-                {"_meta": _build_meta("networth init"), **payload},
-                ensure_ascii=False,
-                indent=2,
-            )
-        )
-    else:
-        success(f"Created {dest_path}")
-        info("Edit the values and run 'finjuice networth validate' to verify.")
-        info("Then run 'finjuice networth' to see your position.")
+    _run_init_command(ctx, json_output=json_output)
 
 
 @networth_app.command("validate")
@@ -358,32 +303,4 @@ def validate_command(
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
     """Validate assets.yaml and report line-numbered errors."""
-    config = get_config(ctx)
-    validation = validate_assets_config_file(config.assets_file, allow_missing_file=True)
-    problems = [_validation_issue_to_problem(issue) for issue in validation.issues]
-    payload = {
-        "path": str(config.assets_file),
-        "exists": validation.exists,
-        "valid": validation.is_valid,
-        "status": "valid" if validation.is_valid else "issues",
-        "version": validation.config.version if validation.exists and validation.is_valid else None,
-        "manual_assets": len(validation.config.manual_assets) if validation.is_valid else 0,
-        "liabilities": len(validation.config.liabilities) if validation.is_valid else 0,
-        "errors": len(problems),
-        "warnings": 0,
-        "problems": problems,
-    }
-
-    if json_output:
-        typer.echo(
-            json.dumps(
-                {"_meta": _build_meta("networth validate"), **payload},
-                ensure_ascii=False,
-                indent=2,
-            )
-        )
-    else:
-        _render_validate(payload)
-
-    if not validation.is_valid:
-        raise typer.Exit(code=1)
+    _run_validate_command(ctx, json_output=json_output)
