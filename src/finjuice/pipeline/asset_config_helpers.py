@@ -2,9 +2,10 @@
 
 Owns composing path -> (line, column) lookups from a YAML document and
 resolving the nearest recorded location for a dotted/indexed path.
-Payload validation and the public load API stay in
-:mod:`finjuice.pipeline.asset_config`, which re-exports these names so
-existing callers can keep importing from that module.
+Payload validation lives in :mod:`finjuice.pipeline.asset_config_validate`.
+The public load API stays in :mod:`finjuice.pipeline.asset_config`, which
+re-exports these names so existing callers can keep importing from that
+module.
 """
 
 from __future__ import annotations
