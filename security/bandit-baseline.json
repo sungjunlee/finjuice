@@ -25,12 +25,12 @@
     },
     {
       "test_id": "B608",
-      "filename": "src/finjuice/pipeline/analytics/duckdb_layer.py",
-      "function": "DuckDBAnalytics.register_transactions_view",
+      "filename": "src/finjuice/pipeline/analytics/duckdb_view.py",
+      "function": "DuckDBTransactionsView.register_transactions_view",
       "issue_severity": "MEDIUM",
       "issue_confidence": "LOW",
       "test_name": "hardcoded_sql_expressions",
-      "rationale": "The fixed partition glob is contained and quoted with quote_duckdb_path_pattern; introspected CSV columns are quoted with quote_duckdb_identifier and report filters use shared literal quoting; see src/finjuice/pipeline/analytics/duckdb_layer.py:DuckDBAnalytics.register_transactions_view."
+      "rationale": "The fixed partition glob is contained and quoted with quote_duckdb_path_pattern; introspected CSV columns are quoted with quote_duckdb_identifier and report filters use shared literal quoting; see src/finjuice/pipeline/analytics/duckdb_view.py:DuckDBTransactionsView.register_transactions_view."
     },
     {
       "test_id": "B608",
