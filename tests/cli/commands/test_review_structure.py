@@ -14,8 +14,6 @@ def test_review_rendering_helpers_live_in_helper_module() -> None:
     rendering_text = (COMMANDS_DIR / "review_rendering.py").read_text(encoding="utf-8")
 
     assert "def review_command" in review_text
-    assert "def _load_latest_month" in review_text
-    assert "def _build_review_next_steps" in review_text
     assert "def _format_amount" not in review_text
     assert "def _format_confidence" not in review_text
     assert "def _render_review" not in review_text

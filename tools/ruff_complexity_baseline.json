@@ -367,16 +367,6 @@
       "value": 11
     },
     {
-      "code": "PLR0913",
-      "column": 5,
-      "limit": 5,
-      "message": "Too many arguments in function definition (8 > 5)",
-      "path": "src/finjuice/pipeline/cli/commands/review.py",
-      "row": 258,
-      "symbol": "_build_review_next_steps",
-      "value": 8
-    },
-    {
       "code": "C901",
       "column": 5,
       "limit": 10,
@@ -415,6 +405,16 @@
       "row": 393,
       "symbol": "review_command",
       "value": 74
+    },
+    {
+      "code": "PLR0913",
+      "column": 5,
+      "limit": 5,
+      "message": "Too many arguments in function definition (8 > 5)",
+      "path": "src/finjuice/pipeline/cli/commands/review_helpers.py",
+      "row": 55,
+      "symbol": "_build_review_next_steps",
+      "value": 8
     },
     {
       "code": "C901",
