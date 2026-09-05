@@ -911,8 +911,8 @@
       "column": 5,
       "limit": 5,
       "message": "Too many arguments in function definition (6 > 5)",
-      "path": "src/finjuice/pipeline/forecast_events.py",
-      "row": 85,
+      "path": "src/finjuice/pipeline/forecast.py",
+      "row": 362,
       "symbol": "_apply_lifecycle_events",
       "value": 6
     },
