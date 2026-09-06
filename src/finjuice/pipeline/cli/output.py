@@ -8,16 +8,27 @@ Pagination and JSON ``_meta`` envelope helpers live in
 :mod:`finjuice.pipeline.cli.output_pagination` and are re-exported here.
 Rich semantic message helpers live in
 :mod:`finjuice.pipeline.cli.output_messages` and are re-exported here.
+Structured error/exit code catalogs live in
+:mod:`finjuice.pipeline.cli.output_codes` and are re-exported here.
 """
 
 import json
-from enum import Enum, IntEnum
-from types import MappingProxyType
-from typing import Any, Callable, Mapping, NoReturn, Optional
+from typing import Any, Callable, NoReturn, Optional
 
 import typer
 from rich.console import Console
 
+from finjuice.pipeline.cli.output_codes import (
+    ERROR_CODE_CATALOG,  # noqa: F401 — re-exported for existing output imports
+    EXIT_CODE_CATALOG,  # noqa: F401 — re-exported for existing output imports
+    ErrorCode,
+    ExitCode,
+    _normalize_error_code,
+    _normalize_exit_code,
+    error_code_values,  # noqa: F401 — re-exported for existing output imports
+    exit_code_items,  # noqa: F401 — re-exported for existing output imports
+    exit_code_values,  # noqa: F401 — re-exported for existing output imports
+)
 from finjuice.pipeline.cli.output_messages import (  # noqa: F401
     bullet_list,
     error,
@@ -48,104 +59,6 @@ from finjuice.pipeline.cli.output_pagination import (  # noqa: F401
 
 # Global console instance (can be overridden for testing)
 console = Console(stderr=True)
-
-
-# ---------------------------------------------------------------------------
-# Structured error codes (Issue #282)
-# ---------------------------------------------------------------------------
-class ErrorCode(str, Enum):
-    """Machine-readable error codes for agent consumption."""
-
-    GENERAL_ERROR = "GENERAL_ERROR"
-    DATA_DIR_NOT_INITIALIZED = "DATA_DIR_NOT_INITIALIZED"
-    NO_DATA = "NO_DATA"
-    RULES_FILE_NOT_FOUND = "RULES_FILE_NOT_FOUND"
-    RULE_NOT_FOUND = "RULE_NOT_FOUND"
-    FILE_NOT_FOUND = "FILE_NOT_FOUND"
-    FILE_ACCESS_ERROR = "FILE_ACCESS_ERROR"
-    VALIDATION_FAILED = "VALIDATION_FAILED"
-    INVALID_ARGS = "INVALID_ARGS"
-    TAGGING_FAILED = "TAGGING_FAILED"
-    TRANSFER_FAILED = "TRANSFER_FAILED"
-    EXPORT_FAILED = "EXPORT_FAILED"
-    QUERY_ERROR = "QUERY_ERROR"
-    SIMULATION_FAILED = "SIMULATION_FAILED"
-    INSPECTION_FAILED = "INSPECTION_FAILED"
-    USER_CANCELLED = "USER_CANCELLED"
-    UNEXPECTED_ERROR = "UNEXPECTED_ERROR"
-
-    def __str__(self) -> str:
-        """Return the wire value for string-formatting compatibility."""
-        return self.value
-
-    @classmethod
-    def values(cls) -> tuple[str, ...]:
-        """Return accepted JSON error-code values in declaration order."""
-        return tuple(code.value for code in cls)
-
-
-# ---------------------------------------------------------------------------
-# Semantic exit codes (Issue #286, follows gh CLI pattern)
-# ---------------------------------------------------------------------------
-class ExitCode(IntEnum):
-    """Semantic exit codes for agent error-type distinction."""
-
-    SUCCESS = 0
-    OK = 0
-    GENERAL_ERROR = 1
-    USAGE_ERROR = 2
-    VALIDATION_ERROR = 3
-    NO_DATA = 4
-    USER_CANCELLED = 130
-
-    def __str__(self) -> str:
-        """Return the integer wire value for string-formatting compatibility."""
-        return str(int(self))
-
-    @classmethod
-    def items(cls, *, include_aliases: bool = True) -> tuple[tuple[str, int], ...]:
-        """Return public exit-code names and integer values."""
-        if include_aliases:
-            return tuple((name, int(code)) for name, code in cls.__members__.items())
-        return tuple((code.name, int(code)) for code in cls)
-
-    @classmethod
-    def values(cls) -> tuple[int, ...]:
-        """Return unique accepted process exit integers in declaration order."""
-        return tuple(int(code) for code in cls)
-
-
-ERROR_CODE_CATALOG: Mapping[str, ErrorCode] = MappingProxyType(
-    {code.value: code for code in ErrorCode}
-)
-EXIT_CODE_CATALOG: Mapping[str, ExitCode] = MappingProxyType(dict(ExitCode.__members__))
-
-
-def error_code_values() -> tuple[str, ...]:
-    """Return accepted JSON error-code values in declaration order."""
-    return ErrorCode.values()
-
-
-def exit_code_items(*, include_aliases: bool = True) -> tuple[tuple[str, int], ...]:
-    """Return public exit-code names and values for manifest/schema discovery."""
-    return ExitCode.items(include_aliases=include_aliases)
-
-
-def exit_code_values() -> tuple[int, ...]:
-    """Return unique accepted process exit integers in declaration order."""
-    return ExitCode.values()
-
-
-def _normalize_error_code(error_code: ErrorCode | str) -> str:
-    """Return the JSON wire value for a typed or legacy string error code."""
-    if isinstance(error_code, ErrorCode):
-        return error_code.value
-    return str(error_code)
-
-
-def _normalize_exit_code(exit_code: ExitCode | int) -> int:
-    """Return the process integer value for a typed or legacy integer exit code."""
-    return int(exit_code)
 
 
 def emit(
