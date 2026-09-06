@@ -5,6 +5,8 @@ Provides Typer-based commands for the full data pipeline.
 
 No-args brief-status helpers live in
 :mod:`finjuice.pipeline.cli.main_helpers` and are re-exported here.
+Machine-output/logger helpers live in
+:mod:`finjuice.pipeline.cli.main_machine_output` and are re-exported here.
 
 Global options:
 - --data-dir / -d: Specify data directory (or set FINJUICE_DATA_DIR env var)
@@ -55,6 +57,12 @@ from finjuice.pipeline.cli.main_helpers import (
     _is_data_directory_initialized,  # noqa: F401 — re-exported for existing main imports
     _show_brief_status,
 )
+from finjuice.pipeline.cli.main_machine_output import (
+    _json_error_command_name,
+    _machine_output_requested,
+    _restore_logger_levels,  # noqa: F401 — re-exported for existing main imports
+    _suppress_logs_for_machine_output,
+)
 from finjuice.pipeline.cli.output import ErrorCode, ExitCode
 from finjuice.pipeline.cli.utils import set_log_level
 from finjuice.pipeline.config import Config
@@ -66,7 +74,6 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
-_SUPPRESSED_JSON_LOGGERS = ("finjuice", "duckdb")
 
 
 class FinjuiceGroup(TyperGroup):
@@ -185,50 +192,6 @@ app.add_typer(assets_app, name="assets", rich_help_panel="Analysis")
 app.add_typer(networth_app, name="networth", rich_help_panel="Analysis")
 app.add_typer(budget_app, name="budget", rich_help_panel="Analysis")
 app.add_typer(journal_app, name="journal", rich_help_panel="Commands")
-
-
-def _machine_output_requested(raw_args: list[str] | None = None) -> bool:
-    """Return True when the invocation requests machine-readable JSON output."""
-    args = raw_args or sys.argv[1:]
-    output_json_requested = any(
-        (arg in ("--output", "-o") and i + 1 < len(args) and args[i + 1] == "json")
-        or arg in ("--output=json", "-o=json")
-        for i, arg in enumerate(args)
-    )
-    return "--json" in args or output_json_requested
-
-
-def _json_error_command_name(ctx: typer.Context) -> str:
-    """Return the best command name for callback-level JSON errors."""
-    if ctx.invoked_subcommand:
-        return ctx.invoked_subcommand
-    if isinstance(ctx.obj, dict):
-        raw_args = list(ctx.obj.get("_raw_args", []))
-        for arg in raw_args:
-            if arg.startswith("-"):
-                continue
-            return str(arg)
-    return "unknown"
-
-
-def _suppress_logs_for_machine_output(ctx: typer.Context, enabled: bool) -> None:
-    """Silence logger noise for machine-readable JSON responses."""
-    if not enabled:
-        return
-
-    previous_levels = {
-        logger_name: logging.getLogger(logger_name).level
-        for logger_name in _SUPPRESSED_JSON_LOGGERS
-    }
-
-    for logger_name in _SUPPRESSED_JSON_LOGGERS:
-        logging.getLogger(logger_name).setLevel(logging.CRITICAL + 1)
-
-    def _restore_logger_levels() -> None:
-        for logger_name, previous_level in previous_levels.items():
-            logging.getLogger(logger_name).setLevel(previous_level)
-
-    ctx.call_on_close(_restore_logger_levels)
 
 
 def _version_callback(value: bool) -> None:

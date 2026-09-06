@@ -45,6 +45,42 @@ def test_brief_status_public_names_stay_on_entrypoint() -> None:
     assert callable(main.status)
 
 
+def test_machine_output_helpers_live_in_helper_module() -> None:
+    """Machine-output/logger helpers should not live in the Typer app module."""
+    main_text = (CLI_DIR / "main.py").read_text(encoding="utf-8")
+    helpers_text = (CLI_DIR / "main_machine_output.py").read_text(encoding="utf-8")
+
+    assert "def main(" in main_text
+    assert "def status(" in main_text
+    assert "def parse_args" in main_text
+    assert "def _machine_output_requested" not in main_text
+    assert "def _json_error_command_name" not in main_text
+    assert "def _suppress_logs_for_machine_output" not in main_text
+    assert "def _restore_logger_levels" not in main_text
+    assert "def _machine_output_requested" in helpers_text
+    assert "def _json_error_command_name" in helpers_text
+    assert "def _suppress_logs_for_machine_output" in helpers_text
+    assert "def _restore_logger_levels" in helpers_text
+
+
+def test_machine_output_public_names_stay_on_entrypoint() -> None:
+    """The stable CLI main import path should keep machine-output helper names."""
+    from finjuice.pipeline.cli import main, main_machine_output
+
+    assert main._machine_output_requested is main_machine_output._machine_output_requested
+    assert main._json_error_command_name is main_machine_output._json_error_command_name
+    assert (
+        main._suppress_logs_for_machine_output
+        is main_machine_output._suppress_logs_for_machine_output
+    )
+    assert main._restore_logger_levels is main_machine_output._restore_logger_levels
+    assert callable(main.app)
+    assert callable(main.cli_entry)
+    assert callable(main.main)
+    assert callable(main.status)
+    assert callable(main.FinjuiceGroup.parse_args)
+
+
 def test_is_data_directory_initialized_requires_standard_layout(tmp_path: Path) -> None:
     """Initialized layout needs the data dir, rules file, and standard subdirs."""
     data_dir = tmp_path / "data"
