@@ -621,8 +621,8 @@
       "column": 5,
       "limit": 5,
       "message": "Too many arguments in function definition (6 > 5)",
-      "path": "src/finjuice/pipeline/cli/commands/rules_cmd/testing.py",
-      "row": 247,
+      "path": "src/finjuice/pipeline/cli/commands/rules_cmd/testing_match.py",
+      "row": 77,
       "symbol": "_record_rules_test_match",
       "value": 6
     },
