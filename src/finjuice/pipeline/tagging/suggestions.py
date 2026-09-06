@@ -8,9 +8,12 @@ through the scoring module. Merchant-context queries
 and coverage stats live in :mod:`finjuice.pipeline.tagging.suggestion_queries`
 and are re-exported through the scoring module. Merchant similarity and
 clustering live in :mod:`finjuice.pipeline.tagging.suggestion_similarity` and
-are re-exported through the scoring module. CLI report formatting,
-rules.yaml serialization, and Banksalad mapping guides live in
-:mod:`finjuice.pipeline.tagging.suggestion_format`.
+are re-exported through the scoring module. CLI report formatting and
+rules.yaml serialization live in
+:mod:`finjuice.pipeline.tagging.suggestion_format`. Banksalad category
+mapping and mapping-guide formatting live in
+:mod:`finjuice.pipeline.tagging.suggestion_format_cluster` and are
+re-exported through the format module.
 
 This module re-exports the documented public surface so existing callers can
 keep importing from ``finjuice.pipeline.tagging.suggestions``. New code should
