@@ -22,10 +22,12 @@ Suggested-rule candidate payloads live in
 :mod:`finjuice.pipeline.tagging.suggestion_scoring_cluster` and are re-exported
 here so existing callers can keep importing from this module.
 
-CLI report formatting, rules.yaml serialization, and Banksalad mapping guides
-live in :mod:`finjuice.pipeline.tagging.suggestion_format`. Callers should keep
-importing the documented public surface from
-:mod:`finjuice.pipeline.tagging.suggestions`.
+CLI report formatting and rules.yaml serialization live in
+:mod:`finjuice.pipeline.tagging.suggestion_format`. Banksalad category mapping
+and mapping-guide formatting live in
+:mod:`finjuice.pipeline.tagging.suggestion_format_cluster` and are re-exported
+through the format module. Callers should keep importing the documented public
+surface from :mod:`finjuice.pipeline.tagging.suggestions`.
 """
 
 from __future__ import annotations
