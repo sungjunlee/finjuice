@@ -3,10 +3,12 @@
 This module owns untagged-merchant aggregation SQL, tagged-merchant context
 hints, and coverage-stat queries.
 
-Scoring, payment-gateway classification, match-pattern generation, and
-suggested-rule candidate payloads live in
-:mod:`finjuice.pipeline.tagging.suggestion_scoring`, which re-exports the
-public names that existing callers import from that module.
+Scoring, payment-gateway classification, and match-pattern generation live
+in :mod:`finjuice.pipeline.tagging.suggestion_scoring`. Suggested-rule
+candidate payloads live in
+:mod:`finjuice.pipeline.tagging.suggestion_scoring_cluster`. The scoring
+module re-exports the public names that existing callers import from that
+module.
 """
 
 from __future__ import annotations
