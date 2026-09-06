@@ -7,7 +7,9 @@ maps columns, calculates row hashes for deduplication, and writes to CSV partiti
 Public API: preview_ingest_paths, preview_ingest_all_files, ingest_file, ingest_all_files
 
 Write-path summary helpers live in
-:mod:`finjuice.pipeline.ingest.pipeline_helpers` and are re-exported here
+:mod:`finjuice.pipeline.ingest.pipeline_helpers`. Single-file import
+recording and partition writes live in
+:mod:`finjuice.pipeline.ingest.pipeline_cluster`. Both are re-exported here
 so existing callers can keep importing from this module.
 """
 
@@ -18,14 +20,7 @@ from zipfile import BadZipFile
 
 import polars as pl
 
-from ..metadata.import_history import archive_source_file, record_import
-from ..storage import csv_partition
 from ..validation import ValidationError
-from ._asset_processor import ingest_asset_snapshots
-from ._overview_io import (
-    _overview_has_writes,
-    _write_banksalad_overview,
-)
 from ._preview import (
     _accumulate_preview_file,
     _build_preview_context,
@@ -34,9 +29,10 @@ from ._preview import (
     _preview_ingest_path,
     _PreviewTotals,
 )
-from ._transaction_processor import (
-    _build_transaction_dataframe,
-    _load_transaction_source,
+from ._transaction_processor import _load_transaction_source
+from .pipeline_cluster import (
+    _record_ingest_import,
+    _write_ingest_file_result,
 )
 from .pipeline_helpers import (
     _accumulate_ingest_file,
@@ -144,91 +140,8 @@ def ingest_file_detailed(
         ValidationError: If required columns are missing from file
     """
     df, source_rows, file_mtime = _load_transaction_source(file_path)
-
-    # Set up metadata tracking
-    metadata_dir = csv_base_dir.parent / "metadata"
-
-    # Record import first to get real file_id
-    file_id = record_import(
-        metadata_dir=metadata_dir,
-        file_path=file_path,
-        file_mtime=file_mtime,
-        source_rows=source_rows,
-        archived=False,
-    )
-
-    # Optionally archive source file
-    if archive:
-        archive_dir = metadata_dir / "archives"
-        archived_path = archive_source_file(file_path, archive_dir, file_id)
-        logger.info("Archived source file")
-
-        # Update import history with archive info
-        record_import(
-            metadata_dir=metadata_dir,
-            file_path=file_path,
-            file_mtime=file_mtime,
-            source_rows=source_rows,
-            archived=True,
-            archived_path=archived_path,
-        )
-
-    df_transactions, skipped_rows = _build_transaction_dataframe(file_path, df, file_id)
-
-    # Write to CSV partitions (with deduplication)
-    result = csv_partition.append_transactions(
-        csv_base_dir,
-        df_transactions,
-        deduplicate=True,
-    )
-
-    inserted = result["rows_inserted"]
-    skipped_dedup = result["rows_skipped"]  # Skipped due to deduplication
-
-    asset_inserted, asset_skipped, asset_warnings = ingest_asset_snapshots(
-        file_path=file_path,
-        csv_base_dir=csv_base_dir,
-        file_id=file_id,
-        file_mtime=file_mtime,
-    )
-    for warning in asset_warnings:
-        logger.warning(warning)
-    if asset_inserted > 0 or asset_skipped > 0:
-        logger.info(
-            "Asset snapshot ingestion complete: "
-            f"{asset_inserted} inserted, {asset_skipped} duplicates skipped"
-        )
-
-    overview_summary = _write_banksalad_overview(
-        file_path=file_path,
-        csv_base_dir=csv_base_dir,
-        file_id=file_id,
-        file_mtime=file_mtime,
-    )
-    if _overview_has_writes(overview_summary):
-        logger.info("Banksalad overview ingestion complete")
-    for warning in overview_summary["warnings"]:
-        logger.warning("Banksalad overview warning: %s", warning)
-
-    logger.info(
-        f"Ingestion complete (Polars): {inserted} inserted, "
-        f"{skipped_dedup} duplicates skipped, {len(skipped_rows)} rows skipped (validation)"
-    )
-
-    return {
-        "transactions": {
-            "inserted": int(inserted),
-            "dedup_skips": int(skipped_dedup),
-            "validation_skips": len(skipped_rows),
-            "skipped_rows": skipped_rows,
-        },
-        "asset_snapshots": {
-            "inserted": int(asset_inserted),
-            "dedup_skips": int(asset_skipped),
-            "warnings": asset_warnings,
-        },
-        "banksalad_overview": overview_summary,
-    }
+    file_id = _record_ingest_import(file_path, csv_base_dir, archive, source_rows, file_mtime)
+    return _write_ingest_file_result(file_path, csv_base_dir, file_id, file_mtime, df)
 
 
 def ingest_all_files(import_dir: Path, csv_base_dir: Path, archive: bool = False) -> dict[str, Any]:
