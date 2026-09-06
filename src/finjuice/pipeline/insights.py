@@ -1,10 +1,11 @@
 """Shared financial snapshot helpers for CLI surfaces.
 
-Monthly stats, structural-savings, and top-category compute helpers live in
-:mod:`finjuice.pipeline.insights_helpers`. Report-filter loading and
-active-filter counting live in :mod:`finjuice.pipeline.insights_cluster`.
-Both modules are re-exported here so existing callers can keep importing
-from this module.
+Monthly stats and top-category compute helpers live in
+:mod:`finjuice.pipeline.insights_helpers`. Structural-savings inference
+lives in :mod:`finjuice.pipeline.insights_structural`. Report-filter
+loading and active-filter counting live in
+:mod:`finjuice.pipeline.insights_cluster`. Sibling modules are re-exported
+here so existing callers can keep importing from this module.
 """
 
 from __future__ import annotations
@@ -32,17 +33,19 @@ from finjuice.pipeline.insights_cluster import (
 )
 from finjuice.pipeline.insights_helpers import (
     MonthlyStats,  # noqa: F401 — re-exported for existing insights imports
-    RecurringSavingsSummary,  # noqa: F401 — re-exported for existing insights imports
     SnapshotCategory,
-    StructuralSavingsSource,
-    TransactionStructuralSavingsSummary,  # noqa: F401 — re-exported for existing insights imports
     _build_category_expr,  # noqa: F401 — re-exported for existing insights imports
     _calculate_monthly_stats,
     _calculate_top_categories,
+    _exclude_transfer_rows,
+)
+from finjuice.pipeline.insights_structural import (
+    RecurringSavingsSummary,  # noqa: F401 — re-exported for existing insights imports
+    StructuralSavingsSource,
+    TransactionStructuralSavingsSummary,  # noqa: F401 — re-exported for existing insights imports
     _calculate_transaction_structural_savings,
     _category_label,  # noqa: F401 — re-exported for existing insights imports
     _coerce_float,  # noqa: F401 — re-exported for existing insights imports
-    _exclude_transfer_rows,
     _load_recurring_savings_summary,
     _matching_structural_tags,  # noqa: F401 — re-exported for existing insights imports
     _month_from_row,  # noqa: F401 — re-exported for existing insights imports
