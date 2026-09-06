@@ -12,8 +12,8 @@ def test_pairing_helpers_live_in_helper_module() -> None:
     detection_text = (TRANSFER_DIR / "detection.py").read_text(encoding="utf-8")
     helpers_text = (TRANSFER_DIR / "detection_helpers.py").read_text(encoding="utf-8")
 
-    assert "def detect_transfer_pairs" in detection_text
     assert "def run_transfer_detection" in detection_text
+    assert "def detect_transfer_pairs" not in detection_text
     assert "def _sign_rank" not in detection_text
     assert "def _candidate_order_key" not in detection_text
     assert "def _pair_order_key" not in detection_text

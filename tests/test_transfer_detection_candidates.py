@@ -15,8 +15,8 @@ def test_candidate_helpers_live_in_candidates_module() -> None:
     detection_text = (TRANSFER_DIR / "detection.py").read_text(encoding="utf-8")
     candidates_text = (TRANSFER_DIR / "detection_candidates.py").read_text(encoding="utf-8")
 
-    assert "def detect_transfer_pairs" in detection_text
     assert "def run_transfer_detection" in detection_text
+    assert "def detect_transfer_pairs" not in detection_text
     assert "class TransferCandidate" not in detection_text
     assert "def _build_transfer_candidates" not in detection_text
     assert "class TransferCandidate" in candidates_text

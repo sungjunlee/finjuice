@@ -1140,21 +1140,21 @@
       "code": "C901",
       "column": 5,
       "limit": 10,
-      "message": "`detect_transfer_pairs` is too complex (12 > 10)",
-      "path": "src/finjuice/pipeline/transfer/detection.py",
-      "row": 136,
-      "symbol": "detect_transfer_pairs",
-      "value": 12
-    },
-    {
-      "code": "C901",
-      "column": 5,
-      "limit": 10,
       "message": "`run_transfer_detection` is too complex (11 > 10)",
       "path": "src/finjuice/pipeline/transfer/detection.py",
       "row": 287,
       "symbol": "run_transfer_detection",
       "value": 11
+    },
+    {
+      "code": "C901",
+      "column": 5,
+      "limit": 10,
+      "message": "`detect_transfer_pairs` is too complex (12 > 10)",
+      "path": "src/finjuice/pipeline/transfer/detection_cluster.py",
+      "row": 28,
+      "symbol": "detect_transfer_pairs",
+      "value": 12
     },
     {
       "code": "C901",
