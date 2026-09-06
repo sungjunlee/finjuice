@@ -11,11 +11,19 @@ All queries use DuckDB's read_csv() function with:
 Report-filter DuckDB exclusion helpers live in
 :mod:`finjuice.pipeline.analytics.query_builder_helpers` and are re-exported
 here so existing callers can keep importing from this module.
+
+Shared DuckDB ``read_csv`` call construction and LIMIT validation live in
+:mod:`finjuice.pipeline.analytics.query_builder_cluster` and are re-exported
+here so existing callers can keep importing from this module.
 """
 
 from pathlib import Path
 from typing import Optional
 
+from finjuice.pipeline.analytics.query_builder_cluster import (
+    _read_csv_call,
+    _validated_limit,
+)
 from finjuice.pipeline.analytics.query_builder_helpers import (
     _build_report_filter_duckdb_clauses,  # noqa: F401 — re-exported for existing query_builder imports
     _category_filter_where_clause,  # noqa: F401 — re-exported for existing query_builder imports
@@ -27,31 +35,8 @@ from finjuice.pipeline.analytics.query_builder_helpers import (
 from finjuice.pipeline.filters import exclude_transfers_sql
 from finjuice.pipeline.sql_utils import (
     quote_duckdb_identifier,
-    quote_duckdb_path_pattern,
     quote_duckdb_string_literal,
 )
-
-
-def _read_csv_call(partitions_path: str, data_dir: Path | None = None) -> str:
-    """Return the shared trusted DuckDB read_csv call for query builders."""
-    base = data_dir if data_dir is not None else Path.cwd()
-    path_literal = quote_duckdb_path_pattern(base, partitions_path)
-    return (
-        "read_csv(\n"
-        f"            {path_literal},\n"
-        "            auto_detect=true,\n"
-        "            union_by_name=true,\n"
-        "            parallel=true\n"
-        "        )"
-    )
-
-
-def _validated_limit(value: int) -> int:
-    """Return a non-negative integer SQL LIMIT value."""
-    limit = int(value)
-    if limit < 0:
-        raise ValueError("SQL LIMIT must be non-negative.")
-    return limit
 
 
 def build_monthly_spend_query(
