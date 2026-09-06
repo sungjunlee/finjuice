@@ -13,7 +13,7 @@ def test_status_partition_helpers_live_in_helper_module() -> None:
     partitions_text = (STATUS_DIR / "compute_partitions.py").read_text(encoding="utf-8")
 
     assert "def collect_status_facts" in compute_text
-    assert "def _collect_transaction_metrics" in compute_text
+    assert "def _load_status_report_filters" in compute_text
     assert "class StatusCommandError" in compute_text
     assert "def _transaction_partitions_or_raise" not in compute_text
     assert "def _validated_partitions" not in compute_text

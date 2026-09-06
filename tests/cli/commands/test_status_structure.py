@@ -11,7 +11,7 @@ def test_status_compute_helpers_live_in_helper_module() -> None:
     helpers_text = (STATUS_DIR / "compute_helpers.py").read_text(encoding="utf-8")
 
     assert "def collect_status_facts" in compute_text
-    assert "def _collect_transaction_metrics" in compute_text
+    assert "def _load_status_report_filters" in compute_text
     assert "class StatusCommandError" in compute_text
     assert "def _normalize_status_partition_schema" not in compute_text
     assert "def _count_tagging_rows" not in compute_text
