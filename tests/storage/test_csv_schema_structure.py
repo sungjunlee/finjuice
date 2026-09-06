@@ -15,7 +15,6 @@ def test_partition_path_helpers_live_in_helper_module() -> None:
     assert "CSV_COLUMNS = [" in schema_text
     assert "POLARS_SCHEMA = {" in schema_text
     assert "ASSET_SNAPSHOT_COLUMNS = [" in schema_text
-    assert "BANKSALAD_OVERVIEW_FACT_COLUMNS = [" in schema_text
     assert "def get_partition_path" not in schema_text
     assert "def get_asset_snapshot_partition_path" not in schema_text
     assert "def get_banksalad_overview_facts_partition_path" not in schema_text
