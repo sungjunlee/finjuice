@@ -740,7 +740,6 @@ def test_merchant_context_queries_live_in_helper_module() -> None:
 
     assert "def generate_merchant_context" in scoring_text
     assert "def classify_merchant_kind" in scoring_text
-    assert "def build_suggested_rule_field" in scoring_text
     assert "def get_suggestion_coverage_stats" not in scoring_text
     assert "def _merchant_context_query" not in scoring_text
     assert "def _similar_merchants_query" not in scoring_text

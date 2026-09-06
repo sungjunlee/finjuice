@@ -15,8 +15,6 @@ def test_match_pattern_helpers_live_in_helper_module() -> None:
 
     assert "def generate_merchant_context" in scoring_text
     assert "def classify_merchant_kind" in scoring_text
-    assert "def build_suggested_rule_field" in scoring_text
-    assert "def get_suggested_rule_name" in scoring_text
     assert "def is_auto_apply_eligible" in scoring_text
     assert "def _clean_merchant_name" not in scoring_text
     assert "def _escape_regex_special_chars" not in scoring_text

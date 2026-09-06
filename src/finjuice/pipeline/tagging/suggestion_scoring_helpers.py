@@ -1,10 +1,12 @@
 """Match-pattern generation helpers for `finjuice rules suggest`.
 
 Owns merchant-name cleaning, regex escaping, and suggestion match-pattern
-construction. Payment-gateway classification, suggested-rule candidate
-payloads, and merchant-context assembly stay in
-:mod:`finjuice.pipeline.tagging.suggestion_scoring`, which re-exports these
-names so existing callers can keep importing from that module.
+construction. Payment-gateway classification and merchant-context assembly
+stay in :mod:`finjuice.pipeline.tagging.suggestion_scoring`. Suggested-rule
+candidate payloads live in
+:mod:`finjuice.pipeline.tagging.suggestion_scoring_cluster`. The scoring
+module re-exports these names so existing callers can keep importing from
+that module.
 """
 
 from __future__ import annotations
