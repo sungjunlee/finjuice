@@ -11,7 +11,7 @@ from io import StringIO
 import pytest
 from rich.console import Console
 
-from finjuice.pipeline.cli import output, output_messages, output_pagination
+from finjuice.pipeline.cli import output, output_codes, output_messages, output_pagination
 
 
 @pytest.fixture
@@ -49,6 +49,18 @@ class TestPublicNames:
         assert output.DEFAULT_PAGINATION_LIMIT is output_pagination.DEFAULT_PAGINATION_LIMIT
         assert output.DEFAULT_MAX_BYTES is output_pagination.DEFAULT_MAX_BYTES
         assert output.MAX_PAGINATION_LIMIT is output_pagination.MAX_PAGINATION_LIMIT
+
+    def test_code_catalog_helpers_are_reexported(self) -> None:
+        """Issue #404: Error/exit catalogs remain importable from output."""
+        assert output.ErrorCode is output_codes.ErrorCode
+        assert output.ExitCode is output_codes.ExitCode
+        assert output.ERROR_CODE_CATALOG is output_codes.ERROR_CODE_CATALOG
+        assert output.EXIT_CODE_CATALOG is output_codes.EXIT_CODE_CATALOG
+        assert output.error_code_values is output_codes.error_code_values
+        assert output.exit_code_items is output_codes.exit_code_items
+        assert output.exit_code_values is output_codes.exit_code_values
+        assert output._normalize_error_code is output_codes._normalize_error_code
+        assert output._normalize_exit_code is output_codes._normalize_exit_code
 
     def test_message_helpers_are_reexported(self) -> None:
         """Issue #163: Rich message helpers remain importable from output."""
