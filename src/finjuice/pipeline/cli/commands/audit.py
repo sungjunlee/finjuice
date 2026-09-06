@@ -7,9 +7,8 @@ Useful for security review and debugging.
 Human rendering lives in :mod:`finjuice.pipeline.cli.commands.audit_rendering`.
 JSONL I/O lives in :mod:`finjuice.pipeline.cli.commands.audit_io` and is
 re-exported here so existing callers can keep importing from this module.
+Stats payload assembly lives in :mod:`finjuice.pipeline.cli.commands.audit_stats`.
 """
-
-from typing import Any
 
 import typer
 
@@ -22,9 +21,8 @@ from finjuice.pipeline.cli.commands.audit_rendering import (
     _render_audit_log,
     _render_audit_stats,
 )
-from finjuice.pipeline.cli.commands.audit_template_metrics import (
-    _serialize_template_run_summary,
-    _summarize_template_runs,
+from finjuice.pipeline.cli.commands.audit_stats import (
+    _build_audit_stats_result,
 )
 from finjuice.pipeline.cli.output import (
     ErrorCode,
@@ -179,60 +177,7 @@ def stats(
     if skipped > 0 and not json_output:
         warning(f"Skipped {skipped} malformed audit entries.")
 
-    # Calculate statistics
-    total_suggestions = sum(1 for e in events if e.get("event") == "command_suggested")
-    confirmed = sum(
-        1
-        for e in events
-        if e.get("event") == "command_suggested" and e.get("user_confirmed") is True
-    )
-    declined = sum(
-        1
-        for e in events
-        if e.get("event") == "command_suggested" and e.get("user_confirmed") is False
-    )
-
-    total_executions = sum(1 for e in events if e.get("event") == "command_executed")
-    successful = sum(
-        1 for e in events if e.get("event") == "command_executed" and e.get("success") is True
-    )
-    failed = sum(
-        1 for e in events if e.get("event") == "command_executed" and e.get("success") is False
-    )
-
-    # Most common commands
-    command_counts: dict[str, int] = {}
-    for event in events:
-        if event.get("event") == "command_suggested":
-            cmd = event.get("command", "unknown")
-            command_counts[cmd] = command_counts.get(cmd, 0) + 1
-
-    success_rate = (successful / total_executions) * 100 if total_executions > 0 else None
-    result: dict[str, Any] = {
-        "suggestions": {
-            "total": total_suggestions,
-            "confirmed": confirmed,
-            "declined": declined,
-        },
-        "executions": {
-            "total": total_executions,
-            "successful": successful,
-            "failed": failed,
-        },
-        "success_rate": success_rate,
-        "top_commands": [
-            {"command": cmd, "count": count}
-            for cmd, count in sorted(command_counts.items(), key=lambda x: x[1], reverse=True)[:5]
-        ],
-        "skipped_entries": skipped,
-    }
-
-    template_runs = [e for e in events if e.get("event") == "template_run"]
-    if template_runs:
-        template_summary = _summarize_template_runs(template_runs)
-        result["_template_summary"] = template_summary
-        result["template_summary"] = _serialize_template_run_summary(template_summary)
-
+    result = _build_audit_stats_result(events, skipped)
     json_result = {k: v for k, v in result.items() if not k.startswith("_")}
     emit(json_result, json_output, lambda _: _render_audit_stats(result), command="audit stats")
 
