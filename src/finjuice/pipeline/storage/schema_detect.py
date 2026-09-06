@@ -1,8 +1,11 @@
 """Schema version detection for CSV partition storage.
 
-Owns compatible-read inference, partition schema summaries, and the public
-detection API. Header matching helpers live in
-:mod:`finjuice.pipeline.storage.schema_detect_helpers` and are re-exported
+Owns compatible-read inference and the public detection API. Header matching
+helpers live in :mod:`finjuice.pipeline.storage.schema_detect_helpers` and
+are re-exported here so existing callers can keep importing from this module.
+
+Partition schema summaries live in
+:mod:`finjuice.pipeline.storage.schema_detect_summary` and are re-exported
 here so existing callers can keep importing from this module.
 
 Registry load and cache stay in
@@ -26,6 +29,9 @@ from finjuice.pipeline.storage.schema_detect_helpers import (
     _missing_read_compatible_columns,
     _read_csv_header,
     _schema_columns,
+)
+from finjuice.pipeline.storage.schema_detect_summary import (
+    summarize_partition_schema_versions,
 )
 
 
@@ -297,58 +303,6 @@ def get_schema_version(csv_path: Path, metadata_dir: Path | None = None) -> int:
     raise ValueError(
         f"Could not detect schema version for {csv_path}. "
         f"Header has {len(detection.header)} columns: {list(detection.header[:3])}..."
-    )
-
-
-def summarize_partition_schema_versions(
-    partitions: Iterable[Path],
-    metadata_dir: Path | None = None,
-) -> PartitionSchemaSummary:
-    """Summarize schema compatibility across transaction partition CSV files."""
-    registry = _load_runtime_registry(metadata_dir)
-    current_version = int(registry["current_version"])
-
-    active_versions: set[int] = set()
-    compatible_legacy_versions: set[int] = set()
-    unsupported_versions: set[int | None] = set()
-    unsupported_count = 0
-    partition_count = 0
-
-    for partition_path in partitions:
-        partition_count += 1
-        try:
-            detection = detect_schema_version(partition_path, metadata_dir)
-        except (OSError, ValueError):
-            unsupported_versions.add(None)
-            unsupported_count += 1
-            continue
-
-        if detection.state is SchemaCompatibilityState.ACTIVE and detection.version is not None:
-            active_versions.add(detection.version)
-        elif (
-            detection.state is SchemaCompatibilityState.COMPATIBLE_LEGACY
-            and detection.version is not None
-        ):
-            compatible_legacy_versions.add(detection.version)
-        else:
-            unsupported_versions.add(detection.version)
-            unsupported_count += 1
-
-    if unsupported_count > 0:
-        state = SchemaCompatibilityState.UNSUPPORTED
-    elif compatible_legacy_versions:
-        state = SchemaCompatibilityState.COMPATIBLE_LEGACY
-    else:
-        state = SchemaCompatibilityState.ACTIVE
-
-    return PartitionSchemaSummary(
-        state=state,
-        current_version=current_version,
-        partition_count=partition_count,
-        active_versions=tuple(sorted(active_versions)),
-        compatible_legacy_versions=tuple(sorted(compatible_legacy_versions)),
-        unsupported_versions=tuple(sorted(unsupported_versions, key=lambda version: version or -1)),
-        unsupported_count=unsupported_count,
     )
 
 

@@ -1,8 +1,8 @@
 """Header-matching helpers for schema detection.
 
 Owns CSV header reading and matching against schema definitions, including
-additive read-compatibility matching and legacy-version inference. Detection,
-summaries, and the public API stay in
+additive read-compatibility matching and legacy-version inference. Detection
+and the public API stay in
 :mod:`finjuice.pipeline.storage.schema_detect`, which re-exports these
 helpers so existing callers can keep importing from that module.
 """
