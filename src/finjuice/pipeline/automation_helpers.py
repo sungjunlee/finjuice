@@ -13,13 +13,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .automation_large_transactions import (
+from finjuice.pipeline.automation_large_transactions import (
     LargeTransactionSample,  # noqa: F401 — re-exported for existing automation imports
     LargeTransactionSignal,
     _collect_large_transactions,  # noqa: F401 — re-exported for existing automation imports
     _optional_text,  # noqa: F401 — re-exported for existing automation imports
 )
-from .automation_pending_imports import (
+from finjuice.pipeline.automation_pending_imports import (
     PendingImportFailure,  # noqa: F401 — re-exported for existing automation imports
     PendingImportFile,  # noqa: F401 — re-exported for existing automation imports
     PendingImportsSignal,
@@ -27,7 +27,7 @@ from .automation_pending_imports import (
     _basename,  # noqa: F401 — re-exported for existing automation imports
     _collect_pending_imports,  # noqa: F401 — re-exported for existing automation imports
 )
-from .automation_tagging_pressure import (
+from finjuice.pipeline.automation_tagging_pressure import (
     MerchantPressureSample,  # noqa: F401 — re-exported for existing automation imports
     TaggingPressureSignal,
     _collect_tagging_pressure,  # noqa: F401 — re-exported for existing automation imports
