@@ -1,4 +1,10 @@
-"""Balance (asset/liability) block parser for Banksalad overview sheets."""
+"""Balance (asset/liability) block parser for Banksalad overview sheets.
+
+Sheet walking and table detection live here. Snapshot row assembly (field
+mapping and missing-value policy) lives in
+:mod:`finjuice.pipeline.ingest.overview.snapshot` and is re-exported so
+existing callers can keep importing from this module.
+"""
 
 from __future__ import annotations
 
@@ -9,7 +15,6 @@ from .cells import (
     _cell_value,
     _first_header_col,
     _header_map_for_row,
-    _is_summary_label,
     _iter_non_empty_cells,
     _normalize_cell_text,
     _parse_numeric_value,
@@ -34,6 +39,10 @@ from .models import (
     _SideSpec,
 )
 from .sections import _is_row_break_anchor
+from .snapshot import (
+    _assemble_balance_snapshot_row,
+    _BalanceSnapshotFields,
+)
 
 
 def _parse_balance_block(
@@ -73,39 +82,37 @@ def _parse_balance_block(
         fact_ids=fact_ids or {},
     )
     rows: list[dict[str, Any]] = []
-
     for spec in (asset_spec, liability_spec):
         for source_row in range(spec.header_row + 1, end_row + 1):
-            amount = _parse_numeric_value(_cell_value(sheet, source_row, spec.amount_col))
-            if amount is None:
-                continue
-
-            category = _cell_text(_cell_value(sheet, source_row, spec.category_col))
-            item_name = _cell_text(_cell_value(sheet, source_row, spec.item_col))
-            if not item_name:
-                item_name = category
-            if not item_name or _is_summary_label(item_name):
-                continue
-
-            source_fact_id = fact_result.fact_ids.get((source_row, spec.amount_col))
-            if source_fact_id is None:
-                continue
-
-            rows.append(
-                {
-                    "snapshot_date": block_context.snapshot_date,
-                    "side": spec.side,
-                    "category": category,
-                    "item_name": item_name,
-                    "amount": amount,
-                    "currency": "KRW",
-                    "source_fact_id": source_fact_id,
-                    "file_id": block_context.file_id,
-                    "source_row": source_row,
-                }
+            row = _assemble_balance_snapshot_row(
+                block_context,
+                _read_balance_snapshot_fields(
+                    sheet,
+                    spec,
+                    source_row,
+                    fact_result.fact_ids,
+                ),
             )
+            if row is not None:
+                rows.append(row)
 
     return rows, fact_result.rows, warnings
+
+
+def _read_balance_snapshot_fields(
+    sheet: Any,
+    spec: _SideSpec,
+    source_row: int,
+    fact_ids: dict[tuple[int, int], str],
+) -> _BalanceSnapshotFields:
+    return _BalanceSnapshotFields(
+        side=spec.side,
+        category=_cell_text(_cell_value(sheet, source_row, spec.category_col)),
+        item_name=_cell_text(_cell_value(sheet, source_row, spec.item_col)),
+        amount=_parse_numeric_value(_cell_value(sheet, source_row, spec.amount_col)),
+        source_fact_id=fact_ids.get((source_row, spec.amount_col)),
+        source_row=source_row,
+    )
 
 
 def _balance_fact_result(
