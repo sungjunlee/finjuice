@@ -1,8 +1,8 @@
 """Reusable one-shot automation signal collection for workflow automation.
 
-Pending-import, tagging-pressure, large-transaction, and next-step helpers live
-in :mod:`finjuice.pipeline.automation_helpers` and are re-exported here so
-existing callers can keep importing from this module.
+Pending-import, tagging-pressure, large-transaction, and next-step helpers are
+re-exported from :mod:`finjuice.pipeline.automation_helpers` so existing
+callers can keep importing from this module.
 """
 
 from __future__ import annotations

@@ -1,9 +1,10 @@
 """Pending-import preview helpers for one-shot workflow automation.
 
 Owns import-directory preview samples, failure records, the shared signal-status
-literal, and filename normalization. Tagging-pressure, large-transaction, and
-next-step helpers stay in :mod:`finjuice.pipeline.automation_helpers`, which
-re-exports these names so existing callers can keep importing from that module.
+literal, and filename normalization. Tagging-pressure and large-transaction
+collectors live in sibling modules. Next-step composition stays in
+:mod:`finjuice.pipeline.automation_helpers`, which re-exports these names so
+existing callers can keep importing from that module.
 """
 
 from __future__ import annotations
