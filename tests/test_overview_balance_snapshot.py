@@ -36,23 +36,17 @@ def _block_context() -> _OverviewBlockParseContext:
     )
 
 
-def _fields(
-    *,
-    side: str = "asset",
-    category: str | None = "예금",
-    item_name: str | None = "Synthetic Deposit",
-    amount: float | None = 1_250_000.0,
-    source_fact_id: str | None = "fact-1",
-    source_row: int = 5,
-) -> _BalanceSnapshotFields:
-    return _BalanceSnapshotFields(
-        side=side,
-        category=category,
-        item_name=item_name,
-        amount=amount,
-        source_fact_id=source_fact_id,
-        source_row=source_row,
-    )
+def _fields(**overrides: object) -> _BalanceSnapshotFields:
+    values: dict[str, object] = {
+        "side": "asset",
+        "category": "예금",
+        "item_name": "Synthetic Deposit",
+        "amount": 1_250_000.0,
+        "source_fact_id": "fact-1",
+        "source_row": 5,
+    }
+    values.update(overrides)
+    return _BalanceSnapshotFields(**values)  # type: ignore[arg-type]
 
 
 def test_balance_snapshot_assembly_lives_in_snapshot_module() -> None:
