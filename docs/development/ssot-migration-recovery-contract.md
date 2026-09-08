@@ -71,11 +71,13 @@ filename.
   and other entity IDs are opaque UUID strings. Newly accepted state uses
   lowercase, hyphenated UUIDv4 generated from a cryptographically secure random
   source.
-* Migration IDs must be deterministic for the same migration-manifest digest
-  and legacy locator. `finjuice.migration.v1` uses UUIDv5 namespace
+* Migration IDs must be deterministic for the same immutable capture-manifest
+  digest and legacy locator. The capture manifest is complete before plan/build;
+  neither the output migration manifest nor candidate database hashes are ID
+  inputs. `finjuice.migration.v1` uses UUIDv5 namespace
   `fd6b8bfd-e7db-5103-8513-66a572addf54` (UUIDv5 of the URL namespace and
   `https://github.com/sungjunlee/finjuice/migration/v1`). Its UTF-8 name is
-  `<manifest-digest>/<record-kind>/<legacy-locator>`: lowercase 64-character
+  `<capture-manifest-digest>/<record-kind>/<legacy-locator>`: lowercase 64-character
   SHA-256 hex without a prefix, a fixed lowercase record-kind token, and a
   canonical JSON locator (`sort_keys=True`, `ensure_ascii=False`, separators
   `(',', ':')`). No whitespace, Unicode normalization, or path normalization is
@@ -208,17 +210,24 @@ change the effective category.
 All post-cutover writers call one repository transaction boundary:
 
 1. begin a write transaction and acquire the configured SQLite writer lock;
-2. validate schema version, active generation, expected dataset revision,
-   referenced IDs, and mutation payload;
-3. reserve `(command_scope, idempotency_key)` with a canonical payload digest;
-4. write domain state, legacy/provenance links, changeset details, and audit
+2. validate schema version, active generation, command scope, and payload shape,
+   then compute the canonical request digest;
+3. look up `(command_scope, idempotency_key)` before checking expected revision
+   or mutable entity state: an existing identical digest returns its stored
+   result, while a different digest fails with an idempotency conflict;
+4. only for a new key, validate expected dataset revision, referenced IDs and
+   domain constraints, then reserve the key/digest in this transaction;
+5. write domain state, legacy/provenance links, changeset details, and audit
    event;
-5. increment dataset revision exactly once for a state-changing command;
-6. store the successful result envelope for identical retries; and
-7. commit, then report success.
+6. increment dataset revision exactly once for a state-changing command;
+7. store the successful result envelope for identical retries; and
+8. commit, then report success.
 
 The same key and digest returns the stored result without a second mutation.
-The same key with a different digest is a conflict. A stale expected revision,
+The same key with a different digest is a conflict. Retrying a successful request
+at revision N still returns its original result after the dataset has advanced
+to N+1 or later; a new key with the stale expected revision fails. A stale
+expected revision on a new request,
 constraint error, disk/full I/O error, process interruption, or bounded busy
 timeout rolls back all state and audit writes. Audit failure cannot be downgraded
 to a warning for an otherwise successful financial mutation.
@@ -498,8 +507,8 @@ the private frozen baseline, but public output contains only counts and status.
 | P04 | Blank, null, unknown column, and unparseable optional value occur | Observable distinctions/bytes are preserved and disposition is reported |
 | D01 | `10.10`, `0.0037`, a large coefficient, and non-KRW currencies migrate | Coefficient/scale/lexical values round-trip exactly; unlike currencies are not summed |
 | D02 | FX conversion needs rounding | Named rate and rounding policy reproduce the result; no implicit float path exists |
-| I01 | Same frozen manifest is built twice | IDs and semantic database content match; volatile attempt metadata is excluded from semantic digest |
-| I02 | Same idempotency key is retried with same/different payload | Same payload returns stored result; different payload conflicts |
+| I01 | Same frozen capture manifest is built twice with different attempt metadata | IDs use only the pre-build capture digest and locator; semantic database content matches and output-manifest hashes are never ID inputs |
+| I02 | A request succeeds at revision N, then its key is retried with the same/different payload after N+1 or later | Same payload returns its original stored result despite the old expected revision; different payload conflicts; a new key with stale expected revision fails |
 | A01 | Process fails between state and audit writes | Transaction rolls back; neither state nor successful audit/revision exists |
 | A02 | Two writers use the same expected revision | Exactly one commits; the other reports conflict without lost update |
 | F01 | Source file changes during capture | Capture/candidate is rejected and a fresh freeze is required |

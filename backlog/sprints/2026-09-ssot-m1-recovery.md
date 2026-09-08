@@ -14,7 +14,7 @@ scope: ["**"]
 ## Plan
 ### Batch 1 — 전환 계약
 
-- [~] #430 design(ssot): 전환 ADR·보존 불변조건·배포 계약 확정 (branch: codex/ssot-m1-contract)
+- [~] #430 design(ssot): 전환 ADR·보존 불변조건·배포 계약 확정 (branch: codex/ssot-contract-followup; prior PR: #449)
 
 ### Batch 2 — 전체 사본과 격리 복원
 
@@ -42,3 +42,5 @@ scope: ["**"]
 
 - 2026-09-08: #430 ADR-0014와 보존·복구 실행 계약 작성. 설치/checkout/schema·원본·수동 상태·외부 소비자/overlay·Git·스케줄러·저널/config의 비공개 inventory를 기록했다. 이는 동결 기준선이나 복원 성공 증거가 아니다. 문서 테스트 42개, Ruff, mypy(345개 source) 통과. 전체 회귀 검사와 Grok 교차 리뷰 진행 중.
 - 2026-09-08: Grok 4.6 high 교차 리뷰 완료. 6개 지적을 통합해 hidden marker 호환 codec, staging builder 예외, activation descriptor 백업, M1 writer 중단 경계, Decimal 변환 및 UUIDv5 namespace를 고정했다. 사전 pre-commit 문서 검사는 통과했다.
+- 2026-09-08: #449 이후 완료된 비동기 리뷰의 후속 보완을 위해 #430을 재개했다. 멱등 결과 조회를 새 요청 revision 검사보다 먼저 수행하고, ID seed를 빌드 전 capture digest로 고정한다. 공개 연속성 기록의 운영 식별자도 논리 역할로 바꾼다. 이 정정은 별도 PR로 처리하며 #431의 코드 구현과 원본 데이터에는 영향을 주지 않는다.
+- 2026-09-08: 후속 정정의 문서 테스트 42개, pre-commit·문서 링크·계약 assertion 통과. Grok 4.6 high가 정정 diff를 다시 검토해 추가 발견 없음으로 확인했다.
