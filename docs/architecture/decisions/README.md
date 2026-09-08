@@ -15,7 +15,7 @@ For new ADRs, please use [template.md](template.md) as basis.
 | ADR | Title | Status | Date | Issue |
 |-----|-------|--------|------|-------|
 | [0001](0001-use-madr-for-architecture-decisions.md) | Use MADR for Architecture Decisions | ✅ accepted | 2025-11-16 | #110 |
-| [0002](0002-csv-partition-storage.md) | CSV Partition Storage | ✅ accepted | 2025-11-03 | #59 |
+| [0002](0002-csv-partition-storage.md) | CSV Partition Storage | ⏭️ superseded by ADR-0014 | 2025-11-03 | #59 |
 | [0003](0003-polars-migration-strategy.md) | Polars Migration Strategy | ✅ accepted | 2025-11-05 | #68 |
 | [0004](0004-duckdb-analytics-layer.md) | DuckDB Analytics Layer | ✅ accepted | 2025-11-16 | #90 |
 | [0005](0005-issue-based-development-workflow.md) | Issue-Based Development Workflow | ✅ accepted | 2025-10-28 | #47 |
@@ -27,6 +27,7 @@ For new ADRs, please use [template.md](template.md) as basis.
 | [0011](0011-defer-mcp-and-vector-search-for-index.md) | Defer MCP and Vector Search for Index | ✅ accepted | 2026-05-24 | #774 |
 | [0012](0012-agent-package-layout-for-finjuice-workflows.md) | Agent Package Layout for Finjuice Workflows | ✅ accepted | 2026-05-24 | #779 |
 | [0013](0013-banksalad-overview-workbook-ingest.md) | Banksalad Overview Workbook Ingest | ✅ accepted | 2026-06-15 | N/A |
+| [0014](0014-sqlite-authoritative-storage.md) | SQLite Authoritative Storage with Immutable Sources and Derived CSV | ✅ accepted | 2026-09-08 | #430 |
 
 ## Index by Category
 
@@ -46,12 +47,14 @@ For new ADRs, please use [template.md](template.md) as basis.
   - Keep `skills/finjuice*` canonical; defer named packages until public-preview evidence.
 
 ### Data Storage & Schema
-- [ADR-0002: CSV Partition Storage](0002-csv-partition-storage.md) ✅
-  - 89% metadata reduction, git-friendly diffs, 56% token efficiency
+- [ADR-0002: CSV Partition Storage](0002-csv-partition-storage.md) ⏭️ superseded
+  - Remains the current 0.7.1 runtime until the operational cutover.
 - [ADR-0008: Financial Metadata Notes Path](0008-financial-metadata-notes-path.md) ✅
   - Use goals.yaml for stable context and rules.yaml notes for rule rationale
 - [ADR-0013: Banksalad Overview Workbook Ingest](0013-banksalad-overview-workbook-ingest.md) ✅
   - Capture `뱅샐현황` as workbook facts, then derive typed balance/cashflow projections.
+- [ADR-0014: SQLite Authoritative Storage](0014-sqlite-authoritative-storage.md) ✅
+  - Make one SQLite database authoritative after cutover; preserve immutable source bytes and regenerate CSV from a named revision.
 
 ### Performance & Analytics
 - [ADR-0003: Polars Migration Strategy](0003-polars-migration-strategy.md) ✅
@@ -89,14 +92,21 @@ ADR-0005 (Issue Workflow)
 ADR-0006 (Role Separation)
     ├─ Clarifies: ADR-0003 (Polars scope) and ADR-0004 (DuckDB scope)
     └─ Enforces: Centralized view usage for analytics
+
+ADR-0014 (SQLite Authority)
+    ├─ Supersedes: ADR-0002 as the accepted target; CSV remains current until cutover
+    ├─ Adapts: ADR-0004 and ADR-0006 through a revision-pinned DuckDB read layer
+    └─ Preserves: ADR-0007 CLI/JSON agent surface and ADR-0010 proposal-first changes
 ```
 
 ## Active ADRs
 
-All 13 current ADRs are **accepted** and active:
+All 14 current ADRs are listed here. Thirteen are **accepted and active**.
+ADR-0002 is superseded by ADR-0014,
+but still describes the current 0.7.1 runtime until the operational cutover:
 
 1. **MADR Format** - Using MADR 3.0.0 template
-2. **CSV Partitions** - Monthly partitioned CSV storage
+2. **CSV Partitions** - Superseded target decision; current pre-cutover runtime
 3. **Polars Migration** - Gradual migration from pandas
 4. **DuckDB Analytics** - Optional layer for aggregations
 5. **Issue Workflow** - Slash command development process
@@ -108,10 +118,11 @@ All 13 current ADRs are **accepted** and active:
 11. **Defer MCP and Vector Search for Index** - Catalog first, retrieval later, MCP last
 12. **Agent Package Layout** - Keep the current skill suite canonical; defer named bundles
 13. **Banksalad Overview Workbook Ingest** - Capture `뱅샐현황` facts and derive typed projections
+14. **SQLite Authority** - Immutable sources, atomic SQLite authority, and derived CSV after cutover
 
 ## Superseded ADRs
 
-_None yet_
+- [ADR-0002: CSV Partition Storage](0002-csv-partition-storage.md) — superseded by [ADR-0014](0014-sqlite-authoritative-storage.md); still documents the active pre-cutover runtime.
 
 ## Writing a New ADR
 
@@ -194,6 +205,6 @@ proposed → accepted → [deprecated | superseded]
 
 ---
 
-**Last Updated**: 2026-06-15
-**Related Issues**: #110 (ADR Introduction), #602 (AI Enrichment Proposal Log)
+**Last Updated**: 2026-09-08
+**Related Issues**: #110 (ADR Introduction), #430 (SSOT Contract), #602 (AI Enrichment Proposal Log)
 **Format**: MADR 3.0.0

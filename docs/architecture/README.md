@@ -18,26 +18,23 @@ Architecture Decision Records (ADR) documenting significant architectural choice
 
 **Format**: MADR 3.0.0 (Markdown Any Decision Records)
 
-**Active ADRs**:
+**Selected ADRs**:
 - [ADR-0001: Use MADR](decisions/0001-use-madr-for-architecture-decisions.md) - Meta-decision for ADR process
-- [ADR-0002: CSV Partition Storage](decisions/0002-csv-partition-storage.md) - 89% token reduction
+- [ADR-0002: CSV Partition Storage](decisions/0002-csv-partition-storage.md) - Current pre-cutover runtime; target decision superseded by ADR-0014
 - [ADR-0003: Polars Migration](decisions/0003-polars-migration-strategy.md) - 15x speedup
 - [ADR-0004: DuckDB Analytics](decisions/0004-duckdb-analytics-layer.md) - Fast aggregations
 - [ADR-0005: Issue Workflow](decisions/0005-issue-based-development-workflow.md) - Development process
 - [ADR-0012: Agent Package Layout](decisions/0012-agent-package-layout-for-finjuice-workflows.md) - Skill suite stays canonical
 - [ADR-0013: Banksalad Overview Workbook Ingest](decisions/0013-banksalad-overview-workbook-ingest.md) - Capture `뱅샐현황` as facts and projections
+- [ADR-0014: SQLite Authoritative Storage](decisions/0014-sqlite-authoritative-storage.md) - Immutable sources, atomic authority, derived CSV
 
 **See**: [Full ADR Index](decisions/README.md)
-
-### [discussions/](discussions/)
-Implementation discussions and technical analysis.
-
-- [implementation_details.md](discussions/implementation_details.md)
 
 ## Key Architectural Decisions
 
 ### Storage Architecture
-- **CSV Partition Storage**: Monthly partitioned CSV files for 89% token reduction
+- **Current runtime (0.7.1)**: Monthly CSV partitions remain authoritative until an operational cutover
+- **Accepted target**: SQLite authority with immutable sources and revision-pinned derived CSV ([ADR-0014](decisions/0014-sqlite-authoritative-storage.md))
 - **Schema Versioning**: Centralized schema registry in `templates/schema.yaml`
 - **Import History**: Centralized metadata tracking with optional archiving
 
@@ -64,9 +61,10 @@ Implementation discussions and technical analysis.
 - [Full Specification](specs/v0_initial.md) - Complete design doc (Korean)
 - [Schema Reference](../reference/schema.md) - Data schema details
 - [CLI Reference](../reference/cli.md) - Command reference
+- [SSOT Migration and Recovery Contract](../development/ssot-migration-recovery-contract.md) - Preservation, backup, compatibility, and cutover gates
 - [Project Guide](../../CLAUDE.md) - Development workflow
 
 ---
 
-**Last Updated**: 2026-06-15
-**Related Issues**: #109, #110
+**Last Updated**: 2026-09-08
+**Related Issues**: #109, #110, #430
