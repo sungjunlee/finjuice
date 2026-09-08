@@ -120,6 +120,21 @@ CATALOGUED_COMMANDS = [
         "networth_init.schema.json",
     ),
     ("validate", ["validate", "--json"], "validate.schema.json"),
+    (
+        "backup create",
+        ["backup", "create", "--json"],
+        "backup_create.schema.json",
+    ),
+    (
+        "backup verify",
+        ["backup", "verify", "--json"],
+        "backup_verify.schema.json",
+    ),
+    (
+        "backup restore",
+        ["backup", "restore", "--json"],
+        "backup_restore.schema.json",
+    ),
 ]
 
 PRIVACY_PROFILE_COMMANDS = [
@@ -393,6 +408,40 @@ def test_schema_artifact_valid_draft_2020_12(schema_file: str) -> None:
     jsonschema.Draft202012Validator.check_schema(_load_schema(schema_file))
 
 
+def _materialize_backup_catalog_args(schema_data_dir: Path, label: str) -> list[str]:
+    """Build synthetic backup CLI args against the schema data directory."""
+    backup_dir = schema_data_dir.parent / "schema-backup"
+    restore_dir = schema_data_dir.parent / "schema-restore"
+    create_args = [
+        "backup",
+        "create",
+        "--source",
+        str(schema_data_dir),
+        "--output",
+        str(backup_dir),
+        "--consistency",
+        "stopped-writers",
+        "--stopped-writer",
+        "catalog",
+        "--json",
+    ]
+    if label == "backup create":
+        return create_args
+    if not backup_dir.exists():
+        created = runner.invoke(app, ["--data-dir", str(schema_data_dir), *create_args])
+        assert created.exit_code == 0, created.output[:500]
+    if label == "backup verify":
+        return ["backup", "verify", str(backup_dir / "backup-manifest.json"), "--json"]
+    return [
+        "backup",
+        "restore",
+        str(backup_dir / "backup-manifest.json"),
+        "--target",
+        str(restore_dir),
+        "--json",
+    ]
+
+
 @pytest.mark.parametrize(("label", "cmd_args", "schema_file"), CATALOGUED_COMMANDS)
 def test_command_output_validates_against_schema(
     schema_data_dir: Path,
@@ -401,6 +450,8 @@ def test_command_output_validates_against_schema(
     schema_file: str,
 ) -> None:
     """Actual Typer CLI --json output should validate against its artifact."""
+    if label.startswith("backup "):
+        cmd_args = _materialize_backup_catalog_args(schema_data_dir, label)
     result = runner.invoke(app, ["--data-dir", str(schema_data_dir), *cmd_args])
 
     assert result.exit_code == 0, f"{label} failed: {result.output[:500]}"

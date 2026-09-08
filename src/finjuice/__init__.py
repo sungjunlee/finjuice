@@ -4,7 +4,7 @@ finjuice - Local-first personal finance pipeline for Banksalad data.
 Namespace package for modular finance tools.
 """
 
-__version__ = "0.7.1"
+__version__ = "0.7.2"
 
 
 def get_version() -> str:

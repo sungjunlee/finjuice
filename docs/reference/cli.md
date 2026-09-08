@@ -69,6 +69,7 @@ finjuice --version
 │ manifest        Emit CLI manifest                                                                                    │
 │ version         Show finjuice CLI version and data schema version.                                                   │
 │ workspace       Manage workspace directories (symlink-based)                                                         │
+│ backup          Create, verify, and restore a complete legacy data-tree backup.                                      │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Advanced ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ ingest          Import XLSX files from imports/ directory into CSV partitions.                                       │

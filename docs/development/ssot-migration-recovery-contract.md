@@ -270,6 +270,13 @@ finjuice backup verify <backup-manifest> --json
 finjuice backup restore <backup-manifest> --target <empty-path> --json
 ```
 
+The first legacy backup implementation supports create/restore on Linux and
+macOS, where directory metadata, directory fsync, and atomic directory
+publication are exercised. Other platforms fail before creating output or
+staging. Windows mutation support requires a separately verified metadata,
+durability, and empty-target replacement implementation; plain `os.rename`
+and POSIX directory file descriptors are not a compatible fallback.
+
 #435 implements the frozen migration command names and JSON concepts:
 
 ```text

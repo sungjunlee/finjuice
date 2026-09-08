@@ -1,0 +1,86 @@
+{
+  "$id": "backup_restore.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "absent_optional_count": {
+      "type": "integer"
+    },
+    "byte_count": {
+      "type": "integer"
+    },
+    "consistency_kind": {
+      "type": "string"
+    },
+    "data_schema_version": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "data_schema_version_status": {
+      "enum": [
+        "present",
+        "missing",
+        "invalid"
+      ],
+      "type": "string"
+    },
+    "directory_count": {
+      "type": "integer"
+    },
+    "entry_count": {
+      "type": "integer"
+    },
+    "file_count": {
+      "type": "integer"
+    },
+    "finjuice_version": {
+      "type": "string"
+    },
+    "generation_status": {
+      "enum": [
+        "inactive"
+      ],
+      "type": "string"
+    },
+    "manifest_digest": {
+      "type": "string"
+    },
+    "root_count": {
+      "type": "integer"
+    },
+    "schema_version": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "already_complete"
+      ],
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "status",
+    "schema_version",
+    "manifest_digest",
+    "entry_count",
+    "file_count",
+    "directory_count",
+    "byte_count",
+    "root_count",
+    "absent_optional_count",
+    "finjuice_version",
+    "data_schema_version",
+    "data_schema_version_status",
+    "consistency_kind",
+    "generation_status"
+  ],
+  "title": "backup restore --json output",
+  "type": "object"
+}
