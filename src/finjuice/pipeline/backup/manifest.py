@@ -135,7 +135,6 @@ def build_manifest(
     *,
     inventory: Inventory,
     evidence: ConsistencyEvidence,
-    roots: list[SourceRoot],
     data_schema_version: int | None,
     data_schema_version_status: str,
     capture: dict[str, Any],
@@ -152,7 +151,9 @@ def build_manifest(
             "system": platform.system(),
             "python": sys.version.split()[0],
         },
-        "inventory_definition_digest": inventory_definition_digest(roots),
+        "inventory_definition_digest": inventory_definition_digest(
+            [scan.spec for scan in inventory.roots]
+        ),
         "consistency": consistency_payload(evidence),
         "roots": [_root_payload(scan) for scan in inventory.roots],
         "entries": [_entry_payload(entry) for entry in inventory.entries],
@@ -273,32 +274,7 @@ def _validate_root_records(roots: list[Any]) -> dict[str, dict[str, Any]]:
             or (name != DATA_ROOT_NAME and not _valid_external_root_name(name))
         ):
             raise invalid("Backup manifest roots are duplicate or invalid.")
-        presence = root.get("presence")
-        state = root.get("state")
-        entry_type = root.get("entry_type")
-        role = root.get("role")
-        if presence not in {"required", "optional"} or state not in {
-            "present",
-            "intentionally_absent",
-        }:
-            raise invalid("Backup manifest root state is invalid.")
-        if not isinstance(role, str) or not role:
-            raise invalid("Backup manifest root role is invalid.")
-        if presence == "required" and state != "present":
-            raise BackupError("A required backup root is missing.", code="VALIDATION_FAILED")
-        expected_payload = None
-        if state == "present":
-            if entry_type not in {"file", "directory"}:
-                raise invalid("Backup manifest root type is invalid.")
-            expected_payload = (
-                f"{PAYLOAD_DIRNAME}/{DATA_ROOT_NAME}"
-                if name == DATA_ROOT_NAME
-                else f"{PAYLOAD_DIRNAME}/{ROOTS_DIRNAME}/{name}"
-            )
-        elif entry_type is not None:
-            raise invalid("Backup manifest absent root type is invalid.")
-        if root.get("payload_path") != expected_payload:
-            raise invalid("Backup manifest root payload is invalid.")
+        _validate_root_state(root, name)
         seen[name] = root
     data = seen.get(DATA_ROOT_NAME)
     if (
@@ -310,6 +286,35 @@ def _validate_root_records(roots: list[Any]) -> dict[str, dict[str, Any]]:
     ):
         raise invalid("Backup manifest data root is invalid.")
     return seen
+
+
+def _validate_root_state(root: dict[str, Any], name: str) -> None:
+    presence = root.get("presence")
+    state = root.get("state")
+    entry_type = root.get("entry_type")
+    role = root.get("role")
+    if presence not in {"required", "optional"} or state not in {
+        "present",
+        "intentionally_absent",
+    }:
+        raise invalid("Backup manifest root state is invalid.")
+    if not isinstance(role, str) or not role:
+        raise invalid("Backup manifest root role is invalid.")
+    if presence == "required" and state != "present":
+        raise BackupError("A required backup root is missing.", code="VALIDATION_FAILED")
+    expected_payload = None
+    if state == "present":
+        if entry_type not in {"file", "directory"}:
+            raise invalid("Backup manifest root type is invalid.")
+        expected_payload = (
+            f"{PAYLOAD_DIRNAME}/{DATA_ROOT_NAME}"
+            if name == DATA_ROOT_NAME
+            else f"{PAYLOAD_DIRNAME}/{ROOTS_DIRNAME}/{name}"
+        )
+    elif entry_type is not None:
+        raise invalid("Backup manifest absent root type is invalid.")
+    if root.get("payload_path") != expected_payload:
+        raise invalid("Backup manifest root payload is invalid.")
 
 
 def _validate_entry_records(
@@ -328,26 +333,30 @@ def _validate_entry_records(
         key = (root, path)
         if key in seen:
             raise BackupError("Backup manifest contains duplicate paths.", code="VALIDATION_FAILED")
-        entry_type = entry.get("type")
-        size = entry.get("size")
-        mode = entry.get("mode")
-        mtime_ns = entry.get("mtime_ns")
-        digest = entry.get("sha256")
-        if entry_type not in {"file", "directory"}:
-            raise invalid("Backup manifest entry type is invalid.")
-        if type(size) is not int or size < 0:
-            raise invalid("Backup manifest entry size is invalid.")
-        if not isinstance(mode, str) or _MODE_RE.fullmatch(mode) is None:
-            raise invalid("Backup manifest entry mode is invalid.")
-        if type(mtime_ns) is not int:
-            raise invalid("Backup manifest entry timestamp is invalid.")
-        if entry_type == "file":
-            if not isinstance(digest, str) or _DIGEST_RE.fullmatch(digest) is None:
-                raise invalid("Backup manifest file digest is invalid.")
-        elif size != 0 or digest is not None:
-            raise invalid("Backup manifest directory entry is invalid.")
+        _validate_entry_metadata(entry)
         seen[key] = entry
     return seen
+
+
+def _validate_entry_metadata(entry: dict[str, Any]) -> None:
+    entry_type = entry.get("type")
+    size = entry.get("size")
+    mode = entry.get("mode")
+    mtime_ns = entry.get("mtime_ns")
+    digest = entry.get("sha256")
+    if entry_type not in {"file", "directory"}:
+        raise invalid("Backup manifest entry type is invalid.")
+    if type(size) is not int or size < 0:
+        raise invalid("Backup manifest entry size is invalid.")
+    if not isinstance(mode, str) or _MODE_RE.fullmatch(mode) is None:
+        raise invalid("Backup manifest entry mode is invalid.")
+    if type(mtime_ns) is not int:
+        raise invalid("Backup manifest entry timestamp is invalid.")
+    if entry_type == "file":
+        if not isinstance(digest, str) or _DIGEST_RE.fullmatch(digest) is None:
+            raise invalid("Backup manifest file digest is invalid.")
+    elif size != 0 or digest is not None:
+        raise invalid("Backup manifest directory entry is invalid.")
 
 
 def _validate_root_entry_closure(

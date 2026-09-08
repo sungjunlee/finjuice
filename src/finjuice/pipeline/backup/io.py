@@ -64,6 +64,15 @@ def fsync_tree(root: Path) -> None:
         fsync_directory(directory)
 
 
+def fsync_parent_chain(parent: Path) -> None:
+    """Persist publication and any newly created ancestors, from child to root."""
+    try:
+        for directory in (parent, *parent.parents):
+            fsync_directory(directory)
+    except OSError as exc:
+        _raise_io(exc)
+
+
 def mkdir_private(path: Path) -> None:
     """Create a 0700 directory, refusing to reuse an existing path."""
     try:
@@ -243,7 +252,7 @@ def atomic_publish(staging: Path, output: Path, *, replace_empty: bool = False) 
                 code="VALIDATION_FAILED",
             ) from exc
         _raise_io(exc)
-    fsync_directory(output.parent)
+    fsync_parent_chain(output.parent)
 
 
 def write_text_atomic(path: Path, text: str) -> None:

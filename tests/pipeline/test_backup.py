@@ -750,3 +750,46 @@ def test_missing_or_invalid_capture_evidence_is_rejected(
     _rewrite_manifest(output, manifest)
     with pytest.raises(BackupError):
         verify_backup(output)
+
+
+def test_retry_does_not_hide_a_publication_fsync_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import errno
+
+    source = _build_dataset(tmp_path)
+    output = tmp_path / "backup"
+    original = backup_io.fsync_directory
+
+    def fail_parent(path: Path) -> None:
+        if path == output.parent:
+            raise OSError(errno.EIO, "synthetic directory sync failure")
+        original(path)
+
+    monkeypatch.setattr(backup_io, "fsync_directory", fail_parent)
+    with pytest.raises(BackupError):
+        create_backup(_request(source, output))
+    assert output.exists()
+    with pytest.raises(BackupError):
+        create_backup(_request(source, output))
+    monkeypatch.setattr(backup_io, "fsync_directory", original)
+    assert create_backup(_request(source, output)).status == "already_complete"
+
+
+def test_new_output_parent_chain_is_flushed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = _build_dataset(tmp_path)
+    output = tmp_path / "new" / "nested" / "backup"
+    flushed = []
+    original = backup_io.fsync_directory
+
+    def record(path: Path) -> None:
+        flushed.append(path)
+        original(path)
+
+    monkeypatch.setattr(backup_io, "fsync_directory", record)
+    create_backup(_request(source, output))
+    assert output.parent in flushed
+    assert output.parent.parent in flushed
+    assert tmp_path in flushed

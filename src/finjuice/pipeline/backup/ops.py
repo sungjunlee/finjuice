@@ -18,6 +18,7 @@ from finjuice.pipeline.backup.io import (
     copy_inventory,
     copy_payload_entry,
     finalize_directory_metadata,
+    fsync_parent_chain,
     mkdir_private,
     new_staging_dir,
     payload_root_dir,
@@ -217,7 +218,6 @@ def _capture_to_staging(
     manifest = build_manifest(
         inventory=pre,
         evidence=evidence,
-        roots=roots,
         data_schema_version=data_schema_version,
         data_schema_version_status=data_schema_status,
         capture={**capture, "completed_at": datetime.now(timezone.utc).isoformat()},
@@ -268,7 +268,7 @@ def _existing_output(
     parent_attempt_id: str | None,
 ) -> BackupResult:
     manifest_path = output / MANIFEST_FILENAME if output.is_dir() else output
-    _backup_dir, manifest = _load_verified_backup(manifest_path)
+    backup_dir, manifest = _load_verified_backup(manifest_path)
     current = scan_roots(roots)
     if manifest.get("inventory_definition_digest") != inventory_definition_digest(roots):
         raise invalid("Output already exists and does not match this input.")
@@ -278,6 +278,9 @@ def _existing_output(
         raise invalid("Output already exists and does not match this input.")
     if manifest["capture"]["parent_attempt_id"] != parent_attempt_id:
         raise invalid("Output already exists and does not match this capture lineage.")
+    # A previous attempt may have published the directory before its parent
+    # fsync failed. Re-establish durability before reporting a successful retry.
+    fsync_parent_chain(backup_dir.parent)
     return _result_from_manifest(manifest, status="already_complete")
 
 
