@@ -48,6 +48,7 @@ from finjuice.pipeline.backup.paths import (
     require_outside_program_repo,
     validate_root_name,
 )
+from finjuice.pipeline.backup.publish import require_mutation_platform
 from finjuice.pipeline.backup.scan import fingerprint_file, fingerprints_equal, scan_roots
 from finjuice.pipeline.backup.types import (
     COMPLETION_MARKER,
@@ -98,6 +99,8 @@ def _data_root(source: Path) -> SourceRoot:
 def bind_roots(request: CreateRequest) -> list[SourceRoot]:
     """Validate source/output/root paths and return the closed root list."""
     source = require_outside_program_repo(request.source, context="backup source")
+    if classify_mode(lstat_or_raise(source).st_mode) != "directory":
+        raise BackupError("Backup data source must be a directory.", code="INVALID_ARGS")
     output = require_outside_program_repo(request.output, context="backup output")
     reject_overlap(source, output)
     roots = [_data_root(source)]
@@ -167,6 +170,7 @@ def _write_manifest_and_marker(staging: Path, manifest: dict[str, Any]) -> None:
 
 def create_backup(request: CreateRequest) -> BackupResult:
     """Create a complete legacy backup or return already_complete."""
+    require_mutation_platform()
     evidence = require_consistency(request.consistency)
     validate_attempt_id(request.parent_attempt_id)
     roots = bind_roots(request)
@@ -410,6 +414,7 @@ def restore_backup(
     active_data_dir: Path,
 ) -> BackupResult:
     """Restore a verified backup into an isolated inactive target."""
+    require_mutation_platform()
     if active_data_dir is None:
         raise invalid("Active data directory is required for isolated restore.")
     backup_dir, manifest = _load_verified_backup(manifest_path)

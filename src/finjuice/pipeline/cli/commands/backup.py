@@ -157,7 +157,7 @@ def backup_create(  # noqa: PLR0913 - Typer command signature mirrors public CLI
     ),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
-    """Capture a complete inventoried data tree into a new backup directory."""
+    """Capture an inventoried data tree on Linux or macOS into a new backup directory."""
     command = "backup create"
     try:
         result = create_backup(
@@ -203,7 +203,7 @@ def backup_restore(  # noqa: PLR0913 - Typer command signature mirrors public CL
     target: Path = typer.Option(..., "--target", help="Empty or new isolated restore directory."),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
-    """Restore a verified backup into an inactive isolated directory."""
+    """Restore a verified backup on Linux or macOS into an inactive isolated directory."""
     command = "backup restore"
     try:
         result = restore_backup(

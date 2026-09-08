@@ -194,7 +194,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
 
 def backup_dir_from_manifest_path(manifest_path: Path) -> Path:
     """Return the backup directory that owns a manifest path."""
-    if manifest_path.name == MANIFEST_FILENAME:
+    if manifest_path.name == MANIFEST_FILENAME and manifest_path.is_file():
         return manifest_path.parent
     return manifest_path
 

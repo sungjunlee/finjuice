@@ -13,6 +13,46 @@ from finjuice.pipeline.cli.main import app
 runner = CliRunner()
 
 
+@pytest.mark.parametrize("json_output", [True, False])
+@pytest.mark.parametrize("operation", ["create", "restore"])
+def test_unsupported_platform_error_is_safe_in_both_output_modes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, json_output: bool, operation: str
+) -> None:
+    from finjuice.pipeline.backup import publish as backup_publish
+
+    source = _source_tree(tmp_path)
+    output = tmp_path / "output"
+    args = _create_args(source, output)
+    if operation == "restore":
+        output.mkdir()
+        args = [
+            "--data-dir",
+            str(source),
+            "backup",
+            "restore",
+            str(tmp_path / "unused-manifest"),
+            "--target",
+            str(output),
+            "--json",
+        ]
+    if not json_output:
+        args.remove("--json")
+    monkeypatch.setattr(backup_publish.sys, "platform", "win32")
+
+    result = runner.invoke(app, args)
+
+    assert result.exit_code != 0
+    message = json.loads(result.output)["error"]["message"] if json_output else result.output
+    assert "require Linux or macOS" in message
+    assert str(source) not in result.output
+    assert str(output) not in result.output
+    assert not list(tmp_path.glob(".finjuice-backup-staging-*"))
+    if operation == "restore":
+        assert list(output.iterdir()) == []
+    else:
+        assert not output.exists()
+
+
 def _source_tree(tmp_path: Path) -> Path:
     source = tmp_path / "source"
     (source / "transactions" / "2024" / "01").mkdir(parents=True)

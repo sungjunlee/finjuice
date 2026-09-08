@@ -8,6 +8,18 @@ import os
 import sys
 from pathlib import Path
 
+from finjuice.pipeline.backup.errors import BackupError
+
+
+def require_mutation_platform() -> None:
+    """Reject runtimes without the supported directory durability primitives."""
+    if sys.platform not in {"linux", "darwin"}:
+        raise BackupError(
+            "Backup create and restore require Linux or macOS.",
+            code="INVALID_ARGS",
+            suggestion="Use a supported host with directory fsync and atomic rename support.",
+        )
+
 
 def rename_exclusive(source: Path, destination: Path) -> None:
     """Rename a sibling directory with the platform's no-replace primitive.
@@ -17,10 +29,6 @@ def rename_exclusive(source: Path, destination: Path) -> None:
     """
     if source.parent != destination.parent:
         raise OSError(errno.EXDEV, "Publication requires sibling directories")
-    if sys.platform == "win32":
-        # Windows os.rename always refuses an existing destination.
-        os.rename(source, destination)
-        return
     _rename_posix(source, destination)
 
 

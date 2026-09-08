@@ -833,6 +833,58 @@ def test_distinct_paths_to_the_same_file_overlap(tmp_path: Path) -> None:
         backup_paths.reject_overlap(original, alias)
 
 
+def test_primary_data_source_must_be_a_directory_before_output_creation(tmp_path: Path) -> None:
+    source = tmp_path / "input.csv"
+    source.write_text("synthetic\n")
+    output = tmp_path / "new-parent" / "backup"
+    before = source.stat()
+
+    with pytest.raises(BackupError, match="data source must be a directory"):
+        create_backup(_request(source, output))
+    assert not output.parent.exists()
+    assert source.read_text() == "synthetic\n"
+    assert source.stat().st_mtime_ns == before.st_mtime_ns
+
+
+def test_backup_directory_can_be_named_like_a_manifest(tmp_path: Path) -> None:
+    source = _build_dataset(tmp_path)
+    output = tmp_path / MANIFEST_FILENAME
+    created = create_backup(_request(source, output))
+
+    assert output.is_dir()
+    assert create_backup(_request(source, output)).status == "already_complete"
+    assert verify_backup(output).manifest_digest == created.manifest_digest
+    assert verify_backup(output / MANIFEST_FILENAME).manifest_digest == created.manifest_digest
+    target = tmp_path / "restored"
+    assert restore_backup(output, target, active_data_dir=source).status == "ok"
+    assert (target / "data/rules.yaml").read_bytes() == (source / "rules.yaml").read_bytes()
+
+
+@pytest.mark.parametrize("platform", ["win32", "freebsd14"])
+def test_unsupported_platform_fails_before_create_or_restore_writes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, platform: str
+) -> None:
+    from finjuice.pipeline.backup import publish as backup_publish
+
+    source = _build_dataset(tmp_path)
+    output = tmp_path / "backup"
+    create_backup(_request(source, output))
+    target = tmp_path / "empty-target"
+    target.mkdir()
+    before = target.stat()
+    monkeypatch.setattr(backup_publish.sys, "platform", platform)
+
+    with pytest.raises(BackupError, match="require Linux or macOS"):
+        create_backup(_request(source, tmp_path / "new-parent" / "backup"))
+    with pytest.raises(BackupError, match="require Linux or macOS"):
+        restore_backup(output, target, active_data_dir=source)
+    assert not (tmp_path / "new-parent").exists()
+    assert target.stat().st_ino == before.st_ino
+    assert target.stat().st_mode == before.st_mode
+    assert list(target.iterdir()) == []
+    assert not list(tmp_path.glob(".finjuice-backup-staging-*"))
+
+
 def test_restore_requires_an_explicit_active_data_boundary(tmp_path: Path) -> None:
     source = _build_dataset(tmp_path)
     output = tmp_path / "backup"
