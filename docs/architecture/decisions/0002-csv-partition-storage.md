@@ -1,9 +1,10 @@
 # CSV Partition Storage for Transaction Data
 
-**Status**: accepted
+**Status**: superseded by [ADR-0014](0014-sqlite-authoritative-storage.md)
 **Date**: 2025-11-03
 **Issue**: #59
 **Supersedes**: JSON-based storage (no formal ADR)
+**Superseded by**: [ADR-0014: SQLite Authoritative Storage](0014-sqlite-authoritative-storage.md)
 
 ## Context and Problem Statement
 
@@ -63,7 +64,7 @@ representation.
 * ⚠️ **Partition management overhead**: Must handle year/month directory structure
 
 **Mitigations**:
-* DuckDB integration for fast multi-partition queries (see [ADR-0003](0003-duckdb-analytics-layer.md))
+* DuckDB integration for fast multi-partition queries (see [ADR-0004](0004-duckdb-analytics-layer.md))
 * Schema validation at ingest time prevents type errors
 * `read_month()` helper function abstracts partition management
 * Import history CSV (`data/metadata/import_history.csv`) centralizes file_id lookups
@@ -151,7 +152,7 @@ layer.
 * Collision probability: <0.001% for 100K transactions (10-char row_hash)
 
 **Related ADRs**:
-* [ADR-0003: DuckDB Analytics Layer](0003-duckdb-analytics-layer.md) - Addresses multi-partition aggregation
+* [ADR-0004: DuckDB Analytics Layer](0004-duckdb-analytics-layer.md) - Addresses multi-partition aggregation
 * [ADR-0001: Use MADR](0001-use-madr-for-architecture-decisions.md) - Meta-decision process
 
 **References**:
