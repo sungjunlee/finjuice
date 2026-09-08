@@ -86,16 +86,33 @@ def _is_inside_finjuice_checkout(path: Path) -> bool:
 
 
 def paths_overlap(left: Path, right: Path) -> bool:
-    """Return whether two unresolved absolute paths overlap."""
-    if left == right:
-        return True
-    left_parts = left.parts
-    right_parts = right.parts
-    if len(left_parts) <= len(right_parts) and right_parts[: len(left_parts)] == left_parts:
-        return True
-    if len(right_parts) <= len(left_parts) and left_parts[: len(right_parts)] == right_parts:
-        return True
-    return False
+    """Detect lexical containment and existing filesystem aliases."""
+    return (
+        left == right
+        or left in right.parents
+        or right in left.parents
+        or _physical_ancestor(left, right)
+        or _physical_ancestor(right, left)
+    )
+
+
+def _path_identity(path: Path) -> tuple[int, int] | None:
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise BackupError("A backup path could not be read.", code="FILE_ACCESS_ERROR") from exc
+    if stat.S_ISLNK(info.st_mode):
+        raise _symlink_error()
+    return info.st_dev, info.st_ino
+
+
+def _physical_ancestor(parent: Path, child: Path) -> bool:
+    identity = _path_identity(parent)
+    if identity is None:
+        return False
+    return any(_path_identity(candidate) == identity for candidate in (child, *child.parents))
 
 
 def reject_overlap(left: Path, right: Path, *, code: str = "INVALID_ARGS") -> None:

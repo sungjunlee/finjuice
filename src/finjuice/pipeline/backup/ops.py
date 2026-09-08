@@ -407,9 +407,11 @@ def restore_backup(
     manifest_path: Path,
     target: Path,
     *,
-    active_data_dir: Path | None = None,
+    active_data_dir: Path,
 ) -> BackupResult:
     """Restore a verified backup into an isolated inactive target."""
+    if active_data_dir is None:
+        raise invalid("Active data directory is required for isolated restore.")
     backup_dir, manifest = _load_verified_backup(manifest_path)
     destination = require_outside_program_repo(target, context="backup restore target")
     existing_target = _reject_restore_target(destination, backup_dir, active_data_dir)
@@ -425,12 +427,11 @@ def restore_backup(
 def _reject_restore_target(
     destination: Path,
     backup_dir: Path,
-    active_data_dir: Path | None,
+    active_data_dir: Path,
 ) -> os.stat_result | None:
     reject_overlap(destination, backup_dir, code="VALIDATION_FAILED")
-    if active_data_dir is not None:
-        active = reject_symlink_chain(active_data_dir)
-        reject_overlap(destination, active, code="VALIDATION_FAILED")
+    active = reject_symlink_chain(active_data_dir)
+    reject_overlap(destination, active, code="VALIDATION_FAILED")
     if not destination.exists():
         return None
     if destination.is_symlink() or not destination.is_dir():

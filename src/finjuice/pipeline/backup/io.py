@@ -230,8 +230,24 @@ def new_staging_dir(parent: Path) -> Path:
 
 
 def cleanup_tree(path: Path) -> None:
-    """Remove a staging tree, ignoring missing paths."""
-    shutil.rmtree(path, ignore_errors=True)
+    """Remove private staging, including copied read-only directories."""
+    try:
+        if path.is_symlink():
+            path.unlink()
+            return
+        if not path.exists():
+            return
+        os.chmod(path, 0o700, follow_symlinks=False)
+        for current, directories, _files in os.walk(path, followlinks=False):
+            for name in directories:
+                child = Path(current) / name
+                if not child.is_symlink():
+                    os.chmod(child, 0o700, follow_symlinks=False)
+        shutil.rmtree(path)
+    except OSError as exc:
+        raise BackupError(
+            "Could not remove private backup staging.", code="FILE_ACCESS_ERROR"
+        ) from exc
 
 
 def atomic_publish(staging: Path, output: Path, *, replace_empty: bool = False) -> None:

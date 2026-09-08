@@ -88,7 +88,7 @@ def test_create_verify_restore_full_roots(tmp_path: Path) -> None:
     assert verified.absent_optional_count == 1
 
     target = tmp_path / "restored"
-    restored = restore_backup(output / MANIFEST_FILENAME, target)
+    restored = restore_backup(output / MANIFEST_FILENAME, target, active_data_dir=source)
     assert restored.generation_status == "inactive"
     assert (target / "generation.json").read_text(encoding="utf-8")
     assert (target / "data" / "empty_dir").is_dir()
@@ -358,21 +358,21 @@ def test_restore_safeguards(tmp_path: Path) -> None:
     nonempty.mkdir()
     (nonempty / "keep.txt").write_text("x", encoding="utf-8")
     with pytest.raises(BackupError, match="not empty"):
-        restore_backup(manifest, nonempty)
+        restore_backup(manifest, nonempty, active_data_dir=source)
     assert (nonempty / "keep.txt").read_text(encoding="utf-8") == "x"
 
     file_target = tmp_path / "file-target"
     file_target.write_text("nope", encoding="utf-8")
     with pytest.raises(BackupError, match="empty directory"):
-        restore_backup(manifest, file_target)
+        restore_backup(manifest, file_target, active_data_dir=source)
 
     link_target = tmp_path / "link-target"
     link_target.symlink_to(tmp_path / "missing")
     with pytest.raises(BackupError, match="symlink"):
-        restore_backup(manifest, link_target)
+        restore_backup(manifest, link_target, active_data_dir=source)
 
     with pytest.raises(BackupError, match="overlap"):
-        restore_backup(manifest, output / "inside")
+        restore_backup(manifest, output / "inside", active_data_dir=source)
 
     empty = tmp_path / "empty"
     empty.mkdir()
@@ -437,7 +437,7 @@ def test_restore_publish_failure_preserves_existing_empty_target(
 
     monkeypatch.setattr(os, "rename", fail_rename)
     with pytest.raises(BackupError):
-        restore_backup(output, target)
+        restore_backup(output, target, active_data_dir=source)
     assert target.is_dir()
     assert list(target.iterdir()) == []
     assert target.stat().st_ino == before.st_ino
@@ -793,3 +793,90 @@ def test_new_output_parent_chain_is_flushed(
     assert output.parent in flushed
     assert output.parent.parent in flushed
     assert tmp_path in flushed
+
+
+@pytest.mark.parametrize("protected_root", ["source", "backup"])
+def test_case_alias_cannot_restore_inside_a_protected_tree(
+    tmp_path: Path, protected_root: str
+) -> None:
+    source = _build_dataset(tmp_path)
+    output = tmp_path / "backup"
+    create_backup(_request(source, output))
+    alias = tmp_path / protected_root.upper()
+    if not alias.exists():
+        pytest.skip("Filesystem distinguishes path case")
+    assert alias.samefile(tmp_path / protected_root)
+
+    with pytest.raises(BackupError, match="overlap"):
+        restore_backup(output, alias / "restored", active_data_dir=source)
+    assert not (tmp_path / protected_root / "restored").exists()
+
+
+def test_case_alias_cannot_create_a_backup_inside_source(tmp_path: Path) -> None:
+    source = _build_dataset(tmp_path)
+    alias = tmp_path / "SOURCE"
+    if not alias.exists():
+        pytest.skip("Filesystem distinguishes path case")
+
+    with pytest.raises(BackupError, match="overlap"):
+        create_backup(_request(source, alias / "backup"))
+    assert not (source / "backup").exists()
+
+
+def test_distinct_paths_to_the_same_file_overlap(tmp_path: Path) -> None:
+    original = tmp_path / "original"
+    original.write_text("synthetic bytes")
+    alias = tmp_path / "alias"
+    alias.hardlink_to(original)
+
+    with pytest.raises(BackupError, match="overlap"):
+        backup_paths.reject_overlap(original, alias)
+
+
+def test_restore_requires_an_explicit_active_data_boundary(tmp_path: Path) -> None:
+    source = _build_dataset(tmp_path)
+    output = tmp_path / "backup"
+    create_backup(_request(source, output))
+    with pytest.raises(TypeError, match="active_data_dir"):
+        restore_backup(output, source / "restored")  # type: ignore[call-arg]
+    with pytest.raises(BackupError, match="Active data directory"):
+        restore_backup(output, source / "restored", active_data_dir=None)  # type: ignore[arg-type]
+    assert not (source / "restored").exists()
+
+
+@pytest.mark.parametrize("operation", ["create", "restore"])
+def test_failure_cleans_readonly_staging_without_changing_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, operation: str
+) -> None:
+    source = _build_dataset(tmp_path)
+    readonly = source / "readonly"
+    _write(readonly / "inside.txt", "private synthetic bytes")
+    readonly.chmod(0o555)
+    before = readonly.stat()
+    output = tmp_path / "backup"
+
+    def fail(*_args: Any, **_kwargs: Any) -> None:
+        raise BackupError("synthetic failure", code="FILE_ACCESS_ERROR")
+
+    try:
+        if operation == "create":
+            monkeypatch.setattr(backup_ops, "_write_manifest_and_marker", fail)
+            with pytest.raises(BackupError, match="synthetic failure"):
+                create_backup(_request(source, output))
+            assert not output.exists()
+        else:
+            create_backup(_request(source, output))
+            monkeypatch.setattr(backup_ops, "atomic_publish", fail)
+            target = tmp_path / "restored"
+            with pytest.raises(BackupError, match="synthetic failure"):
+                restore_backup(output, target, active_data_dir=source)
+            assert not target.exists()
+            assert verify_backup(output).status == "ok"
+        assert not list(tmp_path.glob(".finjuice-backup-staging-*"))
+        assert readonly.stat().st_mode == before.st_mode
+        assert readonly.stat().st_mtime_ns == before.st_mtime_ns
+        assert (readonly / "inside.txt").read_text() == "private synthetic bytes"
+    finally:
+        readonly.chmod(0o755)
+        if output.exists():
+            (output / "payload/data/readonly").chmod(0o755)
