@@ -23,6 +23,8 @@ ERROR_SCHEMA_REF = "schemas/_error.schema.json"
 MUTATING_COMMANDS = {
     "all",
     "audit clear",
+    "backup create",
+    "backup restore",
     "budget edit",
     "doctor",
     "export",
@@ -64,6 +66,9 @@ RUNTIME_METADATA_COMMANDS = {
 }
 
 ARTIFACT_COMMANDS = {
+    "backup create",
+    "backup restore",
+    "backup verify",
     "export",
     "open",
 }
@@ -75,6 +80,12 @@ COMMAND_EXAMPLES = {
     "rules add": [
         "finjuice rules add --dry-run --name dining_example --match example --tags 식비 --json"
     ],
+    "backup create": [
+        "finjuice backup create --source <data-dir> --output <new-path> "
+        "--consistency stopped-writers --stopped-writer <name> --json"
+    ],
+    "backup verify": ["finjuice backup verify <backup-manifest> --json"],
+    "backup restore": ["finjuice backup restore <backup-manifest> --target <empty-path> --json"],
 }
 
 

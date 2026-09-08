@@ -4,7 +4,7 @@
 
 - 로드맵: https://github.com/sungjunlee/finjuice/issues/425
 - 실행 계약/시작 프롬프트: `goals/finjuice-ssot.md`.
-- 첫 활성 실행 계획: `backlog/sprints/2026-09-ssot-m1-recovery.md`. 목표 실행 중이다. #430의 #449 이후 후속 정정 branch는 `codex/ssot-contract-followup`이며, #431 구현은 `codex/ssot-m1-backup`에서 진행 중이다. `git worktree list`로 각 작업 공간을 확인한다.
+- 첫 활성 실행 계획: `backlog/sprints/2026-09-ssot-m1-recovery.md`. 목표 실행 중이며 #430은 #449와 후속 정정 #450으로 머지 완료됐다. 현재 #431 작업 branch는 `codex/ssot-m1-backup`이며 `git worktree list`로 해당 작업 공간을 확인한다.
 - 전체 순서: M1 복구 계약 → M2 정본/보존 이전 → M3 실제 운영 전환 → M4 가족 재산 → M5 증빙/마감/추가 출처.
 - 에픽: M1 #426, M2 #427, M3 #428, M4 #429, M5 #355. 실행 이슈 #430~#448. 첫 작업 #430.
 

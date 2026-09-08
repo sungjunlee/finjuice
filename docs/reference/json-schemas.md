@@ -41,6 +41,9 @@ command/code/exit-code combinations against this schema.
 | `schemas/audit_log.schema.json` | audit log --json output | `events`, `count`, `skipped_entries` |
 | `schemas/audit_stats.schema.json` | audit stats --json output | `suggestions`, `executions`, `success_rate`, `top_commands`, `skipped_entries` |
 | `schemas/automation_run.schema.json` | automation run --json output | `enabled`, `actionable`, `thresholds`, `pending_imports`, `tagging_pressure`, `large_transactions`, `next_steps`, `warnings` |
+| `schemas/backup_create.schema.json` | backup create --json output | `status`, `schema_version`, `manifest_digest`, `entry_count`, `file_count`, `directory_count`, `byte_count`, `root_count`, `absent_optional_count`, `finjuice_version`, `data_schema_version`, `data_schema_version_status`, `consistency_kind` |
+| `schemas/backup_restore.schema.json` | backup restore --json output | `status`, `schema_version`, `manifest_digest`, `entry_count`, `file_count`, `directory_count`, `byte_count`, `root_count`, `absent_optional_count`, `finjuice_version`, `data_schema_version`, `data_schema_version_status`, `consistency_kind`, `generation_status` |
+| `schemas/backup_verify.schema.json` | backup verify --json output | `status`, `schema_version`, `manifest_digest`, `entry_count`, `file_count`, `directory_count`, `byte_count`, `root_count`, `absent_optional_count`, `finjuice_version`, `data_schema_version`, `data_schema_version_status`, `consistency_kind` |
 | `schemas/budget_edit.schema.json` | budget edit --json output | `path`, `changes`, `monthly_budget` |
 | `schemas/budget_status.schema.json` | budget status --json output | `month`, `goals_file`, `summary`, `categories`, `unmatched_goal_categories`, `health`, `actionable`, `signals`, `review`, `next_steps` |
 | `schemas/budget_validate.schema.json` | budget validate --json output | `status`, `path`, `problems` |
@@ -1110,6 +1113,337 @@ automation run --json output
     "tagging_pressure.transfer_excluded_untagged_transactions": "untagged rows excluded from rule suggestions because they are confirmed transfer pairs",
     "tagging_pressure.untagged_transactions": "untagged"
   }
+}
+```
+
+## `schemas/backup_create.schema.json`
+
+backup create --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `absent_optional_count` | `integer` | yes |
+| `byte_count` | `integer` | yes |
+| `consistency_kind` | `string` | yes |
+| `data_schema_version` | `integer` \| `null` | yes |
+| `data_schema_version_status` | enum(`present`, `missing`, `invalid`) | yes |
+| `directory_count` | `integer` | yes |
+| `entry_count` | `integer` | yes |
+| `file_count` | `integer` | yes |
+| `finjuice_version` | `string` | yes |
+| `generation_status` | enum(`inactive`) | no |
+| `manifest_digest` | `string` | yes |
+| `root_count` | `integer` | yes |
+| `schema_version` | `string` | yes |
+| `status` | enum(`ok`, `already_complete`) | yes |
+
+```json
+{
+  "$id": "backup_create.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "absent_optional_count": {
+      "type": "integer"
+    },
+    "byte_count": {
+      "type": "integer"
+    },
+    "consistency_kind": {
+      "type": "string"
+    },
+    "data_schema_version": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "data_schema_version_status": {
+      "enum": [
+        "present",
+        "missing",
+        "invalid"
+      ],
+      "type": "string"
+    },
+    "directory_count": {
+      "type": "integer"
+    },
+    "entry_count": {
+      "type": "integer"
+    },
+    "file_count": {
+      "type": "integer"
+    },
+    "finjuice_version": {
+      "type": "string"
+    },
+    "generation_status": {
+      "enum": [
+        "inactive"
+      ],
+      "type": "string"
+    },
+    "manifest_digest": {
+      "type": "string"
+    },
+    "root_count": {
+      "type": "integer"
+    },
+    "schema_version": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "already_complete"
+      ],
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "status",
+    "schema_version",
+    "manifest_digest",
+    "entry_count",
+    "file_count",
+    "directory_count",
+    "byte_count",
+    "root_count",
+    "absent_optional_count",
+    "finjuice_version",
+    "data_schema_version",
+    "data_schema_version_status",
+    "consistency_kind"
+  ],
+  "title": "backup create --json output",
+  "type": "object"
+}
+```
+
+## `schemas/backup_restore.schema.json`
+
+backup restore --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `absent_optional_count` | `integer` | yes |
+| `byte_count` | `integer` | yes |
+| `consistency_kind` | `string` | yes |
+| `data_schema_version` | `integer` \| `null` | yes |
+| `data_schema_version_status` | enum(`present`, `missing`, `invalid`) | yes |
+| `directory_count` | `integer` | yes |
+| `entry_count` | `integer` | yes |
+| `file_count` | `integer` | yes |
+| `finjuice_version` | `string` | yes |
+| `generation_status` | enum(`inactive`) | yes |
+| `manifest_digest` | `string` | yes |
+| `root_count` | `integer` | yes |
+| `schema_version` | `string` | yes |
+| `status` | enum(`ok`, `already_complete`) | yes |
+
+```json
+{
+  "$id": "backup_restore.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "absent_optional_count": {
+      "type": "integer"
+    },
+    "byte_count": {
+      "type": "integer"
+    },
+    "consistency_kind": {
+      "type": "string"
+    },
+    "data_schema_version": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "data_schema_version_status": {
+      "enum": [
+        "present",
+        "missing",
+        "invalid"
+      ],
+      "type": "string"
+    },
+    "directory_count": {
+      "type": "integer"
+    },
+    "entry_count": {
+      "type": "integer"
+    },
+    "file_count": {
+      "type": "integer"
+    },
+    "finjuice_version": {
+      "type": "string"
+    },
+    "generation_status": {
+      "enum": [
+        "inactive"
+      ],
+      "type": "string"
+    },
+    "manifest_digest": {
+      "type": "string"
+    },
+    "root_count": {
+      "type": "integer"
+    },
+    "schema_version": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "already_complete"
+      ],
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "status",
+    "schema_version",
+    "manifest_digest",
+    "entry_count",
+    "file_count",
+    "directory_count",
+    "byte_count",
+    "root_count",
+    "absent_optional_count",
+    "finjuice_version",
+    "data_schema_version",
+    "data_schema_version_status",
+    "consistency_kind",
+    "generation_status"
+  ],
+  "title": "backup restore --json output",
+  "type": "object"
+}
+```
+
+## `schemas/backup_verify.schema.json`
+
+backup verify --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `absent_optional_count` | `integer` | yes |
+| `byte_count` | `integer` | yes |
+| `consistency_kind` | `string` | yes |
+| `data_schema_version` | `integer` \| `null` | yes |
+| `data_schema_version_status` | enum(`present`, `missing`, `invalid`) | yes |
+| `directory_count` | `integer` | yes |
+| `entry_count` | `integer` | yes |
+| `file_count` | `integer` | yes |
+| `finjuice_version` | `string` | yes |
+| `generation_status` | enum(`inactive`) | no |
+| `manifest_digest` | `string` | yes |
+| `root_count` | `integer` | yes |
+| `schema_version` | `string` | yes |
+| `status` | enum(`ok`, `already_complete`) | yes |
+
+```json
+{
+  "$id": "backup_verify.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "absent_optional_count": {
+      "type": "integer"
+    },
+    "byte_count": {
+      "type": "integer"
+    },
+    "consistency_kind": {
+      "type": "string"
+    },
+    "data_schema_version": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "data_schema_version_status": {
+      "enum": [
+        "present",
+        "missing",
+        "invalid"
+      ],
+      "type": "string"
+    },
+    "directory_count": {
+      "type": "integer"
+    },
+    "entry_count": {
+      "type": "integer"
+    },
+    "file_count": {
+      "type": "integer"
+    },
+    "finjuice_version": {
+      "type": "string"
+    },
+    "generation_status": {
+      "enum": [
+        "inactive"
+      ],
+      "type": "string"
+    },
+    "manifest_digest": {
+      "type": "string"
+    },
+    "root_count": {
+      "type": "integer"
+    },
+    "schema_version": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "already_complete"
+      ],
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "status",
+    "schema_version",
+    "manifest_digest",
+    "entry_count",
+    "file_count",
+    "directory_count",
+    "byte_count",
+    "root_count",
+    "absent_optional_count",
+    "finjuice_version",
+    "data_schema_version",
+    "data_schema_version_status",
+    "consistency_kind"
+  ],
+  "title": "backup verify --json output",
+  "type": "object"
 }
 ```
 

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
   "name": "finjuice",
-  "version": "0.7.0",
-  "generated_at": "2026-06-16T02:19:23+00:00",
+  "version": "0.7.2",
+  "generated_at": "2026-09-08T13:56:42+00:00",
   "tools": [
     {
       "name": "assets.balance",
@@ -255,6 +255,204 @@
       }
     },
     {
+      "name": "backup.create",
+      "description": "Capture a complete inventoried data tree into a new backup directory.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "format": "path",
+            "description": "Legacy data directory to capture."
+          },
+          "output": {
+            "type": "string",
+            "format": "path",
+            "description": "New backup directory to publish."
+          },
+          "source_root": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Additional inventoried root as NAME=PATH. Repeatable.",
+            "default": null
+          },
+          "optional_root": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Mark a named root optional. Absent optional roots are recorded.",
+            "default": null
+          },
+          "consistency": {
+            "type": "string",
+            "description": "stopped-writers or named-snapshot. Not a host-wide writer proof."
+          },
+          "stopped_writer": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Operator-confirmed stopped writer name. Repeatable.",
+            "default": null
+          },
+          "snapshot_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Named quiesced snapshot taken after writers were stopped.",
+            "default": null
+          },
+          "parent_attempt_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Prior capture attempt ID, as 32 lowercase hex digits.",
+            "default": null
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "source",
+          "output",
+          "consistency"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "backup create --json output",
+        "top_level_keys": [
+          "_meta",
+          "absent_optional_count",
+          "byte_count",
+          "consistency_kind",
+          "data_schema_version",
+          "data_schema_version_status",
+          "directory_count",
+          "entry_count",
+          "file_count",
+          "finjuice_version",
+          "generation_status",
+          "manifest_digest",
+          "root_count",
+          "schema_version",
+          "status"
+        ]
+      }
+    },
+    {
+      "name": "backup.restore",
+      "description": "Restore a verified backup into an inactive isolated directory.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "backup_manifest": {
+            "type": "string",
+            "format": "path",
+            "description": "Backup manifest or backup directory."
+          },
+          "target": {
+            "type": "string",
+            "format": "path",
+            "description": "Empty or new isolated restore directory."
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "backup_manifest",
+          "target"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "backup restore --json output",
+        "top_level_keys": [
+          "_meta",
+          "absent_optional_count",
+          "byte_count",
+          "consistency_kind",
+          "data_schema_version",
+          "data_schema_version_status",
+          "directory_count",
+          "entry_count",
+          "file_count",
+          "finjuice_version",
+          "generation_status",
+          "manifest_digest",
+          "root_count",
+          "schema_version",
+          "status"
+        ]
+      }
+    },
+    {
+      "name": "backup.verify",
+      "description": "Verify a published backup manifest, marker, and payload.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "backup_manifest": {
+            "type": "string",
+            "format": "path",
+            "description": "Backup manifest or backup directory."
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "backup_manifest"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "backup verify --json output",
+        "top_level_keys": [
+          "_meta",
+          "absent_optional_count",
+          "byte_count",
+          "consistency_kind",
+          "data_schema_version",
+          "data_schema_version_status",
+          "directory_count",
+          "entry_count",
+          "file_count",
+          "finjuice_version",
+          "generation_status",
+          "manifest_digest",
+          "root_count",
+          "schema_version",
+          "status"
+        ]
+      }
+    },
+    {
       "name": "budget.edit",
       "description": "Edit monthly budget values in goals.yaml while preserving comments.",
       "parameters": {
@@ -294,7 +492,7 @@
     },
     {
       "name": "budget.status",
-      "description": "Show monthly budget targets vs actual spending.",
+      "description": "Show monthly budget targets vs actual consumption spend.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -327,7 +525,8 @@
           "next_steps",
           "review",
           "signals",
-          "summary"
+          "summary",
+          "unmatched_goal_categories"
         ]
       }
     },
@@ -381,6 +580,11 @@
             "type": "integer",
             "description": "Days after which data is considered stale (default: 35)",
             "default": 35
+          },
+          "fast": {
+            "type": "boolean",
+            "description": "Cheap posture summary; skip full detectors.",
+            "default": false
           }
         },
         "additionalProperties": false

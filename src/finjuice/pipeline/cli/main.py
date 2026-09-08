@@ -26,6 +26,7 @@ from finjuice.pipeline.cli import output
 from finjuice.pipeline.cli.commands import audit
 from finjuice.pipeline.cli.commands.assets import assets_app
 from finjuice.pipeline.cli.commands.automation import automation_app
+from finjuice.pipeline.cli.commands.backup import backup_app
 from finjuice.pipeline.cli.commands.budget import budget_app
 from finjuice.pipeline.cli.commands.checkup import register_checkup_command
 from finjuice.pipeline.cli.commands.context import register_context_command
@@ -192,6 +193,15 @@ app.add_typer(assets_app, name="assets", rich_help_panel="Analysis")
 app.add_typer(networth_app, name="networth", rich_help_panel="Analysis")
 app.add_typer(budget_app, name="budget", rich_help_panel="Analysis")
 app.add_typer(journal_app, name="journal", rich_help_panel="Commands")
+app.add_typer(backup_app, name="backup", rich_help_panel="Admin")
+
+
+def _resolve_active_data_dir(data_dir: Optional[Path]) -> Optional[Path]:
+    """Resolve the active data directory without validating it."""
+    try:
+        return Config.from_env(data_dir=data_dir).data_dir
+    except (ValueError, OSError, TypeError):
+        return None
 
 
 def _version_callback(value: bool) -> None:
@@ -267,10 +277,15 @@ def main(
     help_requested = (
         any(arg in ("--help", "-h") for arg in raw_args) or "--help" in sys.argv or "-h" in sys.argv
     )
-    utility_without_data_dir_requested = ctx.invoked_subcommand in {"manifest", "inspect"}
+    utility_without_data_dir_requested = ctx.invoked_subcommand in {
+        "manifest",
+        "inspect",
+        "backup",
+    }
     # Also check for resilient_parsing (used during completion/help)
     if help_requested or utility_without_data_dir_requested or ctx.resilient_parsing:
         ctx.obj["config"] = None
+        ctx.obj["active_data_dir"] = _resolve_active_data_dir(data_dir)
         return
 
     # Create Config instance with specified data directory
