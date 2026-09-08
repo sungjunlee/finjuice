@@ -2,7 +2,8 @@
 
 Owns rule-name sanitization, Banksalad category/tag defaults, and the compact
 ``suggested_rule`` dict used in JSON output. Payment-gateway classification
-and merchant-context assembly stay in
+lives in :mod:`finjuice.pipeline.tagging.suggestion_scoring_classify`.
+Merchant-context assembly stays in
 :mod:`finjuice.pipeline.tagging.suggestion_scoring`, which re-exports these
 names so existing callers can keep importing from that module.
 """
