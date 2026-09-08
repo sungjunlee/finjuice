@@ -4,7 +4,7 @@
 
 - 로드맵: https://github.com/sungjunlee/finjuice/issues/425
 - 실행 계약/시작 프롬프트: `goals/finjuice-ssot.md`.
-- 첫 활성 실행 계획: `backlog/sprints/2026-09-ssot-m1-recovery.md`. 목표 실행을 시작했고 #430이 진행 중이다. 작업 branch는 `codex/ssot-m1-contract`이며 `git worktree list`로 해당 작업 공간을 확인한다.
+- 첫 활성 실행 계획: `backlog/sprints/2026-09-ssot-m1-recovery.md`. 목표 실행 중이다. #430의 #449 이후 후속 정정 branch는 `codex/ssot-contract-followup`이며, #431 구현은 `codex/ssot-m1-backup`에서 진행 중이다. `git worktree list`로 각 작업 공간을 확인한다.
 - 전체 순서: M1 복구 계약 → M2 정본/보존 이전 → M3 실제 운영 전환 → M4 가족 재산 → M5 증빙/마감/추가 출처.
 - 에픽: M1 #426, M2 #427, M3 #428, M4 #429, M5 #355. 실행 이슈 #430~#448. 첫 작업 #430.
 
@@ -12,7 +12,7 @@
 
 준비 당시 이 Mac checkout과 원격 main·실제 설치본의 버전이 달랐다. 현재 상태는 매번 다시 확인한다. 사용자 미커밋 변경을 보존하고 최신 main의 별도 `codex/` branch/worktree에서 개발한다. 실행 worktree에 `goals/`와 `backlog/`를 이어받았다. 초기 계약 PR에 함께 보존하며 이후에는 해당 branch/commit에서 이어간다.
 
-SSH `openclaw`의 Hermes wealth가 실제 소비자다. `sjlee-environment`와 현재 서비스·CLI 설정으로 운영 경로를 확인한다. 원본과 파생 자료, 수동 태그/메모/분류, rules/goals, 별도 분석 도구의 수동 자산 보정, audit/history가 이전 대상이다. 자세한 데이터/호스트 경로·통계는 공개 파일에 옮기지 않는다.
+운영 에이전트 프로필이 실제 소비자다. 비공개 운영 inventory와 현재 서비스·CLI 설정으로 대상 호스트와 운영 경로를 확인한다. 원본과 파생 자료, 수동 태그/메모/분류, rules/goals, 별도 분석 도구의 수동 자산 보정, audit/history가 이전 대상이다. 자세한 데이터/호스트 경로·통계는 공개 파일에 옮기지 않는다.
 
 기존 부분 사본이나 data Git 존재만으로 백업이 유효하다고 가정하지 않는다. 장비 밖 전체 사본·키 복구·실제 restore가 M1 gate다. 호스트/VM 백업과 과거 이미지 원본의 보관 상태는 실행 시 재확인한다.
 
