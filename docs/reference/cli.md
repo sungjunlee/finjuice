@@ -331,11 +331,15 @@ finjuice --version
  Edit monthly budget values in goals.yaml while preserving comments.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ --set         KEY=VALUE  Update one field in goals.yaml. Use total=..., categories.<name>=...,                       │
-│                          monthly_budget.categories.<name>=..., or bare category names such as 식비=700000.           │
-│ --yes                    Skip the confirmation prompt                                                                │
-│ --json                   Output as JSON                                                                              │
-│ --help                   Show this message and exit.                                                                 │
+│ --set                        KEY=VALUE  Update one field in goals.yaml. Use total=..., categories.<name>=...,        │
+│                                         monthly_budget.categories.<name>=..., or bare category names such as         │
+│                                         식비=700000.                                                                 │
+│ --yes                                   Skip the confirmation prompt                                                 │
+│ --json                                  Output as JSON                                                               │
+│ --idempotency-key            TEXT       Stable retry key for an authoritative mutation                               │
+│ --expected-generation        TEXT       Expected active dataset generation                                           │
+│ --expected-revision          INTEGER    Expected active dataset revision                                             │
+│ --help                                  Show this message and exit.                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```
@@ -371,14 +375,17 @@ finjuice --version
  Use --dry-run to preview changes before applying them.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ --edit                            TEXT  Inspect or edit a transaction's manual tags by row_hash                      │
-│ --add-tag                         TEXT  Add one or more manual tags (repeatable)                                     │
-│ --remove-tag                      TEXT  Remove one or more manual tags (repeatable)                                  │
-│ --set-category                    TEXT  Persist a manual category override for category_final                        │
-│ --set-note                        TEXT  Persist a row-level manual note without changing analysis tags               │
-│ --dry-run         --no-dry-run          Preview changes without writing to CSV files [default: no-dry-run]           │
-│ --json                                  Output as JSON                                                               │
-│ --help                                  Show this message and exit.                                                  │
+│ --edit                                   TEXT     Inspect or edit a transaction's manual tags by row_hash            │
+│ --add-tag                                TEXT     Add one or more manual tags (repeatable)                           │
+│ --remove-tag                             TEXT     Remove one or more manual tags (repeatable)                        │
+│ --set-category                           TEXT     Persist a manual category override for category_final              │
+│ --set-note                               TEXT     Persist a row-level manual note without changing analysis tags     │
+│ --dry-run                --no-dry-run             Preview changes without writing to CSV files [default: no-dry-run] │
+│ --json                                            Output as JSON                                                     │
+│ --idempotency-key                        TEXT     Stable retry key for an authoritative mutation                     │
+│ --expected-generation                    TEXT     Expected active dataset generation                                 │
+│ --expected-revision                      INTEGER  Expected active dataset revision                                   │
+│ --help                                            Show this message and exit.                                        │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```

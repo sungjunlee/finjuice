@@ -238,7 +238,7 @@ def test_cli_tag_dry_run(temp_finance_dir: Path) -> None:
         },
     ]
     df = pl.DataFrame(transactions)
-    csv_partition.append_transactions(csv_base_dir, df, deduplicate=False)
+    csv_partition.append_transactions(df, deduplicate=False, authority_data_dir=csv_base_dir.parent)
 
     # Record file state before dry-run
     csv_file = csv_base_dir / "2025" / "10" / "transactions.csv"
@@ -297,7 +297,7 @@ def test_cli_tag_dry_run_shows_changes(temp_finance_dir: Path) -> None:
         },
     ]
     df = pl.DataFrame(transactions)
-    csv_partition.append_transactions(csv_base_dir, df, deduplicate=False)
+    csv_partition.append_transactions(df, deduplicate=False, authority_data_dir=csv_base_dir.parent)
 
     # Act: Run tag with --dry-run
     result = runner.invoke(app, ["--data-dir", str(temp_finance_dir), "tag", "--dry-run"])
@@ -401,7 +401,7 @@ def _create_test_transactions(csv_base_dir: Path) -> None:
         },
     ]
     df = pl.DataFrame(transactions)
-    csv_partition.append_transactions(csv_base_dir, df, deduplicate=False)
+    csv_partition.append_transactions(df, deduplicate=False, authority_data_dir=csv_base_dir.parent)
 
 
 # Test: finjuice show (default - latest month)

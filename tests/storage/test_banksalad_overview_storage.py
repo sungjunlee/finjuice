@@ -20,12 +20,6 @@ from finjuice.pipeline.storage.csv_partition import (
     BANKSALAD_OVERVIEW_FACT_COLUMNS,
     BANKSALAD_OVERVIEW_FACT_DEDUP_KEY,
     BANKSALAD_OVERVIEW_FACT_POLARS_SCHEMA,
-    append_banksalad_balance,
-    append_banksalad_cashflow,
-    append_banksalad_insurance,
-    append_banksalad_investments,
-    append_banksalad_loans,
-    append_banksalad_overview_facts,
     get_banksalad_balance_partition_path,
     get_banksalad_cashflow_partition_path,
     get_banksalad_insurance_partition_path,
@@ -39,6 +33,64 @@ from finjuice.pipeline.storage.csv_partition import (
     read_banksalad_loan_month,
     read_banksalad_overview_facts_month,
 )
+from finjuice.pipeline.storage.csv_partition import (
+    append_banksalad_balance as _append_banksalad_balance,
+)
+from finjuice.pipeline.storage.csv_partition import (
+    append_banksalad_cashflow as _append_banksalad_cashflow,
+)
+from finjuice.pipeline.storage.csv_partition import (
+    append_banksalad_insurance as _append_banksalad_insurance,
+)
+from finjuice.pipeline.storage.csv_partition import (
+    append_banksalad_investments as _append_banksalad_investments,
+)
+from finjuice.pipeline.storage.csv_partition import (
+    append_banksalad_loans as _append_banksalad_loans,
+)
+from finjuice.pipeline.storage.csv_partition import (
+    append_banksalad_overview_facts as _append_banksalad_overview_facts,
+)
+
+
+def _authority_dir(tmp_path: Path) -> Path:
+    return tmp_path.resolve()
+
+
+def append_banksalad_overview_facts(tmp_path: Path, df: pl.DataFrame, deduplicate: bool = True):
+    return _append_banksalad_overview_facts(
+        df, deduplicate=deduplicate, authority_data_dir=_authority_dir(tmp_path)
+    )
+
+
+def append_banksalad_balance(tmp_path: Path, df: pl.DataFrame, deduplicate: bool = True):
+    return _append_banksalad_balance(
+        df, deduplicate=deduplicate, authority_data_dir=_authority_dir(tmp_path)
+    )
+
+
+def append_banksalad_cashflow(tmp_path: Path, df: pl.DataFrame, deduplicate: bool = True):
+    return _append_banksalad_cashflow(
+        df, deduplicate=deduplicate, authority_data_dir=_authority_dir(tmp_path)
+    )
+
+
+def append_banksalad_insurance(tmp_path: Path, df: pl.DataFrame, deduplicate: bool = True):
+    return _append_banksalad_insurance(
+        df, deduplicate=deduplicate, authority_data_dir=_authority_dir(tmp_path)
+    )
+
+
+def append_banksalad_investments(tmp_path: Path, df: pl.DataFrame, deduplicate: bool = True):
+    return _append_banksalad_investments(
+        df, deduplicate=deduplicate, authority_data_dir=_authority_dir(tmp_path)
+    )
+
+
+def append_banksalad_loans(tmp_path: Path, df: pl.DataFrame, deduplicate: bool = True):
+    return _append_banksalad_loans(
+        df, deduplicate=deduplicate, authority_data_dir=_authority_dir(tmp_path)
+    )
 
 
 def _overview_facts_df() -> pl.DataFrame:
@@ -211,11 +263,11 @@ def test_banksalad_dedup_keys_match_schema_yaml() -> None:
 
 
 def test_banksalad_overview_facts_append_dedups_and_sorts_partitions(tmp_path: Path) -> None:
-    base_dir = tmp_path / "banksalad" / "overview_facts"
+    base_dir = _authority_dir(tmp_path) / "banksalad" / "overview_facts"
     batch = pl.concat([_overview_facts_df(), _overview_facts_df().slice(0, 1)])
 
-    result1 = append_banksalad_overview_facts(base_dir, batch)
-    result2 = append_banksalad_overview_facts(base_dir, _overview_facts_df())
+    result1 = append_banksalad_overview_facts(tmp_path, batch)
+    result2 = append_banksalad_overview_facts(tmp_path, _overview_facts_df())
     june = read_banksalad_overview_facts_month(base_dir, 2026, 6)
     july = read_banksalad_overview_facts_month(base_dir, 2026, 7)
 
@@ -242,11 +294,11 @@ def test_banksalad_overview_facts_append_dedups_and_sorts_partitions(tmp_path: P
 
 
 def test_banksalad_balance_append_partitions_and_dedups(tmp_path: Path) -> None:
-    base_dir = tmp_path / "banksalad" / "balance"
+    base_dir = _authority_dir(tmp_path) / "banksalad" / "balance"
     batch = pl.concat([_balance_df(), _balance_df().slice(1, 1)])
 
-    result = append_banksalad_balance(base_dir, batch)
-    repeat = append_banksalad_balance(base_dir, _balance_df())
+    result = append_banksalad_balance(tmp_path, batch)
+    repeat = append_banksalad_balance(tmp_path, _balance_df())
     june = read_banksalad_balance_month(base_dir, 2026, 6)
 
     assert result["rows_inserted"] == 3
@@ -263,10 +315,10 @@ def test_banksalad_balance_append_partitions_and_dedups(tmp_path: Path) -> None:
 
 
 def test_banksalad_cashflow_uses_period_month_when_available(tmp_path: Path) -> None:
-    base_dir = tmp_path / "banksalad" / "cashflow"
+    base_dir = _authority_dir(tmp_path) / "banksalad" / "cashflow"
 
-    result = append_banksalad_cashflow(base_dir, _cashflow_df())
-    repeat = append_banksalad_cashflow(base_dir, _cashflow_df())
+    result = append_banksalad_cashflow(tmp_path, _cashflow_df())
+    repeat = append_banksalad_cashflow(tmp_path, _cashflow_df())
     june = read_banksalad_cashflow_month(base_dir, 2026, 6)
     july = read_banksalad_cashflow_month(base_dir, 2026, 7)
 
@@ -292,7 +344,7 @@ def test_banksalad_cashflow_uses_period_month_when_available(tmp_path: Path) -> 
 
 
 def test_banksalad_cashflow_requires_valid_partition_source(tmp_path: Path) -> None:
-    base_dir = tmp_path / "banksalad" / "cashflow"
+    base_dir = _authority_dir(tmp_path) / "banksalad" / "cashflow"
     invalid_rows = pl.DataFrame(
         {
             "snapshot_date": [None, None],
@@ -303,21 +355,21 @@ def test_banksalad_cashflow_requires_valid_partition_source(tmp_path: Path) -> N
     )
 
     with pytest.raises(ValueError, match="Cashflow partition source must be populated as YYYY-MM"):
-        append_banksalad_cashflow(base_dir, invalid_rows)
+        append_banksalad_cashflow(tmp_path, invalid_rows)
 
     assert not base_dir.exists()
 
 
 def test_banksalad_structured_overview_tables_partition_and_dedup(tmp_path: Path) -> None:
-    base_dir = tmp_path / "banksalad"
+    base_dir = _authority_dir(tmp_path) / "banksalad"
 
     insurance_batch = pl.concat([_insurance_df(), _insurance_df().slice(1, 1)])
     investment_batch = pl.concat([_investment_df(), _investment_df().slice(1, 1)])
     loan_batch = pl.concat([_loan_df(), _loan_df().slice(1, 1)])
 
-    insurance_result = append_banksalad_insurance(base_dir / "insurance", insurance_batch)
-    investment_result = append_banksalad_investments(base_dir / "investments", investment_batch)
-    loan_result = append_banksalad_loans(base_dir / "loans", loan_batch)
+    insurance_result = append_banksalad_insurance(tmp_path, insurance_batch)
+    investment_result = append_banksalad_investments(tmp_path, investment_batch)
+    loan_result = append_banksalad_loans(tmp_path, loan_batch)
 
     assert insurance_result["rows_inserted"] == 3
     assert insurance_result["rows_skipped"] == 1
@@ -336,7 +388,7 @@ def test_banksalad_structured_overview_tables_partition_and_dedup(tmp_path: Path
 def test_banksalad_investment_dedup_preserves_same_product_from_different_source_rows(
     tmp_path: Path,
 ) -> None:
-    base_dir = tmp_path / "banksalad" / "investments"
+    base_dir = _authority_dir(tmp_path) / "banksalad" / "investments"
     duplicate_product_position = pl.DataFrame(
         {
             "snapshot_date": ["2026-06-15"],
@@ -356,8 +408,8 @@ def test_banksalad_investment_dedup_preserves_same_product_from_different_source
     )
     batch = pl.concat([_investment_df(), duplicate_product_position])
 
-    result = append_banksalad_investments(base_dir, batch)
-    repeat = append_banksalad_investments(base_dir, batch)
+    result = append_banksalad_investments(tmp_path, batch)
+    repeat = append_banksalad_investments(tmp_path, batch)
     june = read_banksalad_investment_month(base_dir, 2026, 6)
 
     assert result["rows_inserted"] == 4
@@ -368,42 +420,19 @@ def test_banksalad_investment_dedup_preserves_same_product_from_different_source
 
 
 def test_banksalad_append_empty_batches_are_noops(tmp_path: Path) -> None:
-    base_dir = tmp_path / "banksalad"
+    base_dir = _authority_dir(tmp_path) / "banksalad"
+    empty = pl.DataFrame()
+    expected = {
+        "total_rows": 0,
+        "partitions_updated": 0,
+        "rows_inserted": 0,
+        "rows_skipped": 0,
+    }
 
-    assert append_banksalad_overview_facts(base_dir / "overview_facts", pl.DataFrame()) == {
-        "total_rows": 0,
-        "partitions_updated": 0,
-        "rows_inserted": 0,
-        "rows_skipped": 0,
-    }
-    assert append_banksalad_balance(base_dir / "balance", pl.DataFrame()) == {
-        "total_rows": 0,
-        "partitions_updated": 0,
-        "rows_inserted": 0,
-        "rows_skipped": 0,
-    }
-    assert append_banksalad_cashflow(base_dir / "cashflow", pl.DataFrame()) == {
-        "total_rows": 0,
-        "partitions_updated": 0,
-        "rows_inserted": 0,
-        "rows_skipped": 0,
-    }
-    assert append_banksalad_insurance(base_dir / "insurance", pl.DataFrame()) == {
-        "total_rows": 0,
-        "partitions_updated": 0,
-        "rows_inserted": 0,
-        "rows_skipped": 0,
-    }
-    assert append_banksalad_investments(base_dir / "investments", pl.DataFrame()) == {
-        "total_rows": 0,
-        "partitions_updated": 0,
-        "rows_inserted": 0,
-        "rows_skipped": 0,
-    }
-    assert append_banksalad_loans(base_dir / "loans", pl.DataFrame()) == {
-        "total_rows": 0,
-        "partitions_updated": 0,
-        "rows_inserted": 0,
-        "rows_skipped": 0,
-    }
+    assert append_banksalad_overview_facts(tmp_path, empty) == expected
+    assert append_banksalad_balance(tmp_path, empty) == expected
+    assert append_banksalad_cashflow(tmp_path, empty) == expected
+    assert append_banksalad_insurance(tmp_path, empty) == expected
+    assert append_banksalad_investments(tmp_path, empty) == expected
+    assert append_banksalad_loans(tmp_path, empty) == expected
     assert not base_dir.exists()

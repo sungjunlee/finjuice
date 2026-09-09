@@ -148,6 +148,9 @@ def ingest_asset_snapshots(
     if snapshot_df.height == 0:
         return 0, 0, warnings
 
-    asset_base_dir = csv_base_dir.parent / "assets" / "snapshots"
-    result = csv_partition.append_asset_snapshots(asset_base_dir, snapshot_df, deduplicate=True)
+    result = csv_partition.append_asset_snapshots(
+        snapshot_df,
+        deduplicate=True,
+        authority_data_dir=csv_base_dir.parent,
+    )
     return int(result["rows_inserted"]), int(result["rows_skipped"]), warnings

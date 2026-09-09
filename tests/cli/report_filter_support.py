@@ -76,7 +76,12 @@ def no_report_filters_data_dir(tmp_path: Path) -> Path:
             category="식비",
         )
     ]
-    write_month(data_dir / "transactions", pl.DataFrame(rows), 2024, 10)
+    write_month(
+        pl.DataFrame(rows),
+        2024,
+        10,
+        authority_data_dir=data_dir,
+    )
     return data_dir
 
 
@@ -124,5 +129,10 @@ def report_filters_data_dir(tmp_path: Path) -> Path:
             category="식비",
         ),
     ]
-    write_month(data_dir / "transactions", pl.DataFrame(rows), 2024, 10)
+    write_month(
+        pl.DataFrame(rows),
+        2024,
+        10,
+        authority_data_dir=data_dir,
+    )
     return data_dir

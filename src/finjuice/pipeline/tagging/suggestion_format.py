@@ -147,6 +147,8 @@ def apply_suggestion_to_rules(
     suggestion: dict[str, Any],
     rules_path: Path,
     modified_tags: Optional[list[str]] = None,
+    *,
+    authority_data_dir: Path,
 ) -> TagRule:
     """
     Convert a suggestion to a rule and append it to rules.yaml.
@@ -165,4 +167,8 @@ def apply_suggestion_to_rules(
     """
     rule_dict = build_rule_dict_from_suggestion(suggestion, modified_tags=modified_tags)
 
-    return append_rule(rule_dict, rules_path)
+    return append_rule(
+        rule_dict,
+        rules_path,
+        authority_data_dir=authority_data_dir,
+    )

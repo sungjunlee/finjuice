@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
   "name": "finjuice",
-  "version": "0.7.2",
-  "generated_at": "2026-09-08T14:15:38+00:00",
+  "version": "0.7.3",
+  "generated_at": "2026-09-08T15:03:19+00:00",
   "tools": [
     {
       "name": "assets.balance",
@@ -475,6 +475,30 @@
             "type": "boolean",
             "description": "Output as JSON",
             "default": false
+          },
+          "idempotency_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Stable retry key for an authoritative mutation",
+            "default": null
+          },
+          "expected_generation": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Expected active dataset generation",
+            "default": null
+          },
+          "expected_revision": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Expected active dataset revision",
+            "default": null
           }
         },
         "additionalProperties": false
@@ -1613,6 +1637,30 @@
             "type": "boolean",
             "description": "Output as JSON",
             "default": false
+          },
+          "idempotency_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Stable retry key for an authoritative mutation",
+            "default": null
+          },
+          "expected_generation": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Expected active dataset generation",
+            "default": null
+          },
+          "expected_revision": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Expected active dataset revision",
+            "default": null
           }
         },
         "additionalProperties": false,
@@ -1775,6 +1823,30 @@
             "type": "boolean",
             "description": "Output as JSON",
             "default": false
+          },
+          "idempotency_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Stable retry key for an authoritative mutation",
+            "default": null
+          },
+          "expected_generation": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Expected active dataset generation",
+            "default": null
+          },
+          "expected_revision": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Expected active dataset revision",
+            "default": null
           }
         },
         "additionalProperties": false,
@@ -2148,6 +2220,30 @@
             "type": "boolean",
             "description": "Output as JSON",
             "default": false
+          },
+          "idempotency_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Stable retry key for an authoritative mutation",
+            "default": null
+          },
+          "expected_generation": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Expected active dataset generation",
+            "default": null
+          },
+          "expected_revision": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Expected active dataset revision",
+            "default": null
           }
         },
         "additionalProperties": false

@@ -9,6 +9,7 @@ module. Validation error envelopes live in
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 
 import typer
 
@@ -17,6 +18,7 @@ from finjuice.pipeline.budget_compute import (
     BudgetEditCancelledError,
     GoalsFileInvalidError,
     compute_budget_edit,
+    compute_budget_edit_bytes,
     compute_budget_status,
     compute_budget_validate,
 )
@@ -33,15 +35,31 @@ from finjuice.pipeline.cli.commands.budget_rendering import (
     _render_unmatched_goal_warning,  # noqa: F401 — re-exported for existing budget imports
     _style_status,  # noqa: F401 — re-exported for existing budget imports
 )
+from finjuice.pipeline.cli.mutation_options import get_mutation_options, with_mutation_options
 from finjuice.pipeline.cli.output import ErrorCode, ExitCode, _build_meta, emit_error
 from finjuice.pipeline.cli.report_filters import load_cli_report_filters
-from finjuice.pipeline.cli.utils import get_config
+from finjuice.pipeline.cli.utils import (
+    get_config,
+    get_mutation_facade,
+    mutation_identity,
+    mutation_metadata,
+)
+from finjuice.pipeline.config import Config
+from finjuice.pipeline.storage.authority import RepositoryAuthority
+from finjuice.pipeline.storage.mutation_facade import (
+    ConfigDocument,
+    ConfigMutation,
+    ConfigTransformResult,
+)
+from finjuice.pipeline.storage.sqlite.errors import AuthorityError, MutationConflictError
 
 budget_app = typer.Typer(
     name="budget",
     help="Track declarative monthly budgets from goals.yaml",
     no_args_is_help=True,
 )
+
+_BUDGET_EDIT_REASON = "budget values edited"
 
 
 @budget_app.command("status")
@@ -99,6 +117,7 @@ def budget_status_command(
 
 
 @budget_app.command("edit")
+@with_mutation_options
 def budget_edit_command(
     ctx: typer.Context,
     updates: list[str] = typer.Option(
@@ -121,19 +140,68 @@ def budget_edit_command(
         )
 
     config = get_config(ctx)
+    options = get_mutation_options(ctx)
     try:
-        result = compute_budget_edit(
-            config,
-            updates=updates,
-            confirm=(
-                None
-                if yes
-                else lambda count: typer.confirm(
-                    f"Write {count} change(s) to {config.goals_file}?",
-                    default=False,
-                )
-            ),
+        identity = mutation_identity(
+            options.idempotency_key,
+            options.expected_generation,
+            options.expected_revision,
         )
+        facade = get_mutation_facade(ctx, config)
+        repository_active = isinstance(facade.dispatch().authority, RepositoryAuthority)
+        if not repository_active and any(
+            value is not None
+            for value in (
+                options.idempotency_key,
+                options.expected_generation,
+                options.expected_revision,
+            )
+        ):
+            raise ValueError("Mutation identity options require an active SQLite repository.")
+        if repository_active:
+            mutation = ConfigMutation(
+                "goals",
+                {"action": "budget_edit", "updates": updates},
+                _budget_edit_transform(config, updates),
+            )
+            receipt = facade.find_config_mutation_replay(
+                mutation,
+                identity=identity,
+                reason=_BUDGET_EDIT_REASON,
+            )
+            if receipt is not None:
+                result = dict(receipt.result)
+                result.update(mutation_metadata(identity, receipt))
+                _emit_budget_edit(result, json_output=json_output)
+                return
+            identity = facade.pin_identity(identity)
+            current_content = facade.read_config_bytes("goals")
+            compute_budget_edit_bytes(config, current_content, updates=updates)
+            if not yes and not typer.confirm(
+                f"Write {len(updates)} change(s) to the active goals config?",
+                default=False,
+            ):
+                raise BudgetEditCancelledError()
+            receipt = facade.mutate_config(
+                mutation,
+                identity=identity,
+                reason=_BUDGET_EDIT_REASON,
+            )
+            result = dict(receipt.result)
+            result.update(mutation_metadata(identity, receipt))
+        else:
+            result = compute_budget_edit(
+                config,
+                updates=updates,
+                confirm=(
+                    None
+                    if yes
+                    else lambda count: typer.confirm(
+                        f"Write {count} change(s) to {config.goals_file}?",
+                        default=False,
+                    )
+                ),
+            )
     except GoalsFileInvalidError as exc:
         _raise_goals_validation_error(
             command="budget edit",
@@ -142,6 +210,14 @@ def budget_edit_command(
         )
     except BudgetEditCancelledError:
         raise typer.Exit(code=ExitCode.USER_CANCELLED) from None
+    except (AuthorityError, MutationConflictError) as exc:
+        emit_error(
+            str(exc),
+            error_code=ErrorCode.VALIDATION_FAILED,
+            exit_code=ExitCode.VALIDATION_ERROR,
+            json_output=json_output,
+            command="budget edit",
+        )
     except ValueError as exc:
         emit_error(
             str(exc),
@@ -150,13 +226,39 @@ def budget_edit_command(
             json_output=json_output,
             command="budget edit",
         )
+    _emit_budget_edit(result, json_output=json_output)
+
+
+def _emit_budget_edit(result: dict[str, object], *, json_output: bool) -> None:
+    """Render one budget edit or replay result."""
     if json_output:
         meta = _build_meta("budget edit")
         payload = {k: v for k, v in result.items() if not k.startswith("_")}
         typer.echo(json.dumps({"_meta": meta, **payload}, ensure_ascii=False, indent=2))
         return
-
     _render_budget_edit(result)
+
+
+def _budget_edit_transform(
+    config: Config,
+    updates: list[str],
+) -> Callable[[bytes | None], ConfigTransformResult]:
+    """Build a lock-scoped goals edit from stable CLI update strings."""
+
+    def transform(content: bytes | None) -> ConfigTransformResult:
+        result, updated_content = compute_budget_edit_bytes(
+            config,
+            content,
+            updates=updates,
+        )
+        return ConfigTransformResult(
+            document=ConfigDocument.from_validated_yaml(
+                "goals", updated_content, parser_version="finjuice.goals.v1"
+            ),
+            result=result,
+        )
+
+    return transform
 
 
 @budget_app.command("validate")

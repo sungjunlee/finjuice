@@ -244,6 +244,18 @@ all inventoried writers are stopped, the legacy tree is made unwritable through
 the verified runtime mechanism, and stale installations fail closed. A lock
 file alone is insufficient because old versions may not understand it.
 
+Current-runtime authoritative CSV writers receive the data root explicitly and
+check its activation fence under a coordination lease before filesystem effects
+or early no-op success. Data-root and partition paths must reject directory
+aliases, including Windows junction/reparse paths, so an inactive alias cannot
+write through to an active repository. POSIX writers use shared leases; Windows coordination
+may serialize all leases exclusively. Both thread-local and OS-lock waits are
+bounded. Separate nested leases in the same thread may reuse the held lease,
+while a shared-to-exclusive upgrade is rejected. Cancellation must release local
+and OS resources so later operations remain usable. Platform-specific SQLite
+object-store, activation, and backup acceptance remains a separate gate from
+legacy CSV coordination acceptance.
+
 M1 backup capture is different: it uses only a stopped-writer capture or a
 snapshot taken under stopped writers as defined in section 5.2, then releases
 that temporary control while CSV remains authoritative. It must not turn on
@@ -528,6 +540,43 @@ The #434 schema v2 gate applies these minimal domain constraints before #435:
   generation, and expected revision within the mutation transaction. Invalid
   relationships roll back state, audit, revision, and the idempotency reservation
   together. Successful identical retries retain their original result.
+
+### 9.2 Configuration heads and schema evolution
+
+Schema v3 adds canonical rules/goals heads on top of the v2 assertion and intake
+contract. Existing v2 databases must use an explicit v2-to-v3 upgrade; changing
+the v2 DDL in place is insufficient. Fresh creation and upgrade must converge
+on the same validated shape while preserving existing identities, values,
+source references, audit, and mutation receipts. The first #435 preservation
+candidate targets the latest schema that has passed the #434 gate.
+
+Configuration changes preserve the original document bytes and append a
+revision before selecting its canonical head in the same mutation transaction.
+A failed change leaves the old head, state, audit, revision, and idempotency
+reservation unchanged. Equal document bytes are a no-op only when parsed status,
+parser version, and canonical interpretation are also equal. A changed
+interpretation retains a new revision even when the source bytes are unchanged.
+A no-op receipt identifies the existing canonical head, never an uninserted
+revision identifier. The request digest includes the canonical interpretation.
+
+A caller-supplied replay key requires its original generation and revision.
+With an automatically generated key, explicit generation or revision values
+are independent one-shot concurrency preconditions. Repeating a normal command
+uses a new key and domain no-op detection, so A-to-B-to-A remains possible.
+CLI transformations such as rule upsert/removal or budget edits bind their
+stable operation inputs to the request identity. Replay must precede checks
+that depend on the current config, so a successfully removed rule remains
+replayable. Read-transform-write preparation must retain the revision it read,
+or run inside the mutation transaction; capturing a newer revision after
+preparing an older document must never authorize overwriting a concurrent edit.
+Manual transaction changes resolve one stable entity;
+legacy identifiers may be used only when they resolve without ambiguity.
+
+Mutation results must satisfy the same receipt envelope contract before commit
+and during replay. Invalid result/artifact shapes roll back the entire mutation.
+Interpretation proposals use object payloads matching the mutation request
+contract; extraction evidence may retain an array without making it an
+applicable command.
 
 ## 10. Synthetic acceptance scenario matrix
 

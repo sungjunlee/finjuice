@@ -57,16 +57,16 @@ def paginated_data_dir(tmp_path: Path) -> Path:
     (data_dir / "rules.yaml").write_text("version: 1\nrules: []\n", encoding="utf-8")
 
     write_month(
-        data_dir / "transactions",
         pl.DataFrame([_transaction(i, month=10) for i in range(25)]),
         2024,
         10,
+        authority_data_dir=data_dir,
     )
     write_month(
-        data_dir / "transactions",
         pl.DataFrame([_transaction(i, month=11) for i in range(3)]),
         2024,
         11,
+        authority_data_dir=data_dir,
     )
     return data_dir
 

@@ -7,6 +7,7 @@ import io
 import os
 import stat
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -17,6 +18,16 @@ from finjuice.pipeline.storage.sqlite.errors import (
     ObjectStoreError,
     RepositoryPathError,
 )
+from finjuice.pipeline.storage.sqlite.objects import _is_link_or_reparse_point
+
+
+def test_windows_reparse_point_is_treated_as_redirecting_path() -> None:
+    entry = SimpleNamespace(
+        st_mode=stat.S_IFDIR,
+        st_file_attributes=stat.FILE_ATTRIBUTE_REPARSE_POINT,
+    )
+
+    assert _is_link_or_reparse_point(entry)
 
 
 def test_object_store_publishes_read_only_content_and_reuses_by_digest(tmp_path: Path) -> None:

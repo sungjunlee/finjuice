@@ -99,7 +99,7 @@ def tag_edit_data_dir(tmp_path: Path) -> Path:
             },
         ]
     )
-    write_month(data_dir / "transactions", transactions, 2024, 10)
+    write_month(transactions, 2024, 10, authority_data_dir=data_dir)
 
     rules_yaml = """
 version: 1
@@ -526,7 +526,7 @@ def review_data_dir(tmp_path: Path) -> Path:
             },
         ]
     )
-    write_month(data_dir / "transactions", transactions, 2024, 10)
+    write_month(transactions, 2024, 10, authority_data_dir=data_dir)
 
     rules_yaml = "version: 1\nrules: []\n"
     (data_dir / "rules.yaml").write_text(rules_yaml, encoding="utf-8")

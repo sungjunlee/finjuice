@@ -85,7 +85,13 @@ def _render_budget_status(result: dict[str, Any]) -> None:
 
 def _render_budget_edit(result: dict[str, Any]) -> None:
     """Render budget-edit confirmation text."""
-    console.print(f"[green]✅ Updated {result['path']}[/green]")
+    if result.get("authority") == "repository":
+        console.print(
+            "[green]✅ Updated active goals config "
+            f"(revision {result['committed_revision']})[/green]"
+        )
+    else:
+        console.print(f"[green]✅ Updated {result['path']}[/green]")
     for change in result["changes"]:
         console.print(
             f"  [cyan]{change['path']}[/cyan]: "

@@ -7,7 +7,8 @@ import json
 import math
 import re
 import sqlite3
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,15 +37,32 @@ from finjuice.pipeline.storage.sqlite.objects import (
     _assert_no_symlink_ancestors,
 )
 from finjuice.pipeline.storage.sqlite.records import (
+    AccountRecord,
     AgentIntakeApplicationRecord,
     AgentIntakeArtifactRecord,
     AgentIntakeConfirmationRecord,
     AgentIntakeExtractionRecord,
     AgentIntakeOccurrenceRecord,
     AgentIntakeProposalRecord,
+    AssetSnapshotRecord,
+    ConfigRevisionRecord,
     EntityRelationAssertionRecord,
+    ObservationRecord,
+    OverviewBalanceRecord,
+    OverviewCashflowRecord,
+    OverviewFactRecord,
+    OverviewInsuranceRecord,
+    OverviewInvestmentRecord,
+    OverviewLoanRecord,
     OwnershipAssertionRecord,
     OwnershipShareRecord,
+    PartyRecord,
+    PreservationIssueRecord,
+    ProvenanceRecord,
+    ResourceRecord,
+    SourceOccurrenceRecord,
+    TransactionRecord,
+    TransactionSourceLinkRecord,
 )
 from finjuice.pipeline.storage.sqlite.schema import (
     _OWNERSHIP_SHARE_UNIT,
@@ -54,7 +72,10 @@ from finjuice.pipeline.storage.sqlite.schema import (
     _validate_intake_applications,
     _validate_ownership_assertions,
     _validate_relation_assertions,
+    _validate_v3_invariants,
+    _validate_v4_invariants,
 )
+from finjuice.pipeline.storage.sqlite.writes import TypedRowWriter
 
 JSONValue: TypeAlias = Any
 MutationHandler: TypeAlias = Callable[["MutationContext"], "MutationOutcome"]
@@ -97,6 +118,40 @@ class MutationReceipt:
     result: Mapping[str, JSONValue]
     retained_artifacts: tuple[str, ...]
     replayed: bool = False
+
+
+@dataclass(frozen=True)
+class ConfigRevisionMutation:
+    """One exact configuration document selected as the new canonical head."""
+
+    revision: ConfigRevisionRecord
+    occurrence: SourceOccurrenceRecord
+    artifact: SourceArtifact
+    updated_at: str
+
+
+@dataclass(frozen=True)
+class ManualTransactionEdit:
+    """Manual classification and note changes for one stable transaction."""
+
+    identifier: str
+    add_tags: tuple[str, ...] = ()
+    remove_tags: tuple[str, ...] = ()
+    category_supplied: bool = False
+    category: str | None = None
+    note_supplied: bool = False
+    note: str | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.identifier, str) or not self.identifier.strip():
+            raise MutationValidationError("Transaction identifier must be explicit.")
+        for tag in (*self.add_tags, *self.remove_tags):
+            if not isinstance(tag, str) or not tag.strip():
+                raise MutationValidationError("Manual tags must be non-empty strings.")
+        if self.category is not None and not self.category.strip():
+            raise MutationValidationError("Manual category must be non-empty when supplied.")
+        if self.note is not None and len(self.note) > 1_000:
+            raise MutationValidationError("Manual note cannot exceed 1000 characters.")
 
 
 @dataclass(frozen=True)
@@ -143,10 +198,12 @@ class MutationContext:
         changeset_id: str,
     ) -> None:
         self.__connection = connection
+        self.__writer = TypedRowWriter(connection)
         self.authority = authority
         self.changeset_id = changeset_id
         self.__entries: list[_ChangeEntry] = []
         self.__retained_artifacts: list[str] = []
+        self.__savepoint_serial = 0
 
     @property
     def entries(self) -> tuple[_ChangeEntry, ...]:
@@ -190,6 +247,340 @@ class MutationContext:
         if self.__connection.execute("SELECT changes()").fetchone()[0]:
             self._record("source_artifact", artifact.artifact_id, "insert", None, asdict(artifact))
 
+    def replace_config(self, mutation: ConfigRevisionMutation) -> bool:
+        """Append exact config bytes and atomically select them as the canonical head."""
+        revision = mutation.revision
+        occurrence = mutation.occurrence
+        if occurrence.artifact_id != mutation.artifact.artifact_id:
+            raise MutationValidationError("Config occurrence must reference its exact artifact.")
+        if revision.artifact_id != mutation.artifact.artifact_id:
+            raise MutationValidationError("Config revision must reference its exact artifact.")
+        if revision.occurrence_id != occurrence.occurrence_id:
+            raise MutationValidationError("Config revision must reference its occurrence.")
+        current = self.__connection.execute(
+            "SELECT revision.entity_id, revision.source_artifact_id, revision.parsed_status, "
+            "revision.parser_version, revision.canonical_payload_json "
+            "FROM config_heads AS head "
+            "JOIN config_revisions AS revision ON revision.entity_id = head.revision_id "
+            "WHERE head.config_kind = ?",
+            (revision.config_kind,),
+        ).fetchone()
+        canonical_payload_json = (
+            None
+            if revision.canonical_payload is None
+            else _canonical_request_json(revision.canonical_payload)
+        )
+        if current is not None and (
+            str(current[1]) == revision.artifact_id
+            and str(current[2]) == revision.parsed_status
+            and (None if current[3] is None else str(current[3])) == revision.parser_version
+            and (None if current[4] is None else str(current[4])) == canonical_payload_json
+        ):
+            return False
+
+        self.register_source_artifact(mutation.artifact)
+        self._insert_config_occurrence(occurrence)
+        self._insert_config_revision(revision)
+        after = _config_audit_state(revision)
+        self._record("config_revision", revision.revision_id, "insert", None, after)
+        if current is None:
+            self.__connection.execute(
+                "INSERT INTO config_heads "
+                "(config_kind, revision_id, updated_changeset_id, updated_at) "
+                "VALUES (?, ?, ?, ?)",
+                (
+                    revision.config_kind,
+                    revision.revision_id,
+                    self.changeset_id,
+                    mutation.updated_at,
+                ),
+            )
+            before = None
+            action = "insert"
+        else:
+            before = {
+                "artifact_id": str(current[1]),
+                "parsed_status": str(current[2]),
+                "parser_version": None if current[3] is None else str(current[3]),
+                "revision_id": str(current[0]),
+            }
+            updated = self.__connection.execute(
+                "UPDATE config_heads SET revision_id = ?, updated_changeset_id = ?, "
+                "updated_at = ? WHERE config_kind = ? AND revision_id = ?",
+                (
+                    revision.revision_id,
+                    self.changeset_id,
+                    mutation.updated_at,
+                    revision.config_kind,
+                    current[0],
+                ),
+            )
+            if updated.rowcount != 1:
+                raise MutationConflictError("Canonical config head changed during mutation.")
+            action = "update"
+        self._record("config_head", revision.config_kind, action, before, after)
+        return True
+
+    def config_head_revision_id(self, config_kind: str) -> str | None:
+        """Return the selected config revision inside this mutation transaction."""
+        row = self.__connection.execute(
+            "SELECT revision_id FROM config_heads WHERE config_kind = ?",
+            (config_kind,),
+        ).fetchone()
+        return None if row is None else str(row[0])
+
+    def read_config_bytes(self, config_kind: str) -> bytes | None:
+        """Read the selected exact config while holding the mutation transaction."""
+        row = self.__connection.execute(
+            "SELECT artifact.source_artifact_id, artifact.byte_length "
+            "FROM config_heads AS head "
+            "JOIN config_revisions AS revision ON revision.entity_id = head.revision_id "
+            "JOIN source_artifacts AS artifact "
+            "ON artifact.source_artifact_id = revision.source_artifact_id "
+            "WHERE head.config_kind = ?",
+            (config_kind,),
+        ).fetchone()
+        if row is None:
+            return None
+        artifact = SourceObjectStore(self.authority.paths).verify(str(row[0]), int(row[1]))
+        return (self.authority.paths.root / artifact.relative_path).read_bytes()
+
+    def _insert_config_occurrence(self, occurrence: SourceOccurrenceRecord) -> None:
+        self.__writer.add_source_occurrence(occurrence)
+        self._record(
+            "source_occurrence",
+            occurrence.occurrence_id,
+            "insert",
+            None,
+            asdict(occurrence),
+        )
+
+    def _insert_config_revision(self, revision: ConfigRevisionRecord) -> None:
+        validate_entity_id(revision.revision_id)
+        payload_json = (
+            None
+            if revision.canonical_payload is None
+            else _canonical_request_json(revision.canonical_payload)
+        )
+        self.__connection.execute(
+            "INSERT INTO entities (entity_id, entity_kind) VALUES (?, 'config_revision')",
+            (revision.revision_id,),
+        )
+        self.__connection.execute(
+            "INSERT INTO config_revisions "
+            "(entity_id, config_kind, source_artifact_id, source_occurrence_id, parsed_status, "
+            "parser_version, canonical_payload_json) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                revision.revision_id,
+                revision.config_kind,
+                revision.artifact_id,
+                revision.occurrence_id,
+                revision.parsed_status,
+                revision.parser_version,
+                payload_json,
+            ),
+        )
+
+    def edit_manual_transaction(
+        self,
+        edit: ManualTransactionEdit,
+    ) -> Mapping[str, JSONValue]:
+        """Patch manual classification fields on one unambiguous stable entity."""
+        from finjuice.pipeline.tagging.manual import merge_final_tags
+
+        transaction_id = self._resolve_transaction_id(edit.identifier.strip())
+        current = self._load_manual_transaction(transaction_id)
+        remove_tags = set(edit.remove_tags)
+        next_manual = [tag for tag in current["tags_manual"] if tag not in remove_tags]
+        next_manual = merge_final_tags(next_manual, edit.add_tags)
+        next_category = edit.category if edit.category_supplied else current["category_manual"]
+        next_note = edit.note if edit.note_supplied else current["notes_manual"]
+        classification_requested = bool(edit.add_tags or edit.remove_tags or edit.category_supplied)
+        if classification_requested:
+            next_final_tags = merge_final_tags(
+                current["tags_rule"], current["tags_ai"], next_manual
+            )
+            next_category_final = _resolve_manual_category(
+                next_category,
+                current["category_rule"],
+                current["minor_raw"],
+                current["major_raw"],
+            )
+        else:
+            next_final_tags = current["tags_final"]
+            next_category_final = current["category_final"]
+        confidence_value_id = current["confidence_value_id"]
+        confidence_exact = current["confidence_exact"]
+        needs_review = current["needs_review"]
+        if classification_requested:
+            confidence_target = int(bool(next_final_tags) or next_category is not None)
+            if not _exact_equals_integer(
+                current["confidence_coefficient"],
+                current["confidence_scale"],
+                confidence_target,
+            ):
+                confidence_value_id = new_entity_id()
+                self.add_exact_value(
+                    confidence_value_id,
+                    ExactValue(
+                        coefficient=str(confidence_target),
+                        scale=0,
+                        lexical=None,
+                        value_kind="number",
+                        origin_kind="calculated",
+                        unit="confidence.v1",
+                    ),
+                )
+                confidence_exact = str(confidence_target)
+            needs_review = confidence_target == 0
+        before = _manual_audit_state(current)
+        result_state = {
+            "category_final": next_category_final,
+            "category_manual": next_category,
+            "confidence_exact": confidence_exact,
+            "needs_review": needs_review,
+            "notes_manual": next_note,
+            "tags_final": next_final_tags,
+            "tags_manual": next_manual,
+        }
+        after = dict(result_state)
+        if not classification_requested:
+            after.update(
+                {
+                    "category_final": before["category_final"],
+                    "category_manual": before["category_manual"],
+                    "confidence_exact": before["confidence_exact"],
+                    "needs_review": before["needs_review"],
+                    "tags_final": before["tags_final"],
+                    "tags_manual": before["tags_manual"],
+                }
+            )
+        if before != after:
+            assignments: list[str] = []
+            parameters: list[Any] = []
+            if edit.note_supplied and before["notes_manual"] != after["notes_manual"]:
+                assignments.append("notes_manual = ?")
+                parameters.append(next_note)
+            if classification_requested:
+                assignments.extend(
+                    (
+                        "category_manual = ?",
+                        "category_final = ?",
+                        "tags_manual_json = ?",
+                        "tags_final_json = ?",
+                        "confidence_value_id = ?",
+                        "needs_review = ?",
+                    )
+                )
+                parameters.extend(
+                    (
+                        next_category,
+                        next_category_final,
+                        _canonical_request_json(next_manual),
+                        _canonical_request_json(next_final_tags),
+                        confidence_value_id,
+                        None if needs_review is None else int(needs_review),
+                    )
+                )
+            if not assignments:
+                raise RepositoryIntegrityError("Manual edit changed state without a typed field.")
+            parameters.append(transaction_id)
+            self.__connection.execute(
+                f"UPDATE transactions SET {', '.join(assignments)} "  # nosec B608
+                "WHERE entity_id = ?",
+                parameters,
+            )
+            self._record("transaction", transaction_id, "update", before, after)
+        return {
+            "transaction_id": transaction_id,
+            **_manual_transaction_view(current),
+            **result_state,
+        }
+
+    def _resolve_transaction_id(self, identifier: str) -> str:
+        try:
+            validate_entity_id(identifier)
+        except ValueError:
+            pass
+        else:
+            exists = self.__connection.execute(
+                "SELECT 1 FROM transactions WHERE entity_id = ?",
+                (identifier,),
+            ).fetchone()
+            if exists is not None:
+                return identifier
+        rows = self.__connection.execute(
+            "SELECT DISTINCT mapping.entity_id FROM legacy_identifiers AS mapping "
+            "LEFT JOIN legacy_identifier_supersessions AS supersession "
+            "ON supersession.previous_mapping_id = mapping.mapping_id "
+            "JOIN transactions AS txn ON txn.entity_id = mapping.entity_id "
+            "WHERE mapping.identifier_kind = 'row_hash' AND mapping.identifier_value = ? "
+            "AND supersession.previous_mapping_id IS NULL ORDER BY mapping.entity_id",
+            (identifier,),
+        ).fetchall()
+        if not rows:
+            raise MutationValidationError("Transaction identifier was not found.")
+        if len(rows) != 1:
+            raise MutationValidationError(
+                "Legacy row_hash identifies multiple transactions; use a stable transaction ID."
+            )
+        return str(rows[0][0])
+
+    def _load_manual_transaction(self, transaction_id: str) -> dict[str, Any]:
+        row = self.__connection.execute(
+            "SELECT txn.date_raw, txn.time_raw, txn.datetime_raw, txn.type_raw, "
+            "txn.type_norm, txn.major_raw, txn.minor_raw, txn.merchant_raw, txn.memo_raw, "
+            "txn.notes_manual, txn.account_text, txn.counterparty, txn.category_rule, "
+            "txn.category_manual, txn.category_final, txn.tags_rule_json, txn.tags_ai_json, "
+            "txn.tags_manual_json, txn.tags_final_json, txn.confidence_value_id, "
+            "txn.needs_review, confidence.coefficient, confidence.scale, amount.coefficient, "
+            "amount.scale, money.currency_code, txn.is_transfer_candidate, txn.is_transfer, "
+            "txn.transfer_group_id FROM transactions AS txn "
+            "LEFT JOIN exact_values AS confidence "
+            "ON confidence.value_id = txn.confidence_value_id "
+            "JOIN exact_values AS amount ON amount.value_id = txn.amount_value_id "
+            "JOIN money_values AS money ON money.value_id = txn.amount_value_id "
+            "WHERE txn.entity_id = ?",
+            (transaction_id,),
+        ).fetchone()
+        if row is None:
+            raise MutationValidationError("Transaction identifier was not found.")
+        coefficient = None if row[21] is None else str(row[21])
+        scale = None if row[22] is None else int(row[22])
+        return {
+            "date_raw": row[0],
+            "time_raw": row[1],
+            "datetime_raw": row[2],
+            "type_raw": row[3],
+            "type_norm": row[4],
+            "major_raw": row[5],
+            "minor_raw": row[6],
+            "merchant_raw": row[7],
+            "memo_raw": row[8],
+            "notes_manual": row[9],
+            "account_text": row[10],
+            "counterparty": row[11],
+            "category_rule": row[12],
+            "category_manual": row[13],
+            "category_final": row[14],
+            "tags_rule": _parse_string_array(row[15]),
+            "tags_ai": _parse_string_array(row[16]),
+            "tags_manual": _parse_string_array(row[17]),
+            "tags_final": _parse_string_array(row[18]),
+            "tags_manual_audit": None if row[17] is None else _parse_string_array(row[17]),
+            "tags_final_audit": None if row[18] is None else _parse_string_array(row[18]),
+            "confidence_value_id": row[19],
+            "needs_review": None if row[20] is None else bool(row[20]),
+            "confidence_coefficient": coefficient,
+            "confidence_scale": scale,
+            "confidence_exact": _exact_decimal_text(coefficient, scale),
+            "amount_exact": _exact_decimal_text(str(row[23]), int(row[24])),
+            "currency": row[25],
+            "is_transfer_candidate": None if row[26] is None else bool(row[26]),
+            "is_transfer": None if row[27] is None else bool(row[27]),
+            "transfer_group_id": row[28],
+        }
+
     def add_exact_value(
         self,
         value_id: str,
@@ -198,46 +589,223 @@ class MutationContext:
         provenance_id: str | None = None,
     ) -> None:
         """Insert one exact value and semantic subtype without float conversion."""
-        validate_entity_id(value_id)
-        if provenance_id is not None:
-            validate_entity_id(provenance_id)
-        self.__connection.execute(
-            "INSERT INTO exact_values "
-            "(value_id, value_kind, coefficient, scale, lexical, origin_kind, provenance_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (
-                value_id,
-                value.value_kind,
-                value.coefficient,
-                value.scale,
-                value.lexical,
-                value.origin_kind,
-                provenance_id,
-            ),
-        )
-        if value.value_kind == "money":
-            self.__connection.execute(
-                "INSERT INTO money_values (value_id, currency_code, currency_unknown) "
-                "VALUES (?, ?, ?)",
-                (value_id, value.currency, int(value.currency_unknown)),
-            )
-        else:
-            table = {
-                "quantity": "quantity_values",
-                "rate": "rate_values",
-                "number": "number_values",
-            }[value.value_kind]
-            self.__connection.execute(
-                f"INSERT INTO {table} (value_id, unit) VALUES (?, ?)",  # nosec B608
-                (value_id, value.unit),
-            )
-        self._record(
+        after = {"value_id": value_id, **asdict(value), "provenance_id": provenance_id}
+        self._audited_insert(
             "exact_value",
             value_id,
-            "insert",
-            None,
-            {"value_id": value_id, **asdict(value), "provenance_id": provenance_id},
+            after,
+            lambda: self.__writer.add_exact_value(value_id, value, provenance_id=provenance_id),
         )
+
+    def add_source_occurrence(self, record: SourceOccurrenceRecord) -> None:
+        """Add a distinct source occurrence and audit it after the typed insert succeeds."""
+        self._audited_insert(
+            "source_occurrence",
+            record.occurrence_id,
+            asdict(record),
+            lambda: self.__writer.add_source_occurrence(record),
+        )
+
+    def add_provenance(self, record: ProvenanceRecord) -> None:
+        """Add canonical source coordinates without collapsing equal legacy row hashes."""
+        self._audited_insert(
+            "record_provenance",
+            record.provenance_id,
+            asdict(record),
+            lambda: self.__writer.add_provenance(record),
+        )
+
+    def add_party(self, record: PartyRecord) -> None:
+        """Add a party foundation row."""
+        self._audited_insert(
+            "party", record.party_id, asdict(record), lambda: self.__writer.add_party(record)
+        )
+
+    def add_account(self, record: AccountRecord) -> None:
+        """Add an account with explicit ownership state; no lookup or merge is attempted."""
+        self._audited_insert(
+            "account",
+            record.account_id,
+            asdict(record),
+            lambda: self.__writer.add_account(record),
+        )
+
+    def add_resource(self, record: ResourceRecord) -> None:
+        """Add a resource or instrument foundation row."""
+        self._audited_insert(
+            "resource",
+            record.resource_id,
+            asdict(record),
+            lambda: self.__writer.add_resource(record),
+        )
+
+    def add_observation(self, record: ObservationRecord) -> None:
+        """Add source-backed temporal and scope context."""
+        self._audited_insert(
+            "observation",
+            record.observation_id,
+            asdict(record),
+            lambda: self.__writer.add_observation(record),
+        )
+
+    def add_transaction(self, record: TransactionRecord) -> None:
+        """Add a typed transaction row; equal row hashes stay distinct by provenance."""
+        self._audited_insert(
+            "transaction",
+            record.transaction_id,
+            asdict(record),
+            lambda: self.__writer.add_transaction(record),
+        )
+
+    def add_transaction_source_link(self, record: TransactionSourceLinkRecord) -> None:
+        """Link source evidence to one accepted transaction without asserting ownership."""
+        after = {**asdict(record), "created_changeset_id": self.changeset_id}
+        _canonical_request_json(after)
+        with self._source_link_savepoint():
+            self._insert_transaction_source_link(record)
+        self._record("transaction_source_link", record.link_id, "link", None, after)
+
+    def add_overview_fact(self, record: OverviewFactRecord) -> None:
+        """Add one typed overview fact."""
+        self._audited_insert(
+            "overview_fact",
+            record.fact_id,
+            asdict(record),
+            lambda: self.__writer.add_overview_fact(record),
+        )
+
+    def add_overview_balance(self, record: OverviewBalanceRecord) -> None:
+        """Add a typed overview balance."""
+        self._audited_insert(
+            "overview_balance",
+            record.balance_id,
+            asdict(record),
+            lambda: self.__writer.add_overview_balance(record),
+        )
+
+    def add_overview_cashflow(self, record: OverviewCashflowRecord) -> None:
+        """Add a typed overview cashflow."""
+        self._audited_insert(
+            "overview_cashflow",
+            record.cashflow_id,
+            asdict(record),
+            lambda: self.__writer.add_overview_cashflow(record),
+        )
+
+    def add_overview_insurance(self, record: OverviewInsuranceRecord) -> None:
+        """Add a typed overview insurance row."""
+        self._audited_insert(
+            "overview_insurance",
+            record.insurance_id,
+            asdict(record),
+            lambda: self.__writer.add_overview_insurance(record),
+        )
+
+    def add_overview_investment(self, record: OverviewInvestmentRecord) -> None:
+        """Add a typed overview investment row."""
+        self._audited_insert(
+            "overview_investment",
+            record.investment_id,
+            asdict(record),
+            lambda: self.__writer.add_overview_investment(record),
+        )
+
+    def add_overview_loan(self, record: OverviewLoanRecord) -> None:
+        """Add a typed overview loan row."""
+        self._audited_insert(
+            "overview_loan",
+            record.loan_id,
+            asdict(record),
+            lambda: self.__writer.add_overview_loan(record),
+        )
+
+    def add_asset_snapshot(self, record: AssetSnapshotRecord) -> None:
+        """Add a typed asset position snapshot."""
+        self._audited_insert(
+            "asset_snapshot",
+            record.snapshot_id,
+            asdict(record),
+            lambda: self.__writer.add_asset_snapshot(record),
+        )
+
+    def add_legacy_payload(
+        self,
+        provenance_id: str,
+        payload: Mapping[str, JSONValue] | Sequence[JSONValue],
+        *,
+        payload_id: str | None = None,
+    ) -> str:
+        """Preserve one full legacy payload next to its typed rows and return its ID."""
+        payload_id = payload_id or new_entity_id()
+        snapshot = list(payload) if not isinstance(payload, Mapping) else dict(payload)
+        after = {"payload_id": payload_id, "provenance_id": provenance_id, "payload": snapshot}
+        self._audited_insert(
+            "legacy_payload",
+            payload_id,
+            after,
+            lambda: self.__writer.add_legacy_payload(provenance_id, payload, payload_id=payload_id),
+        )
+        return payload_id
+
+    def add_preservation_issue(self, record: PreservationIssueRecord) -> str:
+        """Record a lossless typing or preservation problem and return its issue ID."""
+        issue_id = record.issue_id or new_entity_id()
+        stored = PreservationIssueRecord(**{**asdict(record), "issue_id": issue_id})
+        self._audited_insert(
+            "preservation_issue",
+            issue_id,
+            asdict(stored),
+            lambda: self.__writer.add_preservation_issue(stored),
+        )
+        return issue_id
+
+    def _insert_transaction_source_link(self, record: TransactionSourceLinkRecord) -> None:
+        _validate_source_link_record(record)
+        _validate_source_link_binding(self.__connection, record)
+        self.__connection.execute(
+            "INSERT INTO transaction_source_links "
+            "(link_id, transaction_id, provenance_id, observation_id, link_kind, "
+            "created_changeset_id) VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                record.link_id,
+                record.transaction_id,
+                record.provenance_id,
+                record.observation_id,
+                record.link_kind,
+                self.changeset_id,
+            ),
+        )
+
+    @contextmanager
+    def _source_link_savepoint(self) -> Iterator[None]:
+        self.__savepoint_serial += 1
+        name = f"source_link_{self.__savepoint_serial}"
+        self.__connection.execute(f"SAVEPOINT {name}")
+        try:
+            yield
+        except BaseException:
+            self.__connection.execute(f"ROLLBACK TO {name}")
+            self.__connection.execute(f"RELEASE {name}")
+            raise
+        else:
+            self.__connection.execute(f"RELEASE {name}")
+
+    def _audited_insert(
+        self,
+        entity_kind: str,
+        entity_id: str,
+        after: Mapping[str, JSONValue],
+        write: Callable[[], Any],
+    ) -> None:
+        """Validate the audit snapshot, run one atomic typed write, then record the insert.
+
+        The snapshot is checked before any row is touched so a rejected audit value (for
+        example a float) never leaves typed rows without a matching changeset entry, even when
+        the handler catches the error and continues.
+        """
+        _canonical_request_json(after)
+        write()
+        self._record(entity_kind, entity_id, "insert", None, after)
 
     def add_ownership_assertion(
         self,
@@ -390,6 +958,8 @@ class MutationContext:
         """Add an unconfirmed interpretation proposal with revision preconditions."""
         validate_entity_id(record.proposal_id)
         validate_entity_id(record.expected_generation)
+        if not isinstance(record.payload, Mapping):
+            raise MutationValidationError("Agent intake proposal payload must be a JSON object.")
         payload_json = _canonical_request_json(record.payload)
         self.__connection.execute(
             "INSERT INTO agent_intake_proposals "
@@ -462,6 +1032,106 @@ class MutationContext:
         self.__entries.append(_ChangeEntry(entity_kind, entity_id, action, before, after))
 
 
+def _config_audit_state(revision: ConfigRevisionRecord) -> dict[str, JSONValue]:
+    return {
+        "artifact_id": revision.artifact_id,
+        "parsed_status": revision.parsed_status,
+        "parser_version": revision.parser_version,
+        "revision_id": revision.revision_id,
+    }
+
+
+def _parse_string_array(value: Any) -> list[str]:
+    if value is None:
+        return []
+    try:
+        parsed = json.loads(str(value), parse_constant=_reject_json_constant)
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise RepositoryIntegrityError("Stored transaction tags are invalid JSON.") from exc
+    if (
+        not isinstance(parsed, list)
+        or any(not isinstance(item, str) or not item for item in parsed)
+        or len(parsed) != len(set(parsed))
+    ):
+        raise RepositoryIntegrityError("Stored transaction tags are not a canonical string array.")
+    return parsed
+
+
+def _manual_transaction_view(current: Mapping[str, Any]) -> dict[str, JSONValue]:
+    """Return stable read fields shared by inspection, write, and replay receipts."""
+    return {
+        "date": current["date_raw"],
+        "time": current["time_raw"],
+        "datetime": current["datetime_raw"],
+        "type_raw": current["type_raw"],
+        "type_norm": current["type_norm"],
+        "major_raw": current["major_raw"],
+        "minor_raw": current["minor_raw"],
+        "merchant_raw": current["merchant_raw"],
+        "memo_raw": current["memo_raw"],
+        "account": current["account_text"],
+        "counterparty": current["counterparty"],
+        "category_rule": current["category_rule"],
+        "tags_rule": current["tags_rule"],
+        "tags_ai": current["tags_ai"],
+        "amount_exact": current["amount_exact"],
+        "currency": current["currency"],
+        "is_transfer_candidate": current["is_transfer_candidate"],
+        "is_transfer": current["is_transfer"],
+        "transfer_group_id": current["transfer_group_id"],
+    }
+
+
+def _manual_audit_state(current: Mapping[str, Any]) -> dict[str, JSONValue]:
+    return {
+        "category_final": current["category_final"],
+        "category_manual": current["category_manual"],
+        "confidence_exact": current["confidence_exact"],
+        "needs_review": current["needs_review"],
+        "notes_manual": current["notes_manual"],
+        "tags_final": current["tags_final_audit"],
+        "tags_manual": current["tags_manual_audit"],
+    }
+
+
+def _resolve_manual_category(
+    category_manual: Any,
+    category_rule: Any,
+    minor_raw: Any,
+    major_raw: Any,
+) -> str:
+    for candidate in (category_manual, category_rule, minor_raw, major_raw):
+        if candidate is not None and str(candidate).strip():
+            return str(candidate).strip()
+    return "미분류"
+
+
+def _exact_equals_integer(
+    coefficient: str | None,
+    scale: int | None,
+    expected: int,
+) -> bool:
+    if coefficient is None or scale is None:
+        return False
+    coefficient_value = int(str(coefficient))
+    scale_value = int(scale)
+    return bool(coefficient_value == expected * 10**scale_value)
+
+
+def _exact_decimal_text(coefficient: str | None, scale: int | None) -> str | None:
+    if coefficient is None or scale is None:
+        return None
+    negative = coefficient.startswith("-")
+    digits = coefficient.removeprefix("-")
+    if scale == 0:
+        rendered = digits
+    elif len(digits) > scale:
+        rendered = f"{digits[:-scale]}.{digits[-scale:]}"
+    else:
+        rendered = f"0.{('0' * (scale - len(digits)))}{digits}"
+    return f"-{rendered}" if negative and digits != "0" else rendered
+
+
 class MutationService:
     """Execute typed domain writes, audit, revision, and receipt in one transaction."""
 
@@ -493,6 +1163,24 @@ class MutationService:
             connection = _connect_writer(authority.paths.database, self._busy_timeout_ms)
             try:
                 return self._execute_locked(connection, authority, request, handler)
+            finally:
+                connection.close()
+
+    def find_replay(self, request: MutationRequest) -> MutationReceipt | None:
+        """Return a committed receipt for this exact request without starting a write."""
+        with shared_write_lease(
+            self._authority_paths,
+            timeout_ms=self._busy_timeout_ms,
+        ):
+            authority = require_repository_binding(
+                self._authority_paths,
+                self._activation_evidence,
+            )
+            connection = _connect_reader(authority.paths.database, self._busy_timeout_ms)
+            try:
+                _validate_locked_repository(connection, authority)
+                request_digest = _digest(_canonical_request(request))
+                return _lookup_idempotency(connection, request, request_digest)
             finally:
                 connection.close()
 
@@ -585,6 +1273,12 @@ def _execute_new_request(
     outcome = inputs.handler(context)
     if not isinstance(outcome, MutationOutcome):
         raise MutationValidationError("Mutation handler must return MutationOutcome.")
+    if not isinstance(outcome.result, Mapping):
+        raise MutationValidationError("Mutation result must be a JSON object.")
+    if any(
+        not isinstance(artifact, str) or not artifact for artifact in outcome.retained_artifacts
+    ):
+        raise MutationValidationError("Retained artifact identities must be non-empty strings.")
     attempt.outcome = outcome
     result_json = _canonical_result_json(outcome.result)
     state_changed = bool(context.entries)
@@ -602,6 +1296,8 @@ def _execute_new_request(
     _validate_ownership_assertions(connection)
     _validate_relation_assertions(connection)
     _validate_intake_applications(connection)
+    _validate_v3_invariants(connection)
+    _validate_v4_invariants(connection)
     _advance_revision(connection, commit)
     retained = _attempt_retained_artifacts(attempt)
     _store_receipt(connection, request, commit, result_json, retained)
@@ -648,6 +1344,23 @@ def _connect_writer(database: Path, busy_timeout_ms: int) -> sqlite3.Connection:
     )
     connection.execute("PRAGMA foreign_keys = ON")
     connection.execute("PRAGMA synchronous = FULL")
+    connection.execute(f"PRAGMA busy_timeout = {busy_timeout_ms}")
+    return connection
+
+
+def _connect_reader(database: Path, busy_timeout_ms: int) -> sqlite3.Connection:
+    _assert_no_symlink_ancestors(database)
+    if database.is_symlink() or not database.is_file():
+        raise RepositoryIntegrityError("Active repository is not a regular database file.")
+    uri = f"{database.resolve().as_uri()}?mode=ro"
+    connection = sqlite3.connect(
+        uri,
+        uri=True,
+        timeout=busy_timeout_ms / 1000,
+        isolation_level=None,
+    )
+    connection.execute("PRAGMA query_only = ON")
+    connection.execute("PRAGMA foreign_keys = ON")
     connection.execute(f"PRAGMA busy_timeout = {busy_timeout_ms}")
     return connection
 
@@ -722,6 +1435,103 @@ def _validate_new_request(
         raise MutationConflictError("Expected dataset generation is stale.")
     if request.expected_revision != current_revision:
         raise MutationConflictError("Expected dataset revision is stale.")
+
+
+_SUPPORTED_SOURCE_LINK_KINDS = frozenset({"origin", "duplicate_evidence"})
+
+
+def _validate_source_link_record(record: TransactionSourceLinkRecord) -> None:
+    for identifier in (
+        record.link_id,
+        record.transaction_id,
+        record.provenance_id,
+        record.observation_id,
+    ):
+        validate_entity_id(identifier)
+    if record.link_kind not in _SUPPORTED_SOURCE_LINK_KINDS:
+        raise MutationValidationError("Source link kind is not supported.")
+
+
+def _transaction_origin(connection: sqlite3.Connection, transaction_id: str) -> tuple[str, str]:
+    row = connection.execute(
+        "SELECT provenance_id, observation_id FROM transactions WHERE entity_id = ?",
+        (transaction_id,),
+    ).fetchone()
+    if row is None:
+        raise MutationValidationError("Source link target transaction was not found.")
+    return str(row[0]), str(row[1])
+
+
+def _require_same_source_occurrence(
+    connection: sqlite3.Connection,
+    provenance_id: str,
+    observation_id: str,
+) -> None:
+    row = connection.execute(
+        "SELECT provenance.source_occurrence_id, observation.source_occurrence_id "
+        "FROM record_provenance AS provenance "
+        "JOIN observations AS observation ON observation.entity_id = ? "
+        "WHERE provenance.provenance_id = ?",
+        (observation_id, provenance_id),
+    ).fetchone()
+    if row is None:
+        raise MutationValidationError("Source link provenance or observation was not found.")
+    if str(row[0]) != str(row[1]):
+        raise MutationValidationError(
+            "Source link provenance and observation come from different occurrences."
+        )
+
+
+def _validate_origin_source_link(
+    connection: sqlite3.Connection,
+    record: TransactionSourceLinkRecord,
+    origin: tuple[str, str],
+) -> None:
+    if record.provenance_id != origin[0] or record.observation_id != origin[1]:
+        raise MutationValidationError(
+            "Origin source link must match the transaction's preserved origin."
+        )
+    existing = connection.execute(
+        "SELECT 1 FROM transaction_source_links "
+        "WHERE transaction_id = ? AND link_kind = 'origin' LIMIT 1",
+        (record.transaction_id,),
+    ).fetchone()
+    if existing is not None:
+        raise MutationValidationError("A transaction may have at most one origin source link.")
+
+
+def _reject_reassigned_source_evidence(
+    connection: sqlite3.Connection,
+    provenance_id: str,
+    transaction_id: str,
+) -> None:
+    claimed = connection.execute(
+        "SELECT 1 FROM transaction_source_links WHERE provenance_id = ? "
+        "UNION ALL "
+        "SELECT 1 FROM transactions WHERE provenance_id = ? AND entity_id <> ? "
+        "LIMIT 1",
+        (provenance_id, provenance_id, transaction_id),
+    ).fetchone()
+    if claimed is not None:
+        raise MutationValidationError(
+            "Source evidence cannot be reassigned to another accepted target."
+        )
+
+
+def _validate_source_link_binding(
+    connection: sqlite3.Connection,
+    record: TransactionSourceLinkRecord,
+) -> None:
+    origin = _transaction_origin(connection, record.transaction_id)
+    _require_same_source_occurrence(connection, record.provenance_id, record.observation_id)
+    _reject_reassigned_source_evidence(connection, record.provenance_id, record.transaction_id)
+    if record.link_kind == "origin":
+        _validate_origin_source_link(connection, record, origin)
+        return
+    if record.provenance_id == origin[0]:
+        raise MutationValidationError(
+            "Duplicate evidence must use a different provenance than the origin."
+        )
 
 
 def _validate_mutation_effective_interval(
@@ -855,6 +1665,7 @@ def _store_receipt(
             "retained_artifacts": list(retained_artifacts),
         }
     )
+    _parse_receipt_envelope(envelope_json)
     updated = connection.execute(
         "UPDATE idempotency_requests SET status = 'committed', changeset_id = ?, "
         "result_json = ?, base_revision = ?, committed_revision = ?, state_changed = ? "
