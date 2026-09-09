@@ -11,7 +11,7 @@ from finjuice.pipeline.storage.sqlite.errors import (
     RepositoryVersionError,
     SQLiteStorageError,
 )
-from finjuice.pipeline.storage.sqlite.exact import ExactValue
+from finjuice.pipeline.storage.sqlite.exact import UNKNOWN_CURRENCY, CurrencyState, ExactValue
 from finjuice.pipeline.storage.sqlite.ids import migration_entity_id, new_entity_id
 from finjuice.pipeline.storage.sqlite.objects import SourceArtifact, SourceObjectStore
 from finjuice.pipeline.storage.sqlite.paths import GenerationPaths
@@ -19,6 +19,7 @@ from finjuice.pipeline.storage.sqlite.records import (
     AccountRecord,
     AssetSnapshotRecord,
     ConfigRevisionRecord,
+    LegacyIdentifierRecord,
     ObservationRecord,
     OverviewBalanceRecord,
     OverviewCashflowRecord,
@@ -27,6 +28,7 @@ from finjuice.pipeline.storage.sqlite.records import (
     OverviewInvestmentRecord,
     OverviewLoanRecord,
     PartyRecord,
+    PreservationIssueRecord,
     ProvenanceRecord,
     ResourceRecord,
     SourceOccurrenceRecord,
@@ -49,10 +51,12 @@ __all__ = [
     "AccountRecord",
     "AssetSnapshotRecord",
     "ConfigRevisionRecord",
+    "CurrencyState",
     "ExactValue",
     "ExactValueError",
     "GenerationPaths",
     "IdentifierError",
+    "LegacyIdentifierRecord",
     "ObjectCorruptionError",
     "ObjectStoreError",
     "ObservationRecord",
@@ -63,6 +67,7 @@ __all__ = [
     "OverviewInvestmentRecord",
     "OverviewLoanRecord",
     "PartyRecord",
+    "PreservationIssueRecord",
     "ProvenanceRecord",
     "RepositoryBuilder",
     "RepositoryInfo",
@@ -77,6 +82,7 @@ __all__ = [
     "SourceObjectStore",
     "SourceOccurrenceRecord",
     "TransactionRecord",
+    "UNKNOWN_CURRENCY",
     "initialize_repository",
     "inspect_repository",
     "migration_entity_id",

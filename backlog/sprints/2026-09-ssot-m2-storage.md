@@ -50,6 +50,7 @@ scope: ["**"]
 - 기존 DB의 사전 검사도 원본 WAL/SHM을 바꾸면 안 된다. SQLite의 일반 read-only 연결은 SHM을 변경할 수 있고 immutable 연결은 미반영 WAL을 놓칠 수 있음을 합성 시험으로 확인했다. 검사는 보존되는 별도 snapshot 경계를 사용한다.
 - #433은 WAL 활성화를 요구하지 않는다. 새 WAL 운영을 도입할 때는 [SQLite WAL-reset 수정 버전](https://www.sqlite.org/wal.html)의 런타임을 확인한다. 현재 개발 SQLite 3.50.4에서 전역 런타임을 임의로 바꾸지 않는다.
 - 실제 금융 자료·운영 경로·키·상세 차이는 비공개 증거에 둔다. 사용자 원래 checkout의 변경을 보존한다.
+- CI는 일반 Ruff/mypy 외에도 `scripts/check_complexity_ratchet.py`와 `scripts/check_security_baselines.py`를 실행한다. 후속 구현의 로컬 마감 검사에 두 gate를 포함하고 새 경고를 기준 완화로 처리하지 않는다.
 
 ## Progress
 - 2026-09-09: M1 완료 후 최신 main에서 M2를 시작했다. #433의 live AC 4개와 선행 #430·#432·#426의 COMPLETED 상태를 확인했다. 저장 계층 경계와 테스트 계획 탐색을 마쳤으며 첫 SQLite repository 구현을 시작한다.
@@ -57,3 +58,6 @@ scope: ["**"]
 - 2026-09-09: 후보 패키지와 skill runtime 요구 버전을 0.7.3으로 동기화했다. lock의 변경은 로컬 패키지 버전뿐이며 CLI 버전·runtime 검사 30개를 통과했다. 운영 설치 변경이나 SQLite 활성화는 아직 하지 않았다.
 - 2026-09-09: #433 구현을 인계받았다. 합성 테스트 19개, 전체 Ruff와 365개 소스의 mypy를 통과했다. 원본 누락 검출, upgrade 중 실패 시 원본 DB/WAL/SHM 보존, FK 위반 검출과 FIFO 입력 거부를 포함한다. 전체 pytest·wheel/sdist 설치 smoke·Opus 5 교차 리뷰를 진행 중이며 AC와 이슈 상태는 검증 완료 후 갱신한다.
 - 2026-09-09: 전체 pytest 2,505 PASS·Windows 전용 1 SKIP, 커버리지 87.63%를 확인했다. wheel/sdist의 새 환경 설치·CLI 및 SQLite 후보 생성/읽기/원본 포함 upgrade smoke를 통과했다. 형식 정리는 Python AST 동일성을 확인했고 pre-commit도 통과했다. Opus 검토와 draft PR의 최종 CI 결과를 대기한다.
+- 2026-09-09: draft PR #453을 열었다. CI의 테스트·패키지·문서·CodeQL은 통과했으나 복잡도 5건과 Bandit의 SQL 구성 2건을 수정 중이다. Opus 5 검토 후 빌더의 부분 삽입 방지·공개 전 관계 검증·불변 ID·원문 증거·scratch 보존 경계를 보강한다. namespace는 직접 계산해 계약과 일치함을 확인했으며, 같은 schema의 논리적 복제와 새로운 활성화를 구분한다.
+
+- Corrected review preflight (2026-09-09 10:52 KST): Claude configured account, 5h used 74% / remaining 26%, reset 11:30 KST; weekly used 12% / remaining 88%, reset 2026-09-13 01:00 KST. Both pace windows report lasting until reset; monthly/absolute exhaustion ETA unavailable. Source `claude`, confidence `percentOnly`. Review remains bounded and code/synthetic-evidence only.

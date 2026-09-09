@@ -350,7 +350,8 @@ CREATE TABLE overview_facts (
     value_type TEXT NOT NULL
         CHECK (value_type IN ('number', 'text', 'date', 'empty', 'unsupported')),
     FOREIGN KEY (entity_id, entity_kind) REFERENCES entities(entity_id, entity_kind),
-    CHECK ((value_type = 'number') = (numeric_value_id IS NOT NULL))
+    CHECK ((value_type = 'number') = (numeric_value_id IS NOT NULL)),
+    CHECK (value_type IN ('number', 'empty') OR value_text IS NOT NULL)
 );
 
 CREATE TABLE overview_balances (
@@ -466,6 +467,7 @@ CREATE INDEX idx_observation_effective
 
 
 _IMMUTABLE_TABLES = (
+    "entities",
     "source_artifacts",
     "source_occurrences",
     "record_provenance",
@@ -480,6 +482,48 @@ _IMMUTABLE_TABLES = (
     "migration_dispositions",
     "legacy_identifiers",
     "legacy_identifier_supersessions",
+)
+
+_ENTITY_SUBTYPE_CHECKS: Final = (
+    "SELECT entity_id FROM entities WHERE entity_kind = 'source_occurrence' "
+    "EXCEPT SELECT entity_id FROM source_occurrences",
+    "SELECT entity_id FROM entities WHERE entity_kind = 'party' "
+    "EXCEPT SELECT entity_id FROM parties",
+    "SELECT entity_id FROM entities WHERE entity_kind = 'account' "
+    "EXCEPT SELECT entity_id FROM accounts",
+    "SELECT entity_id FROM entities WHERE entity_kind = 'resource' "
+    "EXCEPT SELECT entity_id FROM resources",
+    "SELECT entity_id FROM entities WHERE entity_kind = 'observation' "
+    "EXCEPT SELECT entity_id FROM observations",
+    "SELECT entity_id FROM entities WHERE entity_kind = 'config_revision' "
+    "EXCEPT SELECT entity_id FROM config_revisions",
+    "SELECT entity_id FROM entities WHERE entity_kind = 'transaction' "
+    "EXCEPT SELECT entity_id FROM transactions",
+    "SELECT entity_id FROM entities WHERE entity_kind = 'overview_fact' "
+    "EXCEPT SELECT entity_id FROM overview_facts",
+    "SELECT entity_id FROM entities WHERE entity_kind = 'overview_balance' "
+    "EXCEPT SELECT entity_id FROM overview_balances",
+    "SELECT entity_id FROM entities WHERE entity_kind = 'overview_cashflow' "
+    "EXCEPT SELECT entity_id FROM overview_cashflows",
+    "SELECT entity_id FROM entities WHERE entity_kind = 'overview_insurance' "
+    "EXCEPT SELECT entity_id FROM overview_insurance",
+    "SELECT entity_id FROM entities WHERE entity_kind = 'overview_investment' "
+    "EXCEPT SELECT entity_id FROM overview_investments",
+    "SELECT entity_id FROM entities WHERE entity_kind = 'overview_loan' "
+    "EXCEPT SELECT entity_id FROM overview_loans",
+    "SELECT entity_id FROM entities WHERE entity_kind = 'asset_snapshot' "
+    "EXCEPT SELECT entity_id FROM asset_snapshots",
+)
+
+_EXACT_SUBTYPE_CHECKS: Final = (
+    "SELECT value_id FROM exact_values WHERE value_kind = 'money' "
+    "EXCEPT SELECT value_id FROM money_values",
+    "SELECT value_id FROM exact_values WHERE value_kind = 'quantity' "
+    "EXCEPT SELECT value_id FROM quantity_values",
+    "SELECT value_id FROM exact_values WHERE value_kind = 'rate' "
+    "EXCEPT SELECT value_id FROM rate_values",
+    "SELECT value_id FROM exact_values WHERE value_kind = 'number' "
+    "EXCEPT SELECT value_id FROM number_values",
 )
 
 
@@ -521,9 +565,13 @@ def initialize_repository(paths: GenerationPaths, dataset_generation: str) -> Re
     return info
 
 
-def inspect_repository(database: Path) -> RepositoryInfo:
+def inspect_repository(
+    database: Path,
+    *,
+    scratch_root: Path | None = None,
+) -> RepositoryInfo:
     """Inspect the latest stable DB/WAL state without SQLite-opening the original files."""
-    with inspection_snapshot(database) as snapshot:
+    with inspection_snapshot(database, scratch_root=scratch_root) as snapshot:
         connection = _connect_snapshot(snapshot)
         try:
             return _read_info(connection)
@@ -531,13 +579,18 @@ def inspect_repository(database: Path) -> RepositoryInfo:
             connection.close()
 
 
-def upgrade_repository(source: Path, destination: GenerationPaths) -> RepositoryInfo:
+def upgrade_repository(
+    source: Path,
+    destination: GenerationPaths,
+    *,
+    scratch_root: Path | None = None,
+) -> RepositoryInfo:
     """Copy a stable DB plus referenced objects into a separately published candidate."""
     _prepare_generation_layout(destination)
     if destination.database.exists() or destination.database.is_symlink():
         raise RepositoryPathError("Upgrade destination already exists and will not be replaced.")
 
-    with inspection_snapshot(source) as snapshot:
+    with inspection_snapshot(source, scratch_root=scratch_root) as snapshot:
         source_connection = _connect_snapshot(snapshot)
         try:
             source_info = _read_info(source_connection, allow_bootstrap=True)
@@ -554,6 +607,7 @@ def upgrade_repository(source: Path, destination: GenerationPaths) -> Repository
             target_connection = _connect_builder(staging)
             try:
                 source_connection.backup(target_connection)
+                _normalize_journal_mode(target_connection)
                 if source_info.schema_version == 0:
                     generation = str(uuid.uuid4())
                     _apply_schema_v1(target_connection, generation)
@@ -593,9 +647,13 @@ def _copy_source_objects(
             )
 
 
-def validate_repository(database: Path) -> RepositoryInfo:
+def validate_repository(
+    database: Path,
+    *,
+    scratch_root: Path | None = None,
+) -> RepositoryInfo:
     """Run version, integrity, and foreign-key checks on a non-mutating snapshot."""
-    with inspection_snapshot(database) as snapshot:
+    with inspection_snapshot(database, scratch_root=scratch_root) as snapshot:
         connection = _connect_snapshot(snapshot)
         try:
             repository_paths = GenerationPaths(database.expanduser().absolute().parent)
@@ -654,6 +712,12 @@ def _connect_builder(path: Path) -> sqlite3.Connection:
     return connection
 
 
+def _normalize_journal_mode(connection: sqlite3.Connection) -> None:
+    row = connection.execute("PRAGMA journal_mode = DELETE").fetchone()
+    if row is None or str(row[0]).lower() != "delete":
+        raise RepositoryIntegrityError("Upgrade candidate journal mode could not be normalized.")
+
+
 def _connect_snapshot(path: Path) -> sqlite3.Connection:
     uri = f"{path.resolve().as_uri()}?mode=ro"
     connection = sqlite3.connect(uri, uri=True, isolation_level=None)
@@ -710,9 +774,19 @@ def _validate_connection(
     foreign_keys = connection.execute("PRAGMA foreign_key_check").fetchall()
     if foreign_keys:
         raise RepositoryIntegrityError("SQLite foreign_key_check failed.")
+    _validate_application_invariants(connection)
     if object_paths is not None:
         _validate_source_objects(connection, object_paths)
     return info
+
+
+def _validate_application_invariants(connection: sqlite3.Connection) -> None:
+    for query in _ENTITY_SUBTYPE_CHECKS:
+        if connection.execute(query).fetchone() is not None:
+            raise RepositoryIntegrityError("An entity is missing its matching typed row.")
+    for query in _EXACT_SUBTYPE_CHECKS:
+        if connection.execute(query).fetchone() is not None:
+            raise RepositoryIntegrityError("An exact value is missing its matching subtype row.")
 
 
 def _validate_source_objects(

@@ -16,6 +16,7 @@ from finjuice.pipeline.storage.sqlite import (
     ConfigRevisionRecord,
     ExactValue,
     GenerationPaths,
+    LegacyIdentifierRecord,
     ObservationRecord,
     OverviewBalanceRecord,
     OverviewFactRecord,
@@ -57,6 +58,19 @@ def _provenance(occurrence_id: str, row: int) -> ProvenanceRecord:
         },
         parser_version="test-v1",
     )
+
+
+def _assert_typed_domain_rows(paths: GenerationPaths, transaction_ids: list[str]) -> None:
+    with RepositoryReader(paths.database) as reader:
+        assert len(reader.rows("transactions")) == 2
+        assert {row["entity_id"] for row in reader.rows("transactions")} == set(transaction_ids)
+        assert [row["identifier_value"] for row in reader.rows("legacy_identifiers")] == [
+            "same-legacy-row-hash",
+            "same-legacy-row-hash",
+        ]
+        assert len(reader.rows("overview_balances")) == 1
+        assert len(reader.rows("asset_snapshots")) == 1
+        assert len(reader.rows("config_revisions")) == 1
 
 
 def test_builder_publishes_typed_domains_and_preserves_duplicate_occurrences(
@@ -156,11 +170,13 @@ def test_builder_publishes_typed_domains_and_preserves_duplicate_occurrences(
                 )
             )
             builder.add_legacy_identifier(
-                transaction_id,
-                "row_hash",
-                "same-legacy-row-hash",
-                "a" * 64,
-                provenance_id=provenance.provenance_id,
+                LegacyIdentifierRecord(
+                    entity_id=transaction_id,
+                    identifier_kind="row_hash",
+                    identifier_value="same-legacy-row-hash",
+                    capture_manifest_digest="a" * 64,
+                    provenance_id=provenance.provenance_id,
+                )
             )
 
         builder.add_legacy_payload(
@@ -242,16 +258,7 @@ def test_builder_publishes_typed_domains_and_preserves_duplicate_occurrences(
 
     assert info.dataset_generation == generation
     assert info.dataset_revision == 4
-    with RepositoryReader(paths.database) as reader:
-        assert len(reader.rows("transactions")) == 2
-        assert {row["entity_id"] for row in reader.rows("transactions")} == set(transaction_ids)
-        assert [row["identifier_value"] for row in reader.rows("legacy_identifiers")] == [
-            "same-legacy-row-hash",
-            "same-legacy-row-hash",
-        ]
-        assert len(reader.rows("overview_balances")) == 1
-        assert len(reader.rows("asset_snapshots")) == 1
-        assert len(reader.rows("config_revisions")) == 1
+    _assert_typed_domain_rows(paths, transaction_ids)
 
 
 def test_text_primary_keys_reject_explicit_null(tmp_path: Path) -> None:
@@ -343,9 +350,14 @@ def test_upgrade_processing_failure_preserves_source_and_unpublishes_candidate(
     try:
         assert connection.execute("PRAGMA journal_mode = WAL").fetchone()[0] == "wal"
         connection.execute("PRAGMA wal_autocheckpoint = 0")
+        party_id = _id()
         connection.execute(
             "INSERT INTO entities (entity_id, entity_kind) VALUES (?, 'party')",
-            (_id(),),
+            (party_id,),
+        )
+        connection.execute(
+            "INSERT INTO parties (entity_id, party_kind) VALUES (?, 'unknown')",
+            (party_id,),
         )
         connection.commit()
         connection.execute("SELECT * FROM repository_meta").fetchall()

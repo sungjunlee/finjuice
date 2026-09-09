@@ -25,8 +25,21 @@ class _Fingerprint:
     digest: str
 
 
+def default_inspection_scratch_root() -> Path:
+    """Return the private application-cache root used for inspection copies."""
+    configured = os.environ.get("XDG_CACHE_HOME")
+    cache_root = Path(configured).expanduser() if configured else Path.home() / ".cache"
+    if not cache_root.is_absolute():
+        raise RepositorySnapshotError("Inspection cache root must be absolute.")
+    return cache_root / "finjuice" / "sqlite-inspection"
+
+
 @contextmanager
-def inspection_snapshot(database: Path) -> Iterator[Path]:
+def inspection_snapshot(
+    database: Path,
+    *,
+    scratch_root: Path | None = None,
+) -> Iterator[Path]:
     """Copy a stable DB/WAL pair to scratch without opening the original via SQLite."""
     source = database.expanduser().absolute()
     _assert_no_symlink_ancestors(source)
@@ -39,7 +52,14 @@ def inspection_snapshot(database: Path) -> Iterator[Path]:
         source_paths.append(wal)
     before = {path.name: _fingerprint(path) for path in source_paths}
 
-    with tempfile.TemporaryDirectory(prefix="finjuice-sqlite-inspect-") as temp_dir:
+    requested_scratch = (scratch_root or default_inspection_scratch_root()).expanduser().absolute()
+    if requested_scratch == source.parent or requested_scratch.is_relative_to(source.parent):
+        raise RepositorySnapshotError("Inspection scratch root must be outside the generation.")
+    scratch = _prepare_scratch_root(requested_scratch)
+    with tempfile.TemporaryDirectory(
+        prefix="finjuice-sqlite-inspect-",
+        dir=scratch,
+    ) as temp_dir:
         scratch_dir = Path(temp_dir)
         for source_path in source_paths:
             _copy_regular(source_path, scratch_dir / source_path.name)
@@ -66,24 +86,10 @@ def inspection_snapshot(database: Path) -> Iterator[Path]:
 
 
 def _fingerprint(path: Path) -> _Fingerprint:
-    try:
-        before = path.lstat()
-    except OSError as exc:
-        raise RepositorySnapshotError("Database input is missing or unsafe.") from exc
-    if not stat.S_ISREG(before.st_mode):
-        raise RepositorySnapshotError("Database inputs must be regular files.")
-    flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0)
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
-    try:
-        fd = os.open(path, flags)
-    except OSError as exc:
-        raise RepositorySnapshotError("Database input is missing or unsafe.") from exc
+    fd, before = _open_regular_read(path)
     digest = hashlib.sha256()
     try:
         opened = os.fstat(fd)
-        if not stat.S_ISREG(before.st_mode) or not stat.S_ISREG(opened.st_mode):
-            raise RepositorySnapshotError("Database inputs must be regular files.")
         while True:
             chunk = os.read(fd, _CHUNK_SIZE)
             if not chunk:
@@ -107,43 +113,59 @@ def _fingerprint(path: Path) -> _Fingerprint:
 
 
 def _copy_regular(source: Path, destination: Path) -> None:
+    source_fd, _ = _open_regular_read(source)
     try:
-        before = source.lstat()
-    except OSError as exc:
-        raise RepositorySnapshotError("Inspection snapshot could not be created.") from exc
-    if not stat.S_ISREG(before.st_mode):
-        raise RepositorySnapshotError("Database inputs must be regular files.")
-    read_flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0)
-    if hasattr(os, "O_NOFOLLOW"):
-        read_flags |= os.O_NOFOLLOW
-    write_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
-    try:
-        source_fd = os.open(source, read_flags)
-    except OSError as exc:
-        raise RepositorySnapshotError("Inspection snapshot could not be created.") from exc
-    try:
-        opened = os.fstat(source_fd)
-        if not stat.S_ISREG(opened.st_mode):
-            raise RepositorySnapshotError("Database inputs must be regular files.")
-        if (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino):
-            raise RepositorySnapshotError("Database input changed while it was opened.")
+        destination_fd = _open_scratch_destination(destination)
         try:
-            destination_fd = os.open(destination, write_flags, 0o600)
-        except OSError as exc:
-            raise RepositorySnapshotError("Inspection snapshot could not be created.") from exc
-        try:
-            while True:
-                chunk = os.read(source_fd, _CHUNK_SIZE)
-                if not chunk:
-                    break
-                _write_all(destination_fd, chunk)
+            _copy_bytes(source_fd, destination_fd)
             os.fsync(destination_fd)
         finally:
             os.close(destination_fd)
-    except OSError as exc:
-        raise RepositorySnapshotError("Inspection snapshot copy failed.") from exc
     finally:
         os.close(source_fd)
+
+
+def _open_regular_read(path: Path) -> tuple[int, os.stat_result]:
+    try:
+        before = path.lstat()
+    except OSError as exc:
+        raise RepositorySnapshotError("Database input is missing or unsafe.") from exc
+    if not stat.S_ISREG(before.st_mode):
+        raise RepositorySnapshotError("Database inputs must be regular files.")
+    flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0)
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        fd = os.open(path, flags)
+    except OSError as exc:
+        raise RepositorySnapshotError("Database input is missing or unsafe.") from exc
+    opened = os.fstat(fd)
+    if not stat.S_ISREG(opened.st_mode):
+        os.close(fd)
+        raise RepositorySnapshotError("Database inputs must be regular files.")
+    if (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino):
+        os.close(fd)
+        raise RepositorySnapshotError("Database input changed while it was opened.")
+    return fd, before
+
+
+def _open_scratch_destination(destination: Path) -> int:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    try:
+        return os.open(destination, flags, 0o600)
+    except OSError as exc:
+        raise RepositorySnapshotError("Inspection snapshot could not be created.") from exc
+
+
+def _copy_bytes(source_fd: int, destination_fd: int) -> None:
+    try:
+        while True:
+            chunk = os.read(source_fd, _CHUNK_SIZE)
+            if not chunk:
+                return
+            _write_all(destination_fd, chunk)
+    except OSError as exc:
+        raise RepositorySnapshotError("Inspection snapshot copy failed.") from exc
 
 
 def _write_all(fd: int, data: bytes) -> None:
@@ -155,11 +177,29 @@ def _write_all(fd: int, data: bytes) -> None:
         remaining = remaining[written:]
 
 
-def _assert_no_symlink_ancestors(path: Path) -> None:
+def _prepare_scratch_root(path: Path) -> Path:
+    root = path.expanduser().absolute()
+    _assert_no_symlink_ancestors(root, allow_missing=True)
+    try:
+        root.mkdir(mode=0o700, parents=True, exist_ok=True)
+        entry = root.lstat()
+    except OSError as exc:
+        raise RepositorySnapshotError("Inspection scratch root could not be prepared.") from exc
+    _assert_no_symlink_ancestors(root)
+    if not stat.S_ISDIR(entry.st_mode) or stat.S_IMODE(entry.st_mode) & 0o077:
+        raise RepositorySnapshotError("Inspection scratch root must be a private directory.")
+    return root
+
+
+def _assert_no_symlink_ancestors(path: Path, *, allow_missing: bool = False) -> None:
     """Reject a database path reached through any symlink component."""
     for component in (*path.parents[::-1], path):
         try:
             entry = component.lstat()
+        except FileNotFoundError:
+            if allow_missing:
+                continue
+            raise RepositorySnapshotError("Database input is missing or unsafe.") from None
         except OSError as exc:
             raise RepositorySnapshotError("Database input is missing or unsafe.") from exc
         if stat.S_ISLNK(entry.st_mode):

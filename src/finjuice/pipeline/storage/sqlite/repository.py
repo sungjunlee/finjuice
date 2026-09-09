@@ -5,10 +5,11 @@ from __future__ import annotations
 import json
 import uuid
 from collections.abc import Mapping, Sequence
-from contextlib import AbstractContextManager
+from contextlib import AbstractContextManager, contextmanager
+from functools import wraps
 from pathlib import Path
 from types import TracebackType
-from typing import Any, BinaryIO, Final
+from typing import Any, BinaryIO, Callable, Final, Iterator, TypeVar, cast
 
 from finjuice.pipeline.storage.sqlite.errors import RepositoryPathError
 from finjuice.pipeline.storage.sqlite.exact import ExactValue
@@ -20,6 +21,7 @@ from finjuice.pipeline.storage.sqlite.records import (
     AssetSnapshotRecord,
     ConfigRevisionRecord,
     EntityKind,
+    LegacyIdentifierRecord,
     ObservationRecord,
     OverviewBalanceRecord,
     OverviewCashflowRecord,
@@ -28,6 +30,7 @@ from finjuice.pipeline.storage.sqlite.records import (
     OverviewInvestmentRecord,
     OverviewLoanRecord,
     PartyRecord,
+    PreservationIssueRecord,
     ProvenanceRecord,
     ResourceRecord,
     SourceOccurrenceRecord,
@@ -45,39 +48,56 @@ from finjuice.pipeline.storage.sqlite.schema import (
 )
 from finjuice.pipeline.storage.sqlite.snapshot import inspection_snapshot
 
-_READABLE_TABLES: Final = frozenset(
-    {
-        "repository_meta",
-        "schema_migrations",
-        "entities",
-        "source_artifacts",
-        "source_occurrences",
-        "record_provenance",
-        "exact_values",
-        "money_values",
-        "quantity_values",
-        "rate_values",
-        "number_values",
-        "parties",
-        "accounts",
-        "resources",
-        "observations",
-        "config_revisions",
-        "legacy_payloads",
-        "preservation_issues",
-        "migration_dispositions",
-        "legacy_identifiers",
-        "legacy_identifier_supersessions",
-        "transactions",
-        "overview_facts",
-        "overview_balances",
-        "overview_cashflows",
-        "overview_insurance",
-        "overview_investments",
-        "overview_loans",
-        "asset_snapshots",
-    }
-)
+_READ_TABLE_SQL: Final = {
+    "repository_meta": "SELECT * FROM repository_meta",
+    "schema_migrations": "SELECT * FROM schema_migrations",
+    "entities": "SELECT * FROM entities",
+    "source_artifacts": "SELECT * FROM source_artifacts",
+    "source_occurrences": "SELECT * FROM source_occurrences",
+    "record_provenance": "SELECT * FROM record_provenance",
+    "exact_values": "SELECT * FROM exact_values",
+    "money_values": "SELECT * FROM money_values",
+    "quantity_values": "SELECT * FROM quantity_values",
+    "rate_values": "SELECT * FROM rate_values",
+    "number_values": "SELECT * FROM number_values",
+    "parties": "SELECT * FROM parties",
+    "accounts": "SELECT * FROM accounts",
+    "resources": "SELECT * FROM resources",
+    "observations": "SELECT * FROM observations",
+    "config_revisions": "SELECT * FROM config_revisions",
+    "legacy_payloads": "SELECT * FROM legacy_payloads",
+    "preservation_issues": "SELECT * FROM preservation_issues",
+    "migration_dispositions": "SELECT * FROM migration_dispositions",
+    "legacy_identifiers": "SELECT * FROM legacy_identifiers",
+    "legacy_identifier_supersessions": "SELECT * FROM legacy_identifier_supersessions",
+    "transactions": "SELECT * FROM transactions",
+    "overview_facts": "SELECT * FROM overview_facts",
+    "overview_balances": "SELECT * FROM overview_balances",
+    "overview_cashflows": "SELECT * FROM overview_cashflows",
+    "overview_insurance": "SELECT * FROM overview_insurance",
+    "overview_investments": "SELECT * FROM overview_investments",
+    "overview_loans": "SELECT * FROM overview_loans",
+    "asset_snapshots": "SELECT * FROM asset_snapshots",
+}
+
+_EXACT_SUBTYPE_INSERT_SQL: Final = {
+    "quantity": "INSERT INTO quantity_values (value_id, unit) VALUES (?, ?)",
+    "rate": "INSERT INTO rate_values (value_id, unit) VALUES (?, ?)",
+    "number": "INSERT INTO number_values (value_id, unit) VALUES (?, ?)",
+}
+
+_Method = TypeVar("_Method", bound=Callable[..., Any])
+
+
+def _atomic_add(method: _Method) -> _Method:
+    """Wrap one builder add call in a rollback-on-error savepoint."""
+
+    @wraps(method)
+    def wrapped(self: RepositoryBuilder, *args: Any, **kwargs: Any) -> Any:
+        with self._savepoint():
+            return method(self, *args, **kwargs)
+
+    return cast(_Method, wrapped)
 
 
 class RepositoryBuilder:
@@ -111,6 +131,7 @@ class RepositoryBuilder:
         self._staging = paths.root / f".finjuice-sqlite-staging-{uuid.uuid4().hex}"
         self._connection = _connect_builder(self._staging)
         self._closed = False
+        self._published_artifacts: list[SourceArtifact] = []
         try:
             _apply_schema_v1(
                 self._connection,
@@ -137,15 +158,24 @@ class RepositoryBuilder:
 
     def publish_source_path(self, source: Path) -> SourceArtifact:
         """Publish source bytes and register their verified content identity."""
+        self._require_open()
         artifact = SourceObjectStore(self.paths).publish_path(source)
+        self._published_artifacts.append(artifact)
         self.register_artifact(artifact)
         return artifact
 
     def publish_source(self, source: BinaryIO) -> SourceArtifact:
         """Publish a binary stream and register its verified content identity."""
+        self._require_open()
         artifact = SourceObjectStore(self.paths).publish(source)
+        self._published_artifacts.append(artifact)
         self.register_artifact(artifact)
         return artifact
+
+    @property
+    def published_artifacts(self) -> tuple[SourceArtifact, ...]:
+        """Return receipts for objects this builder published, including after abort."""
+        return tuple(self._published_artifacts)
 
     def register_artifact(self, artifact: SourceArtifact) -> None:
         """Register an object only after re-verifying its path, digest, and length."""
@@ -170,6 +200,7 @@ class RepositoryBuilder:
             ),
         )
 
+    @_atomic_add
     def add_source_occurrence(self, record: SourceOccurrenceRecord) -> None:
         """Add a distinct source occurrence, even when source bytes are reused."""
         self._insert_entity(record.occurrence_id, "source_occurrence")
@@ -210,6 +241,7 @@ class RepositoryBuilder:
             ),
         )
 
+    @_atomic_add
     def add_exact_value(
         self,
         value_id: str,
@@ -243,10 +275,11 @@ class RepositoryBuilder:
             )
         else:
             self._connection.execute(
-                f"INSERT INTO {value.value_kind}_values (value_id, unit) VALUES (?, ?)",
+                _EXACT_SUBTYPE_INSERT_SQL[value.value_kind],
                 (value_id, value.unit),
             )
 
+    @_atomic_add
     def add_party(self, record: PartyRecord) -> None:
         """Add a party foundation row."""
         self._insert_entity(record.party_id, "party")
@@ -255,6 +288,7 @@ class RepositoryBuilder:
             (record.party_id, record.party_kind, record.display_name),
         )
 
+    @_atomic_add
     def add_account(self, record: AccountRecord) -> None:
         """Add an account with explicit ownership state."""
         self._insert_entity(record.account_id, "account")
@@ -271,6 +305,7 @@ class RepositoryBuilder:
             ),
         )
 
+    @_atomic_add
     def add_resource(self, record: ResourceRecord) -> None:
         """Add a resource or instrument foundation row."""
         self._insert_entity(record.resource_id, "resource")
@@ -279,6 +314,7 @@ class RepositoryBuilder:
             (record.resource_id, record.resource_kind, record.display_name),
         )
 
+    @_atomic_add
     def add_observation(self, record: ObservationRecord) -> None:
         """Add source-backed temporal and scope context."""
         self._insert_entity(record.observation_id, "observation")
@@ -299,6 +335,7 @@ class RepositoryBuilder:
             ),
         )
 
+    @_atomic_add
     def add_config_revision(self, record: ConfigRevisionRecord) -> None:
         """Add an immutable source-backed configuration revision."""
         self._insert_entity(record.revision_id, "config_revision")
@@ -338,31 +375,22 @@ class RepositoryBuilder:
         )
         return payload_id
 
-    def add_preservation_issue(
-        self,
-        provenance_id: str,
-        issue_kind: str,
-        detail: Mapping[str, Any],
-        *,
-        field_name: str | None = None,
-        lexical_value: str | None = None,
-        issue_id: str | None = None,
-    ) -> str:
+    def add_preservation_issue(self, record: PreservationIssueRecord) -> str:
         """Record a lossless typing or preservation problem without discarding evidence."""
-        issue_id = issue_id or str(uuid.uuid4())
+        issue_id = record.issue_id or str(uuid.uuid4())
         validate_entity_id(issue_id)
-        validate_entity_id(provenance_id)
+        validate_entity_id(record.provenance_id)
         self._connection.execute(
             "INSERT INTO preservation_issues "
             "(issue_id, provenance_id, field_name, issue_kind, lexical_value, detail_json) "
             "VALUES (?, ?, ?, ?, ?, ?)",
             (
                 issue_id,
-                provenance_id,
-                field_name,
-                issue_kind,
-                lexical_value,
-                _canonical_json(detail),
+                record.provenance_id,
+                record.field_name,
+                record.issue_kind,
+                record.lexical_value,
+                _canonical_json(record.detail),
             ),
         )
         return issue_id
@@ -381,33 +409,24 @@ class RepositoryBuilder:
             (provenance_id, disposition, reason),
         )
 
-    def add_legacy_identifier(
-        self,
-        entity_id: str,
-        identifier_kind: str,
-        identifier_value: str,
-        capture_manifest_digest: str,
-        *,
-        provenance_id: str | None = None,
-        mapping_id: str | None = None,
-    ) -> str:
+    def add_legacy_identifier(self, record: LegacyIdentifierRecord) -> str:
         """Append a captured legacy identifier mapping."""
-        mapping_id = mapping_id or str(uuid.uuid4())
+        mapping_id = record.mapping_id or str(uuid.uuid4())
         validate_entity_id(mapping_id)
-        validate_entity_id(entity_id)
-        if provenance_id is not None:
-            validate_entity_id(provenance_id)
+        validate_entity_id(record.entity_id)
+        if record.provenance_id is not None:
+            validate_entity_id(record.provenance_id)
         self._connection.execute(
             "INSERT INTO legacy_identifiers "
             "(mapping_id, entity_id, identifier_kind, identifier_value, provenance_id, "
             "capture_manifest_digest) VALUES (?, ?, ?, ?, ?, ?)",
             (
                 mapping_id,
-                entity_id,
-                identifier_kind,
-                identifier_value,
-                provenance_id,
-                capture_manifest_digest.removeprefix("sha256:"),
+                record.entity_id,
+                record.identifier_kind,
+                record.identifier_value,
+                record.provenance_id,
+                record.capture_manifest_digest.removeprefix("sha256:"),
             ),
         )
         return mapping_id
@@ -432,6 +451,7 @@ class RepositoryBuilder:
         )
         return supersession_id
 
+    @_atomic_add
     def add_transaction(self, record: TransactionRecord) -> None:
         """Add a typed transaction without collapsing equal row hashes."""
         self._insert_entity(record.transaction_id, "transaction")
@@ -479,6 +499,7 @@ class RepositoryBuilder:
             ),
         )
 
+    @_atomic_add
     def add_overview_fact(self, record: OverviewFactRecord) -> None:
         """Add one typed overview fact."""
         self._insert_entity(record.fact_id, "overview_fact")
@@ -504,6 +525,7 @@ class RepositoryBuilder:
             ),
         )
 
+    @_atomic_add
     def add_overview_balance(self, record: OverviewBalanceRecord) -> None:
         """Add a typed overview balance."""
         self._insert_entity(record.balance_id, "overview_balance")
@@ -524,6 +546,7 @@ class RepositoryBuilder:
             ),
         )
 
+    @_atomic_add
     def add_overview_cashflow(self, record: OverviewCashflowRecord) -> None:
         """Add a typed overview cashflow."""
         self._insert_entity(record.cashflow_id, "overview_cashflow")
@@ -543,6 +566,7 @@ class RepositoryBuilder:
             ),
         )
 
+    @_atomic_add
     def add_overview_insurance(self, record: OverviewInsuranceRecord) -> None:
         """Add a typed overview insurance row."""
         self._insert_entity(record.insurance_id, "overview_insurance")
@@ -566,6 +590,7 @@ class RepositoryBuilder:
             ),
         )
 
+    @_atomic_add
     def add_overview_investment(self, record: OverviewInvestmentRecord) -> None:
         """Add a typed overview investment row."""
         self._insert_entity(record.investment_id, "overview_investment")
@@ -592,6 +617,7 @@ class RepositoryBuilder:
             ),
         )
 
+    @_atomic_add
     def add_overview_loan(self, record: OverviewLoanRecord) -> None:
         """Add a typed overview loan row."""
         self._insert_entity(record.loan_id, "overview_loan")
@@ -618,6 +644,7 @@ class RepositoryBuilder:
             ),
         )
 
+    @_atomic_add
     def add_asset_snapshot(self, record: AssetSnapshotRecord) -> None:
         """Add a typed asset position snapshot."""
         self._insert_entity(record.snapshot_id, "asset_snapshot")
@@ -654,13 +681,27 @@ class RepositoryBuilder:
         _publish_database(self._staging, self.paths.database)
         return info
 
-    def abort(self) -> None:
-        """Discard the unpublished database candidate."""
+    def abort(self) -> tuple[SourceArtifact, ...]:
+        """Discard the staging DB while preserving and reporting published source objects."""
         if self._closed:
-            return
+            return self.published_artifacts
         self._connection.close()
         self._closed = True
         _cleanup_staging(self._staging)
+        return self.published_artifacts
+
+    @contextmanager
+    def _savepoint(self) -> Iterator[None]:
+        self._require_open()
+        self._connection.execute("SAVEPOINT builder_add")
+        try:
+            yield
+        except BaseException:
+            self._connection.execute("ROLLBACK TO builder_add")
+            self._connection.execute("RELEASE builder_add")
+            raise
+        else:
+            self._connection.execute("RELEASE builder_add")
 
     def _insert_entity(self, entity_id: str, entity_kind: EntityKind) -> None:
         self._require_open()
@@ -678,8 +719,8 @@ class RepositoryBuilder:
 class RepositoryReader(AbstractContextManager["RepositoryReader"]):
     """Read a stable DB/WAL snapshot without touching source SQLite sidecars."""
 
-    def __init__(self, database: Path) -> None:
-        self._snapshot_context = inspection_snapshot(database)
+    def __init__(self, database: Path, *, scratch_root: Path | None = None) -> None:
+        self._snapshot_context = inspection_snapshot(database, scratch_root=scratch_root)
         snapshot = self._snapshot_context.__enter__()
         try:
             self._connection = _connect_snapshot(snapshot)
@@ -708,9 +749,10 @@ class RepositoryReader(AbstractContextManager["RepositoryReader"]):
         """Return rows from one fixed schema table as dictionaries."""
         if self._closed:
             raise RuntimeError("Repository reader is already closed.")
-        if table not in _READABLE_TABLES:
+        query = _READ_TABLE_SQL.get(table)
+        if query is None:
             raise ValueError("Table is not part of the authoritative repository read surface.")
-        cursor = self._connection.execute(f"SELECT * FROM {table}")
+        cursor = self._connection.execute(query)
         names = [description[0] for description in cursor.description]
         return [dict(zip(names, row, strict=True)) for row in cursor.fetchall()]
 

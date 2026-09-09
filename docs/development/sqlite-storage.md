@@ -28,7 +28,12 @@ database; copying the SQLite file alone is not a complete generation backup.
 
 This example uses synthetic bytes in a temporary directory. `finalize()` makes
 the candidate database visible only after validation. Leaving the builder
-context without finalizing discards the unpublished database.
+context without finalizing discards the unpublished database. Original objects
+already published by that attempt remain in the selected generation directory;
+abort does not delete source bytes. The caller must account for those retained
+objects when inspecting or retiring a failed candidate. The immutable
+`builder.published_artifacts` tuple remains available after abort; `abort()`
+also returns that receipt.
 
 ```python
 from io import BytesIO
@@ -61,7 +66,7 @@ are retained permanently, and supersession is an additional relationship.
 
 `ExactValue` stores a canonical integer coefficient as text, scale from 0 to 255,
 and original lexical evidence. Money requires a known currency or explicit
-unknown-currency state. Quantities and rates use versioned units. Parsing and
+`currency=UNKNOWN_CURRENCY`. Quantities and rates use versioned units. Parsing and
 reconstruction do not depend on the ambient Decimal precision and do not pass
 through binary floats. Typed values outside the supported contract must be
 retained as opaque evidence and resolved before cutover.
@@ -84,6 +89,22 @@ DB and its sidecars on failure. Candidate builders use DELETE journaling and
 FULL synchronization. Before introducing WAL for operational writes, verify
 that the deployed SQLite runtime includes the
 [WAL-reset fix](https://www.sqlite.org/wal.html).
+
+A copy at the current schema version retains the logical dataset generation and
+revision. It is a validated replica, not a second activation or a fabricated
+schema transition. Operational activation must select the verified target tree
+and release; finding a matching generation UUID alone does not activate a copy.
+
+`RepositoryReader`, `inspect_repository`, `validate_repository`, and
+`upgrade_repository` accept a keyword-only `scratch_root` for inspection copies.
+The default is `$XDG_CACHE_HOME/finjuice/sqlite-inspection` when configured, or
+`~/.cache/finjuice/sqlite-inspection`.
+
+Inspection scratch directories contain private database bytes. Normal context
+exit removes the scratch copy, but process termination or power loss can leave
+residue. Keep the configured scratch root private and inspect leftovers only
+after confirming no inspection process is using them. Do not treat abort or a
+failed inspection as proof that every temporary byte has been removed.
 
 ## Verification boundary
 

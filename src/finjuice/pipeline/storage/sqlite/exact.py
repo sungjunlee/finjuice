@@ -5,12 +5,22 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from decimal import Decimal
+from enum import Enum
 from typing import Final, Literal
 
 from finjuice.pipeline.storage.sqlite.errors import ExactValueError
 
 ValueKind = Literal["money", "quantity", "rate", "number"]
 OriginKind = Literal["source", "migration", "calculated"]
+
+
+class CurrencyState(Enum):
+    """Explicit non-code currency states accepted by exact money factories."""
+
+    UNKNOWN = "unknown"
+
+
+UNKNOWN_CURRENCY: Final = CurrencyState.UNKNOWN
 
 _COEFFICIENT_RE: Final = re.compile(r"^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$")
 _CURRENCY_RE: Final = re.compile(r"^[A-Z]{3}$")
@@ -74,21 +84,22 @@ class ExactValue:
         *,
         value_kind: ValueKind,
         origin_kind: OriginKind = "source",
-        currency: str | None = None,
-        currency_unknown: bool = False,
+        currency: str | CurrencyState | None = None,
         unit: str | None = None,
     ) -> "ExactValue":
         """Parse source text without float conversion or decimal-context arithmetic."""
         if not isinstance(lexical, str):
             raise ExactValueError("Authoritative source values must be parsed from text.")
         coefficient, scale = _coefficient_scale_from_lexical(lexical)
+        currency_unknown = currency is CurrencyState.UNKNOWN
+        currency_code = currency if isinstance(currency, str) else None
         return cls(
             coefficient=coefficient,
             scale=scale,
             lexical=lexical,
             value_kind=value_kind,
             origin_kind=origin_kind,
-            currency=currency,
+            currency=currency_code,
             currency_unknown=currency_unknown,
             unit=unit,
         )

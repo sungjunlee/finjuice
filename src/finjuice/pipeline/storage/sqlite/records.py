@@ -50,6 +50,30 @@ class ProvenanceRecord:
 
 
 @dataclass(frozen=True)
+class PreservationIssueRecord:
+    """One structured reason typed preservation could not be completed."""
+
+    provenance_id: str
+    issue_kind: str
+    detail: Mapping[str, Any]
+    field_name: str | None = None
+    lexical_value: str | None = None
+    issue_id: str | None = None
+
+
+@dataclass(frozen=True)
+class LegacyIdentifierRecord:
+    """One captured legacy identifier mapping."""
+
+    entity_id: str
+    identifier_kind: str
+    identifier_value: str
+    capture_manifest_digest: str
+    provenance_id: str | None = None
+    mapping_id: str | None = None
+
+
+@dataclass(frozen=True)
 class PartyRecord:
     """Stable party identity without inferred household semantics."""
 
