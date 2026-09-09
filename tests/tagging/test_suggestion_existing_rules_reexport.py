@@ -38,7 +38,7 @@ def test_existing_rule_helpers_are_defined_in_helper_module() -> None:
 
 
 def test_suggestion_scoring_keeps_public_scoring_api() -> None:
-    """Classification and merchant-context API stay defined on suggestion_scoring."""
+    """Classification stays importable; merchant-context stays defined on scoring."""
     scoring = importlib.import_module("finjuice.pipeline.tagging.suggestion_scoring")
     scoring_module = "finjuice.pipeline.tagging.suggestion_scoring"
 
@@ -47,9 +47,8 @@ def test_suggestion_scoring_keeps_public_scoring_api() -> None:
         "is_auto_apply_eligible",
         "generate_merchant_context",
     ):
-        target = getattr(scoring, name)
-        assert callable(target)
-        assert target.__module__ == scoring_module
+        assert callable(getattr(scoring, name))
 
+    assert scoring.generate_merchant_context.__module__ == scoring_module
     assert callable(scoring.build_suggested_rule_field)
     assert callable(scoring.get_suggested_rule_name)

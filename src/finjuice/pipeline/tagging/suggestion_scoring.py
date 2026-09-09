@@ -1,6 +1,10 @@
 """Scoring and candidate generation for `finjuice rules suggest`.
 
-This module owns payment-gateway classification and merchant-context assembly.
+This module owns merchant-context assembly.
+
+Payment-gateway classification lives in
+:mod:`finjuice.pipeline.tagging.suggestion_scoring_classify` and is
+re-exported here so existing callers can keep importing from this module.
 
 Match-pattern generation lives in
 :mod:`finjuice.pipeline.tagging.suggestion_scoring_helpers` and is re-exported
@@ -33,7 +37,6 @@ surface from :mod:`finjuice.pipeline.tagging.suggestions`.
 from __future__ import annotations
 
 import logging
-import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -47,6 +50,15 @@ from finjuice.pipeline.tagging.suggestion_queries import (
     _normalize_suggest_data_dir,
     _similar_merchants_query,
     get_suggestion_coverage_stats,  # noqa: F401 — re-exported for suggestions callers.
+)
+from finjuice.pipeline.tagging.suggestion_scoring_classify import (
+    PAYMENT_GATEWAY_AMBIGUOUS_REASON as PAYMENT_GATEWAY_AMBIGUOUS_REASON,  # noqa: F401 — re-exported for suggestions callers.
+)
+from finjuice.pipeline.tagging.suggestion_scoring_classify import (
+    classify_merchant_kind as classify_merchant_kind,
+)
+from finjuice.pipeline.tagging.suggestion_scoring_classify import (
+    is_auto_apply_eligible as is_auto_apply_eligible,
 )
 from finjuice.pipeline.tagging.suggestion_scoring_cluster import (
     RECURRING_PRIORITY_BOOST,  # noqa: F401 — re-exported for suggestions callers.
@@ -75,32 +87,6 @@ from finjuice.pipeline.tagging.suggestion_similarity import (
 )
 
 logger = logging.getLogger(__name__)
-PAYMENT_GATEWAY_AMBIGUOUS_REASON = "payment_gateway"
-
-_KNOWN_PAYMENT_GATEWAY_NORMALIZED = {
-    "KGINICIS",
-    "이니시스",
-    "케이지이니시스",
-    "NHNKCP",
-    "KCP",
-    "엔에이치엔케이씨피",
-    "토스페이먼츠",
-    "TOSSPAYMENTS",
-    "나이스페이먼츠",
-    "NICEPAYMENTS",
-    "KICC",
-    "한국정보통신",
-    "ALIPAY",
-    "ALIPAYCONNECT",
-    "ANOMALY",
-}
-
-_PAYMENT_GATEWAY_PREFIXES = (
-    "PAYPAL*",
-    "PAYPAL *",
-    "STRIPE*",
-    "STRIPE *",
-)
 
 
 def _normalize_text_list(value: Any) -> list[str]:
@@ -117,45 +103,6 @@ def _normalize_text_list(value: Any) -> list[str]:
         if normalized and normalized not in values:
             values.append(normalized)
     return values
-
-
-def _normalize_payment_gateway_key(value: Any) -> str:
-    """Normalize merchant text for conservative known-PG classification."""
-    text = _normalize_text(value)
-    if not text:
-        return ""
-    return re.sub(r"[^0-9A-Z가-힣]+", "", text.upper())
-
-
-def classify_merchant_kind(merchant: Any) -> dict[str, str | None]:
-    """Classify merchants that are known payment intermediaries.
-
-    The detector is intentionally conservative. It marks well-known processor
-    names and processor-style prefixes, but avoids broad substring matches so
-    ordinary merchants with similar text remain eligible for normal curation.
-    """
-    text = _normalize_text(merchant) or ""
-    key = _normalize_payment_gateway_key(text)
-    upper_text = text.upper()
-    is_gateway = key in _KNOWN_PAYMENT_GATEWAY_NORMALIZED or any(
-        upper_text.startswith(prefix) for prefix in _PAYMENT_GATEWAY_PREFIXES
-    )
-    if not is_gateway:
-        return {
-            "merchant_kind": "merchant",
-            "ambiguous_reason": None,
-            "default_action": "create_rule",
-        }
-    return {
-        "merchant_kind": "payment_gateway",
-        "ambiguous_reason": PAYMENT_GATEWAY_AMBIGUOUS_REASON,
-        "default_action": "skip_rule",
-    }
-
-
-def is_auto_apply_eligible(suggestion: dict[str, Any]) -> bool:
-    """Return whether a suggestion is safe for headless rule auto-apply."""
-    return suggestion.get("default_action") != "skip_rule"
 
 
 def _round_ratio(value: Any) -> float:

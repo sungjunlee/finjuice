@@ -1,10 +1,12 @@
 """Backwards-compatibility shim for the tagging-suggestions public API.
 
 Scoring and candidate generation live in
-:mod:`finjuice.pipeline.tagging.suggestion_scoring`. Suggested-rule candidate
-payloads live in
-:mod:`finjuice.pipeline.tagging.suggestion_scoring_cluster` and are re-exported
-through the scoring module. Merchant-context queries
+:mod:`finjuice.pipeline.tagging.suggestion_scoring`. Payment-gateway
+classification lives in
+:mod:`finjuice.pipeline.tagging.suggestion_scoring_classify` and is
+re-exported through the scoring module. Suggested-rule candidate payloads
+live in :mod:`finjuice.pipeline.tagging.suggestion_scoring_cluster` and are
+re-exported through the scoring module. Merchant-context queries
 and coverage stats live in :mod:`finjuice.pipeline.tagging.suggestion_queries`
 and are re-exported through the scoring module. Merchant similarity and
 clustering live in :mod:`finjuice.pipeline.tagging.suggestion_similarity` and

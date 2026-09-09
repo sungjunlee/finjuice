@@ -14,8 +14,6 @@ def test_match_pattern_helpers_live_in_helper_module() -> None:
     helpers_text = (TAGGING_DIR / "suggestion_scoring_helpers.py").read_text(encoding="utf-8")
 
     assert "def generate_merchant_context" in scoring_text
-    assert "def classify_merchant_kind" in scoring_text
-    assert "def is_auto_apply_eligible" in scoring_text
     assert "def _clean_merchant_name" not in scoring_text
     assert "def _escape_regex_special_chars" not in scoring_text
     assert "def _generate_match_pattern" not in scoring_text
