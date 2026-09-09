@@ -47,7 +47,13 @@ scope: ["**"]
 - 첫 이전은 중복 row_hash occurrence와 수동 상태를 보존한다. 기존 float 정규화기를 재사용하지 않고 정확한 숫자의 계수·소수 자릿수·원문을 저장한다. 통화 미상은 KRW로 추정하지 않는다.
 - M1의 최초 기준선과 검토된 복구 절차는 영구 보호한다. #438과 실제 cutover의 기준선은 해당 시점 writer 통제 아래 새로 취득한다. 오래된 원격 capture plan이나 옛 helper를 그대로 재실행하지 않는다.
 - 구현 writer는 저장 코드·합성 테스트를 맡고 오케스트레이터는 계약 판단·통합·다른 패밀리 최종 검토·GitHub 및 비공개 운영 검증을 맡는다. 같은 파일에 writer를 겹치지 않는다.
+- 기존 DB의 사전 검사도 원본 WAL/SHM을 바꾸면 안 된다. SQLite의 일반 read-only 연결은 SHM을 변경할 수 있고 immutable 연결은 미반영 WAL을 놓칠 수 있음을 합성 시험으로 확인했다. 검사는 보존되는 별도 snapshot 경계를 사용한다.
+- #433은 WAL 활성화를 요구하지 않는다. 새 WAL 운영을 도입할 때는 [SQLite WAL-reset 수정 버전](https://www.sqlite.org/wal.html)의 런타임을 확인한다. 현재 개발 SQLite 3.50.4에서 전역 런타임을 임의로 바꾸지 않는다.
 - 실제 금융 자료·운영 경로·키·상세 차이는 비공개 증거에 둔다. 사용자 원래 checkout의 변경을 보존한다.
 
 ## Progress
 - 2026-09-09: M1 완료 후 최신 main에서 M2를 시작했다. #433의 live AC 4개와 선행 #430·#432·#426의 COMPLETED 상태를 확인했다. 저장 계층 경계와 테스트 계획 탐색을 마쳤으며 첫 SQLite repository 구현을 시작한다.
+- 2026-09-09: Sol high를 #433의 단독 writer로 배정했다. 오케스트레이터의 SQLite 합성 probe에서 read-only의 SHM 변경과 immutable의 이전 WAL 상태 조회를 확인해 사전 검사·upgrade 실패 보존 테스트 요구에 반영했다.
+- 2026-09-09: 후보 패키지와 skill runtime 요구 버전을 0.7.3으로 동기화했다. lock의 변경은 로컬 패키지 버전뿐이며 CLI 버전·runtime 검사 30개를 통과했다. 운영 설치 변경이나 SQLite 활성화는 아직 하지 않았다.
+- 2026-09-09: #433 구현을 인계받았다. 합성 테스트 19개, 전체 Ruff와 365개 소스의 mypy를 통과했다. 원본 누락 검출, upgrade 중 실패 시 원본 DB/WAL/SHM 보존, FK 위반 검출과 FIFO 입력 거부를 포함한다. 전체 pytest·wheel/sdist 설치 smoke·Opus 5 교차 리뷰를 진행 중이며 AC와 이슈 상태는 검증 완료 후 갱신한다.
+- 2026-09-09: 전체 pytest 2,505 PASS·Windows 전용 1 SKIP, 커버리지 87.63%를 확인했다. wheel/sdist의 새 환경 설치·CLI 및 SQLite 후보 생성/읽기/원본 포함 upgrade smoke를 통과했다. 형식 정리는 Python AST 동일성을 확인했고 pre-commit도 통과했다. Opus 검토와 draft PR의 최종 CI 결과를 대기한다.

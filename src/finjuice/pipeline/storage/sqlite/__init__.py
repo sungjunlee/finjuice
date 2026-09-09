@@ -1,0 +1,86 @@
+"""Authoritative SQLite storage foundation with immutable source objects."""
+
+from finjuice.pipeline.storage.sqlite.errors import (
+    ExactValueError,
+    IdentifierError,
+    ObjectCorruptionError,
+    ObjectStoreError,
+    RepositoryIntegrityError,
+    RepositoryPathError,
+    RepositorySnapshotError,
+    RepositoryVersionError,
+    SQLiteStorageError,
+)
+from finjuice.pipeline.storage.sqlite.exact import ExactValue
+from finjuice.pipeline.storage.sqlite.ids import migration_entity_id, new_entity_id
+from finjuice.pipeline.storage.sqlite.objects import SourceArtifact, SourceObjectStore
+from finjuice.pipeline.storage.sqlite.paths import GenerationPaths
+from finjuice.pipeline.storage.sqlite.records import (
+    AccountRecord,
+    AssetSnapshotRecord,
+    ConfigRevisionRecord,
+    ObservationRecord,
+    OverviewBalanceRecord,
+    OverviewCashflowRecord,
+    OverviewFactRecord,
+    OverviewInsuranceRecord,
+    OverviewInvestmentRecord,
+    OverviewLoanRecord,
+    PartyRecord,
+    ProvenanceRecord,
+    ResourceRecord,
+    SourceOccurrenceRecord,
+    TransactionRecord,
+)
+from finjuice.pipeline.storage.sqlite.repository import RepositoryBuilder, RepositoryReader
+from finjuice.pipeline.storage.sqlite.schema import (
+    SQLITE_APPLICATION_ID,
+    SQLITE_SCHEMA_VERSION,
+    RepositoryInfo,
+    initialize_repository,
+    inspect_repository,
+    upgrade_repository,
+    validate_repository,
+)
+
+__all__ = [
+    "SQLITE_APPLICATION_ID",
+    "SQLITE_SCHEMA_VERSION",
+    "AccountRecord",
+    "AssetSnapshotRecord",
+    "ConfigRevisionRecord",
+    "ExactValue",
+    "ExactValueError",
+    "GenerationPaths",
+    "IdentifierError",
+    "ObjectCorruptionError",
+    "ObjectStoreError",
+    "ObservationRecord",
+    "OverviewBalanceRecord",
+    "OverviewCashflowRecord",
+    "OverviewFactRecord",
+    "OverviewInsuranceRecord",
+    "OverviewInvestmentRecord",
+    "OverviewLoanRecord",
+    "PartyRecord",
+    "ProvenanceRecord",
+    "RepositoryBuilder",
+    "RepositoryInfo",
+    "RepositoryIntegrityError",
+    "RepositoryPathError",
+    "RepositoryReader",
+    "RepositorySnapshotError",
+    "RepositoryVersionError",
+    "ResourceRecord",
+    "SQLiteStorageError",
+    "SourceArtifact",
+    "SourceObjectStore",
+    "SourceOccurrenceRecord",
+    "TransactionRecord",
+    "initialize_repository",
+    "inspect_repository",
+    "migration_entity_id",
+    "new_entity_id",
+    "upgrade_repository",
+    "validate_repository",
+]
