@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- An isolated SQLite storage foundation for preservation candidates, with exact
+  decimal values, stable legacy occurrence IDs, immutable source objects, and
+  schema/integrity checks (#433). The existing CSV dataset remains authoritative
+  until a separately verified operational cutover.
+
 ### Fixed
 
 - `finjuice budget status` now warns when `goals.yaml` category names do not
