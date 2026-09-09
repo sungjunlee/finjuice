@@ -20,6 +20,51 @@ from finjuice.pipeline.tagging.rules_yaml_roundtrip import save_rule_dicts_round
 logger = logging.getLogger(__name__)
 
 
+def _match_fields(r: TagRule) -> Dict[str, Any]:
+    extra: Dict[str, Any] = {}
+    if r.match:
+        extra["match"] = r.match
+    if r.fields:
+        extra["fields"] = r.fields
+    if r.conditions:
+        extra["conditions"] = [
+            {"field": condition.field, "op": condition.op, "value": condition.value}
+            for condition in r.conditions
+        ]
+    if r.logic != "all":
+        extra["logic"] = r.logic
+    return extra
+
+
+def _meta_fields(r: TagRule) -> Dict[str, Any]:
+    extra: Dict[str, Any] = {}
+    if r.category:
+        extra["category"] = r.category
+    if not r.enabled:
+        extra["enabled"] = r.enabled
+    if r.created_by != "manual":
+        extra["created_by"] = r.created_by
+    if r.created_at:
+        extra["created_at"] = r.created_at
+    if r.confidence != DEFAULT_RULE_CONFIDENCE:
+        extra["confidence"] = r.confidence
+    if r.notes:
+        extra["notes"] = r.notes
+    return extra
+
+
+def rule_to_dict(r: TagRule) -> Dict[str, Any]:
+    """Convert TagRule to dict, only including optional fields when set."""
+    d: Dict[str, Any] = {
+        "name": r.name,
+        "tags": r.tags,
+        "priority": r.priority,
+    }
+    d.update(_match_fields(r))
+    d.update(_meta_fields(r))
+    return d
+
+
 def save_rules(rules: List[TagRule], rules_path: Path) -> None:
     """
     Save rules back to YAML file.
@@ -33,40 +78,6 @@ def save_rules(rules: List[TagRule], rules_path: Path) -> None:
     Raises:
         OSError: If file cannot be written (permission denied, disk full, etc.)
     """
-
-    def rule_to_dict(r: TagRule) -> Dict[str, Any]:
-        """Convert TagRule to dict, only including category if set."""
-        d: Dict[str, Any] = {
-            "name": r.name,
-            "tags": r.tags,
-            "priority": r.priority,
-        }
-        if r.match:
-            d["match"] = r.match
-        if r.fields:
-            d["fields"] = r.fields
-        if r.conditions:
-            d["conditions"] = [
-                {"field": condition.field, "op": condition.op, "value": condition.value}
-                for condition in r.conditions
-            ]
-        if r.logic != "all":
-            d["logic"] = r.logic
-        # Only include optional fields if they have non-default values
-        if r.category:
-            d["category"] = r.category
-        if not r.enabled:
-            d["enabled"] = r.enabled
-        if r.created_by != "manual":
-            d["created_by"] = r.created_by
-        if r.created_at:
-            d["created_at"] = r.created_at
-        if r.confidence != DEFAULT_RULE_CONFIDENCE:
-            d["confidence"] = r.confidence
-        if r.notes:
-            d["notes"] = r.notes
-        return d
-
     try:
         save_rule_dicts_roundtrip([rule_to_dict(r) for r in rules], rules_path)
         logger.info(f"Saved {len(rules)} rules to {rules_path}")
