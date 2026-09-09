@@ -52,7 +52,7 @@ from finjuice.pipeline.tagging.suggestion_queries import (
     get_suggestion_coverage_stats,  # noqa: F401 — re-exported for suggestions callers.
 )
 from finjuice.pipeline.tagging.suggestion_scoring_classify import (
-    PAYMENT_GATEWAY_AMBIGUOUS_REASON as PAYMENT_GATEWAY_AMBIGUOUS_REASON,  # noqa: F401 — re-exported for suggestions callers.
+    PAYMENT_GATEWAY_AMBIGUOUS_REASON as PAYMENT_GATEWAY_AMBIGUOUS_REASON,
 )
 from finjuice.pipeline.tagging.suggestion_scoring_classify import (
     classify_merchant_kind as classify_merchant_kind,
