@@ -41,6 +41,7 @@ def test_rules_command_implementations_are_split_by_domain() -> None:
         "suggest_rendering",
         "export",
         "gaps",
+        "gaps_json",
     }.issubset(module_names)
 
 
@@ -116,3 +117,29 @@ def test_rules_suggest_apply_names_stay_on_entrypoint() -> None:
 
     assert suggest._interactive_apply_suggestions is apply_mod._interactive_apply_suggestions
     assert callable(suggest.suggest_rules_command)
+
+
+def test_rules_gaps_json_lives_in_helper_module() -> None:
+    """JSON payload builders should not live in the Typer command module."""
+    gaps_text = (COMMANDS_DIR / "rules_cmd" / "gaps.py").read_text(encoding="utf-8")
+    gaps_json_text = (COMMANDS_DIR / "rules_cmd" / "gaps_json.py").read_text(encoding="utf-8")
+
+    assert "def analyze_gaps_command" in gaps_text
+    assert "def _compute_rules_gaps_json" not in gaps_text
+    assert "def _serialize_gap_analysis" not in gaps_text
+    assert "def _serialize_coverage_simulation" not in gaps_text
+    assert "_compute_rules_gaps_json" in gaps_text
+    assert "def _compute_rules_gaps_json" in gaps_json_text
+    assert "def _serialize_gap_analysis" in gaps_json_text
+    assert "def _serialize_coverage_simulation" in gaps_json_text
+
+
+def test_rules_gaps_json_names_stay_on_entrypoint() -> None:
+    """The stable gaps import path should keep the JSON helper names."""
+    gaps = importlib.import_module("finjuice.pipeline.cli.commands.rules_cmd.gaps")
+    gaps_json = importlib.import_module("finjuice.pipeline.cli.commands.rules_cmd.gaps_json")
+
+    assert gaps._compute_rules_gaps_json is gaps_json._compute_rules_gaps_json
+    assert gaps._serialize_gap_analysis is gaps_json._serialize_gap_analysis
+    assert gaps._serialize_coverage_simulation is gaps_json._serialize_coverage_simulation
+    assert callable(gaps.analyze_gaps_command)
