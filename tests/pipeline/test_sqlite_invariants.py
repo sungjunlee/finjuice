@@ -16,11 +16,13 @@ from finjuice.pipeline.storage.sqlite import (
     UNKNOWN_CURRENCY,
     AccountRecord,
     AssetSnapshotRecord,
+    ConfigRevisionRecord,
     ExactValue,
     GenerationPaths,
     LegacyIdentifierRecord,
     MigrationIdentityRecord,
     ObservationRecord,
+    OverviewBalanceRecord,
     OverviewFactRecord,
     PartyRecord,
     ProvenanceRecord,
@@ -36,6 +38,7 @@ from finjuice.pipeline.storage.sqlite import (
     validate_repository,
 )
 from finjuice.pipeline.storage.sqlite import repository as repository_module
+from finjuice.pipeline.storage.sqlite import schema as sqlite_schema
 from finjuice.pipeline.storage.sqlite.errors import (
     RepositoryIntegrityError,
     RepositorySnapshotError,
@@ -102,7 +105,12 @@ def test_exact_add_savepoint_rolls_back_wrong_subtype_insert(
 ) -> None:
     paths = GenerationPaths(tmp_path / "atomic-exact")
     value_id = new_entity_id()
-    value = ExactValue.from_lexical("1.25", value_kind="quantity", unit="share.v1")
+    value = ExactValue.from_lexical(
+        "1.25",
+        value_kind="quantity",
+        origin_kind="calculated",
+        unit="share.v1",
+    )
     original_sql = repository_module._EXACT_SUBTYPE_INSERT_SQL["quantity"]
 
     with RepositoryBuilder(paths, new_entity_id()) as builder:
@@ -148,6 +156,401 @@ def test_finalize_rejects_missing_application_subtype(
         builder.finalize()
 
     assert not paths.database.exists()
+
+
+def test_repository_metadata_allows_forward_progress_but_rejects_identity_rewrite(
+    tmp_path: Path,
+) -> None:
+    paths = GenerationPaths(tmp_path / "protected-metadata")
+    generation = new_entity_id()
+    with RepositoryBuilder(paths, generation) as builder:
+        builder.finalize()
+
+    connection = sqlite3.connect(paths.database)
+    try:
+        connection.execute("UPDATE repository_meta SET dataset_revision = 2 WHERE singleton = 1")
+        connection.commit()
+        connection.execute("UPDATE repository_meta SET schema_version = 2 WHERE singleton = 1")
+        assert connection.execute(
+            "SELECT schema_version FROM repository_meta WHERE singleton = 1"
+        ).fetchone() == (2,)
+        connection.rollback()
+
+        guarded_statements = (
+            (
+                "UPDATE repository_meta SET application_id = ? WHERE singleton = 1",
+                (1,),
+            ),
+            (
+                "UPDATE repository_meta SET dataset_generation = ? WHERE singleton = 1",
+                (new_entity_id(),),
+            ),
+            (
+                "UPDATE repository_meta SET schema_version = 0 WHERE singleton = 1",
+                (),
+            ),
+            (
+                "UPDATE repository_meta SET dataset_revision = 1 WHERE singleton = 1",
+                (),
+            ),
+            ("DELETE FROM repository_meta WHERE singleton = 1", ()),
+            (
+                "INSERT OR REPLACE INTO repository_meta "
+                "(singleton, application_id, schema_version, dataset_generation, "
+                "dataset_revision) VALUES (1, ?, 1, ?, 3)",
+                (sqlite_schema.SQLITE_APPLICATION_ID, new_entity_id()),
+            ),
+        )
+        for statement, parameters in guarded_statements:
+            with pytest.raises(sqlite3.IntegrityError, match="protected repository metadata"):
+                connection.execute(statement, parameters)
+            connection.rollback()
+    finally:
+        connection.close()
+
+    info = validate_repository(paths.database, scratch_root=tmp_path / "scratch")
+    assert info.dataset_generation == generation
+    assert info.dataset_revision == 2
+
+
+def test_schema_migration_ledger_is_immutable_and_must_match_current_version(
+    tmp_path: Path,
+) -> None:
+    paths = GenerationPaths(tmp_path / "migration-ledger")
+    with RepositoryBuilder(paths, new_entity_id()) as builder:
+        builder.finalize()
+
+    connection = sqlite3.connect(paths.database)
+    try:
+        with pytest.raises(sqlite3.IntegrityError, match="immutable preservation row"):
+            connection.execute(
+                "UPDATE schema_migrations SET migration_name = 'rewritten' WHERE schema_version = 1"
+            )
+        connection.rollback()
+        with pytest.raises(sqlite3.IntegrityError, match="immutable preservation row"):
+            connection.execute("DELETE FROM schema_migrations WHERE schema_version = 1")
+        connection.rollback()
+        connection.execute("DROP TRIGGER schema_migrations_no_delete")
+        connection.execute("DELETE FROM schema_migrations WHERE schema_version = 1")
+        connection.commit()
+    finally:
+        connection.close()
+
+    with pytest.raises(RepositoryIntegrityError, match="migration ledger"):
+        validate_repository(paths.database, scratch_root=tmp_path / "scratch")
+
+
+def test_source_binding_checks_cover_every_observation_backed_typed_table() -> None:
+    assert set(sqlite_schema._OBSERVATION_PROVENANCE_TABLES) == {
+        "transactions",
+        "overview_facts",
+        "overview_balances",
+        "overview_cashflows",
+        "overview_insurance",
+        "overview_investments",
+        "overview_loans",
+        "asset_snapshots",
+    }
+
+
+def test_typed_record_rejects_observation_and_provenance_from_different_occurrences(
+    tmp_path: Path,
+) -> None:
+    paths = GenerationPaths(tmp_path / "typed-source-mismatch")
+    with RepositoryBuilder(paths, new_entity_id()) as builder:
+        _, first_occurrence = _source_context(builder, b"first source")
+        _, second_occurrence = _source_context(builder, b"second source")
+        observation_id = new_entity_id()
+        builder.add_observation(
+            ObservationRecord(
+                observation_id=observation_id,
+                occurrence_id=first_occurrence,
+                observed_at=None,
+                effective_at=None,
+                collected_at=None,
+                scope_state="unknown",
+            )
+        )
+        provenance_id = _add_provenance(
+            builder,
+            second_occurrence,
+            {"locator_version": 1, "row": 1},
+        )
+        builder.add_overview_fact(
+            OverviewFactRecord(
+                fact_id=new_entity_id(),
+                observation_id=observation_id,
+                provenance_id=provenance_id,
+                snapshot_date="2026-09-01",
+                sheet_name="overview",
+                block_id="text",
+                block_title="Text",
+                fact_kind="text",
+                value_type="text",
+                value_text="evidence",
+            )
+        )
+
+        with pytest.raises(RepositoryIntegrityError, match="different source occurrences"):
+            builder.finalize()
+
+
+def test_config_revision_rejects_artifact_from_a_different_occurrence(tmp_path: Path) -> None:
+    paths = GenerationPaths(tmp_path / "config-source-mismatch")
+    with RepositoryBuilder(paths, new_entity_id()) as builder:
+        first_artifact, _ = _source_context(builder, b"first config")
+        _, second_occurrence = _source_context(builder, b"second config")
+        builder.add_config_revision(
+            ConfigRevisionRecord(
+                revision_id=new_entity_id(),
+                config_kind="rules",
+                artifact_id=first_artifact,
+                occurrence_id=second_occurrence,
+                parsed_status="parsed",
+                canonical_payload={"rules": []},
+            )
+        )
+
+        with pytest.raises(RepositoryIntegrityError, match="does not match its source"):
+            builder.finalize()
+
+
+def test_source_exact_value_requires_provenance_but_calculated_value_does_not(
+    tmp_path: Path,
+) -> None:
+    calculated_paths = GenerationPaths(tmp_path / "calculated-without-provenance")
+    calculated_id = new_entity_id()
+    with RepositoryBuilder(calculated_paths, new_entity_id()) as builder:
+        builder.add_exact_value(
+            calculated_id,
+            ExactValue.from_lexical(
+                "1",
+                value_kind="number",
+                origin_kind="calculated",
+                unit="count.v1",
+            ),
+        )
+        builder.finalize()
+
+    source_paths = GenerationPaths(tmp_path / "source-without-provenance")
+    with RepositoryBuilder(source_paths, new_entity_id()) as builder:
+        builder.add_exact_value(
+            new_entity_id(),
+            ExactValue.from_lexical("1", value_kind="number", unit="count.v1"),
+        )
+        with pytest.raises(RepositoryIntegrityError, match="missing provenance"):
+            builder.finalize()
+
+    with RepositoryReader(
+        calculated_paths.database,
+        scratch_root=tmp_path / "scratch",
+    ) as reader:
+        assert reader.rows("exact_values")[0]["provenance_id"] is None
+
+
+def test_typed_record_rejects_source_exact_value_from_a_different_occurrence(
+    tmp_path: Path,
+) -> None:
+    paths = GenerationPaths(tmp_path / "exact-source-mismatch")
+    with RepositoryBuilder(paths, new_entity_id()) as builder:
+        _, first_occurrence = _source_context(builder, b"first values")
+        _, second_occurrence = _source_context(builder, b"second values")
+        observation_id = new_entity_id()
+        builder.add_observation(
+            ObservationRecord(
+                observation_id=observation_id,
+                occurrence_id=first_occurrence,
+                observed_at=None,
+                effective_at=None,
+                collected_at=None,
+                scope_state="unknown",
+            )
+        )
+        fact_provenance = _add_provenance(
+            builder,
+            first_occurrence,
+            {"locator_version": 1, "row": 1},
+        )
+        value_provenance = _add_provenance(
+            builder,
+            second_occurrence,
+            {"locator_version": 1, "row": 2},
+        )
+        value_id = new_entity_id()
+        builder.add_exact_value(
+            value_id,
+            ExactValue.from_lexical("10", value_kind="money", currency="KRW"),
+            provenance_id=value_provenance,
+        )
+        builder.add_overview_fact(
+            OverviewFactRecord(
+                fact_id=new_entity_id(),
+                observation_id=observation_id,
+                provenance_id=fact_provenance,
+                snapshot_date="2026-09-01",
+                sheet_name="overview",
+                block_id="money",
+                block_title="Money",
+                fact_kind="amount",
+                value_type="number",
+                numeric_value_id=value_id,
+            )
+        )
+
+        with pytest.raises(RepositoryIntegrityError, match="exact value.*different"):
+            builder.finalize()
+
+
+def test_overview_projection_rejects_source_fact_from_a_different_occurrence(
+    tmp_path: Path,
+) -> None:
+    paths = GenerationPaths(tmp_path / "projection-source-mismatch")
+    with RepositoryBuilder(paths, new_entity_id()) as builder:
+        _, first_occurrence = _source_context(builder, b"first overview")
+        _, second_occurrence = _source_context(builder, b"second overview")
+        first_observation = new_entity_id()
+        second_observation = new_entity_id()
+        for observation_id, occurrence_id in (
+            (first_observation, first_occurrence),
+            (second_observation, second_occurrence),
+        ):
+            builder.add_observation(
+                ObservationRecord(
+                    observation_id=observation_id,
+                    occurrence_id=occurrence_id,
+                    observed_at=None,
+                    effective_at=None,
+                    collected_at=None,
+                    scope_state="unknown",
+                )
+            )
+        fact_provenance = _add_provenance(
+            builder,
+            first_occurrence,
+            {"locator_version": 1, "row": 1},
+        )
+        projection_provenance = _add_provenance(
+            builder,
+            second_occurrence,
+            {"locator_version": 1, "row": 2},
+        )
+        value_id = new_entity_id()
+        builder.add_exact_value(
+            value_id,
+            ExactValue.from_lexical("10", value_kind="money", currency="KRW"),
+            provenance_id=fact_provenance,
+        )
+        fact_id = new_entity_id()
+        builder.add_overview_fact(
+            OverviewFactRecord(
+                fact_id=fact_id,
+                observation_id=first_observation,
+                provenance_id=fact_provenance,
+                snapshot_date="2026-09-01",
+                sheet_name="overview",
+                block_id="balance",
+                block_title="Balance",
+                fact_kind="amount",
+                value_type="number",
+                numeric_value_id=value_id,
+            )
+        )
+        projection_value_id = new_entity_id()
+        builder.add_exact_value(
+            projection_value_id,
+            ExactValue.from_lexical("10", value_kind="money", currency="KRW"),
+            provenance_id=projection_provenance,
+        )
+        builder.add_overview_balance(
+            OverviewBalanceRecord(
+                balance_id=new_entity_id(),
+                observation_id=second_observation,
+                provenance_id=projection_provenance,
+                source_fact_id=fact_id,
+                amount_value_id=projection_value_id,
+                snapshot_date="2026-09-01",
+                side="asset",
+                category="cash",
+                item_name="cash",
+            )
+        )
+
+        with pytest.raises(RepositoryIntegrityError, match="source fact.*different"):
+            builder.finalize()
+
+
+def test_same_occurrence_allows_distinct_overview_observations_and_calculation_sources(
+    tmp_path: Path,
+) -> None:
+    paths = GenerationPaths(tmp_path / "same-occurrence-distinct-observations")
+    with RepositoryBuilder(paths, new_entity_id()) as builder:
+        _, occurrence_id = _source_context(builder, b"one overview file")
+        observations = [new_entity_id(), new_entity_id()]
+        for index, observation_id in enumerate(observations, start=1):
+            builder.add_observation(
+                ObservationRecord(
+                    observation_id=observation_id,
+                    occurrence_id=occurrence_id,
+                    observed_at=None,
+                    effective_at=f"2026-09-0{index}",
+                    collected_at=None,
+                    scope_state="partial",
+                )
+            )
+        provenances = [
+            _add_provenance(
+                builder,
+                occurrence_id,
+                {"locator_version": 1, "row": row},
+            )
+            for row in (1, 2)
+        ]
+        fact_value_id = new_entity_id()
+        builder.add_exact_value(
+            fact_value_id,
+            ExactValue.from_lexical("10", value_kind="money", currency="KRW"),
+            provenance_id=provenances[0],
+        )
+        fact_id = new_entity_id()
+        builder.add_overview_fact(
+            OverviewFactRecord(
+                fact_id=fact_id,
+                observation_id=observations[0],
+                provenance_id=provenances[0],
+                snapshot_date="2026-09-01",
+                sheet_name="overview",
+                block_id="balance",
+                block_title="Balance",
+                fact_kind="amount",
+                value_type="number",
+                numeric_value_id=fact_value_id,
+            )
+        )
+        calculated_id = new_entity_id()
+        builder.add_exact_value(
+            calculated_id,
+            ExactValue.from_lexical(
+                "10",
+                value_kind="money",
+                origin_kind="calculated",
+                currency="KRW",
+            ),
+            provenance_id=provenances[0],
+        )
+        builder.add_overview_balance(
+            OverviewBalanceRecord(
+                balance_id=new_entity_id(),
+                observation_id=observations[1],
+                provenance_id=provenances[1],
+                source_fact_id=fact_id,
+                amount_value_id=calculated_id,
+                snapshot_date="2026-09-02",
+                side="asset",
+                category="cash",
+                item_name="cash",
+            )
+        )
+        builder.finalize()
 
 
 def test_overview_non_numeric_fact_requires_lexical_evidence_and_rolls_back(
@@ -272,16 +675,6 @@ def test_asset_snapshot_accepts_one_real_value_and_rejects_both_missing(tmp_path
         )
         builder.add_account(AccountRecord(account_id=account_id, account_kind="broker.v1"))
         builder.add_resource(ResourceRecord(resource_id=resource_id, resource_kind="equity.v1"))
-        quantity_id = new_entity_id()
-        market_value_id = new_entity_id()
-        builder.add_exact_value(
-            quantity_id,
-            ExactValue.from_lexical("1.5", value_kind="quantity", unit="share.v1"),
-        )
-        builder.add_exact_value(
-            market_value_id,
-            ExactValue.from_lexical("2500", value_kind="money", currency="KRW"),
-        )
         provenances = [
             _add_provenance(
                 builder,
@@ -290,6 +683,18 @@ def test_asset_snapshot_accepts_one_real_value_and_rejects_both_missing(tmp_path
             )
             for row in range(1, 4)
         ]
+        quantity_id = new_entity_id()
+        market_value_id = new_entity_id()
+        builder.add_exact_value(
+            quantity_id,
+            ExactValue.from_lexical("1.5", value_kind="quantity", unit="share.v1"),
+            provenance_id=provenances[0],
+        )
+        builder.add_exact_value(
+            market_value_id,
+            ExactValue.from_lexical("2500", value_kind="money", currency="KRW"),
+            provenance_id=provenances[1],
+        )
         builder.add_asset_snapshot(
             AssetSnapshotRecord(
                 snapshot_id=new_entity_id(),
@@ -407,7 +812,12 @@ def test_exact_money_round_trips_as_text_with_lexical_and_currency(tmp_path: Pat
     with RepositoryBuilder(paths, new_entity_id()) as builder:
         builder.add_exact_value(
             value_id,
-            ExactValue.from_lexical(lexical, value_kind="money", currency="KRW"),
+            ExactValue.from_lexical(
+                lexical,
+                value_kind="money",
+                origin_kind="calculated",
+                currency="KRW",
+            ),
         )
         builder.finalize()
 

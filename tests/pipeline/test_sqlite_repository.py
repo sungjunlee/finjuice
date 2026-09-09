@@ -48,6 +48,16 @@ def _id() -> str:
     return str(uuid4())
 
 
+def _tree_state(root: Path) -> dict[str, tuple[int, bytes | None]]:
+    state: dict[str, tuple[int, bytes | None]] = {}
+    for path in (root, *sorted(root.rglob("*"))):
+        relative_path = "." if path == root else path.relative_to(root).as_posix()
+        entry = path.lstat()
+        contents = path.read_bytes() if stat.S_ISREG(entry.st_mode) else None
+        state[relative_path] = (stat.S_IMODE(entry.st_mode), contents)
+    return state
+
+
 def _provenance(occurrence_id: str, row: int) -> ProvenanceRecord:
     return ProvenanceRecord(
         provenance_id=_id(),
@@ -347,6 +357,100 @@ def test_finalize_and_validation_reject_missing_referenced_objects(tmp_path: Pat
         validate_repository(published.database)
 
 
+def test_validation_and_upgrade_normalize_corrupt_source_object_without_mutating_source(
+    tmp_path: Path,
+) -> None:
+    source = GenerationPaths(tmp_path / "corrupt-source")
+    with RepositoryBuilder(source, _id()) as builder:
+        artifacts = [
+            builder.publish_source(io.BytesIO(contents))
+            for contents in (b"first source object", b"second source object")
+        ]
+        builder.finalize()
+    ordered = sorted(artifacts, key=lambda artifact: artifact.artifact_id)
+    corrupt_path = source.root / ordered[1].relative_path
+    original = corrupt_path.read_bytes()
+    corrupt_path.chmod(0o644)
+    corrupt_path.write_bytes(bytes([original[0] ^ 0xFF]) + original[1:])
+    corrupt_path.chmod(0o444)
+    before = _tree_state(source.root)
+    destination = GenerationPaths(tmp_path / "corrupt-destination")
+
+    with pytest.raises(RepositoryIntegrityError, match="missing, mutable, or corrupt"):
+        validate_repository(
+            source.database,
+            scratch_root=tmp_path / "corrupt-validate-scratch",
+        )
+    with pytest.raises(RepositoryIntegrityError, match="missing, mutable, or corrupt"):
+        upgrade_repository(
+            source.database,
+            destination,
+            scratch_root=tmp_path / "corrupt-upgrade-scratch",
+        )
+
+    assert _tree_state(source.root) == before
+    first_source = source.root / ordered[0].relative_path
+    assert (destination.root / ordered[0].relative_path).read_bytes() == first_source.read_bytes()
+    assert not destination.database.exists()
+    assert list(destination.root.glob(".finjuice-sqlite-staging-*")) == []
+
+
+def test_validation_and_upgrade_normalize_missing_source_object_tree(
+    tmp_path: Path,
+) -> None:
+    source = GenerationPaths(tmp_path / "missing-object-tree-source")
+    with RepositoryBuilder(source, _id()) as builder:
+        artifact = builder.publish_source(io.BytesIO(b"preserved outside expected tree"))
+        builder.finalize()
+    detached_objects = source.root / "detached-objects"
+    source.objects.rename(detached_objects)
+    before = _tree_state(source.root)
+    destination = GenerationPaths(tmp_path / "missing-object-tree-destination")
+
+    with pytest.raises(RepositoryIntegrityError, match="missing, mutable, or corrupt"):
+        validate_repository(
+            source.database,
+            scratch_root=tmp_path / "missing-tree-validate-scratch",
+        )
+    with pytest.raises(RepositoryIntegrityError, match="missing, mutable, or corrupt"):
+        upgrade_repository(
+            source.database,
+            destination,
+            scratch_root=tmp_path / "missing-tree-upgrade-scratch",
+        )
+
+    assert _tree_state(source.root) == before
+    assert (detached_objects / Path(artifact.relative_path).relative_to("objects")).exists()
+    assert not destination.database.exists()
+    assert list(destination.root.glob(".finjuice-sqlite-staging-*")) == []
+
+
+def test_upgrade_does_not_misclassify_destination_object_path_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = GenerationPaths(tmp_path / "destination-path-source")
+    with RepositoryBuilder(source, _id()) as builder:
+        builder.publish_source(io.BytesIO(b"valid upgrade source"))
+        builder.finalize()
+    destination = GenerationPaths(tmp_path / "destination-path-failure")
+
+    def fail_destination_publish(self: object, path: Path) -> None:
+        raise RepositoryPathError("injected destination path failure")
+
+    monkeypatch.setattr(sqlite_schema.SourceObjectStore, "publish_path", fail_destination_publish)
+
+    with pytest.raises(RepositoryPathError, match="injected destination"):
+        upgrade_repository(
+            source.database,
+            destination,
+            scratch_root=tmp_path / "destination-path-scratch",
+        )
+
+    assert not destination.database.exists()
+    assert list(destination.root.glob(".finjuice-sqlite-staging-*")) == []
+
+
 def test_foreign_key_validation_detects_invalid_reference(tmp_path: Path) -> None:
     paths = GenerationPaths(tmp_path / "foreign-key")
     initialize_repository(paths, _id())
@@ -592,6 +696,29 @@ def test_database_publication_reports_first_directory_sync_failure(
         sqlite_schema._publish_database(staging, destination)
 
     assert not destination.exists()
+
+
+def test_database_publication_preserves_existing_destination_and_cleans_staging(
+    tmp_path: Path,
+) -> None:
+    staging = tmp_path / "staging.sqlite3"
+    destination = tmp_path / "published.sqlite3"
+    staging.write_bytes(b"candidate")
+    destination.write_bytes(b"existing repository")
+    staging_sidecars = [
+        Path(f"{staging}-journal"),
+        Path(f"{staging}-wal"),
+        Path(f"{staging}-shm"),
+    ]
+    for sidecar in staging_sidecars:
+        sidecar.write_bytes(b"staging sidecar")
+
+    with pytest.raises(RepositoryPathError, match="already exists and was not replaced"):
+        sqlite_schema._publish_database(staging, destination)
+
+    assert destination.read_bytes() == b"existing repository"
+    assert not staging.exists()
+    assert all(not sidecar.exists() for sidecar in staging_sidecars)
 
 
 def test_initialize_never_replaces_existing_database(tmp_path: Path) -> None:

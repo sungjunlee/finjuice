@@ -92,6 +92,10 @@ retained as opaque evidence and resolved before cutover.
 SQLite schema version is separate from the legacy CSV schema and backup-manifest
 versions. Connections enable foreign keys, and validation checks the application
 identity, schema metadata, SQLite integrity, and foreign-key consistency.
+Generation/application identity is immutable, revision/schema counters cannot
+move backwards, and the immutable migration ledger must match the current schema.
+Typed source records must bind observation and provenance to the same occurrence;
+config revisions must name the artifact belonging to their occurrence.
 Unsupported versions, including an unrecognized schema v0 bootstrap, are
 rejected; no destructive downgrade is attempted. A new builder starts at dataset
 revision zero. Only a validated source copy carries an existing revision forward.
@@ -103,7 +107,10 @@ and rollback journals. This inspection mechanism does not replace the stopped
 writer or filesystem-snapshot boundary required for a migration baseline.
 
 Schema changes build and validate a separate candidate and preserve the source
-DB and its sidecars on failure. Candidate builders use DELETE journaling and
+DB and its sidecars on failure. Missing, mutable, or corrupt referenced source
+objects fail as repository integrity errors. A failed copy can retain objects
+already published into its isolated destination; it never publishes the
+candidate database or deletes those objects to simulate rollback. Candidate builders use DELETE journaling and
 FULL synchronization. Before introducing WAL for operational writes, verify
 that the deployed SQLite runtime includes the
 [WAL-reset fix](https://www.sqlite.org/wal.html).
@@ -140,3 +147,23 @@ must not be inferred from the storage foundation alone. Publication durability
 tests check synchronization order and injected errors; they are not physical
 power-loss tests. File data and its directory entry require separate attention
 under the [Linux fsync contract](https://man7.org/linux/man-pages/man2/fsync.2.html).
+
+## Required schema v2 migration gate
+
+Before #435 imports any frozen dataset, #434 must supply and test the remaining
+[contract §9](ssot-migration-recovery-contract.md#9-minimal-m4-extension-points)
+extension points alongside the atomic changeset/audit boundary:
+
+- Effective-dated ownership assertions with exact shares, evidence, confirmation,
+  and non-overlap/ambiguity validation.
+- Explicit inclusion/overlap assertions for summaries, holdings, and manual versus
+  institutional facts.
+- Agent intake records separating immutable evidence, extraction, interpretation
+  proposals, user confirmation, and applied changesets, with idempotency and
+  expected-revision checks.
+
+These belong to schema v2 before the first preservation migration. Schema v1's
+account owner field preserves a source assertion; it does not establish confirmed
+ownership or authorize ownership calculations. Migration defaults remain unknown
+or unconfirmed and must not infer ownership, inclusion, or semantic supersession.
+The M5 purchase/order/close/adapter domain is outside this extension gate.

@@ -479,6 +479,7 @@ CREATE INDEX idx_observation_effective
 
 
 _IMMUTABLE_TABLES = (
+    "schema_migrations",
     "entities",
     "migration_identities",
     "source_artifacts",
@@ -539,6 +540,93 @@ _EXACT_SUBTYPE_CHECKS: Final = (
     "EXCEPT SELECT value_id FROM number_values",
 )
 
+_OBSERVATION_PROVENANCE_TABLES: Final = (
+    "transactions",
+    "overview_facts",
+    "overview_balances",
+    "overview_cashflows",
+    "overview_insurance",
+    "overview_investments",
+    "overview_loans",
+    "asset_snapshots",
+)
+
+_SOURCE_BINDING_CHECKS: Final = (
+    (
+        "WITH typed_records(entity_id, observation_id, provenance_id) AS ("
+        "SELECT entity_id, observation_id, provenance_id FROM transactions UNION ALL "
+        "SELECT entity_id, observation_id, provenance_id FROM overview_facts UNION ALL "
+        "SELECT entity_id, observation_id, provenance_id FROM overview_balances UNION ALL "
+        "SELECT entity_id, observation_id, provenance_id FROM overview_cashflows UNION ALL "
+        "SELECT entity_id, observation_id, provenance_id FROM overview_insurance UNION ALL "
+        "SELECT entity_id, observation_id, provenance_id FROM overview_investments UNION ALL "
+        "SELECT entity_id, observation_id, provenance_id FROM overview_loans UNION ALL "
+        "SELECT entity_id, observation_id, provenance_id FROM asset_snapshots) "
+        "SELECT record.entity_id FROM typed_records AS record "
+        "JOIN observations AS observation ON observation.entity_id = record.observation_id "
+        "JOIN record_provenance AS provenance "
+        "ON provenance.provenance_id = record.provenance_id "
+        "WHERE observation.source_occurrence_id <> provenance.source_occurrence_id",
+        "A typed record joins evidence from different source occurrences.",
+    ),
+    (
+        "SELECT revision.entity_id FROM config_revisions AS revision "
+        "JOIN source_occurrences AS occurrence "
+        "ON occurrence.entity_id = revision.source_occurrence_id "
+        "WHERE occurrence.source_artifact_id <> revision.source_artifact_id",
+        "A config revision artifact does not match its source occurrence.",
+    ),
+    (
+        "WITH projections(entity_id, source_fact_id, provenance_id) AS ("
+        "SELECT entity_id, source_fact_id, provenance_id FROM overview_balances UNION ALL "
+        "SELECT entity_id, source_fact_id, provenance_id FROM overview_cashflows UNION ALL "
+        "SELECT entity_id, source_fact_id, provenance_id FROM overview_insurance UNION ALL "
+        "SELECT entity_id, source_fact_id, provenance_id FROM overview_investments UNION ALL "
+        "SELECT entity_id, source_fact_id, provenance_id FROM overview_loans) "
+        "SELECT projection.entity_id FROM projections AS projection "
+        "JOIN record_provenance AS projection_provenance "
+        "ON projection_provenance.provenance_id = projection.provenance_id "
+        "JOIN overview_facts AS fact ON fact.entity_id = projection.source_fact_id "
+        "JOIN record_provenance AS fact_provenance "
+        "ON fact_provenance.provenance_id = fact.provenance_id "
+        "WHERE projection_provenance.source_occurrence_id "
+        "<> fact_provenance.source_occurrence_id",
+        "An overview projection and its source fact come from different occurrences.",
+    ),
+    (
+        "SELECT value_id FROM exact_values "
+        "WHERE origin_kind IN ('source', 'migration') AND provenance_id IS NULL",
+        "A source or migration exact value is missing provenance.",
+    ),
+    (
+        "WITH typed_values(entity_id, value_id, provenance_id) AS ("
+        "SELECT entity_id, amount_value_id, provenance_id FROM transactions UNION ALL "
+        "SELECT entity_id, confidence_value_id, provenance_id FROM transactions UNION ALL "
+        "SELECT entity_id, numeric_value_id, provenance_id FROM overview_facts UNION ALL "
+        "SELECT entity_id, amount_value_id, provenance_id FROM overview_balances UNION ALL "
+        "SELECT entity_id, amount_value_id, provenance_id FROM overview_cashflows UNION ALL "
+        "SELECT entity_id, paid_amount_value_id, provenance_id FROM overview_insurance UNION ALL "
+        "SELECT entity_id, principal_value_id, provenance_id FROM overview_investments UNION ALL "
+        "SELECT entity_id, valuation_value_id, provenance_id FROM overview_investments UNION ALL "
+        "SELECT entity_id, return_rate_value_id, provenance_id FROM overview_investments UNION ALL "
+        "SELECT entity_id, principal_value_id, provenance_id FROM overview_loans UNION ALL "
+        "SELECT entity_id, balance_value_id, provenance_id FROM overview_loans UNION ALL "
+        "SELECT entity_id, interest_rate_value_id, provenance_id FROM overview_loans UNION ALL "
+        "SELECT entity_id, quantity_value_id, provenance_id FROM asset_snapshots UNION ALL "
+        "SELECT entity_id, market_value_id, provenance_id FROM asset_snapshots) "
+        "SELECT record.entity_id FROM typed_values AS record "
+        "JOIN exact_values AS value ON value.value_id = record.value_id "
+        "JOIN record_provenance AS record_provenance "
+        "ON record_provenance.provenance_id = record.provenance_id "
+        "JOIN record_provenance AS value_provenance "
+        "ON value_provenance.provenance_id = value.provenance_id "
+        "WHERE value.origin_kind IN ('source', 'migration') "
+        "AND record_provenance.source_occurrence_id "
+        "<> value_provenance.source_occurrence_id",
+        "A typed record and its exact value come from different source occurrences.",
+    ),
+)
+
 
 def _immutable_trigger_sql() -> str:
     statements: list[str] = []
@@ -551,6 +639,22 @@ def _immutable_trigger_sql() -> str:
                 "BEGIN SELECT RAISE(ABORT, 'immutable preservation row'); END;",
             )
         )
+    statements.extend(
+        (
+            "CREATE TRIGGER repository_meta_guarded_update "
+            "BEFORE UPDATE ON repository_meta WHEN "
+            "NEW.application_id <> OLD.application_id "
+            "OR NEW.dataset_generation <> OLD.dataset_generation "
+            "OR NEW.schema_version < OLD.schema_version "
+            "OR NEW.dataset_revision < OLD.dataset_revision "
+            "BEGIN SELECT RAISE(ABORT, 'protected repository metadata'); END;",
+            "CREATE TRIGGER repository_meta_no_delete BEFORE DELETE ON repository_meta "
+            "BEGIN SELECT RAISE(ABORT, 'protected repository metadata'); END;",
+            "CREATE TRIGGER repository_meta_no_reinsert BEFORE INSERT ON repository_meta "
+            "WHEN EXISTS (SELECT 1 FROM repository_meta) "
+            "BEGIN SELECT RAISE(ABORT, 'protected repository metadata'); END;",
+        )
+    )
     return "\n".join(statements)
 
 
@@ -648,7 +752,12 @@ def _copy_source_objects(
     source_store = SourceObjectStore(source_paths)
     destination_store = SourceObjectStore(destination)
     for artifact_id, byte_length in rows:
-        source_artifact = source_store.verify(str(artifact_id), int(byte_length))
+        try:
+            source_artifact = source_store.verify(str(artifact_id), int(byte_length))
+        except (ObjectStoreError, RepositoryPathError) as exc:
+            raise RepositoryIntegrityError(
+                "A referenced immutable source object is missing, mutable, or corrupt."
+            ) from exc
         copied = destination_store.publish_path(source_paths.root / source_artifact.relative_path)
         if copied.artifact_id != artifact_id or copied.byte_length != byte_length:
             raise RepositoryIntegrityError(
@@ -803,6 +912,8 @@ def _validate_application_invariants(connection: sqlite3.Connection) -> None:
     for query in _EXACT_SUBTYPE_CHECKS:
         if connection.execute(query).fetchone() is not None:
             raise RepositoryIntegrityError("An exact value is missing its matching subtype row.")
+    _validate_schema_migration_ledger(connection)
+    _validate_source_bindings(connection)
     identities = connection.execute(
         "SELECT entity_id, capture_manifest_digest, record_kind, canonical_locator_json "
         "FROM migration_identities ORDER BY entity_id"
@@ -828,6 +939,28 @@ def _validate_application_invariants(connection: sqlite3.Connection) -> None:
             raise RepositoryIntegrityError("A migration identity does not re-derive its entity ID.")
 
 
+def _validate_schema_migration_ledger(connection: sqlite3.Connection) -> None:
+    """Require one immutable ledger row for every applied schema version."""
+    schema_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+    migration_versions = [
+        int(row[0])
+        for row in connection.execute(
+            "SELECT schema_version FROM schema_migrations ORDER BY schema_version"
+        ).fetchall()
+    ]
+    if migration_versions != list(range(1, schema_version + 1)):
+        raise RepositoryIntegrityError(
+            "The schema migration ledger does not match the current schema version."
+        )
+
+
+def _validate_source_bindings(connection: sqlite3.Connection) -> None:
+    """Reject typed rows that combine evidence from different source occurrences."""
+    for query, message in _SOURCE_BINDING_CHECKS:
+        if connection.execute(query).fetchone() is not None:
+            raise RepositoryIntegrityError(message)
+
+
 def _validate_source_objects(
     connection: sqlite3.Connection,
     paths: GenerationPaths,
@@ -844,7 +977,7 @@ def _validate_source_objects(
                 raise RepositoryIntegrityError(
                     "Source artifact database path disagrees with its object identity."
                 )
-    except ObjectStoreError as exc:
+    except (ObjectStoreError, RepositoryPathError) as exc:
         raise RepositoryIntegrityError(
             "A referenced immutable source object is missing, mutable, or corrupt."
         ) from exc
