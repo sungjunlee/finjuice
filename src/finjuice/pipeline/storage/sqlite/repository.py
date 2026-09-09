@@ -44,6 +44,7 @@ from finjuice.pipeline.storage.sqlite.records import (
 from finjuice.pipeline.storage.sqlite.schema import (
     RepositoryInfo,
     _apply_schema_v1,
+    _apply_schema_v2,
     _cleanup_staging,
     _connect_builder,
     _connect_snapshot,
@@ -84,6 +85,19 @@ _READ_TABLE_SQL: Final = {
     "overview_investments": "SELECT * FROM overview_investments",
     "overview_loans": "SELECT * FROM overview_loans",
     "asset_snapshots": "SELECT * FROM asset_snapshots",
+    "changesets": "SELECT * FROM changesets",
+    "changeset_entries": "SELECT * FROM changeset_entries",
+    "audit_events": "SELECT * FROM audit_events",
+    "idempotency_requests": "SELECT * FROM idempotency_requests",
+    "ownership_assertion_sets": "SELECT * FROM ownership_assertion_sets",
+    "ownership_assertion_shares": "SELECT * FROM ownership_assertion_shares",
+    "entity_relation_assertions": "SELECT * FROM entity_relation_assertions",
+    "agent_intake_artifacts": "SELECT * FROM agent_intake_artifacts",
+    "agent_intake_occurrences": "SELECT * FROM agent_intake_occurrences",
+    "agent_intake_extractions": "SELECT * FROM agent_intake_extractions",
+    "agent_intake_proposals": "SELECT * FROM agent_intake_proposals",
+    "agent_intake_confirmations": "SELECT * FROM agent_intake_confirmations",
+    "agent_intake_applications": "SELECT * FROM agent_intake_applications",
 }
 
 _EXACT_SUBTYPE_INSERT_SQL: Final = {
@@ -144,6 +158,7 @@ class RepositoryBuilder:
                 dataset_generation,
                 dataset_revision=dataset_revision,
             )
+            _apply_schema_v2(self._connection)
         except Exception:
             self._connection.close()
             self._closed = True

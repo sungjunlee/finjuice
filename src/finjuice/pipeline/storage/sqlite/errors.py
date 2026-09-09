@@ -37,3 +37,39 @@ class ObjectStoreError(SQLiteStorageError):
 
 class ObjectCorruptionError(ObjectStoreError):
     """An existing content-addressed object does not match its identity."""
+
+
+class AuthorityError(SQLiteStorageError):
+    """Base error for storage authority selection and coordination."""
+
+
+class AuthorityIntegrityError(AuthorityError):
+    """An activation record or its external identity binding is invalid."""
+
+
+class AuthorityConflictError(AuthorityError):
+    """The attempted writer does not own the active storage authority."""
+
+
+class MutationError(SQLiteStorageError):
+    """Base error for an authoritative repository mutation."""
+
+
+class MutationValidationError(MutationError, ValueError):
+    """A mutation request or domain operation is invalid."""
+
+
+class MutationConflictError(MutationError):
+    """A mutation conflicts with idempotency or optimistic concurrency state."""
+
+
+class MutationBusyError(MutationError):
+    """A repository writer could not acquire its bounded SQLite lock."""
+
+
+class MutationAbortedError(MutationError):
+    """A rolled-back mutation that left explicitly reported immutable objects."""
+
+    def __init__(self, message: str, retained_artifacts: tuple[str, ...]) -> None:
+        super().__init__(message)
+        self.retained_artifacts = retained_artifacts

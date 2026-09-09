@@ -290,3 +290,114 @@ class AssetSnapshotRecord:
     quantity_value_id: str | None
     market_value_id: str | None
     snapshot_date: str
+
+
+@dataclass(frozen=True)
+class OwnershipAssertionRecord:
+    """Effective-dated, evidenced ownership state for one account."""
+
+    assertion_id: str
+    account_id: str
+    completeness: Literal["complete", "partial", "unknown"]
+    confirmation_state: Literal["unconfirmed", "confirmed", "rejected"]
+    evidence: Mapping[str, Any]
+    effective_from: str | None = None
+    effective_to: str | None = None
+    unknown_remainder: bool = True
+    confirmed_at: str | None = None
+    supersedes_assertion_id: str | None = None
+
+
+@dataclass(frozen=True)
+class OwnershipShareRecord:
+    """One party's exact share in an ownership assertion set."""
+
+    assertion_id: str
+    party_id: str
+    share_value_id: str
+
+
+@dataclass(frozen=True)
+class EntityRelationAssertionRecord:
+    """Evidenced inclusion or overlap relation between two stable entities."""
+
+    assertion_id: str
+    subject_entity_id: str
+    object_entity_id: str
+    relation_kind: Literal["includes", "overlaps", "excludes", "unknown"]
+    confirmation_state: Literal["unconfirmed", "confirmed", "rejected"]
+    evidence: Mapping[str, Any]
+    effective_from: str | None = None
+    effective_to: str | None = None
+    confirmed_at: str | None = None
+    supersedes_assertion_id: str | None = None
+
+
+@dataclass(frozen=True)
+class AgentIntakeArtifactRecord:
+    """Immutable evidence object registered for agent-assisted intake."""
+
+    intake_artifact_id: str
+    source_artifact_id: str
+    media_type: str
+    evidence: Mapping[str, Any]
+    created_at: str
+
+
+@dataclass(frozen=True)
+class AgentIntakeOccurrenceRecord:
+    """One receipt occurrence of an immutable intake artifact."""
+
+    occurrence_id: str
+    intake_artifact_id: str
+    channel: str
+    received_at: str
+    detail: Mapping[str, Any]
+
+
+@dataclass(frozen=True)
+class AgentIntakeExtractionRecord:
+    """Machine extraction kept separate from evidence and interpretation."""
+
+    extraction_id: str
+    occurrence_id: str
+    extractor: str
+    payload: Mapping[str, Any] | list[Any]
+    created_at: str
+
+
+@dataclass(frozen=True)
+class AgentIntakeProposalRecord:
+    """Proposed mutation with its own optimistic-concurrency identity."""
+
+    proposal_id: str
+    extraction_id: str
+    policy_version: str
+    command_scope: str
+    idempotency_key: str
+    expected_generation: str
+    expected_revision: int
+    payload: Mapping[str, Any] | list[Any]
+    created_at: str
+
+
+@dataclass(frozen=True)
+class AgentIntakeConfirmationRecord:
+    """Explicit human confirmation or rejection of an intake proposal."""
+
+    confirmation_id: str
+    proposal_id: str
+    confirmation_state: Literal["confirmed", "rejected"]
+    actor: str
+    detail: Mapping[str, Any]
+    confirmed_at: str
+
+
+@dataclass(frozen=True)
+class AgentIntakeApplicationRecord:
+    """Link a confirmed proposal to the single changeset that applied it."""
+
+    proposal_id: str
+    confirmation_id: str
+    changeset_id: str
+    applied_at: str

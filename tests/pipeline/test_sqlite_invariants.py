@@ -1123,10 +1123,10 @@ def test_private_scratch_override_connects_all_read_and_upgrade_apis(tmp_path: P
         builder.finalize()
     scratch = tmp_path / "private-scratch"
 
-    assert inspect_repository(paths.database, scratch_root=scratch).schema_version == 1
-    assert validate_repository(paths.database, scratch_root=scratch).schema_version == 1
+    assert inspect_repository(paths.database, scratch_root=scratch).schema_version == 2
+    assert validate_repository(paths.database, scratch_root=scratch).schema_version == 2
     with RepositoryReader(paths.database, scratch_root=scratch) as reader:
-        assert reader.info.schema_version == 1
+        assert reader.info.schema_version == 2
     destination = GenerationPaths(tmp_path / "scratch-destination")
     upgrade_repository(paths.database, destination, scratch_root=scratch)
 
