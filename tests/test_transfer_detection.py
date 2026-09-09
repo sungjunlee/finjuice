@@ -468,7 +468,9 @@ class TestRunTransferDetection:
         ]
 
         df = pl.DataFrame(transfers)
-        csv_partition.append_transactions(csv_base_dir, df, deduplicate=False)
+        csv_partition.append_transactions(
+            df, deduplicate=False, authority_data_dir=csv_base_dir.parent
+        )
 
         # Act
         result = run_transfer_detection(csv_base_dir)
@@ -541,7 +543,9 @@ class TestRunTransferDetection:
         ]
 
         df = pl.DataFrame(transfers)
-        csv_partition.append_transactions(csv_base_dir, df, deduplicate=False)
+        csv_partition.append_transactions(
+            df, deduplicate=False, authority_data_dir=csv_base_dir.parent
+        )
 
         # Act - run twice
         result1 = run_transfer_detection(csv_base_dir)
@@ -581,7 +585,9 @@ class TestRunTransferDetection:
         ]
 
         df = pl.DataFrame(transactions)
-        csv_partition.append_transactions(csv_base_dir, df, deduplicate=False)
+        csv_partition.append_transactions(
+            df, deduplicate=False, authority_data_dir=csv_base_dir.parent
+        )
 
         # Act
         result = run_transfer_detection(csv_base_dir)
@@ -966,7 +972,9 @@ class TestRunTransferDetectionEmpty:
         ]
 
         df = pl.DataFrame(transfers)
-        csv_partition.append_transactions(csv_base_dir, df, deduplicate=False)
+        csv_partition.append_transactions(
+            df, deduplicate=False, authority_data_dir=csv_base_dir.parent
+        )
 
         # Act - should not raise error
         result = run_transfer_detection(csv_base_dir)

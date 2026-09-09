@@ -37,6 +37,13 @@ from .csv_partition import (
     write_banksalad_overview_facts_month,
     write_month,
 )
+from .mutation_facade import (
+    ConfigDocument,
+    ConfigMutation,
+    ConfigTransformResult,
+    MutationIdentity,
+    StorageMutationFacade,
+)
 
 __all__ = [
     # CSV Partition Storage (Primary)
@@ -75,4 +82,9 @@ __all__ = [
     "get_banksalad_insurance_partition_path",
     "get_banksalad_investment_partition_path",
     "get_banksalad_loan_partition_path",
+    "ConfigDocument",
+    "ConfigMutation",
+    "ConfigTransformResult",
+    "MutationIdentity",
+    "StorageMutationFacade",
 ]

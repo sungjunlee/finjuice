@@ -47,6 +47,10 @@ class AuthorityIntegrityError(AuthorityError):
     """An activation record or its external identity binding is invalid."""
 
 
+class AuthorityEvidenceUnavailableError(AuthorityIntegrityError):
+    """An active dataset has no independently trusted runtime evidence."""
+
+
 class AuthorityConflictError(AuthorityError):
     """The attempted writer does not own the active storage authority."""
 

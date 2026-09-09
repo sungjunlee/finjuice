@@ -183,6 +183,7 @@ def _compute_rules_suggest_json(
         applied_count, skipped_count = _apply_auto_apply_suggestions(
             suggestions,
             rules_file=config.rules_file,
+            authority_data_dir=config.data_dir,
             audit_applied=partial(_append_applied_suggestion_audit, on_applied),
         )
 

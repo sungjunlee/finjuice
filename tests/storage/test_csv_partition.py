@@ -18,15 +18,40 @@ import pytest
 from finjuice.pipeline.storage import csv_transactions
 from finjuice.pipeline.storage.csv_partition import (
     CSV_COLUMNS,
-    append_transactions,
     find_transaction_by_hash,
     get_all_transactions,
     get_partition_path,
     read_month,
     read_range,
-    upsert_transaction,
-    write_month,
 )
+from finjuice.pipeline.storage.csv_partition import (
+    append_transactions as _append_transactions,
+)
+from finjuice.pipeline.storage.csv_partition import (
+    upsert_transaction as _upsert_transaction,
+)
+from finjuice.pipeline.storage.csv_partition import (
+    write_month as _write_month,
+)
+from finjuice.pipeline.storage.sqlite.errors import (
+    AuthorityEvidenceUnavailableError,
+    RepositoryPathError,
+)
+
+
+def write_month(base_dir, *args, **kwargs):
+    """Call the public writer with the explicit synthetic authority root."""
+    return _write_month(*args, authority_data_dir=base_dir.parent, **kwargs)
+
+
+def append_transactions(base_dir, *args, **kwargs):
+    """Call the public appender with the explicit synthetic authority root."""
+    return _append_transactions(*args, authority_data_dir=base_dir.parent, **kwargs)
+
+
+def upsert_transaction(base_dir, *args, **kwargs):
+    """Call the public upsert with the explicit synthetic authority root."""
+    return _upsert_transaction(*args, authority_data_dir=base_dir.parent, **kwargs)
 
 
 @pytest.fixture
@@ -100,6 +125,92 @@ def sample_transactions():
             },
         ]
     )
+
+
+def test_transaction_writer_rejects_symlinked_transaction_root(tmp_path, sample_transactions):
+    data_dir = tmp_path / "data"
+    target = tmp_path / "other" / "transactions"
+    data_dir.mkdir()
+    target.mkdir(parents=True)
+    sentinel = target / "sentinel"
+    sentinel.write_bytes(b"unchanged")
+    (data_dir / "transactions").symlink_to(target, target_is_directory=True)
+
+    with pytest.raises(RepositoryPathError):
+        _write_month(
+            sample_transactions,
+            2024,
+            10,
+            authority_data_dir=data_dir,
+        )
+
+    assert sentinel.read_bytes() == b"unchanged"
+    assert not (data_dir / ".finjuice").exists()
+
+
+def test_transaction_writer_does_not_follow_precreated_fixed_temp_symlink(
+    tmp_path, sample_transactions
+):
+    data_dir = tmp_path / "data"
+    partition_dir = data_dir / "transactions" / "2024" / "10"
+    partition_dir.mkdir(parents=True)
+    outside = tmp_path / "outside.csv"
+    outside.write_bytes(b"unchanged")
+    fixed_temp = partition_dir / "transactions.tmp"
+    fixed_temp.symlink_to(outside)
+
+    _write_month(
+        sample_transactions,
+        2024,
+        10,
+        authority_data_dir=data_dir,
+    )
+
+    partition = partition_dir / "transactions.csv"
+    assert outside.read_bytes() == b"unchanged"
+    assert fixed_temp.is_symlink()
+    assert partition.is_file()
+    assert not partition.is_symlink()
+
+
+def test_transaction_writers_fence_active_root_before_noop_read_or_write(
+    tmp_path, sample_transactions
+):
+    data_dir = tmp_path / "data"
+    base_dir = data_dir / "transactions"
+    _write_month(
+        sample_transactions,
+        2024,
+        10,
+        authority_data_dir=data_dir,
+    )
+    partition = base_dir / "2024" / "10" / "transactions.csv"
+    original = partition.read_bytes()
+    activation = data_dir / ".finjuice" / "authority" / "active.json"
+    activation.parent.mkdir(parents=True, exist_ok=True)
+    activation.write_text("{}", encoding="utf-8")
+
+    calls = (
+        lambda: _write_month(
+            sample_transactions.head(1),
+            2024,
+            10,
+            authority_data_dir=data_dir,
+        ),
+        lambda: _append_transactions(
+            pl.DataFrame(),
+            authority_data_dir=data_dir,
+        ),
+        lambda: _upsert_transaction(
+            sample_transactions.row(0, named=True),
+            authority_data_dir=data_dir,
+        ),
+    )
+    for call in calls:
+        with pytest.raises(AuthorityEvidenceUnavailableError):
+            call()
+
+    assert partition.read_bytes() == original
 
 
 class TestPartitionPath:

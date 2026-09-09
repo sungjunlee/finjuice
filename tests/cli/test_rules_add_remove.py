@@ -566,3 +566,200 @@ rules:
         assert payload["validation"]["warnings"] >= 1
         problem_types = {problem["type"] for problem in payload["validation"]["problems"]}
         assert "pattern_overlap" in problem_types or "priority_inversion" in problem_types
+
+
+def test_update_preserves_omitted_rule_fields_and_reports_merged_state(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    rules_file = _write_rules(
+        data_dir,
+        """version: 1
+rules:
+  - name: retained
+    match: old  # keep match comment
+    fields: [memo_raw]
+    conditions:
+      - field: merchant_raw
+        op: contains
+        value: Coupang
+    tags: [old]
+    priority: 88
+    category: Existing
+    enabled: false
+    confidence: 0.75
+    notes: keep notes
+    custom_id: keep-id
+""",
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "--data-dir",
+            str(data_dir),
+            "rules",
+            "add",
+            "--name",
+            "retained",
+            "--match",
+            "new",
+            "--tags",
+            "new-tag",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["action"] == "updated"
+    assert payload["rule"]["match"] == "new"
+    assert payload["rule"]["fields"] == ["memo_raw"]
+    assert payload["rule"]["priority"] == 88
+    assert payload["rule"]["category"] == "Existing"
+    assert payload["rule"]["enabled"] is False
+    assert payload["rule"]["confidence"] == 0.75
+    assert payload["rule"]["notes"] == "keep notes"
+    assert payload["rule"]["logic"] == "all"
+    assert payload["rule"]["conditions"] == [
+        {"field": "merchant_raw", "op": "contains", "value": "Coupang"}
+    ]
+    content = rules_file.read_text(encoding="utf-8")
+    assert "match: new  # keep match comment" in content
+    assert "custom_id: keep-id" in content
+    assert "notes: keep notes" in content
+
+
+def test_update_explicit_clear_and_defaults_are_persisted_and_reported(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    rules_file = _write_rules(
+        data_dir,
+        """version: 1
+rules:
+  - name: retained
+    match: old
+    fields: [memo_raw]
+    tags: [old]
+    priority: 88
+    category: Existing
+    notes: keep notes
+    custom_id: keep-id
+""",
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "--data-dir",
+            str(data_dir),
+            "rules",
+            "add",
+            "--name",
+            "retained",
+            "--match",
+            "new",
+            "--tags",
+            "new-tag",
+            "--category",
+            "",
+            "--priority",
+            "50",
+            "--fields",
+            "merchant_raw",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["rule"]["category"] == ""
+    assert payload["rule"]["priority"] == 50
+    assert payload["rule"]["fields"] == ["merchant_raw"]
+    content = rules_file.read_text(encoding="utf-8")
+    assert "category:" not in content
+    assert "priority: 50" in content
+    assert "fields: [merchant_raw]" in content
+    assert "notes: keep notes" in content
+    assert "custom_id: keep-id" in content
+
+
+def test_condition_rule_dry_run_uses_merged_actual_matcher(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    _write_transactions(data_dir)
+    rules_file = _write_rules(
+        data_dir,
+        """version: 1
+rules:
+  - name: retained
+    match: old
+    fields: [merchant_raw]
+    conditions:
+      - field: merchant_raw
+        op: contains
+        value: Coupang
+    tags: [old]
+    priority: 88
+""",
+    )
+    before = rules_file.read_bytes()
+
+    result = runner.invoke(
+        app,
+        [
+            "--data-dir",
+            str(data_dir),
+            "rules",
+            "add",
+            "--name",
+            "retained",
+            "--match",
+            "Netflix",
+            "--tags",
+            "new-tag",
+            "--dry-run",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["rule"]["priority"] == 88
+    assert payload["impact"]["matcher"] == "conditions"
+    assert payload["impact"]["matched_transactions"] == 1
+    assert payload["impact"]["conditions"][0]["value"] == "Coupang"
+    assert rules_file.read_bytes() == before
+
+
+def test_update_human_output_uses_merged_optional_values(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    _write_rules(
+        data_dir,
+        """version: 1
+rules:
+  - name: retained
+    match: old
+    fields: [memo_raw]
+    tags: [old]
+    priority: 88
+    category: Existing
+""",
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "--data-dir",
+            str(data_dir),
+            "rules",
+            "add",
+            "--name",
+            "retained",
+            "--match",
+            "new",
+            "--tags",
+            "new-tag",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Fields: memo_raw" in result.output
+    assert "Priority: 88" in result.output
+    assert "Category: Existing" in result.output

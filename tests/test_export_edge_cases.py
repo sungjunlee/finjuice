@@ -144,7 +144,11 @@ class TestMasterExportEdgeCases:
         """Test export handles polars write errors."""
         # Arrange
         df = pl.DataFrame(sample_transactions)
-        csv_partition.append_transactions(temp_csv_base_dir, df, deduplicate=False)
+        csv_partition.append_transactions(
+            df,
+            deduplicate=False,
+            authority_data_dir=temp_csv_base_dir.parent,
+        )
         output_path = tmp_path / "master.xlsx"
 
         # Mock polars error
@@ -162,7 +166,11 @@ class TestMasterExportEdgeCases:
         """Test export handles read-only output paths."""
         # Arrange
         df = pl.DataFrame(sample_transactions)
-        csv_partition.append_transactions(temp_csv_base_dir, df, deduplicate=False)
+        csv_partition.append_transactions(
+            df,
+            deduplicate=False,
+            authority_data_dir=temp_csv_base_dir.parent,
+        )
 
         # Create a read-only directory to trigger PermissionError
         readonly_dir = tmp_path / "readonly"

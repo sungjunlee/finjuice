@@ -65,8 +65,9 @@ def test_write_append_functions_reexport_from_overview() -> None:
         assert name not in overview_write.__all__
 
 
-def test_append_via_write_module_returns_empty_result_for_empty_frame() -> None:
+def test_append_via_write_module_returns_empty_result_for_empty_frame(tmp_path: Path) -> None:
     """Direct write-module imports keep the empty-append contract."""
+    data_dir = tmp_path.resolve()
     empty = pl.DataFrame()
     expected = {
         "total_rows": 0,
@@ -75,9 +76,13 @@ def test_append_via_write_module_returns_empty_result_for_empty_frame() -> None:
         "rows_skipped": 0,
     }
 
-    assert overview_write.append_banksalad_overview_facts(Path("unused"), empty) == expected
-    assert overview_write.append_banksalad_balance(Path("unused"), empty) == expected
-    assert overview_write.append_banksalad_cashflow(Path("unused"), empty) == expected
-    assert overview_write.append_banksalad_insurance(Path("unused"), empty) == expected
-    assert overview_write.append_banksalad_investments(Path("unused"), empty) == expected
-    assert overview_write.append_banksalad_loans(Path("unused"), empty) == expected
+    assert overview_write.append_banksalad_overview_facts(empty, authority_data_dir=data_dir) == (
+        expected
+    )
+    assert overview_write.append_banksalad_balance(empty, authority_data_dir=data_dir) == expected
+    assert overview_write.append_banksalad_cashflow(empty, authority_data_dir=data_dir) == expected
+    assert overview_write.append_banksalad_insurance(empty, authority_data_dir=data_dir) == expected
+    investments = overview_write.append_banksalad_investments(empty, authority_data_dir=data_dir)
+    assert investments == expected
+    assert overview_write.append_banksalad_loans(empty, authority_data_dir=data_dir) == expected
+    assert not (data_dir / "banksalad").exists()

@@ -9,6 +9,7 @@ import os
 import platform
 import subprocess
 from pathlib import Path
+from typing import cast
 
 import typer
 
@@ -16,6 +17,9 @@ from finjuice.pipeline.cli import output
 from finjuice.pipeline.config import Config
 from finjuice.pipeline.constants import SUBPROCESS_TIMEOUT_SHORT
 from finjuice.pipeline.metadata import check_schema_version
+from finjuice.pipeline.storage.authority import ActivationEvidenceProvider
+from finjuice.pipeline.storage.mutation_facade import MutationIdentity, StorageMutationFacade
+from finjuice.pipeline.storage.sqlite.mutations import MutationReceipt
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +46,45 @@ def get_config(ctx: typer.Context) -> Config:
         return Config.from_env()
     config: Config = ctx.obj["config"]
     return config
+
+
+def get_mutation_facade(ctx: typer.Context, config: Config) -> StorageMutationFacade:
+    """Build the authority-aware mutation facade from trusted host context."""
+    provider: ActivationEvidenceProvider | None = None
+    if isinstance(ctx.obj, dict):
+        raw_provider = ctx.obj.get("activation_evidence_provider")
+        if raw_provider is not None:
+            provider = cast(ActivationEvidenceProvider, raw_provider)
+    return StorageMutationFacade(config.data_dir, provider)
+
+
+def mutation_identity(
+    idempotency_key: str | None,
+    expected_generation: str | None,
+    expected_revision: int | None,
+) -> MutationIdentity:
+    """Build and validate common CLI mutation identity options."""
+    identity = MutationIdentity(
+        idempotency_key=idempotency_key,
+        expected_generation=expected_generation,
+        expected_revision=expected_revision,
+    )
+    identity.validate()
+    return identity
+
+
+def mutation_metadata(identity: MutationIdentity, receipt: MutationReceipt) -> dict[str, object]:
+    """Return additive JSON-safe authority and receipt fields."""
+    return {
+        "authority": "repository",
+        "idempotency_key": identity.idempotency_key,
+        "changeset_id": receipt.changeset_id,
+        "base_revision": receipt.base_revision,
+        "committed_revision": receipt.committed_revision,
+        "state_changed": receipt.state_changed,
+        "replayed": receipt.replayed,
+        "retained_artifacts": list(receipt.retained_artifacts),
+    }
 
 
 def set_log_level(verbose: bool) -> None:

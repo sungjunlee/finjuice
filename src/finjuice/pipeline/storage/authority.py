@@ -2,24 +2,33 @@
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import re
 import stat
+import threading
 import time
-from contextlib import AbstractContextManager
+from collections.abc import Iterator
+from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 try:
     import fcntl as _fcntl
 except ImportError:  # pragma: no cover - exercised by monkeypatch on non-Windows CI
     _fcntl = None  # type: ignore[assignment]
 
+try:
+    import msvcrt as _msvcrt
+except ImportError:  # pragma: no cover - imported on Windows
+    _msvcrt = None  # type: ignore[assignment]
+
 from finjuice.pipeline.storage.sqlite.errors import (
     AuthorityConflictError,
+    AuthorityEvidenceUnavailableError,
     AuthorityIntegrityError,
     RepositoryPathError,
 )
@@ -35,6 +44,34 @@ _DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 _ACTIVATION_SCHEMA_VERSION = 1
 _MAX_ACTIVATION_BYTES = 64 * 1024
 _DEFAULT_LEASE_TIMEOUT_MS = 5_000
+_LEASE_BYTE_COUNT = 1
+
+
+@dataclass
+class _LocalLeaseState:
+    """Serialize and track nested leases inside one Python process."""
+
+    lock: threading.RLock
+    depth: int = 0
+    exclusive: bool = False
+
+
+_lease_registry_pid = os.getpid()
+_lease_registry_guard = threading.Lock()
+_lease_registry: dict[Path, _LocalLeaseState] = {}
+
+
+def _local_lease_state(path: Path) -> _LocalLeaseState:
+    """Return PID-local state, resetting inherited state after fork."""
+    global _lease_registry_pid, _lease_registry_guard, _lease_registry
+    process_id = os.getpid()
+    if process_id != _lease_registry_pid:
+        _lease_registry_pid = process_id
+        _lease_registry_guard = threading.Lock()
+        _lease_registry = {}
+    key = path.expanduser().absolute()
+    with _lease_registry_guard:
+        return _lease_registry.setdefault(key, _LocalLeaseState(threading.RLock()))
 
 
 @dataclass(frozen=True)
@@ -121,6 +158,34 @@ class RepositoryAuthority:
 StorageAuthority = LegacyAuthority | RepositoryAuthority
 
 
+class ActivationEvidenceProvider(Protocol):
+    """Independent source of release and migration-manifest evidence."""
+
+    def evidence_for(self, paths: AuthorityPaths) -> ActivationEvidence | None:
+        """Return trusted evidence for an activated data root, when available."""
+
+
+@dataclass(frozen=True)
+class StaticActivationEvidenceProvider:
+    """Inject already verified evidence in tests or a trusted host runtime."""
+
+    evidence: ActivationEvidence
+
+    def evidence_for(self, paths: AuthorityPaths) -> ActivationEvidence:
+        """Return evidence that was supplied independently of the activation pointer."""
+        del paths
+        return self.evidence
+
+
+@dataclass(frozen=True)
+class AuthorityDispatch:
+    """Resolved storage authority plus the evidence needed by repository writers."""
+
+    paths: AuthorityPaths
+    authority: StorageAuthority
+    evidence: ActivationEvidence | None
+
+
 class CoordinationLease(AbstractContextManager["CoordinationLease"]):
     """Advisory lease shared by writers and exclusively held by activation/maintenance."""
 
@@ -137,44 +202,87 @@ class CoordinationLease(AbstractContextManager["CoordinationLease"]):
         self._exclusive = exclusive
         self._timeout_ms = timeout_ms
         self._descriptor: int | None = None
+        self._local_state: _LocalLeaseState | None = None
+        self._nested = False
 
     def __enter__(self) -> "CoordinationLease":
-        if _fcntl is None:
+        if self._local_state is not None:
+            raise AuthorityConflictError("A coordination lease instance is already entered.")
+        if _fcntl is None and _msvcrt is None:
             raise AuthorityIntegrityError(
                 "Authority coordination leases are unsupported on this platform."
             )
+        deadline = time.monotonic() + self._timeout_ms / 1000
+        if self._acquire_local_lease(deadline):
+            return self
+        descriptor: int | None = None
         try:
-            _mkdir_checked(self._paths.control_root)
+            descriptor = self._open_coordination_descriptor()
+            self._acquire_os_lock(descriptor, deadline)
+        except BaseException:
+            if descriptor is not None:
+                os.close(descriptor)
+            self._release_local_state()
+            raise
+        self._descriptor = descriptor
+        assert self._local_state is not None
+        self._local_state.depth = 1
+        self._local_state.exclusive = self._exclusive
+        return self
+
+    def _acquire_local_lease(self, deadline: float) -> bool:
+        """Acquire process-local serialization and return whether this entry is nested."""
+        local_state = _local_lease_state(self._paths.coordination_lock)
+        remaining = max(0.0, deadline - time.monotonic())
+        acquired_locally = (
+            local_state.lock.acquire(blocking=False)
+            if remaining == 0
+            else local_state.lock.acquire(timeout=remaining)
+        )
+        if not acquired_locally:
+            raise AuthorityConflictError("Authority coordination lease timed out.")
+        self._local_state = local_state
+        if local_state.depth:
+            if self._exclusive and not local_state.exclusive:
+                self._local_state = None
+                local_state.lock.release()
+                raise AuthorityConflictError(
+                    "A shared authority lease cannot be upgraded while it is held."
+                )
+            local_state.depth += 1
+            self._nested = True
+            return True
+        return False
+
+    def _open_coordination_descriptor(self) -> int:
+        """Prepare and open the stable lock file without following links."""
+        try:
+            _prepare_coordination_root(self._paths.control_root)
             _assert_no_symlink_ancestors(self._paths.coordination_lock, allow_missing=True)
-        except Exception as exc:
-            raise AuthorityIntegrityError("Authority coordination namespace is unsafe.") from exc
+        except BaseException as exc:
+            self._release_local_state()
+            if isinstance(exc, Exception):
+                raise AuthorityIntegrityError(
+                    "Authority coordination namespace is unsafe."
+                ) from exc
+            raise
         flags = os.O_RDWR | os.O_CREAT
         if hasattr(os, "O_NOFOLLOW"):
             flags |= os.O_NOFOLLOW
+        descriptor = os.open(self._paths.coordination_lock, flags, 0o600)
         try:
-            descriptor = os.open(self._paths.coordination_lock, flags, 0o600)
             entry = os.fstat(descriptor)
             if not stat.S_ISREG(entry.st_mode) or entry.st_nlink != 1:
                 raise AuthorityIntegrityError("Authority coordination lock is not a safe file.")
-            os.fchmod(descriptor, 0o600)
-            operation = _fcntl.LOCK_EX if self._exclusive else _fcntl.LOCK_SH
-            deadline = time.monotonic() + self._timeout_ms / 1000
-            while True:
-                try:
-                    _fcntl.flock(descriptor, operation | _fcntl.LOCK_NB)
-                    break
-                except BlockingIOError as exc:
-                    if time.monotonic() >= deadline:
-                        raise AuthorityConflictError(
-                            "Authority coordination lease timed out."
-                        ) from exc
-                    time.sleep(min(0.01, max(0.0, deadline - time.monotonic())))
+            current_path = self._paths.coordination_lock.lstat()
+            if (entry.st_dev, entry.st_ino) != (current_path.st_dev, current_path.st_ino):
+                raise AuthorityIntegrityError("Authority coordination lock changed while opening.")
+            if hasattr(os, "fchmod"):
+                os.fchmod(descriptor, 0o600)
         except BaseException:
-            if "descriptor" in locals():
-                os.close(descriptor)
+            os.close(descriptor)
             raise
-        self._descriptor = descriptor
-        return self
+        return descriptor
 
     def __exit__(
         self,
@@ -182,14 +290,78 @@ class CoordinationLease(AbstractContextManager["CoordinationLease"]):
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
-        if self._descriptor is None:
+        if self._local_state is None:
             return
+        local_state = self._local_state
+        if self._nested:
+            local_state.depth -= 1
+            self._nested = False
+            self._local_state = None
+            local_state.lock.release()
+            return
+        descriptor = self._descriptor
         try:
-            assert _fcntl is not None
-            _fcntl.flock(self._descriptor, _fcntl.LOCK_UN)
+            if descriptor is not None:
+                self._release_os_lock(descriptor)
         finally:
-            os.close(self._descriptor)
+            if descriptor is not None:
+                os.close(descriptor)
             self._descriptor = None
+            local_state.depth = 0
+            local_state.exclusive = False
+            self._local_state = None
+            local_state.lock.release()
+
+    def _acquire_os_lock(self, descriptor: int, deadline: float) -> None:
+        """Acquire the platform lock without exceeding the caller's deadline."""
+        while True:
+            try:
+                os.lseek(descriptor, 0, os.SEEK_SET)
+                if _fcntl is not None:
+                    operation = _fcntl.LOCK_EX if self._exclusive else _fcntl.LOCK_SH
+                    _fcntl.flock(descriptor, operation | _fcntl.LOCK_NB)
+                else:
+                    assert _msvcrt is not None
+                    _msvcrt.locking(descriptor, _msvcrt.LK_NBLCK, _LEASE_BYTE_COUNT)
+                return
+            except OSError as exc:
+                if exc.errno not in {errno.EACCES, errno.EAGAIN, errno.EWOULDBLOCK}:
+                    raise
+                if time.monotonic() >= deadline:
+                    raise AuthorityConflictError("Authority coordination lease timed out.") from exc
+                time.sleep(min(0.01, max(0.0, deadline - time.monotonic())))
+
+    @staticmethod
+    def _release_os_lock(descriptor: int) -> None:
+        """Release the platform lock while leaving descriptor cleanup to the caller."""
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        if _fcntl is not None:
+            _fcntl.flock(descriptor, _fcntl.LOCK_UN)
+            return
+        assert _msvcrt is not None
+        _msvcrt.locking(descriptor, _msvcrt.LK_UNLCK, _LEASE_BYTE_COUNT)
+
+    def _release_local_state(self) -> None:
+        """Clear a partially entered local lease after failure."""
+        local_state = self._local_state
+        if local_state is None:
+            return
+        local_state.depth = 0
+        local_state.exclusive = False
+        self._local_state = None
+        local_state.lock.release()
+
+
+def _prepare_coordination_root(path: Path) -> None:
+    """Create the lock namespace without weakening immutable-object permissions."""
+    if os.name != "nt":
+        _mkdir_checked(path)
+        return
+    _assert_no_symlink_ancestors(path, allow_missing=True)
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    _assert_no_symlink_ancestors(path)
+    if path.is_symlink() or not path.is_dir():
+        raise RepositoryPathError("Authority coordination root is not a safe directory.")
 
 
 def shared_write_lease(
@@ -210,11 +382,18 @@ def exclusive_maintenance_lease(
     return CoordinationLease(paths, exclusive=True, timeout_ms=timeout_ms)
 
 
-def resolve_authority(paths: AuthorityPaths, evidence: ActivationEvidence) -> StorageAuthority:
+def resolve_authority(
+    paths: AuthorityPaths,
+    evidence: ActivationEvidence | None,
+) -> StorageAuthority:
     """Resolve legacy or repository authority without modifying the data tree."""
     activation_path = paths.activation
     if not activation_path.exists() and not activation_path.is_symlink():
         return LegacyAuthority()
+    if evidence is None:
+        raise AuthorityEvidenceUnavailableError(
+            "Repository activation requires independently verified runtime evidence."
+        )
     activation = _read_activation(activation_path)
     _verify_external_evidence(activation, evidence)
     generation_paths = paths.generation(activation.dataset_generation)
@@ -245,13 +424,51 @@ def read_activation(
 
 
 def require_legacy_authority(
-    paths: AuthorityPaths, evidence: ActivationEvidence
+    paths: AuthorityPaths, evidence: ActivationEvidence | None = None
 ) -> LegacyAuthority:
     """Fail closed when a legacy writer is attempted after activation."""
     resolved = resolve_authority(paths, evidence)
     if not isinstance(resolved, LegacyAuthority):
         raise AuthorityConflictError("Legacy writes are fenced after repository activation.")
     return resolved
+
+
+def resolve_storage_authority(
+    data_dir: Path,
+    evidence_provider: ActivationEvidenceProvider | None = None,
+) -> AuthorityDispatch:
+    """Resolve one data root without deriving trust from its activation pointer."""
+    paths = AuthorityPaths.for_data_dir(data_dir)
+    activation_exists = paths.activation.exists() or paths.activation.is_symlink()
+    evidence = None
+    if activation_exists:
+        if evidence_provider is None:
+            raise AuthorityEvidenceUnavailableError(
+                "Repository activation is present, but no trusted evidence provider is configured."
+            )
+        evidence = evidence_provider.evidence_for(paths)
+        if evidence is None:
+            raise AuthorityEvidenceUnavailableError(
+                "The trusted evidence provider has no evidence for this activated data root."
+            )
+    authority = resolve_authority(paths, evidence)
+    return AuthorityDispatch(paths=paths, authority=authority, evidence=evidence)
+
+
+@contextmanager
+def legacy_write_lease(
+    data_dir: Path,
+    evidence_provider: ActivationEvidenceProvider | None = None,
+    *,
+    timeout_ms: int = _DEFAULT_LEASE_TIMEOUT_MS,
+) -> Iterator[LegacyAuthority]:
+    """Hold the shared cutover lease and reject every post-activation legacy write."""
+    paths = AuthorityPaths.for_data_dir(data_dir)
+    with shared_write_lease(paths, timeout_ms=timeout_ms):
+        dispatch = resolve_storage_authority(data_dir, evidence_provider)
+        if not isinstance(dispatch.authority, LegacyAuthority):
+            raise AuthorityConflictError("Legacy writes are fenced after repository activation.")
+        yield dispatch.authority
 
 
 def require_repository_authority(

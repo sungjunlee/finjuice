@@ -4,7 +4,7 @@
 
 - 로드맵: https://github.com/sungjunlee/finjuice/issues/425
 - 실행 계약/시작 프롬프트: `goals/finjuice-ssot.md`.
-- 활성 실행 계획: `backlog/sprints/2026-09-ssot-m2-storage.md`. PR #452의 merge f56f5d5에서 `codex/ssot-m2-storage`를 시작했고 #433 저장 계층을 구현한다. 실행 작업 공간은 `git worktree list`로 확인한다.
+- 활성 실행 계획: `backlog/sprints/2026-09-ssot-m2-storage.md`. PR #453의 merge b7a94ba에서 `codex/ssot-m2-mutations`를 시작했다. #434의 core `ac13e54`는 로컬 전체 검증을 통과했고 교차 리뷰 중이다. 수동 수정·rules/goals의 CLI 연결을 구현하며 bulk tag/transfer/import/refresh 연결은 남아 있다. #433 저장 기반은 검증 완료했다. 실행 작업 공간은 `git worktree list`로 확인한다.
 - 완료 실행 기록: `backlog/sprints/2026-09-ssot-m1-recovery.md`. #430은 #449·#450, 백업 구현은 #451, 실제 운영 검증과 스프린트 마감은 #452로 머지됐다. M1의 실제 캡처·Linux 격리 복원·장비 밖 독립 복원·최종 교차 검토와 복구 절차 보존을 통과했고 #431·#432·#426 및 milestone 2를 완료했다.
 - 전체 순서: M1 복구 계약 → M2 정본/보존 이전 → M3 실제 운영 전환 → M4 가족 재산 → M5 증빙/마감/추가 출처.
 - 에픽: M1 #426, M2 #427, M3 #428, M4 #429, M5 #355. 실행 이슈 #430~#448. 첫 작업 #430.

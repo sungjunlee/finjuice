@@ -10,6 +10,7 @@ names that existing callers import from the validator module.
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, cast
 
 from finjuice.pipeline.tagging.models import (
@@ -66,7 +67,18 @@ def _validate_match_fields(rule_dict: Dict[str, Any], rule_label: str) -> tuple[
     return match, fields
 
 
-def _parse_between_range(value: str) -> tuple[float | None, float | None]:
+def _parse_exact_decimal(value: str) -> Decimal | None:
+    """Parse finite decimal text without context-rounded arithmetic."""
+    try:
+        parsed = Decimal(value.strip())
+    except (InvalidOperation, ValueError, AttributeError):
+        return None
+    if not parsed.is_finite():
+        return None
+    return parsed
+
+
+def _parse_between_range(value: str) -> tuple[Decimal | None, Decimal | None]:
     """Parse a ``min,max`` numeric range from a normalized condition string.
 
     Shared by numeric-condition schema validation and the matching engine in
@@ -75,10 +87,11 @@ def _parse_between_range(value: str) -> tuple[float | None, float | None]:
     parts = [part.strip() for part in value.split(",")]
     if len(parts) != 2:
         return None, None
-    try:
-        return float(parts[0]), float(parts[1])
-    except (TypeError, ValueError):
+    minimum = _parse_exact_decimal(parts[0])
+    maximum = _parse_exact_decimal(parts[1])
+    if minimum is None or maximum is None:
         return None, None
+    return minimum, maximum
 
 
 def _validate_condition(
@@ -109,8 +122,8 @@ def _validate_condition(
                 "Use [min, max] list or 'min,max' string."
             )
         raw_val = f"{raw_val[0]},{raw_val[1]}"
-    # Coerce YAML-parsed int/float to str for numeric operators
-    if isinstance(raw_val, (int, float)):
+    # Coerce YAML-parsed int/float/Decimal to str for numeric operators
+    if isinstance(raw_val, (int, float, Decimal)):
         raw_val = str(raw_val)
     val = _validate_required_string(raw_val, rule_label, "value")
     if op not in VALID_CONDITION_OPERATORS:
@@ -138,10 +151,8 @@ def _validate_numeric_condition_value(ctx: str, op: str, value: str) -> None:
         if minimum > maximum:
             raise ValueError(f"{ctx} has invalid 'value' for between: min must be <= max")
         return
-    try:
-        float(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"{ctx} has invalid numeric 'value': {value!r}") from exc
+    if _parse_exact_decimal(value) is None:
+        raise ValueError(f"{ctx} has invalid numeric 'value': {value!r}")
 
 
 def _validate_conditions(

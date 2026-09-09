@@ -25,9 +25,12 @@ from finjuice.pipeline.storage.sqlite.paths import GenerationPaths
 from finjuice.pipeline.storage.sqlite.snapshot import inspection_snapshot
 
 SQLITE_APPLICATION_ID: Final = 0x464A5353  # "FJSS"
-SQLITE_SCHEMA_VERSION: Final = 2
+SQLITE_SCHEMA_VERSION: Final = 4
 _OWNERSHIP_SHARE_UNIT: Final = "ownership_share.v1"
 _SCHEMA_V1: Final = 1
+_SCHEMA_V2: Final = 2
+_SCHEMA_V3: Final = 3
+_SCHEMA_V4: Final = 4
 _BUSY_TIMEOUT_MS: Final = 5_000
 
 _UUID_CHECK = """
@@ -700,6 +703,39 @@ CREATE INDEX idx_relations_subject_object
 """
 
 
+def _schema_v3_sql() -> str:
+    """Return the canonical configuration-head schema introduced in v3."""
+    return """
+CREATE TABLE config_heads (
+    config_kind TEXT PRIMARY KEY NOT NULL
+        CHECK (config_kind IN ('rules', 'goals', 'assets', 'scenarios', 'schema', 'other')),
+    revision_id TEXT NOT NULL UNIQUE REFERENCES config_revisions(entity_id),
+    updated_changeset_id TEXT REFERENCES changesets(changeset_id) DEFERRABLE INITIALLY DEFERRED,
+    updated_at TEXT NOT NULL CHECK (length(updated_at) > 0)
+);
+"""
+
+
+def _schema_v4_sql() -> str:
+    """Return the source-evidence link schema introduced in v4."""
+    uuid_link = _uuid_check("link_id")
+    return f"""
+CREATE TABLE transaction_source_links (
+    link_id TEXT PRIMARY KEY NOT NULL CHECK ({uuid_link}),
+    transaction_id TEXT NOT NULL REFERENCES transactions(entity_id),
+    provenance_id TEXT NOT NULL UNIQUE REFERENCES record_provenance(provenance_id),
+    observation_id TEXT NOT NULL REFERENCES observations(entity_id),
+    link_kind TEXT NOT NULL CHECK (link_kind IN ('origin', 'duplicate_evidence')),
+    created_changeset_id TEXT NOT NULL REFERENCES changesets(changeset_id)
+        DEFERRABLE INITIALLY DEFERRED
+);
+
+CREATE UNIQUE INDEX uq_transaction_origin_source_link
+    ON transaction_source_links(transaction_id)
+    WHERE link_kind = 'origin';
+"""
+
+
 _IMMUTABLE_TABLES = (
     "schema_migrations",
     "entities",
@@ -807,6 +843,7 @@ _SOURCE_BINDING_CHECKS: Final = (
     (
         "WITH typed_records(entity_id, observation_id, provenance_id) AS ("
         "SELECT entity_id, observation_id, provenance_id FROM transactions UNION ALL "
+        "SELECT link_id, observation_id, provenance_id FROM transaction_source_links UNION ALL "
         "SELECT entity_id, observation_id, provenance_id FROM overview_facts UNION ALL "
         "SELECT entity_id, observation_id, provenance_id FROM overview_balances UNION ALL "
         "SELECT entity_id, observation_id, provenance_id FROM overview_cashflows UNION ALL "
@@ -921,6 +958,8 @@ def initialize_repository(paths: GenerationPaths, dataset_generation: str) -> Re
     try:
         _apply_schema_v1(connection, dataset_generation)
         _apply_schema_v2(connection)
+        _apply_schema_v3(connection)
+        _apply_schema_v4(connection)
         info = _validate_connection(
             connection,
             expected_generation=dataset_generation,
@@ -978,8 +1017,7 @@ def upgrade_repository(
             try:
                 source_connection.backup(target_connection)
                 _normalize_journal_mode(target_connection)
-                if source_info.schema_version == _SCHEMA_V1:
-                    _apply_schema_v2(target_connection)
+                _upgrade_schema_to_current(target_connection, source_info.schema_version)
                 info = _validate_connection(target_connection)
                 _copy_source_objects(source, source_connection, destination)
                 info = _validate_connection(target_connection, object_paths=destination)
@@ -1088,13 +1126,13 @@ def _apply_schema_v2(connection: sqlite3.Connection) -> None:
         connection.execute(
             "INSERT INTO schema_migrations (schema_version, migration_name, applied_at) "
             "VALUES (?, ?, ?)",
-            (SQLITE_SCHEMA_VERSION, "atomic_mutations_and_relationship_assertions", applied_at),
+            (_SCHEMA_V2, "atomic_mutations_and_relationship_assertions", applied_at),
         )
         connection.execute(
             "UPDATE repository_meta SET schema_version = ? WHERE singleton = 1",
-            (SQLITE_SCHEMA_VERSION,),
+            (_SCHEMA_V2,),
         )
-        connection.execute(f"PRAGMA user_version = {SQLITE_SCHEMA_VERSION}")
+        connection.execute(f"PRAGMA user_version = {_SCHEMA_V2}")
         connection.execute("COMMIT")
     except Exception:
         if connection.in_transaction:
@@ -1139,6 +1177,99 @@ def _immutable_trigger_sql_for_v2() -> str:
         )
     )
     return "\n".join(statements)
+
+
+def _apply_schema_v3(connection: sqlite3.Connection) -> None:
+    """Apply the v2-to-v3 canonical configuration-head migration."""
+    if int(connection.execute("PRAGMA user_version").fetchone()[0]) != _SCHEMA_V2:
+        raise RepositoryVersionError("Schema v3 requires a schema v2 repository.")
+    try:
+        connection.executescript(
+            "BEGIN IMMEDIATE;\n" + _schema_v3_sql() + _immutable_trigger_sql_for_v3()
+        )
+        applied_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        connection.execute(
+            "INSERT INTO schema_migrations (schema_version, migration_name, applied_at) "
+            "VALUES (?, ?, ?)",
+            (_SCHEMA_V3, "canonical_configuration_heads", applied_at),
+        )
+        connection.execute(
+            "UPDATE repository_meta SET schema_version = ? WHERE singleton = 1",
+            (_SCHEMA_V3,),
+        )
+        connection.execute(f"PRAGMA user_version = {_SCHEMA_V3}")
+        connection.execute("COMMIT")
+    except Exception:
+        if connection.in_transaction:
+            connection.execute("ROLLBACK")
+        raise
+
+
+def _immutable_trigger_sql_for_v3() -> str:
+    """Create protection guards for the configuration heads introduced in v3."""
+    return "\n".join(
+        (
+            "CREATE TRIGGER config_heads_guarded_update BEFORE UPDATE ON config_heads WHEN "
+            "NEW.config_kind <> OLD.config_kind OR NEW.revision_id = OLD.revision_id "
+            "OR NEW.updated_changeset_id IS NULL "
+            "BEGIN SELECT RAISE(ABORT, 'protected config head'); END;",
+            "CREATE TRIGGER config_heads_no_delete BEFORE DELETE ON config_heads "
+            "BEGIN SELECT RAISE(ABORT, 'protected config head'); END;",
+            "CREATE TRIGGER config_heads_no_reinsert BEFORE INSERT ON config_heads "
+            "WHEN EXISTS (SELECT 1 FROM config_heads WHERE config_kind = NEW.config_kind) "
+            "BEGIN SELECT RAISE(ABORT, 'protected config head'); END;",
+        )
+    )
+
+
+def _upgrade_schema_to_current(connection: sqlite3.Connection, source_version: int) -> None:
+    """Apply every later supported schema version onto a cloned candidate."""
+    if source_version == _SCHEMA_V1:
+        _apply_schema_v2(connection)
+    if source_version <= _SCHEMA_V2:
+        _apply_schema_v3(connection)
+    if source_version <= _SCHEMA_V3:
+        _apply_schema_v4(connection)
+
+
+def _apply_schema_v4(connection: sqlite3.Connection) -> None:
+    """Apply the v3-to-v4 source-evidence link migration."""
+    if int(connection.execute("PRAGMA user_version").fetchone()[0]) != _SCHEMA_V3:
+        raise RepositoryVersionError("Schema v4 requires a schema v3 repository.")
+    try:
+        connection.executescript(
+            "BEGIN IMMEDIATE;\n" + _schema_v4_sql() + _immutable_trigger_sql_for_v4()
+        )
+        applied_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        connection.execute(
+            "INSERT INTO schema_migrations (schema_version, migration_name, applied_at) "
+            "VALUES (?, ?, ?)",
+            (_SCHEMA_V4, "transaction_source_evidence_links", applied_at),
+        )
+        connection.execute(
+            "UPDATE repository_meta SET schema_version = ? WHERE singleton = 1",
+            (_SCHEMA_V4,),
+        )
+        connection.execute(f"PRAGMA user_version = {_SCHEMA_V4}")
+        connection.execute("COMMIT")
+    except Exception:
+        if connection.in_transaction:
+            connection.execute("ROLLBACK")
+        raise
+
+
+def _immutable_trigger_sql_for_v4() -> str:
+    """Create append-only guards for source-evidence links introduced in v4."""
+    return "\n".join(
+        (
+            "CREATE TRIGGER transaction_source_links_no_update "
+            "BEFORE UPDATE ON transaction_source_links "
+            "BEGIN SELECT RAISE(ABORT, 'immutable preservation row'); END;",
+            "CREATE TRIGGER transaction_source_links_no_delete "
+            "BEFORE DELETE ON transaction_source_links "
+            "BEGIN SELECT RAISE(ABORT, 'immutable preservation row'); END;",
+        )
+    )
 
 
 def _connect_builder(path: Path) -> sqlite3.Connection:
@@ -1268,6 +1399,8 @@ def _validate_application_invariants(connection: sqlite3.Connection) -> None:
     _validate_schema_migration_ledger(connection)
     _validate_source_bindings(connection)
     _validate_v2_invariants(connection)
+    _validate_v3_invariants(connection)
+    _validate_v4_invariants(connection)
     identities = connection.execute(
         "SELECT entity_id, capture_manifest_digest, record_kind, canonical_locator_json "
         "FROM migration_identities ORDER BY entity_id"
@@ -1340,6 +1473,67 @@ def _validate_v2_invariants(connection: sqlite3.Connection) -> None:
     _validate_ownership_assertions(connection)
     _validate_relation_assertions(connection)
     _validate_intake_applications(connection)
+
+
+def _validate_v3_invariants(connection: sqlite3.Connection) -> None:
+    """Validate cross-row invariants introduced by canonical configuration heads."""
+    schema_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+    if schema_version < 3:
+        return
+    head_mismatch = connection.execute(
+        "SELECT 1 FROM config_heads AS head "
+        "JOIN config_revisions AS revision ON revision.entity_id = head.revision_id "
+        "WHERE head.config_kind <> revision.config_kind LIMIT 1"
+    ).fetchone()
+    if head_mismatch is not None:
+        raise RepositoryIntegrityError("A config head references another configuration kind.")
+
+
+_SOURCE_LINK_CHECKS: Final = (
+    (
+        "SELECT link.link_id FROM transaction_source_links AS link "
+        "JOIN record_provenance AS provenance ON provenance.provenance_id = link.provenance_id "
+        "JOIN observations AS observation ON observation.entity_id = link.observation_id "
+        "WHERE provenance.source_occurrence_id <> observation.source_occurrence_id",
+        "A source link joins evidence from different source occurrences.",
+    ),
+    (
+        "SELECT link.link_id FROM transaction_source_links AS link "
+        "JOIN transactions AS txn ON txn.entity_id = link.transaction_id "
+        "WHERE link.link_kind = 'origin' "
+        "AND (link.provenance_id <> txn.provenance_id "
+        "OR link.observation_id <> txn.observation_id)",
+        "An origin source link does not match the transaction's preserved origin.",
+    ),
+    (
+        "SELECT link.link_id FROM transaction_source_links AS link "
+        "JOIN transactions AS txn ON txn.entity_id = link.transaction_id "
+        "WHERE link.link_kind = 'duplicate_evidence' "
+        "AND link.provenance_id = txn.provenance_id",
+        "Duplicate evidence must not reuse the transaction origin provenance.",
+    ),
+    (
+        "SELECT transaction_id FROM transaction_source_links "
+        "WHERE link_kind = 'origin' GROUP BY transaction_id HAVING COUNT(*) > 1",
+        "A transaction has more than one origin source link.",
+    ),
+    (
+        "SELECT link.link_id FROM transaction_source_links AS link "
+        "JOIN transactions AS txn ON txn.provenance_id = link.provenance_id "
+        "WHERE txn.entity_id <> link.transaction_id",
+        "A source link reassigns another transaction's origin provenance.",
+    ),
+)
+
+
+def _validate_v4_invariants(connection: sqlite3.Connection) -> None:
+    """Validate source-evidence link bindings introduced in schema v4."""
+    schema_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+    if schema_version < _SCHEMA_V4:
+        return
+    for query, message in _SOURCE_LINK_CHECKS:
+        if connection.execute(query).fetchone() is not None:
+            raise RepositoryIntegrityError(message)
 
 
 def _validate_ownership_assertions(connection: sqlite3.Connection) -> None:

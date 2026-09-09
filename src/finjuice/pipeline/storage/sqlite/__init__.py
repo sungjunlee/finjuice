@@ -3,6 +3,7 @@
 from finjuice.pipeline.storage.sqlite.errors import (
     AuthorityConflictError,
     AuthorityError,
+    AuthorityEvidenceUnavailableError,
     AuthorityIntegrityError,
     ExactValueError,
     IdentifierError,
@@ -51,6 +52,7 @@ from finjuice.pipeline.storage.sqlite.records import (
     ResourceRecord,
     SourceOccurrenceRecord,
     TransactionRecord,
+    TransactionSourceLinkRecord,
 )
 from finjuice.pipeline.storage.sqlite.repository import RepositoryBuilder, RepositoryReader
 from finjuice.pipeline.storage.sqlite.schema import (
@@ -75,6 +77,7 @@ __all__ = [
     "AgentIntakeProposalRecord",
     "AssetSnapshotRecord",
     "AuthorityConflictError",
+    "AuthorityEvidenceUnavailableError",
     "AuthorityError",
     "AuthorityIntegrityError",
     "ConfigRevisionRecord",
@@ -118,6 +121,7 @@ __all__ = [
     "SourceObjectStore",
     "SourceOccurrenceRecord",
     "TransactionRecord",
+    "TransactionSourceLinkRecord",
     "UNKNOWN_CURRENCY",
     "initialize_repository",
     "inspect_repository",

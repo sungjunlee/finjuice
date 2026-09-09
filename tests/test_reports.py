@@ -179,7 +179,7 @@ def sample_transactions() -> list[Dict[str, Any]]:
 def insert_transactions_to_csv(csv_base_dir: Path, transactions: list[Dict[str, Any]]) -> None:
     """Helper function to insert test transactions into CSV partitions."""
     df = pl.DataFrame(transactions)
-    csv_partition.append_transactions(csv_base_dir, df, deduplicate=False)
+    csv_partition.append_transactions(df, deduplicate=False, authority_data_dir=csv_base_dir.parent)
 
 
 # Test 1: export_monthly_spend success

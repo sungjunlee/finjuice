@@ -164,37 +164,41 @@ def _write_banksalad_overview(
     file_mtime: str,
 ) -> dict[str, Any]:
     parsed = parse_banksalad_overview(file_path=file_path, file_id=file_id, file_mtime=file_mtime)
-    banksalad_base_dir = _banksalad_overview_base_dir(csv_base_dir)
+    authority_data_dir = csv_base_dir.parent
     result = _empty_overview_write_summary()
 
     result["overview_facts"] = _write_overview_table_result(
         csv_partition.append_banksalad_overview_facts(
-            banksalad_base_dir / "overview_facts",
             parsed.overview_facts,
+            authority_data_dir=authority_data_dir,
         )
     )
     result["balance"] = _write_overview_table_result(
-        csv_partition.append_banksalad_balance(banksalad_base_dir / "balance", parsed.balance)
+        csv_partition.append_banksalad_balance(
+            parsed.balance, authority_data_dir=authority_data_dir
+        )
     )
     result["cashflow"] = _write_overview_table_result(
-        csv_partition.append_banksalad_cashflow(banksalad_base_dir / "cashflow", parsed.cashflow)
+        csv_partition.append_banksalad_cashflow(
+            parsed.cashflow, authority_data_dir=authority_data_dir
+        )
     )
     result["insurance"] = _write_overview_table_result(
         csv_partition.append_banksalad_insurance(
-            banksalad_base_dir / "insurance",
             parsed.insurance,
+            authority_data_dir=authority_data_dir,
         )
     )
     result["investments"] = _write_overview_table_result(
         csv_partition.append_banksalad_investments(
-            banksalad_base_dir / "investments",
             parsed.investments,
+            authority_data_dir=authority_data_dir,
         )
     )
     result["loans"] = _write_overview_table_result(
         csv_partition.append_banksalad_loans(
-            banksalad_base_dir / "loans",
             parsed.loans,
+            authority_data_dir=authority_data_dir,
         )
     )
     result["warnings"] = parsed.warnings

@@ -13,8 +13,8 @@ Report-filters schema parsing lives in
 :mod:`finjuice.pipeline.tagging.rules_yaml_filters`; the public
 :func:`load_report_filters` entrypoint stays here.
 
-* **Loaders** — :func:`load_rules`, :func:`load_rules_collecting`, and
-  :func:`load_report_filters` parse YAML into validated
+* **Loaders** — :func:`load_rules`, :func:`load_rules_collecting`,
+  :func:`load_rules_bytes`, and :func:`load_report_filters` parse YAML into validated
   :class:`~finjuice.pipeline.tagging.models.TagRule` /
   :class:`~finjuice.pipeline.tagging.models.ReportFilters` objects.
 * **Round-trip helpers** — :func:`save_rule_dicts_roundtrip`,
@@ -39,6 +39,7 @@ from finjuice.pipeline.tagging.rules_yaml_filters import _parse_report_filters
 from finjuice.pipeline.tagging.rules_yaml_load import (
     _load_yaml_document,
     load_rules,
+    load_rules_bytes,  # noqa: F401 — re-exported public YAML API
     load_rules_collecting,  # noqa: F401 — re-exported public YAML API
 )
 from finjuice.pipeline.tagging.rules_yaml_roundtrip import (

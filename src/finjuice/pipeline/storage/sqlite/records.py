@@ -176,6 +176,21 @@ class TransactionRecord:
 
 
 @dataclass(frozen=True)
+class TransactionSourceLinkRecord:
+    """Append-only evidence link from one provenance to an accepted transaction.
+
+    A source relation is not a financial ownership assertion. Baseline origin
+    already lives on transaction columns when no link row exists.
+    """
+
+    link_id: str
+    transaction_id: str
+    provenance_id: str
+    observation_id: str
+    link_kind: Literal["origin", "duplicate_evidence"]
+
+
+@dataclass(frozen=True)
 class OverviewFactRecord:
     """One typed Banksalad overview cell fact."""
 
@@ -377,7 +392,7 @@ class AgentIntakeProposalRecord:
     idempotency_key: str
     expected_generation: str
     expected_revision: int
-    payload: Mapping[str, Any] | list[Any]
+    payload: Mapping[str, Any]
     created_at: str
 
 
