@@ -540,17 +540,6 @@ _EXACT_SUBTYPE_CHECKS: Final = (
     "EXCEPT SELECT value_id FROM number_values",
 )
 
-_OBSERVATION_PROVENANCE_TABLES: Final = (
-    "transactions",
-    "overview_facts",
-    "overview_balances",
-    "overview_cashflows",
-    "overview_insurance",
-    "overview_investments",
-    "overview_loans",
-    "asset_snapshots",
-)
-
 _SOURCE_BINDING_CHECKS: Final = (
     (
         "WITH typed_records(entity_id, observation_id, provenance_id) AS ("

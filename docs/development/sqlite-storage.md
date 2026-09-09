@@ -84,7 +84,9 @@ relationship.
 and original lexical evidence. Money requires a known currency or explicit
 `currency=UNKNOWN_CURRENCY`. Quantities and rates use versioned units. Parsing and
 reconstruction do not depend on the ambient Decimal precision and do not pass
-through binary floats. Typed values outside the supported contract must be
+through binary floats. Source/migration values retain their occurrence provenance;
+identical numeric values from different occurrences must not be deduplicated into
+one source value. Typed values outside the supported contract must be
 retained as opaque evidence and resolved before cutover.
 
 ## Inspection and schema safety
@@ -110,7 +112,8 @@ Schema changes build and validate a separate candidate and preserve the source
 DB and its sidecars on failure. Missing, mutable, or corrupt referenced source
 objects fail as repository integrity errors. A failed copy can retain objects
 already published into its isolated destination; it never publishes the
-candidate database or deletes those objects to simulate rollback. Candidate builders use DELETE journaling and
+candidate database or deletes those objects to simulate rollback. Candidate
+builders use DELETE journaling and
 FULL synchronization. Before introducing WAL for operational writes, verify
 that the deployed SQLite runtime includes the
 [WAL-reset fix](https://www.sqlite.org/wal.html).

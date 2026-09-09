@@ -31,6 +31,7 @@ from finjuice.pipeline.storage.sqlite import (
     ResourceRecord,
     SourceOccurrenceRecord,
     TransactionRecord,
+    initialize_repository,
     inspect_repository,
     migration_entity_id,
     new_entity_id,
@@ -240,17 +241,62 @@ def test_schema_migration_ledger_is_immutable_and_must_match_current_version(
         validate_repository(paths.database, scratch_root=tmp_path / "scratch")
 
 
-def test_source_binding_checks_cover_every_observation_backed_typed_table() -> None:
-    assert set(sqlite_schema._OBSERVATION_PROVENANCE_TABLES) == {
-        "transactions",
-        "overview_facts",
-        "overview_balances",
-        "overview_cashflows",
-        "overview_insurance",
-        "overview_investments",
-        "overview_loans",
-        "asset_snapshots",
+def test_source_binding_query_reads_every_observation_backed_typed_table(
+    tmp_path: Path,
+) -> None:
+    paths = GenerationPaths(tmp_path / "source-binding-query-coverage")
+    initialize_repository(paths, new_entity_id())
+    required_columns = {"observation_id", "provenance_id"}
+    connection = sqlite3.connect(paths.database)
+    try:
+        table_names = {
+            str(row[0])
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            ).fetchall()
+        }
+        expected_tables = {
+            table_name
+            for table_name in table_names
+            if required_columns
+            <= {
+                str(row[0])
+                for row in connection.execute(
+                    "SELECT name FROM pragma_table_info(?)",
+                    (table_name,),
+                ).fetchall()
+            }
+        }
+        read_columns: dict[str, set[str]] = {}
+
+        def track_reads(
+            action_code: int,
+            table_name: str | None,
+            column_name: str | None,
+            _database_name: str | None,
+            _trigger_name: str | None,
+        ) -> int:
+            if (
+                action_code == sqlite3.SQLITE_READ
+                and table_name is not None
+                and column_name is not None
+            ):
+                read_columns.setdefault(table_name, set()).add(column_name)
+            return sqlite3.SQLITE_OK
+
+        connection.set_authorizer(track_reads)
+        try:
+            connection.execute(sqlite_schema._SOURCE_BINDING_CHECKS[0][0]).fetchall()
+        finally:
+            connection.set_authorizer(None)
+    finally:
+        connection.close()
+
+    actual_tables = {
+        table_name for table_name, columns in read_columns.items() if required_columns <= columns
     }
+    assert expected_tables
+    assert actual_tables == expected_tables
 
 
 def test_typed_record_rejects_observation_and_provenance_from_different_occurrences(
