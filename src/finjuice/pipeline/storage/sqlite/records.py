@@ -74,6 +74,16 @@ class LegacyIdentifierRecord:
 
 
 @dataclass(frozen=True)
+class MigrationIdentityRecord:
+    """Frozen inputs that deterministically produced one migrated entity ID."""
+
+    entity_id: str
+    capture_manifest_digest: str
+    record_kind: EntityKind
+    legacy_locator: Mapping[str, Any]
+
+
+@dataclass(frozen=True)
 class PartyRecord:
     """Stable party identity without inferred household semantics."""
 
@@ -277,6 +287,6 @@ class AssetSnapshotRecord:
     provenance_id: str
     account_id: str
     resource_id: str
-    quantity_value_id: str
-    market_value_id: str
+    quantity_value_id: str | None
+    market_value_id: str | None
     snapshot_date: str

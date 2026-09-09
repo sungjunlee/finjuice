@@ -5,12 +5,14 @@ from __future__ import annotations
 import io
 import os
 import sqlite3
+import stat
 from pathlib import Path
 from uuid import uuid4
 
 import pytest
 
 from finjuice.pipeline.storage.sqlite import (
+    SQLITE_APPLICATION_ID,
     AccountRecord,
     AssetSnapshotRecord,
     ConfigRevisionRecord,
@@ -33,6 +35,7 @@ from finjuice.pipeline.storage.sqlite import (
     validate_repository,
 )
 from finjuice.pipeline.storage.sqlite import schema as sqlite_schema
+from finjuice.pipeline.storage.sqlite import snapshot as sqlite_snapshot
 from finjuice.pipeline.storage.sqlite.errors import (
     RepositoryIntegrityError,
     RepositoryPathError,
@@ -88,7 +91,7 @@ def test_builder_publishes_typed_domains_and_preserves_duplicate_occurrences(
     balance_provenance = _provenance(occurrence_id, 21)
     asset_provenance = _provenance(occurrence_id, 30)
 
-    with RepositoryBuilder(paths, generation, dataset_revision=4) as builder:
+    with RepositoryBuilder(paths, generation) as builder:
         artifact = builder.publish_source(io.BytesIO(b"synthetic xlsx bytes"))
         assert not paths.database.exists()
         builder.add_source_occurrence(
@@ -257,8 +260,38 @@ def test_builder_publishes_typed_domains_and_preserves_duplicate_occurrences(
         info = builder.finalize()
 
     assert info.dataset_generation == generation
-    assert info.dataset_revision == 4
+    assert info.dataset_revision == 0
     _assert_typed_domain_rows(paths, transaction_ids)
+
+
+def test_new_builder_rejects_invented_dataset_revision(tmp_path: Path) -> None:
+    paths = GenerationPaths(tmp_path / "invented-revision")
+
+    with pytest.raises(ValueError, match="must be zero"):
+        RepositoryBuilder(paths, _id(), dataset_revision=4)
+
+    assert not paths.database.exists()
+
+
+def test_builder_rejects_permissive_generation_root(tmp_path: Path) -> None:
+    root = tmp_path / "permissive-generation"
+    root.mkdir(mode=0o755)
+    root.chmod(0o755)
+
+    with pytest.raises(RepositoryPathError, match="must be private"):
+        RepositoryBuilder(GenerationPaths(root), _id())
+
+    assert not (root / "finjuice.sqlite3").exists()
+
+
+def test_builder_staging_and_published_database_are_private(tmp_path: Path) -> None:
+    paths = GenerationPaths(tmp_path / "private-database")
+    builder = RepositoryBuilder(paths, _id())
+
+    assert stat.S_IMODE(builder._staging.stat().st_mode) == 0o600
+    builder.finalize()
+
+    assert stat.S_IMODE(paths.database.stat().st_mode) == 0o600
 
 
 def test_text_primary_keys_reject_explicit_null(tmp_path: Path) -> None:
@@ -386,6 +419,179 @@ def test_upgrade_processing_failure_preserves_source_and_unpublishes_candidate(
         assert list(destination.root.glob(".finjuice-sqlite-staging-*")) == []
     finally:
         connection.close()
+
+
+def test_committed_wal_reads_validate_and_upgrade_without_changing_source_sidecars(
+    tmp_path: Path,
+) -> None:
+    source = GenerationPaths(tmp_path / "wal-source")
+    generation = _id()
+    initialize_repository(source, generation)
+    connection = sqlite3.connect(source.database)
+    try:
+        assert connection.execute("PRAGMA journal_mode = WAL").fetchone()[0] == "wal"
+        connection.execute("PRAGMA wal_autocheckpoint = 0")
+        party_id = _id()
+        connection.execute("UPDATE repository_meta SET dataset_revision = 7 WHERE singleton = 1")
+        connection.execute(
+            "INSERT INTO entities (entity_id, entity_kind) VALUES (?, 'party')",
+            (party_id,),
+        )
+        connection.execute(
+            "INSERT INTO parties (entity_id, party_kind) VALUES (?, 'unknown')",
+            (party_id,),
+        )
+        connection.commit()
+        connection.execute("SELECT * FROM repository_meta").fetchall()
+        source_files = (
+            source.database,
+            Path(f"{source.database}-wal"),
+            Path(f"{source.database}-shm"),
+        )
+        assert all(path.exists() for path in source_files)
+        before = {path: path.read_bytes() for path in source_files}
+
+        validated = validate_repository(
+            source.database,
+            scratch_root=tmp_path / "validate-scratch",
+        )
+        with RepositoryReader(
+            source.database,
+            scratch_root=tmp_path / "reader-scratch",
+        ) as reader:
+            assert any(row["entity_id"] == party_id for row in reader.rows("parties"))
+
+        destination = GenerationPaths(tmp_path / "wal-destination")
+        upgraded = upgrade_repository(
+            source.database,
+            destination,
+            scratch_root=tmp_path / "upgrade-scratch",
+        )
+
+        assert validated.dataset_generation == generation
+        assert validated.dataset_revision == 7
+        assert upgraded.dataset_generation == generation
+        assert upgraded.dataset_revision == 7
+        with RepositoryReader(
+            destination.database,
+            scratch_root=tmp_path / "destination-scratch",
+        ) as reader:
+            assert any(row["entity_id"] == party_id for row in reader.rows("parties"))
+        assert {path: path.read_bytes() for path in source_files} == before
+    finally:
+        connection.close()
+
+
+@pytest.mark.parametrize(
+    ("application_id", "schema_version", "message"),
+    [
+        (SQLITE_APPLICATION_ID, 0, "unsupported"),
+        (0, 1, "not a finjuice"),
+    ],
+)
+def test_upgrade_rejects_v0_and_wrong_application_id_without_changing_source(
+    tmp_path: Path,
+    application_id: int,
+    schema_version: int,
+    message: str,
+) -> None:
+    source_directory = tmp_path / f"source-{application_id}-{schema_version}"
+    source_directory.mkdir()
+    source = source_directory / "foreign.sqlite3"
+    connection = sqlite3.connect(source)
+    try:
+        connection.execute("CREATE TABLE foreign_payload (value TEXT)")
+        connection.execute("INSERT INTO foreign_payload VALUES ('unchanged')")
+        connection.execute(f"PRAGMA application_id = {application_id}")
+        connection.execute(f"PRAGMA user_version = {schema_version}")
+        connection.commit()
+    finally:
+        connection.close()
+    before = source.read_bytes()
+    destination = GenerationPaths(tmp_path / f"rejected-{application_id}-{schema_version}")
+    scratch_parent = tmp_path / f"scratch-{application_id}-{schema_version}"
+
+    with pytest.raises(RepositoryVersionError, match=message):
+        inspect_repository(source, scratch_root=scratch_parent / "inspect")
+    with pytest.raises(RepositoryVersionError, match=message):
+        upgrade_repository(
+            source,
+            destination,
+            scratch_root=scratch_parent / "upgrade",
+        )
+
+    assert source.read_bytes() == before
+    assert not destination.database.exists()
+
+
+def test_snapshot_rejects_preexisting_and_mid_capture_rollback_journal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths = GenerationPaths(tmp_path / "rollback-journal")
+    initialize_repository(paths, _id())
+    journal = Path(f"{paths.database}-journal")
+    journal.write_bytes(b"synthetic active journal")
+
+    with pytest.raises(RepositorySnapshotError, match="active rollback journal"):
+        inspect_repository(paths.database, scratch_root=tmp_path / "preexisting-scratch")
+
+    journal.unlink()
+    original_copy = sqlite_snapshot._copy_regular
+    journal_created = False
+
+    def copy_then_create_journal(source: Path, destination: Path) -> None:
+        nonlocal journal_created
+        original_copy(source, destination)
+        if not journal_created:
+            journal.write_bytes(b"appeared during capture")
+            journal_created = True
+
+    monkeypatch.setattr(sqlite_snapshot, "_copy_regular", copy_then_create_journal)
+
+    with pytest.raises(RepositorySnapshotError, match="appeared during inspection"):
+        inspect_repository(paths.database, scratch_root=tmp_path / "mid-capture-scratch")
+
+
+def test_database_publication_syncs_link_before_removing_staging(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    staging = tmp_path / "staging.sqlite3"
+    destination = tmp_path / "published.sqlite3"
+    staging.write_bytes(b"candidate")
+    states: list[tuple[bool, bool]] = []
+    real_fsync_directory = sqlite_schema._fsync_directory
+
+    def record_fsync(path: Path) -> None:
+        states.append((staging.exists(), destination.exists()))
+        real_fsync_directory(path)
+
+    monkeypatch.setattr(sqlite_schema, "_fsync_directory", record_fsync)
+
+    sqlite_schema._publish_database(staging, destination)
+
+    assert states == [(True, True), (False, True)]
+    assert destination.read_bytes() == b"candidate"
+
+
+def test_database_publication_reports_first_directory_sync_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    staging = tmp_path / "staging.sqlite3"
+    destination = tmp_path / "published.sqlite3"
+    staging.write_bytes(b"candidate")
+
+    def fail_fsync(path: Path) -> None:
+        raise OSError(f"injected sync failure for {path}")
+
+    monkeypatch.setattr(sqlite_schema, "_fsync_directory", fail_fsync)
+
+    with pytest.raises(RepositoryPathError, match="could not be published"):
+        sqlite_schema._publish_database(staging, destination)
+
+    assert not destination.exists()
 
 
 def test_initialize_never_replaces_existing_database(tmp_path: Path) -> None:

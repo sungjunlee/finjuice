@@ -61,3 +61,6 @@ scope: ["**"]
 - 2026-09-09: draft PR #453을 열었다. CI의 테스트·패키지·문서·CodeQL은 통과했으나 복잡도 5건과 Bandit의 SQL 구성 2건을 수정 중이다. Opus 5 검토 후 빌더의 부분 삽입 방지·공개 전 관계 검증·불변 ID·원문 증거·scratch 보존 경계를 보강한다. namespace는 직접 계산해 계약과 일치함을 확인했으며, 같은 schema의 논리적 복제와 새로운 활성화를 구분한다.
 
 - Corrected review preflight (2026-09-09 10:52 KST): Claude configured account, 5h used 74% / remaining 26%, reset 11:30 KST; weekly used 12% / remaining 88%, reset 2026-09-13 01:00 KST. Both pace windows report lasting until reset; monthly/absolute exhaustion ETA unavailable. Source `claude`, confidence `percentOnly`. Review remains bounded and code/synthetic-evidence only.
+
+- Revision `4af77d4` passed local pytest (2,523 passed, 1 Windows-only skip), all static gates, fresh wheel/sdist installation plus SQLite smoke, and all required CI. Linux/Python 3.13 CI: 2,521 passed, 4 platform/filesystem skips, coverage 87.67%. Installed SQLite source hashes match the review capture.
+- A second Opus 5 review found further preservation gaps. Corrections in progress: immutable migration identity inputs, money-valued overview facts, partial asset values, unsupported v0 rejection, publication fsync ordering, zero-origin builder revisions, and successful-WAL/supersession failure-path tests. Issue #433 and PR #453 remain incomplete pending corrected verification and review.

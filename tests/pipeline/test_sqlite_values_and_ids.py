@@ -102,10 +102,15 @@ def test_migration_namespace_and_golden_uuid_match_contract() -> None:
         "row_hash": "same",
     }
 
-    assert MIGRATION_NAMESPACE == expected_namespace
-    assert migration_entity_id("a" * 64, "transaction", locator) == (
-        "6a476ee8-4dd6-5938-b8a3-b5db57f597c0"
+    literal_locator = (
+        '{"locator_version":1,"partition_digest":"' + "b" * 64 + '","row":7,"row_hash":"same"}'
     )
+    literal_contract_name = "a" * 64 + "/transaction/" + literal_locator
+    independently_derived = str(uuid.uuid5(expected_namespace, literal_contract_name))
+
+    assert MIGRATION_NAMESPACE == expected_namespace
+    assert independently_derived == "6a476ee8-4dd6-5938-b8a3-b5db57f597c0"
+    assert migration_entity_id("a" * 64, "transaction", locator) == independently_derived
 
 
 @pytest.mark.parametrize(

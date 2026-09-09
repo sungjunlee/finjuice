@@ -13,16 +13,20 @@ from pathlib import Path
 import pytest
 
 from finjuice.pipeline.storage.sqlite import (
+    UNKNOWN_CURRENCY,
     AccountRecord,
+    AssetSnapshotRecord,
     ExactValue,
     GenerationPaths,
     LegacyIdentifierRecord,
+    MigrationIdentityRecord,
     ObservationRecord,
     OverviewFactRecord,
     PartyRecord,
     ProvenanceRecord,
     RepositoryBuilder,
     RepositoryReader,
+    ResourceRecord,
     SourceOccurrenceRecord,
     TransactionRecord,
     inspect_repository,
@@ -186,6 +190,152 @@ def test_overview_non_numeric_fact_requires_lexical_evidence_and_rolls_back(
             OverviewFactRecord(**{**missing.__dict__, "value_text": "=UNKNOWN()"})
         )
         builder.finalize()
+
+
+def test_overview_numeric_fact_preserves_money_currency_state_and_generic_number(
+    tmp_path: Path,
+) -> None:
+    paths = GenerationPaths(tmp_path / "overview-numeric-kinds")
+    with RepositoryBuilder(paths, new_entity_id()) as builder:
+        _, occurrence_id = _source_context(builder)
+        observation_id = new_entity_id()
+        builder.add_observation(
+            ObservationRecord(
+                observation_id=observation_id,
+                occurrence_id=occurrence_id,
+                observed_at=None,
+                effective_at=None,
+                collected_at=None,
+                scope_state="unknown",
+            )
+        )
+        cases = (
+            ExactValue.from_lexical("1000", value_kind="money", currency="KRW"),
+            ExactValue.from_lexical("2000", value_kind="money", currency=UNKNOWN_CURRENCY),
+            ExactValue.from_lexical("3", value_kind="number", unit="count.v1"),
+        )
+        value_ids: list[str] = []
+        for row, value in enumerate(cases, start=1):
+            provenance_id = _add_provenance(
+                builder,
+                occurrence_id,
+                {"locator_version": 1, "row": row},
+            )
+            value_id = new_entity_id()
+            value_ids.append(value_id)
+            builder.add_exact_value(value_id, value, provenance_id=provenance_id)
+            builder.add_overview_fact(
+                OverviewFactRecord(
+                    fact_id=new_entity_id(),
+                    observation_id=observation_id,
+                    provenance_id=provenance_id,
+                    snapshot_date="2026-09-01",
+                    sheet_name="overview",
+                    block_id="numeric",
+                    block_title="Numeric",
+                    fact_kind=f"value-{row}",
+                    value_type="number",
+                    numeric_value_id=value_id,
+                )
+            )
+        builder.finalize()
+
+    with RepositoryReader(paths.database, scratch_root=tmp_path / "scratch") as reader:
+        facts = reader.rows("overview_facts")
+        money = reader.rows("money_values")
+        numbers = reader.rows("number_values")
+
+    assert [row["numeric_value_id"] for row in facts] == value_ids
+    assert [(row["currency_code"], row["currency_unknown"]) for row in money] == [
+        ("KRW", 0),
+        (None, 1),
+    ]
+    assert [row["value_id"] for row in numbers] == [value_ids[2]]
+
+
+def test_asset_snapshot_accepts_one_real_value_and_rejects_both_missing(tmp_path: Path) -> None:
+    paths = GenerationPaths(tmp_path / "partial-asset-values")
+    with RepositoryBuilder(paths, new_entity_id()) as builder:
+        _, occurrence_id = _source_context(builder)
+        observation_id = new_entity_id()
+        account_id = new_entity_id()
+        resource_id = new_entity_id()
+        builder.add_observation(
+            ObservationRecord(
+                observation_id=observation_id,
+                occurrence_id=occurrence_id,
+                observed_at=None,
+                effective_at=None,
+                collected_at=None,
+                scope_state="partial",
+            )
+        )
+        builder.add_account(AccountRecord(account_id=account_id, account_kind="broker.v1"))
+        builder.add_resource(ResourceRecord(resource_id=resource_id, resource_kind="equity.v1"))
+        quantity_id = new_entity_id()
+        market_value_id = new_entity_id()
+        builder.add_exact_value(
+            quantity_id,
+            ExactValue.from_lexical("1.5", value_kind="quantity", unit="share.v1"),
+        )
+        builder.add_exact_value(
+            market_value_id,
+            ExactValue.from_lexical("2500", value_kind="money", currency="KRW"),
+        )
+        provenances = [
+            _add_provenance(
+                builder,
+                occurrence_id,
+                {"locator_version": 1, "row": row},
+            )
+            for row in range(1, 4)
+        ]
+        builder.add_asset_snapshot(
+            AssetSnapshotRecord(
+                snapshot_id=new_entity_id(),
+                observation_id=observation_id,
+                provenance_id=provenances[0],
+                account_id=account_id,
+                resource_id=resource_id,
+                quantity_value_id=quantity_id,
+                market_value_id=None,
+                snapshot_date="2026-09-01",
+            )
+        )
+        builder.add_asset_snapshot(
+            AssetSnapshotRecord(
+                snapshot_id=new_entity_id(),
+                observation_id=observation_id,
+                provenance_id=provenances[1],
+                account_id=account_id,
+                resource_id=resource_id,
+                quantity_value_id=None,
+                market_value_id=market_value_id,
+                snapshot_date="2026-09-01",
+            )
+        )
+        with pytest.raises(sqlite3.IntegrityError, match="CHECK constraint"):
+            builder.add_asset_snapshot(
+                AssetSnapshotRecord(
+                    snapshot_id=new_entity_id(),
+                    observation_id=observation_id,
+                    provenance_id=provenances[2],
+                    account_id=account_id,
+                    resource_id=resource_id,
+                    quantity_value_id=None,
+                    market_value_id=None,
+                    snapshot_date="2026-09-01",
+                )
+            )
+        builder.finalize()
+
+    with RepositoryReader(paths.database, scratch_root=tmp_path / "scratch") as reader:
+        snapshots = reader.rows("asset_snapshots")
+
+    assert [(row["quantity_value_id"], row["market_value_id"]) for row in snapshots] == [
+        (quantity_id, None),
+        (None, market_value_id),
+    ]
 
 
 def test_immutable_anchor_and_preservation_rows_reject_update_or_delete(tmp_path: Path) -> None:
@@ -362,22 +512,153 @@ def test_migrated_transaction_id_can_be_rederived_from_persisted_inputs(tmp_path
                 provenance_id=provenance_id,
             )
         )
+        builder.add_migration_identity(
+            MigrationIdentityRecord(
+                entity_id=transaction_id,
+                capture_manifest_digest=capture_digest,
+                record_kind="transaction",
+                legacy_locator=locator,
+            )
+        )
         builder.finalize()
 
     with RepositoryReader(paths.database, scratch_root=tmp_path / "scratch") as reader:
         entity = next(row for row in reader.rows("entities") if row["entity_id"] == transaction_id)
-        provenance = reader.rows("record_provenance")[0]
-        mapping = reader.rows("legacy_identifiers")[0]
+        identity = reader.rows("migration_identities")[0]
 
     assert entity["entity_kind"] == "transaction"
     assert (
         migration_entity_id(
-            mapping["capture_manifest_digest"],
-            entity["entity_kind"],
-            json.loads(provenance["legacy_locator_json"]),
+            identity["capture_manifest_digest"],
+            identity["record_kind"],
+            json.loads(identity["canonical_locator_json"]),
         )
         == transaction_id
     )
+
+
+def test_finalize_requires_migration_identity_for_every_uuid5_entity(tmp_path: Path) -> None:
+    paths = GenerationPaths(tmp_path / "missing-migration-identity")
+    locator = {"locator_version": 1, "row": 1}
+    party_id = migration_entity_id("a" * 64, "party", locator)
+    builder = RepositoryBuilder(paths, new_entity_id())
+    builder.add_party(PartyRecord(party_id=party_id))
+
+    with pytest.raises(RepositoryIntegrityError, match="Every UUIDv5 entity"):
+        builder.finalize()
+
+    assert not paths.database.exists()
+
+
+def test_migration_identity_rejects_mismatch_and_conflict(tmp_path: Path) -> None:
+    paths = GenerationPaths(tmp_path / "migration-identity-conflict")
+    locator = {"locator_version": 1, "row": 1}
+    capture_digest = "a" * 64
+    party_id = migration_entity_id(capture_digest, "party", locator)
+    correct = MigrationIdentityRecord(
+        entity_id=party_id,
+        capture_manifest_digest=capture_digest,
+        record_kind="party",
+        legacy_locator=locator,
+    )
+
+    with RepositoryBuilder(paths, new_entity_id()) as builder:
+        builder.add_party(PartyRecord(party_id=party_id))
+        with pytest.raises(ValueError, match="do not derive"):
+            builder.add_migration_identity(
+                MigrationIdentityRecord(
+                    entity_id=party_id,
+                    capture_manifest_digest="b" * 64,
+                    record_kind="party",
+                    legacy_locator=locator,
+                )
+            )
+        builder.add_migration_identity(correct)
+        with pytest.raises(sqlite3.IntegrityError, match="UNIQUE constraint"):
+            builder.add_migration_identity(correct)
+        builder.finalize()
+
+
+def test_later_aliases_do_not_change_migration_identity_and_supersession_is_append_only(
+    tmp_path: Path,
+) -> None:
+    paths = GenerationPaths(tmp_path / "migration-aliases")
+    locator = {"locator_version": 1, "row": 7, "row_hash": "original"}
+    capture_digest = "a" * 64
+    party_id = migration_entity_id(capture_digest, "party", locator)
+
+    with RepositoryBuilder(paths, new_entity_id()) as builder:
+        builder.add_party(PartyRecord(party_id=party_id))
+        builder.add_migration_identity(
+            MigrationIdentityRecord(
+                entity_id=party_id,
+                capture_manifest_digest=capture_digest,
+                record_kind="party",
+                legacy_locator=locator,
+            )
+        )
+        original_mapping_id = builder.add_legacy_identifier(
+            LegacyIdentifierRecord(
+                entity_id=party_id,
+                identifier_kind="row_hash",
+                identifier_value="original",
+                capture_manifest_digest=capture_digest,
+            )
+        )
+        replacement_mapping_id = builder.add_legacy_identifier(
+            LegacyIdentifierRecord(
+                entity_id=party_id,
+                identifier_kind="old_path",
+                identifier_value="corrected/path.csv",
+                capture_manifest_digest="b" * 64,
+            )
+        )
+        supersession_id = builder.supersede_legacy_identifier(
+            original_mapping_id,
+            replacement_mapping_id,
+            "corrected alias",
+        )
+        builder.finalize()
+
+    with RepositoryReader(paths.database, scratch_root=tmp_path / "scratch") as reader:
+        identity = reader.rows("migration_identities")[0]
+        mappings = reader.rows("legacy_identifiers")
+        supersessions = reader.rows("legacy_identifier_supersessions")
+
+    assert identity["capture_manifest_digest"] == capture_digest
+    assert identity["canonical_locator_json"] == json.dumps(
+        locator,
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    assert {row["mapping_id"] for row in mappings} == {
+        original_mapping_id,
+        replacement_mapping_id,
+    }
+    assert supersessions == [
+        {
+            "supersession_id": supersession_id,
+            "previous_mapping_id": original_mapping_id,
+            "replacement_mapping_id": replacement_mapping_id,
+            "reason": "corrected alias",
+        }
+    ]
+
+    connection = sqlite3.connect(paths.database)
+    try:
+        with pytest.raises(sqlite3.IntegrityError, match="immutable preservation row"):
+            connection.execute(
+                "UPDATE migration_identities SET capture_manifest_digest = ? WHERE entity_id = ?",
+                ("c" * 64, party_id),
+            )
+        with pytest.raises(sqlite3.IntegrityError, match="immutable preservation row"):
+            connection.execute(
+                "DELETE FROM legacy_identifier_supersessions WHERE supersession_id = ?",
+                (supersession_id,),
+            )
+    finally:
+        connection.close()
 
 
 def test_private_scratch_override_connects_all_read_and_upgrade_apis(tmp_path: Path) -> None:

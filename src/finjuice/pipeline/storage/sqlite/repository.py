@@ -13,7 +13,11 @@ from typing import Any, BinaryIO, Callable, Final, Iterator, TypeVar, cast
 
 from finjuice.pipeline.storage.sqlite.errors import RepositoryPathError
 from finjuice.pipeline.storage.sqlite.exact import ExactValue
-from finjuice.pipeline.storage.sqlite.ids import canonical_locator, validate_entity_id
+from finjuice.pipeline.storage.sqlite.ids import (
+    canonical_locator,
+    migration_entity_id,
+    validate_entity_id,
+)
 from finjuice.pipeline.storage.sqlite.objects import SourceArtifact, SourceObjectStore
 from finjuice.pipeline.storage.sqlite.paths import GenerationPaths
 from finjuice.pipeline.storage.sqlite.records import (
@@ -22,6 +26,7 @@ from finjuice.pipeline.storage.sqlite.records import (
     ConfigRevisionRecord,
     EntityKind,
     LegacyIdentifierRecord,
+    MigrationIdentityRecord,
     ObservationRecord,
     OverviewBalanceRecord,
     OverviewCashflowRecord,
@@ -52,6 +57,7 @@ _READ_TABLE_SQL: Final = {
     "repository_meta": "SELECT * FROM repository_meta",
     "schema_migrations": "SELECT * FROM schema_migrations",
     "entities": "SELECT * FROM entities",
+    "migration_identities": "SELECT * FROM migration_identities",
     "source_artifacts": "SELECT * FROM source_artifacts",
     "source_occurrences": "SELECT * FROM source_occurrences",
     "record_provenance": "SELECT * FROM record_provenance",
@@ -116,9 +122,9 @@ class RepositoryBuilder:
     ) -> None:
         validate_entity_id(dataset_generation)
         if isinstance(dataset_revision, bool) or not isinstance(dataset_revision, int):
-            raise ValueError("Dataset revision must be a non-negative integer.")
-        if dataset_revision < 0:
-            raise ValueError("Dataset revision must be a non-negative integer.")
+            raise ValueError("Dataset revision must be the integer zero for a new repository.")
+        if dataset_revision != 0:
+            raise ValueError("Dataset revision must be zero for a new repository.")
         _prepare_generation_layout(paths)
         if paths.database.exists() or paths.database.is_symlink():
             raise RepositoryPathError(
@@ -430,6 +436,30 @@ class RepositoryBuilder:
             ),
         )
         return mapping_id
+
+    @_atomic_add
+    def add_migration_identity(self, record: MigrationIdentityRecord) -> None:
+        """Persist and verify the frozen derivation inputs for one UUIDv5 entity."""
+        validate_entity_id(record.entity_id)
+        locator_json = canonical_locator(record.legacy_locator)
+        derived_id = migration_entity_id(
+            record.capture_manifest_digest,
+            record.record_kind,
+            record.legacy_locator,
+        )
+        if derived_id != record.entity_id:
+            raise ValueError("Migration identity inputs do not derive the entity ID.")
+        self._connection.execute(
+            "INSERT INTO migration_identities "
+            "(entity_id, capture_manifest_digest, record_kind, canonical_locator_json) "
+            "VALUES (?, ?, ?, ?)",
+            (
+                record.entity_id,
+                record.capture_manifest_digest.removeprefix("sha256:"),
+                record.record_kind,
+                locator_json,
+            ),
+        )
 
     def supersede_legacy_identifier(
         self,

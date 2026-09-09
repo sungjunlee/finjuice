@@ -23,6 +23,15 @@ Existing objects are reused only after their length and hash are checked.
 Separate source occurrences can reference the same object without merging their
 provenance or legacy records. Source objects must be retained alongside the
 database; copying the SQLite file alone is not a complete generation backup.
+File-based publication requires a canonical source path without symlinked
+ancestors. Resolve an approved system alias explicitly before calling
+`publish_source_path` or `publish_path`; the file API rejects aliases rather than
+silently following them.
+
+New generation directories use mode `0700`, and new database staging files use
+`0600`. Existing writable namespace directories must already be private; the
+write APIs reject group/other-accessible directories instead of changing their
+permissions. Read-only source inspection does not alter source permissions.
 
 ## Minimal isolated example
 
@@ -30,7 +39,10 @@ This example uses synthetic bytes in a temporary directory. `finalize()` makes
 the candidate database visible only after validation. Leaving the builder
 context without finalizing discards the unpublished database. Original objects
 already published by that attempt remain in the selected generation directory;
-abort does not delete source bytes. The caller must account for those retained
+abort does not delete source bytes. The builder rejects an existing database,
+but it does not resolve operational activation or legacy runtime fences. Callers
+must select an isolated candidate directory; they must never reuse an active
+generation path, including during recovery. The caller must account for those retained
 objects when inspecting or retiring a failed candidate. The immutable
 `builder.published_artifacts` tuple remains available after abort; `abort()`
 also returns that receipt.
@@ -61,8 +73,12 @@ with TemporaryDirectory() as directory:
 New entity IDs are UUIDv4. Migration IDs use the versioned UUIDv5 namespace and
 canonical locator from the recovery contract. The immutable capture-manifest
 digest is an input to this identity; a candidate database hash is not.
-Duplicate legacy `row_hash` values remain separate occurrences. Legacy mappings
-are retained permanently, and supersession is an additional relationship.
+Each migration-derived UUIDv5 entity has one immutable identity record containing
+its capture digest, record kind, and canonical locator. Publication checks the
+derivation against the entity ID. Later legacy aliases do not replace this
+identity record. Duplicate legacy `row_hash` values remain separate occurrences.
+Legacy mappings are retained permanently, and supersession is an additional
+relationship.
 
 `ExactValue` stores a canonical integer coefficient as text, scale from 0 to 255,
 and original lexical evidence. Money requires a known currency or explicit
@@ -76,7 +92,9 @@ retained as opaque evidence and resolved before cutover.
 SQLite schema version is separate from the legacy CSV schema and backup-manifest
 versions. Connections enable foreign keys, and validation checks the application
 identity, schema metadata, SQLite integrity, and foreign-key consistency.
-Unsupported versions are rejected; no destructive downgrade is attempted.
+Unsupported versions, including an unrecognized schema v0 bootstrap, are
+rejected; no destructive downgrade is attempted. A new builder starts at dataset
+revision zero. Only a validated source copy carries an existing revision forward.
 
 Inspection operates on a separate checked DB/WAL copy. Opening the original with
 ordinary SQLite read-only mode can change SHM state, while `immutable=1` can miss
@@ -98,7 +116,8 @@ and release; finding a matching generation UUID alone does not activate a copy.
 `RepositoryReader`, `inspect_repository`, `validate_repository`, and
 `upgrade_repository` accept a keyword-only `scratch_root` for inspection copies.
 The default is `$XDG_CACHE_HOME/finjuice/sqlite-inspection` when configured, or
-`~/.cache/finjuice/sqlite-inspection`.
+`~/.cache/finjuice/sqlite-inspection`. The scratch root must be private and
+outside the inspected generation.
 
 Inspection scratch directories contain private database bytes. Normal context
 exit removes the scratch copy, but process termination or power loss can leave
@@ -117,4 +136,7 @@ the editable checkout.
 Atomic accepted mutations and audit/idempotency state are delivered by #434.
 Preservation migration, CLI read compatibility, complete SQLite backup, and
 private-data acceptance are delivered by #435 through #438. Their completion
-must not be inferred from the storage foundation alone.
+must not be inferred from the storage foundation alone. Publication durability
+tests check synchronization order and injected errors; they are not physical
+power-loss tests. File data and its directory entry require separate attention
+under the [Linux fsync contract](https://man7.org/linux/man-pages/man2/fsync.2.html).

@@ -96,8 +96,8 @@ class SourceObjectStore:
                 digest.update(chunk)
                 byte_length += len(chunk)
                 _write_all(temp_fd, chunk)
-            os.fsync(temp_fd)
             os.fchmod(temp_fd, 0o444)
+            os.fsync(temp_fd)
         except Exception:
             os.close(temp_fd)
             temp_path.unlink(missing_ok=True)
@@ -153,8 +153,20 @@ class SourceObjectStore:
         except OSError as exc:
             temp_path.unlink(missing_ok=True)
             raise ObjectStoreError("Source object could not be published atomically.") from exc
-        temp_path.unlink()
-        _fsync_directory(target.parent)
+        try:
+            _fsync_directory(target.parent)
+        except OSError as exc:
+            try:
+                target.unlink(missing_ok=True)
+                _fsync_directory(target.parent)
+            except OSError:
+                pass
+            raise ObjectStoreError("Source object could not be published durably.") from exc
+        try:
+            temp_path.unlink()
+            _fsync_directory(target.parent)
+        except OSError as exc:
+            raise ObjectStoreError("Source object could not be published durably.") from exc
         return False
 
 
@@ -174,15 +186,59 @@ def _parse_artifact_id(artifact_id: str) -> str:
 
 def _mkdir_checked(path: Path, *, boundary: Path | None = None) -> None:
     _assert_no_symlink_ancestors(path.absolute(), allow_missing=True)
-    try:
-        path.mkdir(mode=0o700, parents=True, exist_ok=True)
-        current = path.lstat()
-    except OSError as exc:
-        raise RepositoryPathError("Repository object directory could not be created.") from exc
-    if stat.S_ISLNK(current.st_mode) or not stat.S_ISDIR(current.st_mode):
-        raise RepositoryPathError("Repository object path must be a real directory.")
+    missing = _missing_directory_chain(path)
+    for directory in reversed(missing):
+        _create_private_directory(directory)
+    _validate_directory_entry(_read_directory_entry(path), require_private=True)
     if boundary is not None:
         _assert_real_directory_chain(boundary, path)
+
+
+def _missing_directory_chain(path: Path) -> list[Path]:
+    """Return missing directories below the nearest safe existing ancestor."""
+    missing: list[Path] = []
+    current_path = path
+    while True:
+        try:
+            current = current_path.lstat()
+        except FileNotFoundError:
+            missing.append(current_path)
+            parent = current_path.parent
+            if parent == current_path:
+                raise RepositoryPathError(
+                    "Repository object directory could not be created."
+                ) from None
+            current_path = parent
+            continue
+        except OSError as exc:
+            raise RepositoryPathError("Repository object directory could not be created.") from exc
+        _validate_directory_entry(current, require_private=not missing)
+        return missing
+
+
+def _create_private_directory(path: Path) -> None:
+    try:
+        path.mkdir(mode=0o700)
+        _validate_directory_entry(_read_directory_entry(path), require_private=True)
+        _fsync_directory(path.parent)
+    except RepositoryPathError:
+        raise
+    except OSError as exc:
+        raise RepositoryPathError("Repository object directory could not be created.") from exc
+
+
+def _read_directory_entry(path: Path) -> os.stat_result:
+    try:
+        return path.lstat()
+    except OSError as exc:
+        raise RepositoryPathError("Repository object directory could not be created.") from exc
+
+
+def _validate_directory_entry(entry: os.stat_result, *, require_private: bool) -> None:
+    if stat.S_ISLNK(entry.st_mode) or not stat.S_ISDIR(entry.st_mode):
+        raise RepositoryPathError("Repository object path must be a real directory.")
+    if require_private and stat.S_IMODE(entry.st_mode) & 0o077:
+        raise RepositoryPathError("Repository object directory must be private.")
 
 
 def _assert_real_directory_chain(boundary: Path, path: Path) -> None:

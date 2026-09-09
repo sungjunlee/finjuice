@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
-import stat
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -17,8 +17,8 @@ from finjuice.pipeline.storage.sqlite.errors import (
     RepositoryPathError,
     RepositoryVersionError,
 )
-from finjuice.pipeline.storage.sqlite.ids import validate_entity_id
-from finjuice.pipeline.storage.sqlite.objects import SourceObjectStore
+from finjuice.pipeline.storage.sqlite.ids import migration_entity_id, validate_entity_id
+from finjuice.pipeline.storage.sqlite.objects import SourceObjectStore, _mkdir_checked
 from finjuice.pipeline.storage.sqlite.paths import GenerationPaths
 from finjuice.pipeline.storage.sqlite.snapshot import inspection_snapshot
 
@@ -81,6 +81,17 @@ CREATE TABLE entities (
         'overview_loan', 'asset_snapshot'
     )),
     UNIQUE (entity_id, entity_kind)
+);
+
+CREATE TABLE migration_identities (
+    entity_id TEXT PRIMARY KEY NOT NULL,
+    capture_manifest_digest TEXT NOT NULL
+        CHECK (length(capture_manifest_digest) = 64
+            AND capture_manifest_digest NOT GLOB '*[^0-9a-f]*'),
+    record_kind TEXT NOT NULL,
+    canonical_locator_json TEXT NOT NULL CHECK (length(canonical_locator_json) > 1),
+    FOREIGN KEY (entity_id, record_kind) REFERENCES entities(entity_id, entity_kind),
+    CHECK (substr(entity_id, 15, 1) = '5')
 );
 
 CREATE TABLE source_artifacts (
@@ -345,7 +356,7 @@ CREATE TABLE overview_facts (
     fact_kind TEXT NOT NULL,
     row_label TEXT,
     column_label TEXT,
-    numeric_value_id TEXT REFERENCES number_values(value_id),
+    numeric_value_id TEXT REFERENCES exact_values(value_id),
     value_text TEXT,
     value_type TEXT NOT NULL
         CHECK (value_type IN ('number', 'text', 'date', 'empty', 'unsupported')),
@@ -442,10 +453,11 @@ CREATE TABLE asset_snapshots (
     provenance_id TEXT NOT NULL UNIQUE REFERENCES record_provenance(provenance_id),
     account_id TEXT NOT NULL REFERENCES accounts(entity_id),
     resource_id TEXT NOT NULL REFERENCES resources(entity_id),
-    quantity_value_id TEXT NOT NULL REFERENCES quantity_values(value_id),
-    market_value_id TEXT NOT NULL REFERENCES money_values(value_id),
+    quantity_value_id TEXT REFERENCES quantity_values(value_id),
+    market_value_id TEXT REFERENCES money_values(value_id),
     snapshot_date TEXT NOT NULL,
-    FOREIGN KEY (entity_id, entity_kind) REFERENCES entities(entity_id, entity_kind)
+    FOREIGN KEY (entity_id, entity_kind) REFERENCES entities(entity_id, entity_kind),
+    CHECK (quantity_value_id IS NOT NULL OR market_value_id IS NOT NULL)
 );
 
 CREATE INDEX idx_legacy_identifier_lookup
@@ -468,6 +480,7 @@ CREATE INDEX idx_observation_effective
 
 _IMMUTABLE_TABLES = (
     "entities",
+    "migration_identities",
     "source_artifacts",
     "source_occurrences",
     "record_provenance",
@@ -593,13 +606,13 @@ def upgrade_repository(
     with inspection_snapshot(source, scratch_root=scratch_root) as snapshot:
         source_connection = _connect_snapshot(snapshot)
         try:
-            source_info = _read_info(source_connection, allow_bootstrap=True)
+            source_info = _read_info(source_connection)
             if source_info.schema_version > SQLITE_SCHEMA_VERSION:
                 raise RepositoryVersionError(
                     f"SQLite schema v{source_info.schema_version} is newer than supported "
                     f"v{SQLITE_SCHEMA_VERSION}."
                 )
-            if source_info.schema_version not in {0, SQLITE_SCHEMA_VERSION}:
+            if source_info.schema_version != SQLITE_SCHEMA_VERSION:
                 raise RepositoryVersionError(
                     f"SQLite schema v{source_info.schema_version} has no supported upgrade path."
                 )
@@ -608,12 +621,8 @@ def upgrade_repository(
             try:
                 source_connection.backup(target_connection)
                 _normalize_journal_mode(target_connection)
-                if source_info.schema_version == 0:
-                    generation = str(uuid.uuid4())
-                    _apply_schema_v1(target_connection, generation)
                 info = _validate_connection(target_connection)
-                if source_info.schema_version == SQLITE_SCHEMA_VERSION:
-                    _copy_source_objects(source, source_connection, destination)
+                _copy_source_objects(source, source_connection, destination)
                 info = _validate_connection(target_connection, object_paths=destination)
             except Exception:
                 target_connection.close()
@@ -704,6 +713,19 @@ def _apply_schema_v1(
 
 
 def _connect_builder(path: Path) -> sqlite3.Connection:
+    flags = os.O_RDWR | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        file_descriptor = os.open(path, flags, 0o600)
+        try:
+            os.fchmod(file_descriptor, 0o600)
+        finally:
+            os.close(file_descriptor)
+    except OSError as exc:
+        raise RepositoryPathError(
+            "Repository staging database could not be created safely."
+        ) from exc
     connection = sqlite3.connect(path, timeout=_BUSY_TIMEOUT_MS / 1000, isolation_level=None)
     connection.execute("PRAGMA foreign_keys = ON")
     connection.execute("PRAGMA journal_mode = DELETE")
@@ -726,17 +748,11 @@ def _connect_snapshot(path: Path) -> sqlite3.Connection:
     return connection
 
 
-def _read_info(
-    connection: sqlite3.Connection,
-    *,
-    allow_bootstrap: bool = False,
-) -> RepositoryInfo:
+def _read_info(connection: sqlite3.Connection) -> RepositoryInfo:
     application_id = int(connection.execute("PRAGMA application_id").fetchone()[0])
     schema_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
     if application_id != SQLITE_APPLICATION_ID:
         raise RepositoryVersionError("SQLite file is not a finjuice authoritative repository.")
-    if schema_version == 0 and allow_bootstrap:
-        return RepositoryInfo(application_id, schema_version, None, None)
     if schema_version != SQLITE_SCHEMA_VERSION:
         relation = "newer than" if schema_version > SQLITE_SCHEMA_VERSION else "unsupported by"
         raise RepositoryVersionError(
@@ -787,6 +803,29 @@ def _validate_application_invariants(connection: sqlite3.Connection) -> None:
     for query in _EXACT_SUBTYPE_CHECKS:
         if connection.execute(query).fetchone() is not None:
             raise RepositoryIntegrityError("An exact value is missing its matching subtype row.")
+    identities = connection.execute(
+        "SELECT entity_id, capture_manifest_digest, record_kind, canonical_locator_json "
+        "FROM migration_identities ORDER BY entity_id"
+    ).fetchall()
+    identity_ids = {str(row[0]) for row in identities}
+    v5_entity_ids = {
+        str(row[0])
+        for row in connection.execute(
+            "SELECT entity_id FROM entities WHERE substr(entity_id, 15, 1) = '5'"
+        ).fetchall()
+    }
+    if identity_ids != v5_entity_ids:
+        raise RepositoryIntegrityError(
+            "Every UUIDv5 entity must have exactly one migration identity."
+        )
+    for entity_id, digest, record_kind, locator_json in identities:
+        try:
+            locator = json.loads(str(locator_json))
+            derived_id = migration_entity_id(str(digest), str(record_kind), locator)
+        except (TypeError, ValueError) as exc:
+            raise RepositoryIntegrityError("A migration identity is invalid.") from exc
+        if derived_id != entity_id:
+            raise RepositoryIntegrityError("A migration identity does not re-derive its entity ID.")
 
 
 def _validate_source_objects(
@@ -814,16 +853,12 @@ def _validate_source_objects(
 def _prepare_generation_layout(paths: GenerationPaths) -> None:
     SourceObjectStore(paths).prepare()
     for directory in (paths.manifests, paths.derived):
-        try:
-            directory.mkdir(mode=0o700, exist_ok=True)
-            entry = directory.lstat()
-        except OSError as exc:
-            raise RepositoryPathError("Generation directory could not be created.") from exc
-        if stat.S_ISLNK(entry.st_mode) or not stat.S_ISDIR(entry.st_mode):
-            raise RepositoryPathError("Generation path must be a real directory.")
+        _mkdir_checked(directory, boundary=paths.root)
 
 
 def _publish_database(staging: Path, destination: Path) -> None:
+    linked_destination = False
+    removed_staging = False
     try:
         staging_fd = os.open(staging, os.O_RDONLY)
         try:
@@ -831,18 +866,23 @@ def _publish_database(staging: Path, destination: Path) -> None:
         finally:
             os.close(staging_fd)
         os.link(staging, destination, follow_symlinks=False)
+        linked_destination = True
+        _fsync_directory(destination.parent)
         staging.unlink()
-        directory_fd = os.open(destination.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
-        try:
-            os.fsync(directory_fd)
-        finally:
-            os.close(directory_fd)
+        removed_staging = True
+        _fsync_directory(destination.parent)
     except FileExistsError as exc:
         _cleanup_staging(staging)
         raise RepositoryPathError(
             "Repository database already exists and was not replaced."
         ) from exc
     except OSError as exc:
+        if linked_destination and not removed_staging:
+            try:
+                destination.unlink(missing_ok=True)
+                _fsync_directory(destination.parent)
+            except OSError:
+                pass
         _cleanup_staging(staging)
         raise RepositoryPathError("Repository database could not be published atomically.") from exc
 
@@ -852,3 +892,11 @@ def _cleanup_staging(path: Path) -> None:
     Path(f"{path}-journal").unlink(missing_ok=True)
     Path(f"{path}-wal").unlink(missing_ok=True)
     Path(f"{path}-shm").unlink(missing_ok=True)
+
+
+def _fsync_directory(path: Path) -> None:
+    directory_fd = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
