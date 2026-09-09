@@ -108,4 +108,3 @@ def test_sibling_modules_import_without_parent_first() -> None:
             text=True,
         )
         assert proc.returncode == 0, proc.stderr
-
