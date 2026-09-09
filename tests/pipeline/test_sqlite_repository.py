@@ -330,7 +330,7 @@ def test_upgrade_carries_referenced_objects_without_changing_source(tmp_path: Pa
 
     info = upgrade_repository(source_paths.database, destination)
 
-    assert info.schema_version == 1
+    assert info.schema_version == 2
     assert source_paths.database.read_bytes() == source_database_before
     assert source_object.read_bytes() == source_object_before
     assert (destination.root / artifact.relative_path).read_bytes() == source_object_before

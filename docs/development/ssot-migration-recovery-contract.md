@@ -501,6 +501,34 @@ household membership, account ownership, summary/holding inclusion, or semantic
 supersession from names or amounts. Those facts are confirmed by later
 changesets.
 
+### 9.1 Schema v2 assertion and intake boundaries
+
+The #434 schema v2 gate applies these minimal domain constraints before #435:
+
+* Ownership shares reference exact rates with the unit `ownership_share.v1`.
+  A rate in another unit, including an FX rate, is not an ownership share.
+  Complete confirmed ownership totals exactly one; partial ownership retains
+  an explicit unknown remainder. Share validation uses exact arithmetic.
+* Ownership and inclusion/overlap assertions use inclusive calendar-date
+  intervals. Each effective boundary is either canonical `YYYY-MM-DD` or null
+  for an open boundary. Invalid dates, noncanonical spellings, timestamps, and
+  reversed intervals are rejected; no timezone is inferred.
+* Active confirmed ownership intervals must not overlap for one account.
+  A correction explicitly supersedes an assertion for that account. For one
+  ordered entity pair, overlapping active confirmed `excludes` assertions
+  cannot coexist with `includes` or `overlaps`. Explicit supersession permits
+  corrections, while unknown and unconfirmed evidence remains distinct.
+* Intake evidence, receipt occurrences, extraction, interpretation proposal,
+  confirmation, and application have separate identities. Proposal deduplication
+  includes extraction, command scope, policy version, payload digest, expected
+  generation, and expected revision. A stale proposal can be re-proposed against
+  a newer revision without inventing a different extraction or policy version;
+  the new proposal requires its own confirmation.
+* Applying a proposal verifies its confirmation, payload, command identity,
+  generation, and expected revision within the mutation transaction. Invalid
+  relationships roll back state, audit, revision, and the idempotency reservation
+  together. Successful identical retries retain their original result.
+
 ## 10. Synthetic acceptance scenario matrix
 
 All public tests use synthetic artifacts and values. The same check IDs run on
