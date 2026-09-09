@@ -12,7 +12,7 @@ import re
 from typing import List
 
 from finjuice.pipeline.tagging.models import TagRule
-from finjuice.pipeline.tagging.validator_conflicts import ValidationIssue
+from finjuice.pipeline.tagging.validator_conflicts_types import ValidationIssue
 
 
 def check_regex_validity(rules: List[TagRule]) -> List[ValidationIssue]:

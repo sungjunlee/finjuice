@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import List
 
 from finjuice.pipeline.tagging.models import TagRule
-from finjuice.pipeline.tagging.validator_conflicts import (
+from finjuice.pipeline.tagging.validator_conflicts_types import (
     ValidationIssue,
     _get_patterns,
     _is_broader_pattern,

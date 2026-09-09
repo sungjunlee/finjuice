@@ -93,3 +93,19 @@ def test_check_function_bodies_do_not_leak_into_validator_conflicts() -> None:
         assert f"def {name}" in sibling_text
         assert name in conflicts_text
         assert "def validate_rules" not in sibling_text
+
+
+def test_sibling_modules_import_without_parent_first() -> None:
+    """Each check module is importable in a fresh interpreter before parent."""
+    import subprocess
+    import sys
+
+    for _name, _filename, module_name in CHECK_SURFACES:
+        proc = subprocess.run(
+            [sys.executable, "-c", f"import {module_name}"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert proc.returncode == 0, proc.stderr
+

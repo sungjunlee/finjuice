@@ -450,8 +450,8 @@ def test_schema_helpers_live_in_helper_module() -> None:
     assert "def _validate_required_string" in schema_text
     assert "def _validate_numeric_condition_value" in schema_text
     assert "def validate_rules" in conflicts_text
-    assert "class ValidationIssue" in conflicts_text
-    assert "class ValidationResult" in conflicts_text
+    assert "ValidationIssue as ValidationIssue" in conflicts_text
+    assert "ValidationResult as ValidationResult" in conflicts_text
 
 
 def test_schema_helpers_reexport_from_validator() -> None:
