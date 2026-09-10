@@ -1,23 +1,31 @@
 """JSON payload assembly helpers for ``finjuice networth``.
 
-Owns as-of date parsing, aggregated position payload construction, and
-the custom JSON envelope. Typer commands stay in
-:mod:`finjuice.pipeline.cli.commands.networth`, which re-exports the
-names used by existing callers.
+Owns as-of date parsing, aggregated position payload construction, the
+custom JSON envelope, and the overview/breakdown command callbacks.
+Typer parsers stay in :mod:`finjuice.pipeline.cli.commands.networth`,
+which re-exports the names used by existing callers.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 from datetime import date
-from typing import Any
+from typing import Any, Literal
 
 import typer
 
+from finjuice.pipeline.cli.commands.networth_errors import _handle_networth_exception
 from finjuice.pipeline.cli.commands.networth_guidance import _build_networth_guidance
+from finjuice.pipeline.cli.commands.networth_rendering import (
+    _render_breakdown,
+    _render_overview,
+)
 from finjuice.pipeline.cli.output import _build_meta
 from finjuice.pipeline.cli.utils import get_config
-from finjuice.pipeline.networth import build_networth_position
+from finjuice.pipeline.networth import build_breakdown_rows, build_networth_position
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_as_of(raw_value: str | None) -> date | None:
@@ -94,3 +102,70 @@ def _build_networth_result(
         "_liabilities": position.liabilities,
         "_filters_applied": 0,
     }
+
+
+def _run_overview_command(
+    ctx: typer.Context,
+    *,
+    date_value: str | None,
+    json_output: bool,
+) -> None:
+    """Run the default ``finjuice networth`` command body."""
+    try:
+        result = _build_networth_result(
+            ctx,
+            as_of=_parse_as_of(date_value),
+            json_output=json_output,
+            command="networth",
+        )
+        json_result = {key: value for key, value in result.items() if not key.startswith("_")}
+        if json_output:
+            _emit_networth_json(
+                json_result,
+                command="networth",
+                as_of=result["as_of"],
+                filters_applied=result["_filters_applied"],
+            )
+            return
+        _render_overview(result)
+    except typer.Exit:
+        raise
+    except Exception as exc:  # intended catch-all for CLI robustness
+        logger.error("Failed to compute net worth: %s", exc, exc_info=True)
+        _handle_networth_exception(exc, json_output=json_output, command="networth")
+
+
+def _run_breakdown_command(
+    ctx: typer.Context,
+    *,
+    by: Literal["category", "asset"],
+    date_value: str | None,
+    json_output: bool,
+) -> None:
+    """Run the ``finjuice networth breakdown`` command body."""
+    try:
+        result = _build_networth_result(
+            ctx,
+            as_of=_resolve_as_of(ctx, date_value),
+            json_output=json_output,
+            command="networth breakdown",
+        )
+        rows = build_breakdown_rows(result["_assets"], by=by)
+        payload = {
+            "as_of": result["as_of"],
+            "breakdown": rows,
+        }
+        if json_output:
+            _emit_networth_json(
+                payload,
+                command="networth breakdown",
+                as_of=result["as_of"],
+                filters_applied=result["_filters_applied"],
+            )
+            return
+        _render_breakdown(result["as_of"], rows, by=by)
+    except typer.Exit:
+        raise
+    except Exception as exc:  # intended catch-all for CLI robustness
+        logger.error("Failed to compute net worth breakdown: %s", exc, exc_info=True)
+        _handle_networth_exception(exc, json_output=json_output, command="networth breakdown")
