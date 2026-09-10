@@ -12,6 +12,8 @@ MOVED_HELPER_NAMES = (
     "_resolve_as_of",
     "_emit_networth_json",
     "_build_networth_result",
+    "_run_overview_command",
+    "_run_breakdown_command",
 )
 
 

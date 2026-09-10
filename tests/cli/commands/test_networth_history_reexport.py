@@ -10,6 +10,7 @@ COMMANDS_DIR = Path("src/finjuice/pipeline/cli/commands")
 MOVED_HELPER_NAMES = (
     "_history_as_of",
     "_build_history_rows",
+    "_run_history_command",
 )
 
 
