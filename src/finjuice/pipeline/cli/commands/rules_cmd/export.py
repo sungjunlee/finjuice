@@ -1,4 +1,9 @@
-"""List/export implementations for rules CLI commands."""
+"""List/export implementations for rules CLI commands.
+
+JSON payload builders live in
+:mod:`finjuice.pipeline.cli.commands.rules_cmd.export_json`; this module
+re-exports them so existing callers can keep importing from here.
+"""
 
 import logging
 from pathlib import Path
@@ -9,7 +14,11 @@ from rich.table import Table
 
 from finjuice.pipeline.cli.output import ErrorCode, ExitCode, console, emit, emit_error, info
 from finjuice.pipeline.cli.utils import get_config
-from finjuice.pipeline.config import Config
+
+from .export_json import (
+    _compute_rules_export_json,
+    _serialize_rule_export,  # noqa: F401 — re-exported for existing export imports
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,40 +48,6 @@ def _render_rules_list(result: dict[str, Any]) -> None:
         )
 
     console.print(table)
-
-
-def _serialize_rule_export(rule: Any) -> dict[str, Any]:
-    """Convert a TagRule dataclass into a JSON-safe payload."""
-    return {
-        "name": rule.name,
-        "match": rule.match,
-        "fields": list(rule.fields),
-        "tags": list(rule.tags),
-        "category": rule.category,
-        "priority": rule.priority,
-    }
-
-
-def _compute_rules_export_json(config: Config, json_output: bool) -> dict[str, Any]:
-    """Compute JSON payload for `rules export`."""
-    from finjuice.pipeline.tagging.rules_yaml_io import load_rules
-
-    if not config.rules_file.exists():
-        emit_error(
-            f"Rules file not found at {config.rules_file}. "
-            "Create rules.yaml or run 'finjuice rules suggest --apply'.",
-            error_code=ErrorCode.RULES_FILE_NOT_FOUND,
-            exit_code=ExitCode.USAGE_ERROR,
-            suggestion="finjuice rules suggest --apply",
-            json_output=json_output,
-            command="rules export",
-        )
-
-    rules = load_rules(config.rules_file)
-    return {
-        "rule_count": len(rules),
-        "rules": [_serialize_rule_export(rule) for rule in rules],
-    }
 
 
 def export_rules_command(
