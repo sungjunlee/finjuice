@@ -15,25 +15,31 @@ existing callers can keep importing from this module.
 Skill runtime checks live in
 :mod:`finjuice.pipeline.doctor.skill_runtime` and are re-exported here so
 existing callers can keep importing from this module.
+
+Required package dependency checks live in
+:mod:`finjuice.pipeline.doctor.dependencies` and are re-exported here so
+existing callers can keep importing from this module.
+
+Optional analytics DuckDB checks live in
+:mod:`finjuice.pipeline.doctor.analytics_duckdb` and are re-exported here so
+existing callers can keep importing from this module.
 """
 
 from __future__ import annotations
 
-import importlib
-import importlib.metadata
-from pathlib import Path
 from typing import Any
 
 from finjuice import get_version
-from finjuice.pipeline.analytics.install_hints import (
-    ANALYTICS_EXTRA,
-    detect_analytics_install_command,
-)
 from finjuice.pipeline.config import Config
+from finjuice.pipeline.doctor.analytics_duckdb import _check_analytics_duckdb
 from finjuice.pipeline.doctor.configuration import _check_configuration
 from finjuice.pipeline.doctor.data_directory import _check_data_directory
 from finjuice.pipeline.doctor.data_status import _check_data_status
-from finjuice.pipeline.doctor.models import CheckResult, DoctorResult
+from finjuice.pipeline.doctor.dependencies import _check_dependencies
+from finjuice.pipeline.doctor.models import (
+    CheckResult,  # noqa: F401 — re-exported for existing checks imports
+    DoctorResult,
+)
 from finjuice.pipeline.doctor.next_step import (
     _next_step_from_data_dir,  # noqa: F401 — re-exported for existing checks imports
     _next_step_from_data_status,  # noqa: F401 — re-exported for existing checks imports
@@ -57,79 +63,6 @@ from finjuice.pipeline.doctor.system import (
     _check_os_info,
     _check_python_version,
 )
-
-
-def _check_dependencies() -> list[CheckResult]:
-    """Check package dependencies."""
-    results = []
-
-    # Required packages
-    required_packages = {
-        "polars": "polars",
-        "typer": "typer",
-        "rich": "rich",
-        "pyyaml": "PyYAML",
-        "openpyxl": "openpyxl",
-    }
-
-    for import_name, package_name in required_packages.items():
-        try:
-            version = importlib.metadata.version(package_name)
-            results.append(
-                CheckResult(
-                    status="ok",
-                    message=f"{package_name} {version}",
-                    name=f"dependency_{import_name}",
-                )
-            )
-        except importlib.metadata.PackageNotFoundError:
-            results.append(
-                CheckResult(
-                    status="error",
-                    message=f"{package_name} 미설치",
-                    suggestion=f"uv pip install {package_name}",
-                    name=f"dependency_{import_name}",
-                )
-            )
-
-    return results
-
-
-def _check_analytics_duckdb(
-    sys_prefix: str | Path | None = None,
-) -> tuple[list[CheckResult], list[str], str]:
-    """Check whether the optional analytics extra is available."""
-    install_hint = detect_analytics_install_command(sys_prefix)
-
-    try:
-        duckdb_module = importlib.import_module("duckdb")
-    except ImportError:
-        return (
-            [
-                CheckResult(
-                    status="warning",
-                    message=f"{ANALYTICS_EXTRA} extra 누락: duckdb 미설치",
-                    detail="query/template/explain 같은 분석 명령에는 DuckDB가 필요합니다.",
-                    suggestion=install_hint,
-                    name="analytics_duckdb",
-                )
-            ],
-            [ANALYTICS_EXTRA],
-            install_hint,
-        )
-
-    version = getattr(duckdb_module, "__version__", "installed")
-    return (
-        [
-            CheckResult(
-                status="ok",
-                message=f"duckdb {version} (analytics 사용 가능)",
-                name="analytics_duckdb",
-            )
-        ],
-        [],
-        install_hint,
-    )
 
 
 def _build_doctor_result(config: Config) -> DoctorResult:
