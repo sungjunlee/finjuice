@@ -8,7 +8,6 @@ from typer.testing import CliRunner
 
 from finjuice import __version__, get_version
 from finjuice.pipeline.cli.main import app
-from finjuice.pipeline.doctor import checks as doctor
 from finjuice.pipeline.doctor.checks import _check_finjuice_version
 
 runner = CliRunner()
@@ -37,7 +36,7 @@ def test_doctor_finjuice_version_uses_current_package_name(
         requested_packages.append(package_name)
         return "9.8.7"
 
-    monkeypatch.setattr(doctor.importlib.metadata, "version", fake_version)
+    monkeypatch.setattr(importlib.metadata, "version", fake_version)
 
     result = _check_finjuice_version()
 
@@ -54,6 +53,6 @@ def test_doctor_version_falls_back_to_source_version(
     def missing_version(package_name: str) -> str:
         raise importlib.metadata.PackageNotFoundError(package_name)
 
-    monkeypatch.setattr(doctor.importlib.metadata, "version", missing_version)
+    monkeypatch.setattr(importlib.metadata, "version", missing_version)
 
     assert get_version() == __version__
