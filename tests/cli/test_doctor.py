@@ -587,7 +587,7 @@ class TestDoctorAnalyticsChecks:
 
     def test_analytics_check_reports_no_missing_extras_when_duckdb_imports(self) -> None:
         """Analytics check should report no missing extra when duckdb imports cleanly."""
-        import finjuice.pipeline.doctor.checks as doctor
+        import finjuice.pipeline.doctor.analytics_duckdb as doctor
 
         original_import_module = doctor.importlib.import_module
         doctor.importlib.import_module = lambda name: SimpleNamespace(__version__="1.4.2")
@@ -605,7 +605,7 @@ class TestDoctorAnalyticsChecks:
         self, doctor_data_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Doctor text output should name the missing analytics extra and install command."""
-        import finjuice.pipeline.doctor.checks as doctor
+        import finjuice.pipeline.doctor.analytics_duckdb as doctor
 
         original_import_module = doctor.importlib.import_module
 
@@ -627,7 +627,7 @@ class TestDoctorAnalyticsChecks:
         self, doctor_data_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """doctor --json should expose additive analytics recovery keys."""
-        import finjuice.pipeline.doctor.checks as doctor
+        import finjuice.pipeline.doctor.analytics_duckdb as doctor
 
         original_import_module = doctor.importlib.import_module
 

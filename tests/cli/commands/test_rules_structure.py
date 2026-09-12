@@ -40,6 +40,7 @@ def test_rules_command_implementations_are_split_by_domain() -> None:
         "suggest_apply",
         "suggest_rendering",
         "export",
+        "export_json",
         "gaps",
         "gaps_json",
     }.issubset(module_names)
@@ -143,3 +144,29 @@ def test_rules_gaps_json_names_stay_on_entrypoint() -> None:
     assert gaps._serialize_gap_analysis is gaps_json._serialize_gap_analysis
     assert gaps._serialize_coverage_simulation is gaps_json._serialize_coverage_simulation
     assert callable(gaps.analyze_gaps_command)
+
+
+def test_rules_export_json_lives_in_helper_module() -> None:
+    """JSON payload builders should not live in the Typer command module."""
+    export_text = (COMMANDS_DIR / "rules_cmd" / "export.py").read_text(encoding="utf-8")
+    export_json_text = (COMMANDS_DIR / "rules_cmd" / "export_json.py").read_text(encoding="utf-8")
+
+    assert "def export_rules_command" in export_text
+    assert "def list_rules_command" in export_text
+    assert "def _render_rules_list" in export_text
+    assert "def _compute_rules_export_json" not in export_text
+    assert "def _serialize_rule_export" not in export_text
+    assert "_compute_rules_export_json" in export_text
+    assert "def _compute_rules_export_json" in export_json_text
+    assert "def _serialize_rule_export" in export_json_text
+
+
+def test_rules_export_json_names_stay_on_entrypoint() -> None:
+    """The stable export import path should keep the JSON helper names."""
+    export = importlib.import_module("finjuice.pipeline.cli.commands.rules_cmd.export")
+    export_json = importlib.import_module("finjuice.pipeline.cli.commands.rules_cmd.export_json")
+
+    assert export._compute_rules_export_json is export_json._compute_rules_export_json
+    assert export._serialize_rule_export is export_json._serialize_rule_export
+    assert callable(export.export_rules_command)
+    assert callable(export.list_rules_command)

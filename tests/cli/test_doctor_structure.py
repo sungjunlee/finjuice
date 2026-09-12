@@ -46,7 +46,7 @@ def test_next_step_helpers_live_in_helper_module() -> None:
         assert f"def {name}" in helpers_text
 
     assert "def _build_doctor_result" in checks_text
-    assert "def _check_dependencies" in checks_text
+    assert "def _check_dependencies" not in checks_text
 
 
 def test_next_step_helpers_reexport_from_checks() -> None:
@@ -68,7 +68,7 @@ def test_system_helpers_live_in_helper_module() -> None:
         assert f"def {name}" in helpers_text
 
     assert "def _build_doctor_result" in checks_text
-    assert "def _check_dependencies" in checks_text
+    assert "def _check_dependencies" not in checks_text
     assert "def _suggest_next_step" not in checks_text
 
 
@@ -96,7 +96,8 @@ def test_skill_runtime_helpers_live_in_helper_module() -> None:
 
     assert "def _build_doctor_result" in checks_text
     assert "def _check_python_version" not in checks_text
-    assert "def _check_dependencies" in checks_text
+    assert "def _check_dependencies" not in checks_text
+    assert "def _check_analytics_duckdb" not in checks_text
 
 
 def test_skill_runtime_helpers_reexport_from_checks() -> None:
