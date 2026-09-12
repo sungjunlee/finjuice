@@ -16,9 +16,11 @@ def run_full_pipeline(
     config: Config,
     *,
     emit_text: bool = True,
+    ingest_result: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run the full pipeline (ingest → tag → transfer → export)."""
     from finjuice.pipeline.cli.commands.full_pipeline_orchestrator import (
+        PipelineCallbacks,
         run_full_pipeline_orchestrator,
     )
 
@@ -32,8 +34,11 @@ def run_full_pipeline(
         config,
         command_name="import",
         export_emit_text=emit_text,
-        on_step_start=_render_step_start if emit_text else None,
-        on_step_complete=_step_complete_renderer(config) if emit_text else None,
+        ingest_result=ingest_result,
+        callbacks=PipelineCallbacks(
+            _render_step_start if emit_text else None,
+            _step_complete_renderer(config) if emit_text else None,
+        ),
     )
     return _pipeline_summary(orchestrated["steps"], config)
 
@@ -93,7 +98,12 @@ def _render_ingest_step(step_result: dict[str, Any]) -> None:
 def _render_tag_step(step_result: dict[str, Any]) -> None:
     """Render tag step output."""
     if step_result.get("skipped"):
-        console.print("   → 규칙 파일 없음 (건너뜀)\n", style="yellow")
+        message = (
+            "SQLite 정본에 규칙이 없음"
+            if step_result.get("authority") == "repository"
+            else "규칙 파일 없음"
+        )
+        console.print(f"   → {message} (건너뜀)\n", style="yellow")
         return
 
     console.print(f"   → {step_result['tagged']}건 태깅됨 ({step_result['coverage_pct']:.1f}%)\n")

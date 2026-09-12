@@ -11,6 +11,10 @@ from typing import Any
 import typer
 
 from finjuice.pipeline.cli.audit_log import append_financial_mutation_event
+from finjuice.pipeline.cli.bulk_repository import (
+    compute_repository_tag,
+    resolve_bulk_mutation,
+)
 from finjuice.pipeline.cli.commands.tag_edit import (
     TagEditRequest,
     _compute_tag_edit,
@@ -35,6 +39,11 @@ from finjuice.pipeline.cli.utils import (
 from finjuice.pipeline.constants import SCHEMA_VERSION
 from finjuice.pipeline.metadata import write_schema_version
 from finjuice.pipeline.storage.authority import RepositoryAuthority, legacy_write_lease
+from finjuice.pipeline.storage.sqlite.errors import (
+    AuthorityError,
+    MutationConflictError,
+    MutationValidationError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +160,34 @@ def _execute_tag_edit_command(
     emit(result, json_output, _render_tag_edit, command="tag")
 
 
+def _execute_bulk_tag_command(
+    ctx: typer.Context, config: Any, dry_run: bool, json_output: bool
+) -> None:
+    """Apply rules through the selected authority and render its result."""
+    facade, identity = resolve_bulk_mutation(ctx, config)
+    if facade is not None:
+        result = compute_repository_tag(facade, identity=identity, dry_run=dry_run)
+        emit(result, json_output, _render_tag, command="tag")
+        return
+
+    result = _compute_tag(config, dry_run, json_output)
+    if not dry_run:
+        write_schema_version(config.data_dir, SCHEMA_VERSION)
+        if int(result["total"]) > 0:
+            append_financial_mutation_event(
+                config.data_dir,
+                {
+                    "command": "tag",
+                    "action": "bulk_apply",
+                    "fields_changed": BULK_TAG_AUDIT_FIELDS,
+                    "change_summary": "bulk tag applied to transaction partitions",
+                    "changed_rows": int(result["total"]),
+                    "partition_count": _count_transaction_partitions(config.csv_base_dir),
+                },
+            )
+    emit(result, json_output, _render_tag, command="tag")
+
+
 @with_mutation_options
 def tag_command(
     ctx: typer.Context,
@@ -182,14 +219,14 @@ def tag_command(
     dry_run: bool = typer.Option(
         False,
         "--dry-run/--no-dry-run",
-        help="Preview changes without writing to CSV files",
+        help="Preview changes without writing to the active storage",
     ),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
     """
-    Apply tagging rules to all transactions in CSV partitions.
+    Apply tagging rules to all transactions in the active storage.
 
-    Loads rules from rules.yaml and applies them to all transactions.
+    Loads rules from the canonical config or legacy rules.yaml.
     Updates tags_rule and tags_final fields.
 
     Use --dry-run to preview changes before applying them.
@@ -226,25 +263,26 @@ def tag_command(
             )
             return
 
-        result = _compute_tag(config, dry_run, json_output)
-        if not dry_run:
-            write_schema_version(config.data_dir, SCHEMA_VERSION)
-            if int(result["total"]) > 0:
-                append_financial_mutation_event(
-                    config.data_dir,
-                    {
-                        "command": "tag",
-                        "action": "bulk_apply",
-                        "fields_changed": BULK_TAG_AUDIT_FIELDS,
-                        "change_summary": "bulk tag applied to transaction partitions",
-                        "changed_rows": int(result["total"]),
-                        "partition_count": _count_transaction_partitions(config.csv_base_dir),
-                    },
-                )
-        emit(result, json_output, _render_tag, command="tag")
+        _execute_bulk_tag_command(ctx, config, dry_run, json_output)
 
     except typer.Exit:
         raise  # Re-raise typer.Exit without modification
+    except (AuthorityError, MutationConflictError) as exc:
+        emit_error(
+            str(exc),
+            error_code=ErrorCode.VALIDATION_FAILED,
+            exit_code=ExitCode.VALIDATION_ERROR,
+            json_output=json_output,
+            command="tag",
+        )
+    except MutationValidationError as exc:
+        emit_error(
+            str(exc),
+            error_code=ErrorCode.INVALID_ARGS,
+            exit_code=ExitCode.USAGE_ERROR,
+            json_output=json_output,
+            command="tag",
+        )
     except FileNotFoundError as e:
         logger.error("Tagging failed (%s)", type(e).__name__)
         if edit is not None:

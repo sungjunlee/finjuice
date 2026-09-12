@@ -140,3 +140,33 @@ def _render_overview_write_summary(overview_summary: dict[str, Any] | None) -> N
 def _render_standard_dry_run(result: dict[str, Any]) -> None:
     """Render human-readable standard dry-run preview."""
     _render_ingest_dry_run(result["preview"])
+
+
+def _render_repository_ingest(result: dict[str, Any]) -> None:
+    """Render authoritative ingest without claiming a full pipeline success."""
+    if result.get("dry_run"):
+        _render_repository_ingest_dry_run(result)
+        return
+    summary = result["summary"]
+    output.success("[OK] Ingestion complete:")
+    output.info(f"  Files processed: {summary['files_processed']}")
+    output.info(f"  New transactions: {summary['new_transactions']}")
+    output.info(f"  Updated: {summary['updated']}")
+    if summary["failed"] > 0:
+        output.error(f"  Failed: {summary['failed']}")
+        for filename, err in summary.get("failed_files", []):
+            output.error(f"    - {filename}: {err}")
+
+
+def _render_repository_ingest_dry_run(result: dict[str, Any]) -> None:
+    """Render authoritative ingest preview counts without invented ZIP totals."""
+    output.info("[Dry-run Summary]")
+    if result.get("preview_unavailable"):
+        output.warning("Preview unavailable: encrypted source requires credentials")
+        output.warning("⚠️  No changes written (dry-run mode)")
+        return
+    for item in result.get("receipts", []):
+        counts = item.get("result", {}).get("counts", {}).get("transactions", {})
+        inserted = int(counts.get("inserted", 0) or 0)
+        output.info(f"  {item.get('filename')}: +{inserted} rows")
+    output.warning("⚠️  No changes written (dry-run mode)")

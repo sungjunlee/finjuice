@@ -36,7 +36,7 @@ finjuice --version
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ import          Import XLSX files and run full pipeline.                                                             │
-│ tag             Apply tagging rules to all transactions in CSV partitions.                                           │
+│ tag             Apply tagging rules to all transactions in the active storage.                                       │
 │ export          Generate master XLSX, HTML, and/or Markdown reports.                                                 │
 │ refresh         Re-process all existing data                                                                         │
 │ validate        Validate CSV partition files against the schema.                                                     │
@@ -92,8 +92,11 @@ finjuice --version
  Re-process all existing data (ingest → tag → transfer → export).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ --json          Output as JSON                                                                                       │
-│ --help          Show this message and exit.                                                                          │
+│ --json                                Output as JSON                                                                 │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```
@@ -270,14 +273,17 @@ finjuice --version
 │   files      [FILES]...  XLSX or ZIP file(s) to import. Pass one or more paths, or use --file for a single XLSX.     │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ --file              PATH  XLSX file to import without prompts.                                                       │
-│ --force     -f            Overwrite existing files in imports/                                                       │
-│ --dry-run                 Preview what would be imported without processing                                          │
-│ --no-scan                 Disable auto-scan of ~/Downloads for Banksalad files                                       │
-│ --password  -p      TEXT  Password for encrypted ZIP files. If not provided, prompts interactively.                  │
-│                           [env var: FINJUICE_ZIP_PASSWORD]                                                           │
-│ --json                    Output as JSON                                                                             │
-│ --help                    Show this message and exit.                                                                │
+│ --file                         PATH     XLSX file to import without prompts.                                         │
+│ --force                -f               Overwrite existing files in imports/                                         │
+│ --dry-run                               Preview what would be imported without processing                            │
+│ --no-scan                               Disable auto-scan of ~/Downloads for Banksalad files                         │
+│ --password             -p      TEXT     Password for encrypted ZIP files. If not provided, prompts interactively.    │
+│                                         [env var: FINJUICE_ZIP_PASSWORD]                                             │
+│ --json                                  Output as JSON                                                               │
+│ --idempotency-key              TEXT     Stable retry key for an authoritative mutation                               │
+│ --expected-generation          TEXT     Expected active dataset generation                                           │
+│ --expected-revision            INTEGER  Expected active dataset revision                                             │
+│ --help                                  Show this message and exit.                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```
@@ -367,9 +373,9 @@ finjuice --version
 
  Usage: finjuice tag [OPTIONS]
 
- Apply tagging rules to all transactions in CSV partitions.
+ Apply tagging rules to all transactions in the active storage.
 
- Loads rules from rules.yaml and applies them to all transactions.
+ Loads rules from the canonical config or legacy rules.yaml.
  Updates tags_rule and tags_final fields.
 
  Use --dry-run to preview changes before applying them.
@@ -380,7 +386,8 @@ finjuice --version
 │ --remove-tag                             TEXT     Remove one or more manual tags (repeatable)                        │
 │ --set-category                           TEXT     Persist a manual category override for category_final              │
 │ --set-note                               TEXT     Persist a row-level manual note without changing analysis tags     │
-│ --dry-run                --no-dry-run             Preview changes without writing to CSV files [default: no-dry-run] │
+│ --dry-run                --no-dry-run             Preview changes without writing to the active storage              │
+│                                                   [default: no-dry-run]                                              │
 │ --json                                            Output as JSON                                                     │
 │ --idempotency-key                        TEXT     Stable retry key for an authoritative mutation                     │
 │ --expected-generation                    TEXT     Expected active dataset generation                                 │

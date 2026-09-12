@@ -156,7 +156,9 @@ class TestImportCommand:
         result = runner.invoke(app, ["--data-dir", str(data_dir), "import", str(xlsx_file)])
 
         # Assert
-        assert result.exit_code == 0
+        # Copy/extraction succeeds, but the synthetic bytes are not a valid workbook.
+        assert result.exit_code == 1
+        assert "ingest" in result.output
         assert (imports_dir / "test_export.xlsx").exists()
         # Should show success message
         assert "✅" in cli_text(result) or "copied" in cli_text(result).lower()
@@ -183,7 +185,9 @@ class TestImportCommand:
         )
 
         # Assert
-        assert result.exit_code == 0
+        # Copy/extraction succeeds, but the synthetic bytes are not a valid workbook.
+        assert result.exit_code == 1
+        assert "ingest" in result.output
         for i in range(3):
             assert (imports_dir / f"export_{i}.xlsx").exists()
 
@@ -321,7 +325,9 @@ class TestImportCommand:
         result = runner.invoke(app, ["--data-dir", str(data_dir), "import", str(xlsx_file)])
 
         # Assert - Should skip existing and show message
-        assert result.exit_code == 0
+        # Copy/extraction succeeds, but the synthetic bytes are not a valid workbook.
+        assert result.exit_code == 1
+        assert "ingest" in result.output
         # File should not be overwritten
         assert existing.read_bytes() == b"PK\x03\x04old content"
         output = cli_text(result).lower()
@@ -348,7 +354,9 @@ class TestImportCommand:
         )
 
         # Assert - File should be overwritten
-        assert result.exit_code == 0
+        # Copy/extraction succeeds, but the synthetic bytes are not a valid workbook.
+        assert result.exit_code == 1
+        assert "ingest" in result.output
         assert existing.read_bytes() == b"PK\x03\x04new content here"
 
     def test_import_dry_run(self, tmp_path: Path) -> None:
@@ -391,7 +399,9 @@ class TestImportCommand:
         result = runner.invoke(app, ["--data-dir", str(data_dir), "import", str(xlsx_file)])
 
         # Assert
-        assert result.exit_code == 0
+        # Copy/extraction succeeds, but the synthetic bytes are not a valid workbook.
+        assert result.exit_code == 1
+        assert "ingest" in result.output
         assert (data_dir / "imports").exists()
         assert (data_dir / "imports" / "test.xlsx").exists()
 
@@ -413,7 +423,9 @@ class TestImportCommand:
         result = runner.invoke(app, ["--data-dir", str(data_dir), "import", str(xlsx_file)])
 
         # Assert
-        assert result.exit_code == 0
+        # Copy/extraction succeeds, but the synthetic bytes are not a valid workbook.
+        assert result.exit_code == 1
+        assert "ingest" in result.output
         # Should show some file info (size, path, etc.)
         output = cli_text(result).lower()
         assert "kb" in output or "mb" in output or "byte" in output or "size" in output
@@ -464,7 +476,9 @@ class TestImportCommand:
         )
 
         # Assert
-        assert result.exit_code == 0
+        # Copy/extraction succeeds, but the synthetic bytes are not a valid workbook.
+        assert result.exit_code == 1
+        assert "ingest" in result.output
         for i in range(3):
             assert (imports_dir / f"뱅크샐러드_2024-{i:02d}.xlsx").exists()
 
@@ -786,7 +800,9 @@ class TestZipImportCommand:
         result = runner.invoke(app, ["--data-dir", str(data_dir), "import", str(zip_path)])
 
         # Assert
-        assert result.exit_code == 0
+        # Copy/extraction succeeds, but the synthetic bytes are not a valid workbook.
+        assert result.exit_code == 1
+        assert "ingest" in result.output
         assert (imports_dir / "2024-01-01~2024-12-31.xlsx").exists()
         assert "압축 해제" in cli_text(result) or "extract" in cli_text(result).lower()
 
@@ -842,7 +858,9 @@ class TestZipImportCommand:
         )
 
         # Assert
-        assert result.exit_code == 0
+        # Copy/extraction succeeds, but the synthetic bytes are not a valid workbook.
+        assert result.exit_code == 1
+        assert "ingest" in result.output
         assert (imports_dir / "direct.xlsx").exists()
         assert (imports_dir / "from_zip.xlsx").exists()
 
@@ -868,7 +886,9 @@ class TestZipImportCommand:
         )
 
         # Assert
-        assert result.exit_code == 0
+        # Copy/extraction succeeds, but the synthetic bytes are not a valid workbook.
+        assert result.exit_code == 1
+        assert "ingest" in result.output
         assert (imports_dir / "data.xlsx").exists()
 
     def test_import_zip_no_xlsx_inside(self, tmp_path: Path) -> None:

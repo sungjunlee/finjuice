@@ -12,6 +12,8 @@ from datetime import date, time, timezone
 from decimal import localcontext
 from fractions import Fraction
 
+import pytest
+
 from finjuice.pipeline.ingest.exact_transactions import (
     PARSER_VERSION,
     SERIAL_MAX_ABS_EXPONENT,
@@ -97,10 +99,17 @@ def _inline(ref: str, text: str) -> str:
     return f'<c r="{ref}" t="inlineStr"><is><t>{text}</t></is></c>'
 
 
-def _formula(ref: str, text: str, cached: str | None = None) -> str:
+def _formula(
+    ref: str, text: str, cached: str | None = None, *, cell_type: str | None = None
+) -> str:
+    typed = "" if cell_type is None else f' t="{cell_type}"'
     if cached is None:
-        return f'<c r="{ref}"><f>{text}</f></c>'
-    return f'<c r="{ref}"><f>{text}</f><v>{cached}</v></c>'
+        return f'<c r="{ref}"{typed}><f>{text}</f></c>'
+    return f'<c r="{ref}"{typed}><f>{text}</f><v>{cached}</v></c>'
+
+
+def _d(ref: str, value: str) -> str:
+    return f'<c r="{ref}" t="d"><v>{value}</v></c>'
 
 
 def _bool(ref: str, lexical: str) -> str:
@@ -185,21 +194,27 @@ class _Tx:
     merchant: str = "x"
     currency: str | None = "KRW"
     extra: str | None = None
+    type_cell: str | None = None
+    account_cell: str | None = None
+    currency_cell: str | None = None
+    merchant_cell: str | None = None
 
 
 def _tx(number: int, spec: _Tx) -> str:
     cells = [spec.date_cell]
     if spec.time_cell is not None:
         cells.append(spec.time_cell)
-    cells.extend(
-        [
-            _s(f"C{number}", spec.type_idx),
-            _inline(f"D{number}", spec.merchant),
-            spec.amount,
-            _s(f"F{number}", 11),
-        ]
+    type_cell = spec.type_cell if spec.type_cell is not None else _s(f"C{number}", spec.type_idx)
+    merchant = (
+        spec.merchant_cell
+        if spec.merchant_cell is not None
+        else _inline(f"D{number}", spec.merchant)
     )
-    if spec.currency is not None:
+    account = spec.account_cell if spec.account_cell is not None else _s(f"F{number}", 11)
+    cells.extend([type_cell, merchant, spec.amount, account])
+    if spec.currency_cell is not None:
+        cells.append(spec.currency_cell)
+    elif spec.currency is not None:
         cells.append(_inline(f"G{number}", spec.currency))
     if spec.extra is not None:
         cells.append(spec.extra)
@@ -208,6 +223,10 @@ def _tx(number: int, spec: _Tx) -> str:
 
 def _codes(row) -> list[str]:
     return [issue.code for issue in row.issues]
+
+
+def _field_codes(row, field_name: str) -> list[str]:
+    return [issue.code for issue in row.issues if issue.field_name == field_name]
 
 
 def test_korean_headers_map_required_fields_and_keep_unknown_columns() -> None:
@@ -808,10 +827,16 @@ def test_serial_bounds_reject_oversize_tokens_per_row() -> None:
 
 _SUBPROCESS_MAPPER = """
 import json
+import os
 import sys
+import threading
 from finjuice.pipeline.ingest.exact_transactions import map_exact_transactions
 from finjuice.pipeline.ingest.xlsx_evidence import read_workbook_evidence
+watchdog = threading.Timer(5.0, lambda: os._exit(124))
+watchdog.daemon = True
+watchdog.start()
 result = map_exact_transactions(read_workbook_evidence(sys.stdin.buffer.read()))
+watchdog.cancel()
 print(json.dumps({
     "status": result.status,
     "supported": [row.supported for row in result.rows],
@@ -825,7 +850,8 @@ print(json.dumps({
 """
 
 
-def _map_in_subprocess(data: bytes, timeout: float = 1.0) -> dict:
+def _map_in_subprocess(data: bytes, timeout: float = 60.0) -> dict:
+    # The runtime watchdog starts after imports; cold package I/O is not parsing time.
     completed = subprocess.run(
         [sys.executable, "-c", _SUBPROCESS_MAPPER],
         input=data,
@@ -848,7 +874,7 @@ def test_extreme_compact_serial_exponents_terminate_promptly() -> None:
         },
         shared=KR,
     )
-    payload = _map_in_subprocess(data, timeout=1.0)
+    payload = _map_in_subprocess(data)
     assert payload["status"] == "mapped"
     assert payload["supported"] == [False, False, False, True]
     assert payload["codes"][0] == ["UNSUPPORTED_SERIAL"]
@@ -859,3 +885,271 @@ def test_extreme_compact_serial_exponents_terminate_promptly() -> None:
     assert payload["serials"][2] == "-1e10000000"
     assert payload["dates"][0] is None
     assert payload["dates"][3] == "2026-09-01"
+
+
+def test_ooxml_date_type_is_iso_not_serial() -> None:
+    result = _kr_mapped(
+        _tx(2, _Tx(_d("A2", "2026-09-10"), _n("E2", "1"), _inline("B2", "13:04:05"))),
+        _tx(3, _Tx(_d("A3", "2026-09-10T12:34:56+09:00"), _n("E3", "1"))),
+        _tx(4, _Tx(_d("A4", "not-an-iso-date"), _n("E4", "1"), _inline("B4", "10:00"))),
+        _tx(
+            5,
+            _Tx(
+                _formula("A5", "TODAY()", "2026-09-10", cell_type="d"),
+                _n("E5", "1"),
+                _inline("B5", "10:00"),
+            ),
+        ),
+        _tx(6, _Tx(_d("A6", "2026-09-10T12:34:56.123456789+09:00"), _n("E6", "1"))),
+        _tx(
+            7,
+            _Tx(_d("A7", "2026-09-10T12:00:00"), _n("E7", "1"), _inline("B7", "13:00:00")),
+        ),
+        _tx(8, _Tx(_d("A8", "2026-09-10"), _n("E8", "1"))),
+    )
+    iso, offset, invalid, cached, nano, conflict, date_only = result.rows
+    assert iso.temporal.parsed_date == date(2026, 9, 10)
+    assert iso.temporal.date_kind == "iso_date"
+    assert iso.temporal.date_serial_lexical is None
+    assert iso.date_raw == "2026-09-10"
+    assert iso.temporal.parsed_time == time(13, 4, 5)
+    assert iso.supported is True
+    assert offset.temporal.parsed_date == date(2026, 9, 10)
+    assert offset.temporal.date_kind == "iso_datetime"
+    assert offset.temporal.timezone_offset == "+09:00"
+    assert offset.temporal.timezone_state == "known"
+    assert offset.temporal.parsed_time == time(12, 34, 56)
+    assert offset.date_raw == "2026-09-10T12:34:56+09:00"
+    assert "date_only" not in offset.temporal.uncertainty
+    assert invalid.temporal.parsed_date is None
+    assert invalid.temporal.date_kind == "iso_date"
+    assert invalid.date_raw == "not-an-iso-date"
+    assert "INVALID_DATE" in _codes(invalid)
+    assert cached.temporal.parsed_date == date(2026, 9, 10)
+    assert cached.temporal.date_kind == "iso_date"
+    assert "FORMULA_CACHED_UNVERIFIED" in _field_codes(cached, "date")
+    assert nano.supported is False
+    assert "UNSUPPORTED_TIME_PRECISION" in _codes(nano)
+    assert nano.date_raw == "2026-09-10T12:34:56.123456789+09:00"
+    assert nano.temporal.parsed_time is None
+    assert "CONFLICTING_DATE_TIME" in _codes(conflict)
+    assert conflict.temporal.parsed_date == date(2026, 9, 10)
+    assert conflict.temporal.parsed_time is None
+    assert conflict.supported is False
+    assert date_only.temporal.parsed_date == date(2026, 9, 10)
+    assert date_only.temporal.parsed_time is None
+    assert date_only.datetime_raw is None
+    assert "date_only" in date_only.temporal.uncertainty
+    assert "missing_time" in date_only.temporal.uncertainty
+
+
+@pytest.mark.parametrize("lexical", ["1_000", "１２", " 42 ", "1 000", "\t1"])
+def test_amount_rejects_non_plain_ascii_decimal_lexeme(lexical: str) -> None:
+    result = _kr_mapped(
+        _tx(2, _Tx(_inline("A2", "2026-09-10"), _n("E2", lexical), _inline("B2", "10:00")))
+    )
+    row = result.rows[0]
+    assert row.source_amount is None
+    assert row.supported is False
+    assert "UNSUPPORTED_AMOUNT" in _codes(row)
+    assert "AMOUNT_FORMATTED" not in _codes(row)
+    assert next(cell for cell in row.cells if cell.column == "E").raw_value == lexical
+
+
+@pytest.mark.parametrize("lexical", ["1e2", "1E+3", "-0.00", "+1.50", "1e-2", "0.0"])
+def test_amount_keeps_ascii_exponent_and_signed_zero(lexical: str) -> None:
+    result = _kr_mapped(
+        _tx(2, _Tx(_inline("A2", "2026-09-10"), _n("E2", lexical), _inline("B2", "10:00")))
+    )
+    row = result.rows[0]
+    assert row.source_amount is not None
+    assert row.source_amount.lexical == lexical
+    assert "UNSUPPORTED_AMOUNT" not in _codes(row)
+    assert "AMOUNT_NONFINITE" not in _codes(row)
+
+
+def test_formula_currency_is_unverified_and_never_defaults_krw() -> None:
+    result = _kr_mapped(
+        _tx(
+            2,
+            _Tx(
+                _inline("A2", "2024-01-01"),
+                _n("E2", "10.00"),
+                _inline("B2", "10:00"),
+                currency_cell=_formula("G2", "G1", "USD", cell_type="str"),
+            ),
+        ),
+        _tx(
+            3,
+            _Tx(
+                _inline("A3", "2024-01-01"),
+                _n("E3", "10.00"),
+                _inline("B3", "10:00"),
+                currency_cell=_formula("G3", "G1"),
+            ),
+        ),
+        _tx(
+            4,
+            _Tx(
+                _inline("A4", "2024-01-01"),
+                _n("E4", "10.00"),
+                _inline("B4", "10:00"),
+                currency_cell=_bool("G4", "1"),
+            ),
+        ),
+        _tx(
+            5,
+            _Tx(
+                _inline("A5", "2024-01-01"),
+                _n("E5", "10.00"),
+                _inline("B5", "10:00"),
+                currency_cell=_err("G5", "#VALUE!"),
+            ),
+        ),
+    )
+    cached, missing, boolean, error = result.rows
+    assert cached.currency_code == "USD"
+    assert cached.currency_unknown is False
+    assert cached.amount_unverified is True
+    assert cached.source_amount is not None
+    assert cached.source_amount.currency == "USD"
+    assert cached.source_amount.lexical == "10.00"
+    assert "FORMULA_CACHED_UNVERIFIED" in _field_codes(cached, "currency")
+    assert "UNKNOWN_CURRENCY" not in _field_codes(cached, "currency")
+    currency_cell = next(cell for cell in cached.cells if cell.column == "G")
+    assert currency_cell.formula is not None
+    assert currency_cell.formula.text == "G1"
+    assert currency_cell.raw_value == "USD"
+    assert missing.currency_code is None
+    assert missing.currency_unknown is True
+    assert "UNKNOWN_CURRENCY" in _field_codes(missing, "currency")
+    assert "FORMULA_CACHE_MISSING" in _field_codes(missing, "currency")
+    assert missing.source_amount is not None
+    assert missing.source_amount.currency_unknown is True
+    assert boolean.currency_code is None
+    assert boolean.currency_unknown is True
+    assert "UNKNOWN_CURRENCY" in _field_codes(boolean, "currency")
+    assert "FORMULA_CACHED_UNVERIFIED" not in _field_codes(boolean, "currency")
+    assert error.currency_code is None
+    assert error.currency_unknown is True
+    assert "UNKNOWN_CURRENCY" in _field_codes(error, "currency")
+    assert error.currency_code != "KRW"
+    assert boolean.currency_code != "KRW"
+    assert missing.currency_code != "KRW"
+
+
+@pytest.mark.parametrize("kind,raw", [("e", "#VALUE!"), ("b", "1")])
+@pytest.mark.parametrize("field,column", [("account", "F"), ("type", "C"), ("merchant", "D")])
+def test_semantic_text_rejects_boolean_and_error_cells(
+    kind: str, raw: str, field: str, column: str
+) -> None:
+    typed = _err(f"{column}2", raw) if kind == "e" else _bool(f"{column}2", raw)
+    spec = _Tx(
+        _inline("A2", "2026-09-10"),
+        _n("E2", "1"),
+        _inline("B2", "10:00"),
+        type_cell=typed if field == "type" else None,
+        merchant_cell=typed if field == "merchant" else None,
+        account_cell=typed if field == "account" else None,
+    )
+    result = _kr_mapped(_tx(2, spec))
+    row = result.rows[0]
+    attr = "account_text" if field == "account" else f"{field}_raw"
+    assert getattr(row, attr) is None
+    assert "INVALID_TEXT_CELL" in _field_codes(row, field)
+    evidence = next(cell for cell in row.cells if cell.column == column)
+    assert evidence.raw_value == raw
+    assert evidence.cell_type == kind
+    if field == "account":
+        assert row.supported is False
+        assert not hasattr(row, "account_id")
+
+
+def test_formula_semantic_text_and_type_derived_amount_stay_unverified() -> None:
+    result = _kr_mapped(
+        _tx(
+            2,
+            _Tx(
+                _inline("A2", "2024-01-01"),
+                _n("E2", "-50.10"),
+                _inline("B2", "10:00"),
+                type_cell=_formula("C2", "C1", "수입", cell_type="str"),
+                merchant="income",
+            ),
+        ),
+        _tx(
+            3,
+            _Tx(
+                _inline("A3", "2024-01-01"),
+                _n("E3", "-50.10"),
+                _inline("B3", "10:00"),
+                type_cell=_formula("C3", "C1"),
+                merchant="missing",
+            ),
+        ),
+        _tx(
+            4,
+            _Tx(
+                _inline("A4", "2024-01-01"),
+                _n("E4", "1"),
+                _inline("B4", "10:00"),
+                merchant_cell=_formula("D4", "D1", "Cafe", cell_type="str"),
+            ),
+        ),
+    )
+    cached_type, missing_type, cached_merchant = result.rows
+    assert cached_type.type_raw == "수입"
+    assert cached_type.type_norm == "income"
+    assert cached_type.interpreted_amount is not None
+    assert cached_type.interpreted_amount.coefficient == "5010"
+    assert cached_type.amount_unverified is True
+    assert cached_type.identity.amount_unverified is True
+    assert "FORMULA_CACHED_UNVERIFIED" in _field_codes(cached_type, "type")
+    assert "NEGATIVE_INCOME_NORMALIZED" in _codes(cached_type)
+    type_cell = next(cell for cell in cached_type.cells if cell.column == "C")
+    assert type_cell.formula is not None
+    assert type_cell.raw_value == "수입"
+    assert missing_type.type_raw is None
+    assert missing_type.interpreted_amount is None
+    assert "FORMULA_CACHE_MISSING" in _field_codes(missing_type, "type")
+    assert missing_type.supported is False
+    assert cached_merchant.merchant_raw == "Cafe"
+    assert "FORMULA_CACHED_UNVERIFIED" in _field_codes(cached_merchant, "merchant")
+
+
+def test_memo_and_category_reject_boolean_error_and_keep_formula_uncertainty() -> None:
+    header = _row(
+        1,
+        _inline("A1", "Date"),
+        _inline("B1", "Time"),
+        _inline("C1", "Type"),
+        _inline("D1", "Merchant"),
+        _inline("E1", "Amount"),
+        _inline("F1", "Account"),
+        _inline("G1", "Memo"),
+        _inline("H1", "Major Category"),
+        _inline("I1", "Minor Category"),
+    )
+    data = _row(
+        2,
+        _inline("A2", "2026-09-10"),
+        _inline("B2", "10:00"),
+        _inline("C2", "지출"),
+        _inline("D2", "Shop"),
+        _n("E2", "1"),
+        _inline("F2", "Card"),
+        _err("G2", "#VALUE!"),
+        _bool("H2", "1"),
+        _formula("I2", "I1", "food", cell_type="str"),
+    )
+    result, _evidence = _map({"Ledger": header + data})
+    row = result.rows[0]
+    assert row.memo_raw is None
+    assert row.major_raw is None
+    assert row.minor_raw == "food"
+    assert "INVALID_TEXT_CELL" in _field_codes(row, "memo")
+    assert "INVALID_TEXT_CELL" in _field_codes(row, "major_category")
+    assert "FORMULA_CACHED_UNVERIFIED" in _field_codes(row, "minor_category")
+    memo = next(cell for cell in row.cells if cell.column == "G")
+    assert memo.raw_value == "#VALUE!"
+    assert memo.cell_type == "e"

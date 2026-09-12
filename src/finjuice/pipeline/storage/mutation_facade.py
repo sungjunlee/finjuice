@@ -19,6 +19,22 @@ from finjuice.pipeline.storage.authority import (
     RepositoryAuthority,
     resolve_storage_authority,
 )
+from finjuice.pipeline.storage.sqlite.bulk_tagging import (
+    BulkTagCommand,
+    apply_bulk_tagging,
+    preview_bulk_tagging,
+)
+from finjuice.pipeline.storage.sqlite.bulk_transfer import (
+    BulkTransferCommand,
+    apply_bulk_transfer,
+    preview_bulk_transfer,
+)
+from finjuice.pipeline.storage.sqlite.exact_import import (
+    COMMAND_SCOPE,
+    ExactImportCommand,
+    ExactImportIntent,
+    ExactWorkbookCapture,
+)
 from finjuice.pipeline.storage.sqlite.ids import new_entity_id
 from finjuice.pipeline.storage.sqlite.mutations import (
     ConfigRevisionMutation,
@@ -73,6 +89,14 @@ def _load_lexical_yaml(content: bytes) -> JSONValue:
         return loader.get_single_data()
     finally:
         loader.dispose()
+
+
+@dataclass(frozen=True)
+class BulkMutationPreview:
+    """Dry-run counts from one pinned read snapshot with no receipt or revision."""
+
+    result: Mapping[str, JSONValue]
+    dataset_revision: int
 
 
 @dataclass(frozen=True)
@@ -213,6 +237,50 @@ class StorageMutationFacade:
             _RequestSpec("tag.manual_edit", payload, identity, actor, reason),
             lambda context: MutationOutcome(result=context.edit_manual_transaction(edit)),
         )
+
+    def recompute_tags(
+        self,
+        command: BulkTagCommand,
+        *,
+        identity: MutationIdentity = MutationIdentity(),
+        actor: str = "cli",
+        reason: str | None = None,
+        dry_run: bool = False,
+    ) -> MutationReceipt | BulkMutationPreview:
+        """Recompute derived tags from the pinned rules head, or preview the counts."""
+        spec = _RequestSpec("tag.bulk_recompute", command.payload(), identity, actor, reason)
+        if dry_run:
+            return self._preview(spec, _tag_preview_handler(command))
+        return self._execute(spec, _tag_write_handler(command))
+
+    def recompute_transfers(
+        self,
+        command: BulkTransferCommand,
+        *,
+        identity: MutationIdentity = MutationIdentity(),
+        actor: str = "cli",
+        reason: str | None = None,
+        dry_run: bool = False,
+    ) -> MutationReceipt | BulkMutationPreview:
+        """Recompute exact transfer pairs, or preview the counts without writing."""
+        spec = _RequestSpec("transfer.bulk_recompute", command.payload(), identity, actor, reason)
+        if dry_run:
+            return self._preview(spec, _transfer_preview_handler(command))
+        return self._execute(spec, _transfer_write_handler(command))
+
+    def import_exact_xlsx(
+        self,
+        command: ExactImportCommand,
+        *,
+        identity: MutationIdentity = MutationIdentity(),
+        actor: str = "cli",
+        reason: str | None = None,
+    ) -> MutationReceipt | BulkMutationPreview:
+        """Import one captured XLSX workbook, or preview integer domain counts."""
+        spec = _RequestSpec(COMMAND_SCOPE, command.payload(), identity, actor, reason)
+        if command.preview:
+            return self._preview(spec, _exact_import_handler(command))
+        return self._execute(spec, _exact_import_handler(command))
 
     def replace_config(
         self,
@@ -376,6 +444,17 @@ class StorageMutationFacade:
         assert dispatch.evidence is not None
         return MutationService(dispatch.paths, dispatch.evidence).execute(request, handler)
 
+    def _preview(
+        self,
+        spec: _RequestSpec,
+        handler: Callable[[MutationContext], MutationOutcome],
+    ) -> BulkMutationPreview:
+        dispatch, authority = self._repository_dispatch()
+        request = self._request(dispatch, authority, spec)
+        assert dispatch.evidence is not None
+        result = MutationService(dispatch.paths, dispatch.evidence).preview(request, handler)
+        return BulkMutationPreview(result=result, dataset_revision=request.expected_revision)
+
     def _repository_dispatch(self) -> tuple[AuthorityDispatch, RepositoryAuthority]:
         dispatch = self.dispatch()
         if not isinstance(dispatch.authority, RepositoryAuthority):
@@ -468,6 +547,53 @@ class StorageMutationFacade:
             )
 
         return apply
+
+
+def _tag_write_handler(
+    command: BulkTagCommand,
+) -> Callable[[MutationContext], MutationOutcome]:
+    def apply(context: MutationContext) -> MutationOutcome:
+        return MutationOutcome(result=apply_bulk_tagging(context, command))
+
+    return apply
+
+
+def _tag_preview_handler(
+    command: BulkTagCommand,
+) -> Callable[[MutationContext], MutationOutcome]:
+    def apply(context: MutationContext) -> MutationOutcome:
+        return MutationOutcome(result=preview_bulk_tagging(context, command))
+
+    return apply
+
+
+def _transfer_write_handler(
+    command: BulkTransferCommand,
+) -> Callable[[MutationContext], MutationOutcome]:
+    def apply(context: MutationContext) -> MutationOutcome:
+        return MutationOutcome(result=apply_bulk_transfer(context, command))
+
+    return apply
+
+
+def _transfer_preview_handler(
+    command: BulkTransferCommand,
+) -> Callable[[MutationContext], MutationOutcome]:
+    def apply(context: MutationContext) -> MutationOutcome:
+        return MutationOutcome(result=preview_bulk_transfer(context, command))
+
+    return apply
+
+
+def _exact_import_handler(
+    command: ExactImportCommand,
+) -> Callable[[MutationContext], MutationOutcome]:
+    from finjuice.pipeline.storage.sqlite.exact_import.handler import apply_exact_import
+
+    def apply(context: MutationContext) -> MutationOutcome:
+        return apply_exact_import(context, command)
+
+    return apply
 
 
 def _now() -> str:
@@ -577,8 +703,14 @@ def _exact_decimal_text(coefficient: object, scale: object) -> str | None:
 
 
 __all__ = [
+    "BulkMutationPreview",
+    "BulkTagCommand",
+    "BulkTransferCommand",
     "ConfigDocument",
     "ConfigTransformResult",
+    "ExactImportCommand",
+    "ExactImportIntent",
+    "ExactWorkbookCapture",
     "MutationIdentity",
     "StorageMutationFacade",
 ]

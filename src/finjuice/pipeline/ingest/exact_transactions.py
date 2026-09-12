@@ -46,7 +46,21 @@ _ISO_DATETIME_RE: Final = re.compile(
     r"^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(Z|[+-]\d{2}:\d{2})?$"
 )
 _CURRENCY_RE: Final = re.compile(r"^[A-Z]{3}$")
+_PLAIN_DECIMAL_RE: Final = re.compile(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?")
 _SERIAL_LEXEME_RE: Final = re.compile(r"^([+-])?(\d+)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$")
+_SEMANTIC_TEXT_FIELDS: Final[tuple[str, ...]] = (
+    "type",
+    "merchant",
+    "account",
+    "memo",
+    "major_category",
+    "minor_category",
+)
+_REQUIRED_TEXT: Final[tuple[tuple[str, str], ...]] = (
+    ("type", "MISSING_TYPE"),
+    ("merchant", "MISSING_MERCHANT"),
+    ("account", "MISSING_ACCOUNT"),
+)
 _HEADER_FIELD: Final[dict[str, str]] = {}
 for _schema in BANKSALAD_SCHEMAS.values():
     for _field_name in _schema.__dataclass_fields__:
@@ -100,6 +114,7 @@ _ISSUE_DETAIL: Final[dict[str, str]] = {
     "MISSING_TYPE": "The type cell is missing or empty.",
     "MISSING_MERCHANT": "The merchant cell is missing or empty.",
     "MISSING_ACCOUNT": "The account cell is missing or empty.",
+    "INVALID_TEXT_CELL": "Boolean and error cells cannot establish semantic text.",
 }
 
 
@@ -278,6 +293,7 @@ class _CurrencyPart:
     code: str | None
     unknown: bool
     issues: tuple[ExactTransactionIssue, ...]
+    unverified: bool = False
 
 
 @dataclass(frozen=True)
@@ -502,9 +518,9 @@ def _map_data_row(
 ) -> ExactMappedRow:
     by_column = {cell.column: cell for cell in cells}
     bound = {item.field_name: by_column.get(item.column) for item in header.bindings}
-    currency = _parse_currency(bound.get("currency"), row)
-    amount = _parse_amount(bound.get("amount"), bound.get("type"), currency, row)
     texts = _text_fields(bound, row)
+    currency = _parse_currency(bound.get("currency"), row)
+    amount = _parse_amount(bound.get("amount"), texts, currency, row)
     temporal, temporal_issues = _parse_temporal(
         bound.get("date"), bound.get("time"), workbook.date1904, row
     )
@@ -564,28 +580,58 @@ class _RowBuild:
 
 
 def _text_fields(bound: dict[str, CellEvidence | None], row: int) -> _TextFields:
-    type_raw = _optional_text(bound.get("type"))
-    merchant = _optional_text(bound.get("merchant"))
-    account = _optional_text(bound.get("account"))
-    issues: list[ExactTransactionIssue] = []
-    if type_raw is None:
-        issues.append(_issue("MISSING_TYPE", field_name="type", source_row=row))
-    if merchant is None:
-        issues.append(_issue("MISSING_MERCHANT", field_name="merchant", source_row=row))
-    if account is None:
-        issues.append(_issue("MISSING_ACCOUNT", field_name="account", source_row=row))
+    values, extras = _semantic_fields(bound, row)
     return _TextFields(
         date_raw=_optional_text(bound.get("date")),
         time_raw=_optional_text(bound.get("time")),
-        type_raw=type_raw,
-        type_norm=_normalize_type(type_raw or ""),
-        merchant_raw=merchant,
-        memo_raw=_optional_text(bound.get("memo")),
-        major_raw=_optional_text(bound.get("major_category")),
-        minor_raw=_optional_text(bound.get("minor_category")),
-        account_text=account,
-        issues=tuple(issues),
+        type_raw=values["type"],
+        type_norm=_normalize_type(values["type"] or ""),
+        merchant_raw=values["merchant"],
+        memo_raw=values["memo"],
+        major_raw=values["major_category"],
+        minor_raw=values["minor_category"],
+        account_text=values["account"],
+        issues=_missing_text_issues(values, row) + extras,
     )
+
+
+def _semantic_fields(
+    bound: dict[str, CellEvidence | None], row: int
+) -> tuple[dict[str, str | None], tuple[ExactTransactionIssue, ...]]:
+    values: dict[str, str | None] = {}
+    issues: list[ExactTransactionIssue] = []
+    for name in _SEMANTIC_TEXT_FIELDS:
+        text, extra = _semantic_text(bound.get(name), name, row)
+        values[name] = text
+        issues.extend(extra)
+    return values, tuple(issues)
+
+
+def _missing_text_issues(
+    values: dict[str, str | None], row: int
+) -> tuple[ExactTransactionIssue, ...]:
+    issues: list[ExactTransactionIssue] = []
+    for field_name, code in _REQUIRED_TEXT:
+        if values[field_name] is None:
+            issues.append(_issue(code, field_name=field_name, source_row=row))
+    return tuple(issues)
+
+
+def _semantic_text(
+    cell: CellEvidence | None, field_name: str, row: int
+) -> tuple[str | None, tuple[ExactTransactionIssue, ...]]:
+    if cell is None:
+        return None, ()
+    cached = _formula_cache_issue(cell, field_name, row)
+    extra = () if cached is None else (cached,)
+    if cell.cell_type in {"b", "e"}:
+        issue = _issue(
+            "INVALID_TEXT_CELL", field_name=field_name, source_row=row, column=cell.column
+        )
+        return None, (issue,) + extra
+    if cached is not None and cached.code == "FORMULA_CACHE_MISSING":
+        return None, extra
+    return _optional_text(cell), extra
 
 
 def _mapped_row(build: _RowBuild) -> ExactMappedRow:
@@ -680,31 +726,56 @@ def _unknown_data_cells(
 
 
 def _parse_currency(cell: CellEvidence | None, row: int) -> _CurrencyPart:
-    issue = _issue("UNKNOWN_CURRENCY", field_name="currency", source_row=row)
     if cell is None:
-        return _CurrencyPart(None, True, (issue,))
-    issue = _issue("UNKNOWN_CURRENCY", field_name="currency", source_row=row, column=cell.column)
+        return _unknown_currency(row, None, ())
+    cached = _formula_cache_issue(cell, "currency", row)
+    extra = () if cached is None else (cached,)
+    if cell.cell_type in {"b", "e"} or (
+        cached is not None and cached.code == "FORMULA_CACHE_MISSING"
+    ):
+        return _unknown_currency(row, cell.column, extra)
     text = _cell_plain_text(cell)
-    if text is None:
-        return _CurrencyPart(None, True, (issue,))
-    stripped = text.strip()
-    if _CURRENCY_RE.fullmatch(stripped) is None:
-        return _CurrencyPart(None, True, (issue,))
-    return _CurrencyPart(stripped, False, ())
+    if text is None or _CURRENCY_RE.fullmatch(text.strip()) is None:
+        return _unknown_currency(row, cell.column, extra)
+    return _CurrencyPart(text.strip(), False, extra, cached is not None)
+
+
+def _unknown_currency(
+    row: int, column: str | None, extra: tuple[ExactTransactionIssue, ...]
+) -> _CurrencyPart:
+    issue = _issue("UNKNOWN_CURRENCY", field_name="currency", source_row=row, column=column)
+    return _CurrencyPart(None, True, (issue,) + extra, False)
 
 
 def _parse_amount(
     cell: CellEvidence | None,
-    type_cell: CellEvidence | None,
+    texts: _TextFields,
     currency: _CurrencyPart,
     row: int,
 ) -> _AmountPart:
-    type_raw = _optional_text(type_cell) or ""
+    type_raw = texts.type_raw or ""
     if cell is None:
-        return _AmountPart(None, None, False, (_missing_amount(row, None),))
-    if cell.formula is not None:
-        return _parse_formula_amount(cell, type_raw, currency, row)
-    return _parse_plain_amount(cell, type_raw, currency, row, unverified=False)
+        parsed = _AmountPart(None, None, False, (_missing_amount(row, None),))
+    elif cell.formula is not None:
+        parsed = _parse_formula_amount(cell, type_raw, currency, row)
+    else:
+        parsed = _parse_plain_amount(cell, type_raw, currency, row, unverified=False)
+    return _apply_derived_uncertainty(parsed, currency, texts)
+
+
+def _apply_derived_uncertainty(
+    parsed: _AmountPart, currency: _CurrencyPart, texts: _TextFields
+) -> _AmountPart:
+    if parsed.source is None:
+        return parsed
+    type_formula = any(
+        issue.field_name == "type" and issue.code == "FORMULA_CACHED_UNVERIFIED"
+        for issue in texts.issues
+    )
+    derived = parsed.interpreted is not None and type_formula
+    if parsed.unverified or currency.unverified or derived:
+        return _AmountPart(parsed.source, parsed.interpreted, True, parsed.issues)
+    return parsed
 
 
 def _parse_formula_amount(
@@ -750,6 +821,7 @@ def _amount_from_lexical(
     unverified: bool,
 ) -> _AmountPart:
     try:
+        _validate_plain_decimal(lexical)
         source = ExactValue.from_lexical(
             lexical,
             value_kind="money",
@@ -762,6 +834,14 @@ def _amount_from_lexical(
     interpreted, income_issue = _negative_income_amount(source, type_raw, cell)
     issues = () if income_issue is None else (income_issue,)
     return _AmountPart(source, interpreted, unverified, issues)
+
+
+def _validate_plain_decimal(lexical: str) -> None:
+    if _PLAIN_DECIMAL_RE.fullmatch(lexical) is not None:
+        return
+    if lexical.lower().lstrip("+-") in {"nan", "snan", "inf", "infinity"}:
+        raise ExactValueError("Unsupported non-finite source number.")
+    raise ExactValueError("Unsupported source decimal lexical form.")
 
 
 def _negative_income_amount(
@@ -849,10 +929,7 @@ def _parse_date_cell(cell: CellEvidence | None, date1904: bool, row: int) -> _Da
     if cell.cell_type in {"b", "e"}:
         issue = _issue("INVALID_DATE", field_name="date", source_row=row, column=cell.column)
         return _DatePart(None, None, _optional_text(cell), None, None, row, (issue,))
-    if _is_text_cell(cell):
-        parsed = _parse_date_text(cell, row)
-    else:
-        parsed = _parse_date_serial(cell, date1904, row)
+    parsed = _parse_date_value(cell, date1904, row)
     extra = () if cached is None else (cached,)
     return _DatePart(
         parsed.value,
@@ -879,18 +956,40 @@ def _formula_cache_issue(
     )
 
 
+def _parse_date_value(cell: CellEvidence, date1904: bool, row: int) -> _DatePart:
+    if _is_text_cell(cell):
+        return _parse_date_text(cell, row)
+    if cell.cell_type == "d":
+        return _parse_ooxml_date(cell, row)
+    return _parse_date_serial(cell, date1904, row)
+
+
 def _parse_date_text(cell: CellEvidence, row: int) -> _DatePart:
+    return _parse_iso_date_lexical(cell, row, date_kind="iso_text", datetime_kind="iso_text")
+
+
+def _parse_ooxml_date(cell: CellEvidence, row: int) -> _DatePart:
+    return _parse_iso_date_lexical(cell, row, date_kind="iso_date", datetime_kind="iso_datetime")
+
+
+def _parse_iso_date_lexical(
+    cell: CellEvidence,
+    row: int,
+    *,
+    date_kind: str,
+    datetime_kind: str,
+) -> _DatePart:
     raw = _cell_plain_text(cell) or ""
     parsed = _parse_iso_datetime(raw)
     if parsed is not None:
         value, clock = parsed
         issues = _precision_issues(clock, "date", row, cell.column)
-        return _DatePart(value, "iso_text", raw, None, clock, row, issues)
+        return _DatePart(value, datetime_kind, raw, None, clock, row, issues)
     parsed_date = _parse_iso_date(raw)
     if parsed_date is not None:
-        return _DatePart(parsed_date, "iso_text", raw, None, None, row, ())
+        return _DatePart(parsed_date, date_kind, raw, None, None, row, ())
     issue = _issue("INVALID_DATE", field_name="date", source_row=row, column=cell.column)
-    return _DatePart(None, "iso_text", raw, None, None, row, (issue,))
+    return _DatePart(None, date_kind, raw, None, None, row, (issue,))
 
 
 def _parse_date_serial(cell: CellEvidence, date1904: bool, row: int) -> _DatePart:

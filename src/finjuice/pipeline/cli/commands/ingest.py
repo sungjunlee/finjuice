@@ -6,6 +6,7 @@ Human rendering lives in :mod:`finjuice.pipeline.cli.commands.ingest_rendering`.
 """
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
@@ -16,16 +17,40 @@ from finjuice.pipeline.cli.commands.ingest_rendering import (
     _render_archive_dry_run,
     _render_ingest_archive_result,
     _render_ingest_result,
+    _render_repository_ingest,
     _render_standard_dry_run,
 )
+from finjuice.pipeline.cli.mutation_options import with_mutation_options
 from finjuice.pipeline.cli.output import ErrorCode, ExitCode, emit, emit_error
-from finjuice.pipeline.cli.utils import get_config, warn_on_schema_mismatch
+from finjuice.pipeline.cli.pipeline_failure import FullPipelineError
+from finjuice.pipeline.cli.repository_import import (
+    identity_from_context,
+    ingest_archived_source,
+    ingest_import_directory,
+)
+from finjuice.pipeline.cli.utils import get_config, get_mutation_facade, warn_on_schema_mismatch
 from finjuice.pipeline.constants import SCHEMA_VERSION
 from finjuice.pipeline.metadata import write_schema_version
+from finjuice.pipeline.storage.authority import RepositoryAuthority
+from finjuice.pipeline.storage.sqlite.errors import (
+    MutationConflictError,
+    MutationValidationError,
+)
 
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class RepositoryIngestOptions:
+    """Presentation and source options for authoritative ingestion."""
+
+    from_archive: str | None
+    archive: bool
+    dry_run: bool
+    json_output: bool
+
+
+@with_mutation_options
 def ingest_command(
     ctx: typer.Context,
     from_archive: Optional[str] = typer.Option(
@@ -76,6 +101,16 @@ def ingest_command(
     config = get_config(ctx)
 
     try:
+        facade = get_mutation_facade(ctx, config)
+        if isinstance(facade.dispatch().authority, RepositoryAuthority):
+            _ingest_repository(
+                ctx,
+                config,
+                facade,
+                RepositoryIngestOptions(from_archive, archive, dry_run, json_output),
+            )
+            return
+
         warn_on_schema_mismatch(config.data_dir)
 
         # Handle --from-archive mode
@@ -103,6 +138,22 @@ def ingest_command(
 
     except typer.Exit:
         raise  # Re-raise typer.Exit without modification
+    except MutationValidationError as e:
+        emit_error(
+            str(e),
+            error_code=ErrorCode.INVALID_ARGS,
+            exit_code=ExitCode.USAGE_ERROR,
+            json_output=json_output,
+            command="ingest",
+        )
+    except MutationConflictError as e:
+        emit_error(
+            str(e),
+            error_code=ErrorCode.VALIDATION_FAILED,
+            exit_code=ExitCode.VALIDATION_ERROR,
+            json_output=json_output,
+            command="ingest",
+        )
     except (FileNotFoundError, PermissionError) as e:
         logger.error("Ingestion failed (%s)", type(e).__name__)
         emit_error(
@@ -135,6 +186,46 @@ def ingest_command(
             json_output=json_output,
             command="ingest",
         )
+
+
+def _ingest_repository(
+    ctx: typer.Context,
+    config: Any,
+    facade: Any,
+    options: RepositoryIngestOptions,
+) -> None:
+    """Ingest through exact import without legacy archive, history, or schema writes."""
+    identity = identity_from_context(ctx)
+    result = _repository_ingest_result(config, facade, options, identity)
+    if int(result["summary"]["failed"]) > 0:
+        failure = FullPipelineError("ingest", {"ingest": result}, error_type="PartialIngestFailure")
+        emit_error(
+            str(failure),
+            error_code=ErrorCode.GENERAL_ERROR,
+            json_output=options.json_output,
+            command="ingest",
+            meta_extras=failure.metadata(),
+        )
+    emit(result, options.json_output, _render_repository_ingest, command="ingest")
+
+
+def _repository_ingest_result(
+    config: Any,
+    facade: Any,
+    options: RepositoryIngestOptions,
+    identity: Any,
+) -> dict[str, Any]:
+    if options.from_archive:
+        return ingest_archived_source(
+            facade,
+            options.from_archive,
+            identity,
+            preview=options.dry_run,
+            archive_requested=options.archive,
+        )
+    return ingest_import_directory(
+        facade, config, identity, preview=options.dry_run, archive_requested=options.archive
+    )
 
 
 def _ingest_from_archive(

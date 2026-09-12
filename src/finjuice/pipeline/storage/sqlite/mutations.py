@@ -9,10 +9,10 @@ import re
 import sqlite3
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, TypeAlias
+from typing import Any, Final, TypeAlias
 
 from finjuice.pipeline.storage.authority import (
     ActivationEvidence,
@@ -30,6 +30,10 @@ from finjuice.pipeline.storage.sqlite.errors import (
     RepositoryIntegrityError,
 )
 from finjuice.pipeline.storage.sqlite.exact import ExactValue
+from finjuice.pipeline.storage.sqlite.exact_import.lookup import (
+    load_completed_exact_imports,
+    load_transaction_identity_snapshot,
+)
 from finjuice.pipeline.storage.sqlite.ids import new_entity_id, validate_entity_id
 from finjuice.pipeline.storage.sqlite.objects import (
     SourceArtifact,
@@ -82,6 +86,20 @@ MutationHandler: TypeAlias = Callable[["MutationContext"], "MutationOutcome"]
 _SCOPE_RE = re.compile(r"^[a-z][a-z0-9_.-]{0,127}$")
 _MAX_KEY_LENGTH = 512
 _DEFAULT_BUSY_TIMEOUT_MS = 5_000
+_PREVIEW_CHANGESET_ID = "preview"
+_DERIVED_COLUMNS: Final[dict[str, str]] = {
+    "category_final": "category_final",
+    "category_rule": "category_rule",
+    "confidence_value_id": "confidence_value_id",
+    "is_transfer": "is_transfer",
+    "is_transfer_candidate": "is_transfer_candidate",
+    "needs_review": "needs_review",
+    "tags_final": "tags_final_json",
+    "tags_rule": "tags_rule_json",
+    "transfer_group_id": "transfer_group_id",
+}
+_JSON_DERIVED_KEYS = frozenset({"tags_final", "tags_rule"})
+_BOOL_DERIVED_KEYS = frozenset({"is_transfer", "is_transfer_candidate", "needs_review"})
 
 
 @dataclass(frozen=True)
@@ -581,6 +599,91 @@ class MutationContext:
             "transfer_group_id": row[28],
         }
 
+    def load_rules_head(self) -> tuple[str | None, bytes | None]:
+        """Return parsed_status and exact bytes for the pinned rules head."""
+        status = self._config_parsed_status("rules")
+        if status is None:
+            return None, None
+        return status, self.read_config_bytes("rules")
+
+    def load_bulk_transactions(
+        self,
+        transaction_ids: Sequence[str] | None = None,
+    ) -> tuple[dict[str, Any], ...]:
+        """Load tagging/transfer inputs in one snapshot batch."""
+        return _load_bulk_transaction_rows(self.__connection, transaction_ids)
+
+    def find_calculated_confidence(self, target: int) -> str | None:
+        """Return an existing calculated coverage 0/1 value, if one is stored."""
+        _require_coverage_target(target)
+        row = self.__connection.execute(
+            "SELECT exact.value_id FROM exact_values AS exact "
+            "JOIN number_values AS number ON number.value_id = exact.value_id "
+            "WHERE exact.value_kind = 'number' AND exact.origin_kind = 'calculated' "
+            "AND number.unit = 'confidence.v1' AND exact.coefficient = ? "
+            "AND exact.scale = 0 ORDER BY exact.value_id LIMIT 1",
+            (str(target),),
+        ).fetchone()
+        return None if row is None else str(row[0])
+
+    def allocate_calculated_confidence(self, target: int) -> str:
+        """Insert one calculated coverage ExactValue and return its id."""
+        _require_coverage_target(target)
+        value_id = new_entity_id()
+        self.add_exact_value(
+            value_id,
+            ExactValue(
+                coefficient=str(target),
+                scale=0,
+                lexical=None,
+                value_kind="number",
+                origin_kind="calculated",
+                unit="confidence.v1",
+            ),
+        )
+        return value_id
+
+    def update_transaction_derived_state(
+        self,
+        transaction_id: str,
+        after: Mapping[str, JSONValue],
+        *,
+        before: Mapping[str, JSONValue],
+    ) -> bool:
+        """Patch allowed derived fields with parameterized SQL and before/after audit."""
+        validate_entity_id(transaction_id)
+        stored = _load_stored_derived_state(self.__connection, transaction_id)
+        _reject_stale_derived_before(before, stored, after)
+        assignments, parameters, audit_before, audit_after = _derived_update_parts(after, stored)
+        if not assignments:
+            return False
+        self._execute_derived_update(transaction_id, assignments, parameters)
+        self._record("transaction", transaction_id, "update", audit_before, audit_after)
+        return True
+
+    def _execute_derived_update(
+        self,
+        transaction_id: str,
+        assignments: list[str],
+        parameters: list[Any],
+    ) -> None:
+        parameters.append(transaction_id)
+        updated = self.__connection.execute(
+            f"UPDATE transactions SET {', '.join(assignments)} WHERE entity_id = ?",  # nosec B608
+            parameters,
+        )
+        if updated.rowcount != 1:
+            raise MutationValidationError("Transaction identifier was not found.")
+
+    def _config_parsed_status(self, config_kind: str) -> str | None:
+        row = self.__connection.execute(
+            "SELECT revision.parsed_status FROM config_heads AS head "
+            "JOIN config_revisions AS revision ON revision.entity_id = head.revision_id "
+            "WHERE head.config_kind = ?",
+            (config_kind,),
+        ).fetchone()
+        return None if row is None else str(row[0])
+
     def add_exact_value(
         self,
         value_id: str,
@@ -758,6 +861,17 @@ class MutationContext:
             lambda: self.__writer.add_preservation_issue(stored),
         )
         return issue_id
+
+    def find_completed_exact_imports(
+        self,
+        digest_hex: str,
+    ) -> tuple[Mapping[str, JSONValue], ...]:
+        """Return completed exact-import manifests bound to one artifact digest."""
+        return load_completed_exact_imports(self.__connection, digest_hex)
+
+    def load_transaction_identity_snapshot(self) -> tuple[Mapping[str, JSONValue], ...]:
+        """Load unproven-overlap identity fields for pinned transactions."""
+        return load_transaction_identity_snapshot(self.__connection)
 
     def _insert_transaction_source_link(self, record: TransactionSourceLinkRecord) -> None:
         _validate_source_link_record(record)
@@ -1132,6 +1246,296 @@ def _exact_decimal_text(coefficient: str | None, scale: int | None) -> str | Non
     return f"-{rendered}" if negative and digits != "0" else rendered
 
 
+def _require_coverage_target(target: int) -> None:
+    if target not in (0, 1):
+        raise MutationValidationError("Coverage confidence must be 0 or 1.")
+
+
+_BULK_TRANSACTION_SQL = (
+    "SELECT txn.entity_id, txn.date_raw, txn.time_raw, txn.datetime_raw, txn.timezone_state, "
+    "txn.type_raw, txn.type_norm, txn.major_raw, txn.minor_raw, txn.merchant_raw, "
+    "txn.memo_raw, txn.notes_manual, txn.account_text, txn.counterparty, txn.category_rule, "
+    "txn.category_manual, txn.category_final, txn.tags_rule_json, txn.tags_ai_json, "
+    "txn.tags_manual_json, txn.tags_final_json, txn.confidence_value_id, txn.needs_review, "
+    "txn.is_transfer_candidate, txn.is_transfer, txn.transfer_group_id, txn.provenance_id, "
+    "txn.observation_id, txn.account_id, txn.amount_value_id, amount.coefficient, "
+    "amount.scale, amount.lexical, amount.value_kind, amount.origin_kind, "
+    "money.currency_code, money.currency_unknown, confidence.coefficient, confidence.scale, "
+    "observation.observed_at, observation.effective_at, observation.collected_at, "
+    "confidence_number.unit "
+    "FROM transactions AS txn "
+    "JOIN exact_values AS amount ON amount.value_id = txn.amount_value_id "
+    "JOIN money_values AS money ON money.value_id = txn.amount_value_id "
+    "LEFT JOIN exact_values AS confidence ON confidence.value_id = txn.confidence_value_id "
+    "LEFT JOIN number_values AS confidence_number "
+    "ON confidence_number.value_id = txn.confidence_value_id "
+    "JOIN observations AS observation ON observation.entity_id = txn.observation_id"
+)
+
+
+def _load_bulk_transaction_rows(
+    connection: sqlite3.Connection,
+    transaction_ids: Sequence[str] | None,
+) -> tuple[dict[str, Any], ...]:
+    sql, parameters = _bulk_transaction_query(transaction_ids)
+    rows = connection.execute(sql, parameters).fetchall()
+    if transaction_ids is not None and len(rows) != len(set(transaction_ids)):
+        raise MutationValidationError("Transaction identifier was not found.")
+    return tuple(_bulk_transaction_mapping(row) for row in rows)
+
+
+def _bulk_transaction_query(
+    transaction_ids: Sequence[str] | None,
+) -> tuple[str, tuple[Any, ...]]:
+    if transaction_ids is None:
+        return f"{_BULK_TRANSACTION_SQL} ORDER BY txn.entity_id", ()
+    identifiers = tuple(transaction_ids)
+    seen: set[str] = set()
+    for transaction_id in identifiers:
+        validate_entity_id(transaction_id)
+        if transaction_id in seen:
+            raise MutationValidationError("Transaction identifiers must be unique.")
+        seen.add(transaction_id)
+    if not identifiers:
+        return f"{_BULK_TRANSACTION_SQL} WHERE 0 ORDER BY txn.entity_id", ()
+    placeholders = ", ".join("?" for _ in identifiers)
+    sql = f"{_BULK_TRANSACTION_SQL} WHERE txn.entity_id IN ({placeholders}) ORDER BY txn.entity_id"
+    return sql, identifiers
+
+
+def _bulk_transaction_mapping(row: Sequence[Any]) -> dict[str, Any]:
+    coefficient = None if row[37] is None else str(row[37])
+    scale = None if row[38] is None else int(row[38])
+    amount_coefficient = str(row[30])
+    amount_scale = int(row[31])
+    mapping = _bulk_transaction_core(row)
+    mapping.update(_bulk_transaction_amount(row, amount_coefficient, amount_scale))
+    mapping.update(
+        {
+            "confidence_coefficient": coefficient,
+            "confidence_exact": _exact_decimal_text(coefficient, scale),
+            "confidence_scale": scale,
+            "confidence_unit": None if row[42] is None else str(row[42]),
+            "collected_at": row[41],
+            "effective_at": row[40],
+            "observed_at": row[39],
+        }
+    )
+    return mapping
+
+
+def _bulk_transaction_core(row: Sequence[Any]) -> dict[str, Any]:
+    mapping = _bulk_transaction_identity(row)
+    mapping.update(_bulk_transaction_classification(row))
+    return mapping
+
+
+def _bulk_transaction_identity(row: Sequence[Any]) -> dict[str, Any]:
+    return {
+        "account_id": row[28],
+        "account_text": row[12],
+        "counterparty": row[13],
+        "date_raw": row[1],
+        "datetime_raw": row[3],
+        "observation_id": row[27],
+        "provenance_id": row[26],
+        "time_raw": row[2],
+        "timezone_state": row[4],
+        "transaction_id": str(row[0]),
+        "type_norm": row[6],
+        "type_raw": row[5],
+    }
+
+
+def _bulk_transaction_classification(row: Sequence[Any]) -> dict[str, Any]:
+    return {
+        "category_final": row[16],
+        "category_manual": row[15],
+        "category_rule": row[14],
+        "confidence_value_id": row[21],
+        "is_transfer": None if row[24] is None else bool(row[24]),
+        "is_transfer_candidate": None if row[23] is None else bool(row[23]),
+        "major_raw": row[7],
+        "memo_raw": row[10],
+        "merchant_raw": row[9],
+        "minor_raw": row[8],
+        "needs_review": None if row[22] is None else bool(row[22]),
+        "notes_manual": row[11],
+        "tags_ai": _parse_string_array(row[18]),
+        "tags_final": _parse_string_array(row[20]),
+        "tags_manual": _parse_string_array(row[19]),
+        "tags_rule": _parse_string_array(row[17]),
+        "transfer_group_id": row[25],
+    }
+
+
+def _bulk_transaction_amount(
+    row: Sequence[Any],
+    amount_coefficient: str,
+    amount_scale: int,
+) -> dict[str, Any]:
+    return {
+        "amount_coefficient": amount_coefficient,
+        "amount_exact": _exact_decimal_text(amount_coefficient, amount_scale),
+        "amount_lexical": None if row[32] is None else str(row[32]),
+        "amount_origin_kind": str(row[34]),
+        "amount_scale": amount_scale,
+        "amount_value_id": row[29],
+        "amount_value_kind": str(row[33]),
+        "currency": None if row[35] is None else str(row[35]),
+        "currency_unknown": bool(row[36]),
+    }
+
+
+def _load_stored_derived_state(
+    connection: sqlite3.Connection,
+    transaction_id: str,
+) -> dict[str, JSONValue]:
+    """Load the actual derived columns used for no-op, audit, and stale-before checks."""
+    row = connection.execute(
+        "SELECT category_final, category_rule, confidence_value_id, needs_review, "
+        "tags_final_json, tags_rule_json, is_transfer, is_transfer_candidate, "
+        "transfer_group_id FROM transactions WHERE entity_id = ?",
+        (transaction_id,),
+    ).fetchone()
+    if row is None:
+        raise MutationValidationError("Transaction identifier was not found.")
+    return _stored_derived_mapping(row)
+
+
+def _stored_derived_mapping(row: Sequence[Any]) -> dict[str, JSONValue]:
+    return {
+        "category_final": row[0],
+        "category_rule": row[1],
+        "confidence_value_id": row[2],
+        "is_transfer": None if row[6] is None else bool(row[6]),
+        "is_transfer_candidate": None if row[7] is None else bool(row[7]),
+        "needs_review": None if row[3] is None else bool(row[3]),
+        "tags_final": _parse_string_array(row[4]),
+        "tags_rule": _parse_string_array(row[5]),
+        "transfer_group_id": row[8],
+    }
+
+
+def _reject_stale_derived_before(
+    before: Mapping[str, JSONValue],
+    stored: Mapping[str, JSONValue],
+    after: Mapping[str, JSONValue],
+) -> None:
+    """Reject caller before-state that does not match the row currently stored."""
+    if not isinstance(before, Mapping):
+        raise MutationValidationError("Derived before-state is missing a field.")
+    for key in after:
+        if key not in _DERIVED_COLUMNS:
+            raise MutationValidationError("Unsupported derived field.")
+        if key not in before:
+            raise MutationValidationError("Derived before-state is missing a field.")
+    for key, claimed in before.items():
+        _reject_mismatched_derived_field(key, claimed, stored)
+
+
+def _reject_mismatched_derived_field(
+    key: str,
+    claimed: JSONValue,
+    stored: Mapping[str, JSONValue],
+) -> None:
+    if key not in _DERIVED_COLUMNS:
+        raise MutationValidationError("Unsupported derived field.")
+    _derived_sql_value(key, claimed)
+    actual = _derived_audit_value(key, stored[key])
+    if _derived_audit_value(key, claimed) != actual:
+        raise MutationValidationError("Derived before-state does not match stored state.")
+
+
+def _derived_update_parts(
+    after: Mapping[str, JSONValue],
+    before: Mapping[str, JSONValue],
+) -> tuple[list[str], list[Any], dict[str, JSONValue], dict[str, JSONValue]]:
+    if not after:
+        raise MutationValidationError("Derived state update must include at least one field.")
+    unknown = [key for key in after if key not in _DERIVED_COLUMNS]
+    if unknown:
+        raise MutationValidationError("Unsupported derived field.")
+    write = _DerivedWrite()
+    for key, value in after.items():
+        _append_derived_assignment(write, key, value, before)
+    if not write.assignments:
+        return [], [], {}, {}
+    _canonical_request_json(write.audit_before)
+    _canonical_request_json(write.audit_after)
+    return write.assignments, write.parameters, write.audit_before, write.audit_after
+
+
+@dataclass
+class _DerivedWrite:
+    assignments: list[str] = field(default_factory=list)
+    parameters: list[Any] = field(default_factory=list)
+    audit_before: dict[str, JSONValue] = field(default_factory=dict)
+    audit_after: dict[str, JSONValue] = field(default_factory=dict)
+
+
+def _append_derived_assignment(
+    write: _DerivedWrite,
+    key: str,
+    value: JSONValue,
+    before: Mapping[str, JSONValue],
+) -> None:
+    if key not in before:
+        raise MutationValidationError("Derived before-state is missing a field.")
+    sql_value = _derived_sql_value(key, value)
+    audit_value = _derived_audit_value(key, value)
+    before_value = _derived_audit_value(key, before[key])
+    if audit_value == before_value:
+        return
+    write.assignments.append(f"{_DERIVED_COLUMNS[key]} = ?")
+    write.parameters.append(sql_value)
+    write.audit_before[key] = before_value
+    write.audit_after[key] = audit_value
+
+
+def _derived_sql_value(key: str, value: JSONValue) -> JSONValue:
+    if key in _JSON_DERIVED_KEYS:
+        return _derived_tags_sql(value)
+    if key in _BOOL_DERIVED_KEYS:
+        return _derived_flag_sql(value)
+    if key == "confidence_value_id":
+        return _derived_confidence_sql(value)
+    if value is not None and not isinstance(value, str):
+        raise MutationValidationError("Derived text fields must be strings or null.")
+    return value
+
+
+def _derived_tags_sql(value: JSONValue) -> str:
+    if not isinstance(value, list) or any(not isinstance(item, str) or not item for item in value):
+        raise MutationValidationError("Derived tags must be a canonical string array.")
+    return _canonical_request_json(value)
+
+
+def _derived_flag_sql(value: JSONValue) -> int | None:
+    if value is None:
+        return None
+    if not isinstance(value, bool):
+        raise MutationValidationError("Derived flags must be boolean or null.")
+    return int(value)
+
+
+def _derived_confidence_sql(value: JSONValue) -> str | None:
+    if value is None:
+        return None
+    validate_entity_id(str(value))
+    return str(value)
+
+
+def _derived_audit_value(key: str, value: JSONValue) -> JSONValue:
+    if key in _JSON_DERIVED_KEYS:
+        if isinstance(value, list):
+            return list(value)
+        return _parse_string_array(value)
+    if key in _BOOL_DERIVED_KEYS:
+        return None if value is None else bool(value)
+    return value
+
+
 class MutationService:
     """Execute typed domain writes, audit, revision, and receipt in one transaction."""
 
@@ -1181,6 +1585,26 @@ class MutationService:
                 _validate_locked_repository(connection, authority)
                 request_digest = _digest(_canonical_request(request))
                 return _lookup_idempotency(connection, request, request_digest)
+            finally:
+                connection.close()
+
+    def preview(
+        self,
+        request: MutationRequest,
+        handler: MutationHandler,
+    ) -> Mapping[str, JSONValue]:
+        """Compute a handler result on one pinned read snapshot without publishing state."""
+        with shared_write_lease(
+            self._authority_paths,
+            timeout_ms=self._busy_timeout_ms,
+        ):
+            authority = require_repository_binding(
+                self._authority_paths,
+                self._activation_evidence,
+            )
+            connection = _connect_reader(authority.paths.database, self._busy_timeout_ms)
+            try:
+                return _preview_locked(connection, authority, request, handler)
             finally:
                 connection.close()
 
@@ -1243,6 +1667,40 @@ class MutationService:
             ),
             attempt,
         )
+
+
+def _preview_locked(
+    connection: sqlite3.Connection,
+    authority: RepositoryAuthority,
+    request: MutationRequest,
+    handler: MutationHandler,
+) -> Mapping[str, JSONValue]:
+    _validate_request_shape(request)
+    connection.execute("BEGIN")
+    try:
+        current_revision = _validate_locked_repository(connection, authority)
+        _validate_new_request(request, authority, current_revision)
+        return _run_preview_handler(connection, authority, handler)
+    finally:
+        if connection.in_transaction:
+            connection.execute("ROLLBACK")
+
+
+def _run_preview_handler(
+    connection: sqlite3.Connection,
+    authority: RepositoryAuthority,
+    handler: MutationHandler,
+) -> Mapping[str, JSONValue]:
+    context = MutationContext(connection, authority, _PREVIEW_CHANGESET_ID)
+    outcome = handler(context)
+    if context.entries:
+        raise MutationValidationError("Preview cannot change repository state.")
+    if not isinstance(outcome, MutationOutcome):
+        raise MutationValidationError("Mutation handler must return MutationOutcome.")
+    if not isinstance(outcome.result, Mapping):
+        raise MutationValidationError("Mutation result must be a JSON object.")
+    _canonical_result_json(outcome.result)
+    return outcome.result
 
 
 def _begin_writer_transaction(connection: sqlite3.Connection) -> None:
