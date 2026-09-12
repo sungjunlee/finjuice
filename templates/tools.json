@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
   "name": "finjuice",
-  "version": "0.7.3",
-  "generated_at": "2026-09-12T08:15:53+00:00",
+  "version": "0.8.0",
+  "generated_at": "2026-09-12T08:58:05+00:00",
   "tools": [
     {
       "name": "assets.balance",
@@ -1542,6 +1542,48 @@
           "pagination",
           "row_count",
           "rows"
+        ]
+      }
+    },
+    {
+      "name": "reconcile",
+      "description": "Match evidence to ledger payments without writing transactions.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "evidence": {
+            "type": "string",
+            "format": "path",
+            "description": "JSON file of purchase/order/receipt evidence (not the ledger SSOT)"
+          },
+          "window_days": {
+            "type": "integer",
+            "description": "Max day gap between evidence and ledger payment",
+            "default": 14
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "evidence"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "reconcile --json output",
+        "top_level_keys": [
+          "_meta",
+          "command",
+          "evidence_count",
+          "groups",
+          "matched",
+          "partial",
+          "payment_count",
+          "unmatched"
         ]
       }
     },

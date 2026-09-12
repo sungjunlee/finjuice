@@ -43,7 +43,7 @@ scope: ["**"]
 ## Running Context
 - GitHub Issues의 최신 본문과 AC가 작업 명세·상태의 정본이다. 실행 권한은 `goals/finjuice-ssot.md`, 저장·보존 계약은 ADR-0014와 `docs/development/ssot-migration-recovery-contract.md`를 따른다.
 - M1 #430·#431·#432·#426과 milestone 2를 완료했다. 운영 기록 PR #452의 merge f56f5d5 기준으로 `codex/ssot-m2-storage`를 시작했다. `git worktree list`로 실행 작업 공간을 확인한다.
-- 운영 서비스와 데이터는 아직 0.7.1/CSV다. #433에서 기존 CLI·Config.data_dir·CSV writer를 바꾸거나 운영 전환을 하지 않는다. 새 generation 경로와 SQLite schema version은 CSV v4 및 backup manifest version과 분리한다.
+- 운영 서비스/데이터의 마지막 현장 검증은 M1 완료 시점의 0.7.1/CSV다. 다른 세션의 후속 배포 여부는 실제 이전·cutover 전에 다시 확인한다. #433에서 기존 CLI·Config.data_dir·CSV writer를 바꾸거나 운영 전환을 하지 않았다. 새 generation 경로와 SQLite schema version은 CSV v4 및 backup manifest version과 분리한다.
 - 첫 이전은 중복 row_hash occurrence와 수동 상태를 보존한다. 기존 float 정규화기를 재사용하지 않고 정확한 숫자의 계수·소수 자릿수·원문을 저장한다. 통화 미상은 KRW로 추정하지 않는다.
 - M1의 최초 기준선과 검토된 복구 절차는 영구 보호한다. #438과 실제 cutover의 기준선은 해당 시점 writer 통제 아래 새로 취득한다. 오래된 원격 capture plan이나 옛 helper를 그대로 재실행하지 않는다.
 - 구현 writer는 저장 코드·합성 테스트를 맡고 오케스트레이터는 계약 판단·통합·다른 패밀리 최종 검토·GitHub 및 비공개 운영 검증을 맡는다. 같은 파일에 writer를 겹치지 않는다.
@@ -111,3 +111,6 @@ scope: ["**"]
 - 최종 통합 검증: `uv run pytest -q` 3,152 PASS·1 플랫폼 SKIP(500.16초), coverage 89.19%; Ruff check/format, mypy 419개, complexity, PII, Bandit 20개 baseline/pip-audit 0개 통과. `just docs`로 문서를 생성했고 새 wheel/sdist의 각각 독립 설치 smoke와 새 dist wheel의 CLI JSON 10개 schema 검증을 통과했다. GitHub main은 최신 main에 대한 Public PR Gate와 approving review 1건을 요구한다. 로컬/CLI 교차 리뷰는 GitHub 승인을 대신하지 않으며 보호 규칙을 우회하지 않는다. 원격 CI와 승인 상태는 PR #463의 현재 head에서 확인한다. #434는 아직 OPEN이며 운영 데이터 이전·활성화는 수행하지 않았다.
 - 비차단 후속 검토: typed 오류로 종료된 active import 미리보기의 ingest metadata에는 `force_requested`/`unavailable_sources`/`preview_unavailable` 부가 키가 생략될 수 있다. 오류 코드·실패 파일·선행 영수증·무변경 및 원문 비노출 계약은 유지된다. 이 표시 보완은 후속 정리 항목으로 남긴다.
 - #435 읽기 전용 사전 조사: backup manifest/fingerprint, `RepositoryBuilder`와 원문 occurrence/payload/disposition 계층을 재사용할 수 있다. plan/build/verify 조정과 `legacy_current_state` baseline revision 계약, 모든 legacy 행/키/필드 대응은 추가 구현이 필요하다. 신규 import의 중복 후보 격리 로직을 보존 이전에 그대로 사용하지 않는다. #434 gate 전에는 구현·운영 자료 접근을 시작하지 않았다.
+
+- `b8ada1a`의 최종 원격 CI는 Linux 3,161 PASS·4 플랫폼 SKIP(142.58초), coverage 89.18%이며 적용 gate를 모두 통과했다. #434의 AC 5개에 구현 검증 근거를 반영했으나 이슈는 필수 리뷰/머지 전까지 OPEN이다.
+- 이후 main에 PR #475(증빙 대사 첫 부분)·#476(0.8.0 버전)이 추가돼 GitHub의 정상 브랜치 업데이트로 `a76798d`에 통합했다. 로컬도 해당 head로 fast-forward했고 대사·schema·버전 관련 136개가 통과했다. `just docs`는 누락된 새 reconcile 도구 정의까지 포함해 `templates/tools.json` 62개를 생성했다. 이 버전 기준의 전체/설치본/원격 검증 결과는 PR #463과 Issue #434에 보존한다. #475는 #446의 첫 부분이며 전체 M5 완료가 아니다. 새 `reconcile`의 원장 조회는 현재 CSV이므로 #436의 SQLite 조회 전환 대상에 포함해 확인한다. 원격 main과 운영 설치본은 서로 다른 상태로 취급하며 이번 통합에서 운영 호스트를 변경하지 않았다.

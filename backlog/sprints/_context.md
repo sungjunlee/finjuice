@@ -4,7 +4,7 @@
 
 - 로드맵: https://github.com/sungjunlee/finjuice/issues/425
 - 실행 계약/시작 프롬프트: `goals/finjuice-ssot.md`.
-- 활성 실행 계획: `backlog/sprints/2026-09-ssot-m2-storage.md`. #433 완료, #434는 ready PR #463에서 진행 중이다. 2026-09-12 다른 세션의 main PR #473·#474(`c146d9a`)를 통합해 파일 지정 import·legacy 처리 이력과 활성 SQLite의 내용 기준 멱등성을 함께 검증했다. 최종 전체 3,152 PASS·1 SKIP, coverage 89.19%; 정적/보안/문서/설치본 검사와 오류 코드 보완의 다른 패밀리 재검토를 통과했다. 최신 head의 CI와 GitHub 필수 승인 1건을 확인한 뒤 머지한다. #436 정본 export가 없어 active import/refresh는 앞선 변경 영수증을 보존하고 export에서 실패한다. #434 검증·머지 후 #435로 넘어가며 운영 SQLite 활성화는 아직 하지 않는다. 실행 작업 공간은 `git worktree list`로 확인한다.
+- 활성 실행 계획: `backlog/sprints/2026-09-ssot-m2-storage.md`. #433 완료, #434는 ready PR #463에서 진행 중이다. 2026-09-12 다른 세션의 main PR #473~#476을 통합해 대상 파일 import·legacy 처리 이력, 증빙 대사 첫 부분과 0.8.0 버전을 보존했다. 최신 head의 로컬/설치본/CI 검증 근거는 PR #463과 Issue #434에서 확인한다. GitHub 필수 approving review 1건 후 머지하며, #434 완료 후 #435로 넘어간다. #436 정본 export가 없어 active import/refresh는 앞선 변경 영수증을 보존하고 export에서 실패한다. 이번 통합에서 운영 데이터 이전이나 SQLite 활성화는 수행하지 않았다. 실행 작업 공간은 `git worktree list`로 확인한다.
 - 완료 실행 기록: `backlog/sprints/2026-09-ssot-m1-recovery.md`. #430은 #449·#450, 백업 구현은 #451, 실제 운영 검증과 스프린트 마감은 #452로 머지됐다. M1의 실제 캡처·Linux 격리 복원·장비 밖 독립 복원·최종 교차 검토와 복구 절차 보존을 통과했고 #431·#432·#426 및 milestone 2를 완료했다.
 - 전체 순서: M1 복구 계약 → M2 정본/보존 이전 → M3 실제 운영 전환 → M4 가족 재산 → M5 증빙/마감/추가 출처.
 - 에픽: M1 #426, M2 #427, M3 #428, M4 #429, M5 #355. 실행 이슈 #430~#448. 첫 작업 #430.
