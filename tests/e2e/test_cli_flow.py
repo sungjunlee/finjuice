@@ -15,6 +15,7 @@ Note: Common fixtures (sample_xlsx_path, initialized_data_dir, etc.)
 are defined in tests/e2e/conftest.py
 """
 
+import csv
 import shutil
 from pathlib import Path
 
@@ -153,6 +154,28 @@ class TestImportCommand:
         imports_dir = initialized_data_dir / "imports"
         imported_files = list(imports_dir.glob("*.xlsx"))
         assert len(imported_files) >= 2, f"Expected 2 XLSX files, got {len(imported_files)}"
+
+    def test_import_already_in_imports_does_not_ingest_sibling(
+        self, initialized_data_dir: Path, sample_xlsx_path: Path
+    ) -> None:
+        """import of a staged imports/ path must not ingest sibling workbooks."""
+        imports_dir = initialized_data_dir / "imports"
+        target = imports_dir / "target.xlsx"
+        leftover = imports_dir / "leftover.xlsx"
+        shutil.copy(sample_xlsx_path, target)
+        shutil.copy(sample_xlsx_path, leftover)
+
+        result = runner.invoke(
+            app,
+            ["--data-dir", str(initialized_data_dir), "import", "--no-scan", str(target)],
+        )
+        assert result.exit_code == 0, f"import failed: {result.output}"
+
+        history = initialized_data_dir / "metadata" / "import_history.csv"
+        assert history.exists(), "import_history.csv was not written"
+        with history.open(encoding="utf-8") as handle:
+            names = [row["original_filename"] for row in csv.DictReader(handle)]
+        assert names == ["target.xlsx"]
 
 
 # ============================================================================

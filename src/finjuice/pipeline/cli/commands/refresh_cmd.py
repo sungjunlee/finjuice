@@ -10,7 +10,10 @@ import typer
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from finjuice.pipeline.cli import output
-from finjuice.pipeline.cli.commands.full_pipeline_orchestrator import run_full_pipeline_orchestrator
+from finjuice.pipeline.cli.commands.full_pipeline_orchestrator import (
+    FullPipelineOptions,
+    run_full_pipeline_orchestrator,
+)
 from finjuice.pipeline.cli.export_runtime import configure_cli_export_result_runtime
 from finjuice.pipeline.cli.output import ErrorCode, ExitCode, emit, emit_error
 from finjuice.pipeline.cli.utils import get_config, warn_on_schema_mismatch
@@ -29,7 +32,9 @@ def _compute_full_pipeline_result(
 ) -> dict[str, Any]:
     """Run all pipeline steps and return a single structured result."""
     if json_output:
-        return run_full_pipeline_orchestrator(ctx, config, command_name=command_name)
+        return run_full_pipeline_orchestrator(
+            ctx, config, FullPipelineOptions(command_name=command_name)
+        )
 
     step_descriptions = {
         "ingest": "[cyan]{index}/{total} XLSX 파일 가져오는 중...",
@@ -97,10 +102,12 @@ def _compute_full_pipeline_result(
         return run_full_pipeline_orchestrator(
             ctx,
             config,
-            command_name=command_name,
-            export_emit_text=True,
-            on_step_start=_on_step_start,
-            on_step_complete=_on_step_complete,
+            FullPipelineOptions(
+                command_name=command_name,
+                export_emit_text=True,
+                on_step_start=_on_step_start,
+                on_step_complete=_on_step_complete,
+            ),
         )
 
 

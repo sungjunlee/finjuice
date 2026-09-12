@@ -16,9 +16,11 @@ def run_full_pipeline(
     config: Config,
     *,
     emit_text: bool = True,
+    file_paths: list[Path] | None = None,
 ) -> dict[str, Any]:
     """Run the full pipeline (ingest → tag → transfer → export)."""
     from finjuice.pipeline.cli.commands.full_pipeline_orchestrator import (
+        FullPipelineOptions,
         run_full_pipeline_orchestrator,
     )
 
@@ -30,10 +32,13 @@ def run_full_pipeline(
     orchestrated = run_full_pipeline_orchestrator(
         ctx,
         config,
-        command_name="import",
-        export_emit_text=emit_text,
-        on_step_start=_render_step_start if emit_text else None,
-        on_step_complete=_step_complete_renderer(config) if emit_text else None,
+        FullPipelineOptions(
+            command_name="import",
+            export_emit_text=emit_text,
+            file_paths=file_paths,
+            on_step_start=_render_step_start if emit_text else None,
+            on_step_complete=_step_complete_renderer(config) if emit_text else None,
+        ),
     )
     return _pipeline_summary(orchestrated["steps"], config)
 

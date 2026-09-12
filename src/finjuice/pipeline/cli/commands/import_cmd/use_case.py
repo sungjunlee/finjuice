@@ -79,6 +79,7 @@ class RunPipelineFn(Protocol):
         config: Config,
         *,
         emit_text: bool = True,
+        file_paths: list[Path] | None = None,
     ) -> dict[str, Any]: ...
 
 
@@ -218,9 +219,7 @@ def _copy_and_maybe_run_pipeline(
         )
 
     return _run_pipeline_after_copy(
-        imported_count,
-        skipped_count,
-        error_count,
+        results,
         options,
         dependencies,
     )
@@ -281,19 +280,38 @@ def _dry_run_result(
     )
 
 
+_ALREADY_IN_IMPORTS = "이미 imports 디렉토리에 있음"
+
+
+def _ingest_file_paths(results: ImportFileResults) -> list[Path]:
+    """Return dest workbooks that this import should ingest.
+
+    Newly copied files and files skipped because the path already lived in
+    ``imports/`` are included. A skip because a *different* source maps to an
+    existing dest without ``--force`` is not ingested.
+    """
+    destinations = [dest for _src, dest in results["imported"]]
+    destinations.extend(
+        src.resolve() for src, reason in results["skipped"] if reason == _ALREADY_IN_IMPORTS
+    )
+    return destinations
+
+
 def _run_pipeline_after_copy(
-    imported_count: int,
-    skipped_count: int,
-    error_count: int,
+    results: ImportFileResults,
     options: ImportOptions,
     dependencies: ImportDependencies,
 ) -> ImportResult:
     """Run the pipeline after successful copy and build the final result."""
+    imported_count = len(results["imported"])
+    skipped_count = len(results["skipped"])
+    error_count = len(results["errors"])
     try:
         summary = dependencies.run_full_pipeline(
             options.ctx,
             options.config,
             emit_text=options.emit_text,
+            file_paths=_ingest_file_paths(results),
         )
         if options.emit_text:
             render_final_summary(summary, imported_count=imported_count, config=options.config)
