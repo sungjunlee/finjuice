@@ -6,6 +6,7 @@ Runs ingest → tag → transfer → export and returns structured step summarie
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any, Callable
 
 import typer
@@ -16,12 +17,26 @@ StepStartCallback = Callable[[str, int, int], None]
 StepCompleteCallback = Callable[[str, dict[str, Any], int, int], None]
 
 
-def compute_full_pipeline_ingest(config: Any) -> dict[str, Any]:
-    """Run the ingest step and normalize its result."""
-    from finjuice.pipeline.ingest.pipeline import ingest_all_files
+def compute_full_pipeline_ingest(
+    config: Any,
+    file_paths: list[Any] | None = None,
+) -> dict[str, Any]:
+    """Run the ingest step and normalize its result.
+
+    ``file_paths is None`` globs ``imports/`` (refresh). An explicit list,
+    including empty, ingests only those workbooks.
+    """
+    from finjuice.pipeline.ingest.pipeline import ingest_all_files, ingest_paths
 
     logger.info(f"Ingest: {config.import_dir} → {config.csv_base_dir}")
-    summary = ingest_all_files(config.import_dir, config.csv_base_dir, archive=False)
+    if file_paths is None:
+        summary = ingest_all_files(config.import_dir, config.csv_base_dir, archive=False)
+    else:
+        summary = ingest_paths(
+            [Path(path) for path in file_paths],
+            config.csv_base_dir,
+            archive=False,
+        )
     return {
         "command": "ingest",
         "dry_run": False,
@@ -110,12 +125,13 @@ def run_full_pipeline_orchestrator(
     *,
     command_name: str,
     export_emit_text: bool = False,
+    file_paths: list[Any] | None = None,
     on_step_start: StepStartCallback | None = None,
     on_step_complete: StepCompleteCallback | None = None,
 ) -> dict[str, Any]:
     """Run all full-pipeline steps and return a structured summary."""
     step_runners: list[tuple[str, Callable[[], dict[str, Any]]]] = [
-        ("ingest", lambda: compute_full_pipeline_ingest(config)),
+        ("ingest", lambda: compute_full_pipeline_ingest(config, file_paths=file_paths)),
         ("tag", lambda: compute_full_pipeline_tag(config)),
         ("transfer", lambda: compute_full_pipeline_transfer(config)),
         ("export", lambda: compute_full_pipeline_export(ctx, config, emit_text=export_emit_text)),
