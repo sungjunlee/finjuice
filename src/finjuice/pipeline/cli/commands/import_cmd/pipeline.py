@@ -16,11 +16,17 @@ def run_full_pipeline(
     config: Config,
     *,
     emit_text: bool = True,
+    file_paths: list[Path] | None = None,
     ingest_result: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Run the full pipeline (ingest → tag → transfer → export)."""
+    """Run the full pipeline (ingest → tag → transfer → export).
+
+    ``file_paths`` scopes the legacy ingest step to the workbooks this import
+    copied or reused. ``ingest_result`` carries an ingest step that active
+    authority already completed before any legacy write.
+    """
     from finjuice.pipeline.cli.commands.full_pipeline_orchestrator import (
-        PipelineCallbacks,
+        FullPipelineOptions,
         run_full_pipeline_orchestrator,
     )
 
@@ -32,12 +38,13 @@ def run_full_pipeline(
     orchestrated = run_full_pipeline_orchestrator(
         ctx,
         config,
-        command_name="import",
-        export_emit_text=emit_text,
-        ingest_result=ingest_result,
-        callbacks=PipelineCallbacks(
-            _render_step_start if emit_text else None,
-            _step_complete_renderer(config) if emit_text else None,
+        FullPipelineOptions(
+            command_name="import",
+            export_emit_text=emit_text,
+            file_paths=file_paths,
+            ingest_result=ingest_result,
+            on_step_start=_render_step_start if emit_text else None,
+            on_step_complete=_step_complete_renderer(config) if emit_text else None,
         ),
     )
     return _pipeline_summary(orchestrated["steps"], config)

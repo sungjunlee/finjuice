@@ -8,6 +8,7 @@ import polars as pl
 
 from finjuice.pipeline.config import Config
 from finjuice.pipeline.doctor.models import CheckResult
+from finjuice.pipeline.metadata.import_history_helpers import list_unprocessed_xlsx
 from finjuice.pipeline.storage.schema_registry import (
     PartitionSchemaSummary,
     SchemaCompatibilityState,
@@ -102,19 +103,13 @@ def _check_data_status(config: Config) -> list[CheckResult]:
             import_history_path = config.data_dir / "metadata" / "import_history.csv"
             if import_history_path.exists():
                 try:
-                    history_df = pl.read_csv(import_history_path)
-                    processed_files = set(
-                        history_df["original_filename"].to_list()
-                        if "original_filename" in history_df.columns
-                        else []
-                    )
-                    unprocessed = [f for f in xlsx_files if f.name not in processed_files]
+                    unprocessed = list_unprocessed_xlsx(imports_dir, config.data_dir / "metadata")
                     if unprocessed:
                         results.append(
                             CheckResult(
                                 status="warning",
                                 message=f"처리되지 않은 XLSX {len(unprocessed)}개",
-                                suggestion="finjuice refresh 실행 권장",
+                                suggestion="finjuice ingest --only-unprocessed 실행 권장",
                                 name="unprocessed_imports",
                             )
                         )

@@ -4,7 +4,8 @@ XLSX Ingestion Pipeline for Banksalad exports (Polars-only).
 Provides end-to-end ingestion pipeline that reads Banksalad XLSX files,
 maps columns, calculates row hashes for deduplication, and writes to CSV partitions.
 
-Public API: preview_ingest_paths, preview_ingest_all_files, ingest_file, ingest_all_files
+Public API: preview_ingest_paths, preview_ingest_all_files, ingest_file,
+ingest_paths, ingest_all_files
 
 Write-path summary helpers live in
 :mod:`finjuice.pipeline.ingest.pipeline_helpers`. Single-file import
@@ -20,6 +21,7 @@ from zipfile import BadZipFile
 
 import polars as pl
 
+from ..metadata.import_history_helpers import list_unprocessed_xlsx
 from ..validation import ValidationError
 from ._preview import (
     _accumulate_preview_file,
@@ -62,7 +64,9 @@ def preview_ingest_paths(
     totals = _PreviewTotals()
     failed_files: list[tuple[str, str]] = []
 
-    for file_path in file_paths:
+    total = len(file_paths)
+    for index, file_path in enumerate(file_paths, start=1):
+        logger.info("Previewing file %s/%s", index, total)
         try:
             _accumulate_preview_file(totals, _preview_ingest_path(file_path, context))
         except (FileNotFoundError, PermissionError) as e:
@@ -89,10 +93,32 @@ def preview_ingest_paths(
 
 
 def preview_ingest_all_files(
-    import_dir: Path, csv_base_dir: Path, archive: bool = False
+    import_dir: Path,
+    csv_base_dir: Path,
+    archive: bool = False,
+    *,
+    skip_processed: bool = False,
+    metadata_dir: Path | None = None,
 ) -> dict[str, Any]:
-    """Preview batch ingest for all XLSX files in the import directory."""
-    return preview_ingest_paths(list(import_dir.glob("*.xlsx")), csv_base_dir, archive=archive)
+    """Preview batch ingest for XLSX files in the import directory.
+
+    When ``skip_processed`` is true, workbooks whose basename is already in
+    import history are not opened. ``files_found`` stays the staged glob
+    count; ``history_skipped`` / ``would_parse`` report the filter.
+    """
+    staged = list(import_dir.glob("*.xlsx"))
+    selected = staged
+    skipped = 0
+    if skip_processed:
+        history_dir = metadata_dir or (csv_base_dir.parent / "metadata")
+        selected = list_unprocessed_xlsx(import_dir, history_dir)
+        skipped = len(staged) - len(selected)
+
+    preview = preview_ingest_paths(selected, csv_base_dir, archive=archive)
+    preview["files_found"] = len(staged)
+    preview["history_skipped"] = skipped
+    preview["would_parse"] = len(selected)
+    return preview
 
 
 def ingest_file(
@@ -144,6 +170,70 @@ def ingest_file_detailed(
     return _write_ingest_file_result(file_path, csv_base_dir, file_id, file_mtime, df)
 
 
+def ingest_paths(
+    file_paths: list[Path],
+    csv_base_dir: Path,
+    archive: bool = False,
+) -> dict[str, Any]:
+    """Batch ingest an explicit list of XLSX workbooks.
+
+    Unlike :func:`ingest_all_files`, this does not glob ``imports/``. An empty
+    list ingests nothing. Failed files are logged and skipped so remaining
+    paths still run.
+
+    Args:
+        file_paths: Workbooks to ingest, in order.
+        csv_base_dir: Base directory for CSV partitions.
+        archive: If True, copy source files to metadata/archives/.
+
+    Returns:
+        dict: Summary with ``files``, ``inserted``, ``updated``, ``failed``,
+        and ``failed_files``.
+    """
+    if not file_paths:
+        return _empty_ingest_all_summary()
+
+    logger.info("Ingesting %s explicit XLSX file(s)", len(file_paths))
+
+    totals = _IngestTotals()
+    failed_files: list[tuple[str, str]] = []
+    total = len(file_paths)
+
+    for index, file_path in enumerate(file_paths, start=1):
+        logger.info("Ingesting file %s/%s", index, total)
+        try:
+            _accumulate_ingest_file(
+                totals, ingest_file_detailed(file_path, csv_base_dir, archive=archive)
+            )
+        except (FileNotFoundError, PermissionError) as e:
+            logger.error("Cannot access source workbook (%s)", type(e).__name__)
+            failed_files.append((file_path.name, f"File access error: {str(e)}"))
+        except ValidationError as e:
+            logger.error("Schema validation failed for source workbook (%s)", type(e).__name__)
+            failed_files.append((file_path.name, f"Schema validation error: {str(e)}"))
+        except (ValueError, KeyError) as e:
+            logger.error("Invalid data in source workbook (%s)", type(e).__name__)
+            failed_files.append((file_path.name, f"Data validation error: {str(e)}"))
+        except pl.exceptions.ComputeError as e:
+            logger.error("Cannot parse source workbook (%s)", type(e).__name__)
+            failed_files.append((file_path.name, f"Parse error: {str(e)}"))
+        except KeyboardInterrupt:
+            logger.warning("Ingestion cancelled by user")
+            failed_files.append((file_path.name, "Cancelled by user"))
+            break
+        except (OSError, pl.exceptions.PolarsError, BadZipFile) as e:
+            logger.error("Unexpected error processing source workbook (%s)", type(e).__name__)
+            failed_files.append((file_path.name, f"Unexpected error: {type(e).__name__}: {str(e)}"))
+
+    summary = _finalize_ingest_all_summary(file_paths, totals, failed_files)
+    logger.info(
+        f"Ingestion summary: {summary['files']} files, "
+        f"{summary['inserted']} inserted, {summary['updated']} updated, "
+        f"{summary['failed']} failed"
+    )
+    return summary
+
+
 def ingest_all_files(import_dir: Path, csv_base_dir: Path, archive: bool = False) -> dict[str, Any]:
     """
     Batch ingest all XLSX files from import directory.
@@ -177,48 +267,4 @@ def ingest_all_files(import_dir: Path, csv_base_dir: Path, archive: bool = False
         return _empty_ingest_all_summary()
 
     logger.info(f"Found {len(xlsx_files)} XLSX file(s)")
-
-    totals = _IngestTotals()
-    failed_files: list[tuple[str, str]] = []
-
-    for file_path in xlsx_files:
-        try:
-            _accumulate_ingest_file(
-                totals, ingest_file_detailed(file_path, csv_base_dir, archive=archive)
-            )
-        except (FileNotFoundError, PermissionError) as e:
-            # File access errors - expected during file processing
-            logger.error("Cannot access source workbook (%s)", type(e).__name__)
-            failed_files.append((file_path.name, f"File access error: {str(e)}"))
-        except ValidationError as e:
-            # Schema validation errors - provide user-friendly message
-            logger.error("Schema validation failed for source workbook (%s)", type(e).__name__)
-            failed_files.append((file_path.name, f"Schema validation error: {str(e)}"))
-        except (ValueError, KeyError) as e:
-            # Data validation errors - expected from malformed files
-            logger.error("Invalid data in source workbook (%s)", type(e).__name__)
-            failed_files.append((file_path.name, f"Data validation error: {str(e)}"))
-        except pl.exceptions.ComputeError as e:
-            # Polars parsing errors - expected from corrupted Excel files
-            logger.error("Cannot parse source workbook (%s)", type(e).__name__)
-            failed_files.append((file_path.name, f"Parse error: {str(e)}"))
-        except KeyboardInterrupt:
-            # User cancellation - clean exit
-            logger.warning("Ingestion cancelled by user")
-            failed_files.append((file_path.name, "Cancelled by user"))
-            break
-        except (OSError, pl.exceptions.PolarsError, BadZipFile) as e:
-            # Unexpected errors - log full stack trace and continue
-            logger.error("Unexpected error processing source workbook (%s)", type(e).__name__)
-            failed_files.append((file_path.name, f"Unexpected error: {type(e).__name__}: {str(e)}"))
-            # Continue processing remaining files despite unexpected errors
-
-    summary = _finalize_ingest_all_summary(xlsx_files, totals, failed_files)
-
-    logger.info(
-        f"Ingestion summary: {summary['files']} files, "
-        f"{summary['inserted']} inserted, {summary['updated']} updated, "
-        f"{summary['failed']} failed"
-    )
-
-    return summary
+    return ingest_paths(xlsx_files, csv_base_dir, archive=archive)

@@ -63,6 +63,8 @@ from finjuice.pipeline.metadata.import_history_helpers import (
     get_metadata_path,
     get_source_file_info,  # noqa: F401 — re-exported for existing import_history imports
     list_source_files,  # noqa: F401 — re-exported for existing import_history imports
+    list_unprocessed_xlsx,  # noqa: F401 — re-exported for existing import_history imports
+    processed_original_filenames,  # noqa: F401 — re-exported for existing import_history imports
 )
 from finjuice.pipeline.storage.atomic_files import (
     OwnedTempMetadata,

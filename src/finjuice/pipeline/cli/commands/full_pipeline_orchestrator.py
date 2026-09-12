@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable
 
 import typer
@@ -18,7 +19,9 @@ from finjuice.pipeline.cli.bulk_repository import (
 from finjuice.pipeline.cli.pipeline_failure import FullPipelineError
 from finjuice.pipeline.cli.repository_import import (
     identity_from_context,
+    import_xlsx_paths,
     ingest_import_directory,
+    present_ingest_step,
 )
 from finjuice.pipeline.cli.utils import get_mutation_facade
 from finjuice.pipeline.storage.authority import RepositoryAuthority
@@ -31,11 +34,22 @@ StepCompleteCallback = Callable[[str, dict[str, Any], int, int], None]
 
 
 @dataclass(frozen=True)
-class PipelineCallbacks:
-    """Optional progress renderers for a composed pipeline."""
+class FullPipelineOptions:
+    """Explicit ingest scope, precomputed ingest, and step hooks for one run.
 
-    on_start: StepStartCallback | None = None
-    on_complete: StepCompleteCallback | None = None
+    ``file_paths is None`` means glob ``imports/`` (refresh). An explicit list,
+    including empty, ingests only those workbooks and never falls back to glob.
+    ``ingest_result`` supplies an already-completed ingest step (active import
+    captures its sources before this orchestrator runs) and takes precedence
+    over ``file_paths``.
+    """
+
+    command_name: str
+    export_emit_text: bool = False
+    file_paths: list[Any] | None = None
+    ingest_result: dict[str, Any] | None = None
+    on_step_start: StepStartCallback | None = None
+    on_step_complete: StepCompleteCallback | None = None
 
 
 class CanonicalExportUnavailableError(RuntimeError):
@@ -44,29 +58,54 @@ class CanonicalExportUnavailableError(RuntimeError):
 
 def compute_full_pipeline_ingest(
     config: Any,
+    file_paths: list[Any] | None = None,
     *,
     facade: StorageMutationFacade | None = None,
     identity: MutationIdentity = MutationIdentity(),
 ) -> dict[str, Any]:
-    """Run the ingest step and normalize its result."""
+    """Run the ingest step and normalize its result.
+
+    ``file_paths is None`` globs ``imports/`` (refresh). An explicit list,
+    including empty, ingests only those workbooks and never falls back to glob.
+    """
     selected = facade or StorageMutationFacade(config.data_dir)
     if isinstance(selected.dispatch().authority, RepositoryAuthority):
+        return _repository_ingest_step(selected, config, identity, file_paths)
+    return _legacy_ingest_step(config, file_paths)
+
+
+def _repository_ingest_step(
+    facade: StorageMutationFacade,
+    config: Any,
+    identity: MutationIdentity,
+    file_paths: list[Any] | None,
+) -> dict[str, Any]:
+    """Import explicit workbooks, or every staged workbook, under canonical authority."""
+    if file_paths is None:
         return ingest_import_directory(
-            selected,
+            facade,
             config,
             identity,
             preview=False,
             archive_requested=False,
         )
-    return _legacy_ingest_step(config)
+    batch = import_xlsx_paths(facade, [Path(path) for path in file_paths], identity, preview=False)
+    return present_ingest_step(batch, source="files", dry_run=False, archive_requested=False)
 
 
-def _legacy_ingest_step(config: Any) -> dict[str, Any]:
+def _legacy_ingest_step(config: Any, file_paths: list[Any] | None = None) -> dict[str, Any]:
     """Run the legacy CSV ingest step and normalize its result."""
-    from finjuice.pipeline.ingest.pipeline import ingest_all_files
+    from finjuice.pipeline.ingest.pipeline import ingest_all_files, ingest_paths
 
     logger.info(f"Ingest: {config.import_dir} → {config.csv_base_dir}")
-    summary = ingest_all_files(config.import_dir, config.csv_base_dir, archive=False)
+    if file_paths is None:
+        summary = ingest_all_files(config.import_dir, config.csv_base_dir, archive=False)
+    else:
+        summary = ingest_paths(
+            [Path(path) for path in file_paths],
+            config.csv_base_dir,
+            archive=False,
+        )
     return {
         "command": "ingest",
         "dry_run": False,
@@ -186,23 +225,19 @@ def _legacy_export_step(ctx: typer.Context, config: Any, *, emit_text: bool) -> 
 def run_full_pipeline_orchestrator(
     ctx: typer.Context,
     config: Any,
-    *,
-    command_name: str,
-    export_emit_text: bool = False,
-    ingest_result: dict[str, Any] | None = None,
-    callbacks: PipelineCallbacks = PipelineCallbacks(),
+    options: FullPipelineOptions,
 ) -> dict[str, Any]:
     """Run all full-pipeline steps and return a structured summary."""
     facade = get_mutation_facade(ctx, config)
     identity = identity_from_context(ctx)
     step_runners: list[tuple[str, Callable[[], dict[str, Any]]]] = [
-        ("ingest", lambda: _ingest_step(config, facade, identity, ingest_result)),
+        ("ingest", lambda: _ingest_step(config, facade, identity, options)),
         ("tag", lambda: compute_full_pipeline_tag(config, facade=facade)),
         ("transfer", lambda: compute_full_pipeline_transfer(config, facade=facade)),
         (
             "export",
             lambda: compute_full_pipeline_export(
-                ctx, config, emit_text=export_emit_text, facade=facade
+                ctx, config, emit_text=options.export_emit_text, facade=facade
             ),
         ),
     ]
@@ -210,25 +245,25 @@ def run_full_pipeline_orchestrator(
     steps: dict[str, dict[str, Any]] = {}
 
     for index, (step_name, step_runner) in enumerate(step_runners, start=1):
-        if callbacks.on_start is not None:
-            callbacks.on_start(step_name, index, total_steps)
+        if options.on_step_start is not None:
+            options.on_step_start(step_name, index, total_steps)
 
         try:
             step_result = step_runner()
-        except typer.Exit:
+        except (typer.Exit, FullPipelineError):
             raise
         except Exception as exc:
             raise FullPipelineError.from_exception(step_name, steps, exc) from exc
         steps[step_name] = step_result
 
-        if callbacks.on_complete is not None:
-            callbacks.on_complete(step_name, step_result, index, total_steps)
+        if options.on_step_complete is not None:
+            options.on_step_complete(step_name, step_result, index, total_steps)
 
         if step_name == "ingest" and int(step_result["summary"]["failed"]) > 0:
             raise FullPipelineError(step_name, steps, error_type="PartialIngestFailure")
 
     return {
-        "command": command_name,
+        "command": options.command_name,
         "steps": steps,
     }
 
@@ -237,9 +272,11 @@ def _ingest_step(
     config: Any,
     facade: StorageMutationFacade,
     identity: MutationIdentity,
-    ingest_result: dict[str, Any] | None,
+    options: FullPipelineOptions,
 ) -> dict[str, Any]:
-    """Use a precomputed ingest result, or run the ingest step."""
-    if ingest_result is not None:
-        return ingest_result
-    return compute_full_pipeline_ingest(config, facade=facade, identity=identity)
+    """Use a precomputed ingest result, or run the scoped ingest step."""
+    if options.ingest_result is not None:
+        return options.ingest_result
+    return compute_full_pipeline_ingest(
+        config, options.file_paths, facade=facade, identity=identity
+    )

@@ -72,7 +72,7 @@ finjuice --version
 │ backup          Create, verify, and restore a complete legacy data-tree backup.                                      │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Advanced ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ ingest          Import XLSX files from imports/ directory into CSV partitions.                                       │
+│ ingest          Import XLSX files from imports/ into the selected storage authority.                                 │
 │ transfer        Detect and pair internal transfers.                                                                  │
 │ audit           Inspect and manage audit logs                                                                        │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯

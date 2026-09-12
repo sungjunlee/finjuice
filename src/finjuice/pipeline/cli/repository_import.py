@@ -9,6 +9,7 @@ from typing import Any
 import typer
 
 from finjuice.pipeline.cli.mutation_options import get_mutation_options
+from finjuice.pipeline.cli.pipeline_failure import FullPipelineError
 from finjuice.pipeline.cli.utils import mutation_identity, mutation_metadata
 from finjuice.pipeline.config import Config
 from finjuice.pipeline.ingest.xlsx_evidence import XlsxEvidenceError
@@ -19,7 +20,11 @@ from finjuice.pipeline.storage.mutation_facade import (
     MutationIdentity,
     StorageMutationFacade,
 )
-from finjuice.pipeline.storage.sqlite.errors import MutationError, MutationValidationError
+from finjuice.pipeline.storage.sqlite.errors import (
+    MutationConflictError,
+    MutationError,
+    MutationValidationError,
+)
 from finjuice.pipeline.storage.sqlite.exact_import import (
     ExactWorkbookCapture,
     capture_exact_xlsx,
@@ -38,6 +43,7 @@ class ImportBatchResult:
 
     receipts: tuple[dict[str, Any], ...]
     failed_files: tuple[tuple[str, str], ...]
+    typed_failure: MutationValidationError | MutationConflictError | None = None
 
 
 def identity_from_context(ctx: typer.Context) -> MutationIdentity:
@@ -76,6 +82,9 @@ def import_xlsx_paths(
     for path in paths:
         try:
             receipts.append(_import_one_path(facade, path, identity, preview=preview))
+        except (MutationValidationError, MutationConflictError) as exc:
+            failed.append((path.name, type(exc).__name__))
+            return ImportBatchResult(tuple(receipts), tuple(failed), typed_failure=exc)
         except Exception as exc:
             failed.append((path.name, _safe_error(exc)))
             break
@@ -94,6 +103,10 @@ def present_ingest_step(
     payload = _ingest_payload(batch, source, dry_run, archive_requested)
     if from_archive is not None:
         payload["from_archive"] = from_archive
+    if batch.typed_failure is not None:
+        raise FullPipelineError.from_exception(
+            "ingest", {"ingest": payload}, batch.typed_failure
+        ) from batch.typed_failure
     return payload
 
 

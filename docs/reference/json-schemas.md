@@ -3048,9 +3048,11 @@ ingest --json output
 | `command` | `string` | yes |
 | `dry_run` | `boolean` | yes |
 | `from_archive` | `string` | no |
+| `history_skipped` | `integer` | no |
 | `preview` | `object` | no |
 | `source` | `string` | yes |
 | `summary` | `object` | no |
+| `would_parse` | `integer` | no |
 
 ```json
 {
@@ -3073,6 +3075,9 @@ ingest --json output
     "from_archive": {
       "type": "string"
     },
+    "history_skipped": {
+      "type": "integer"
+    },
     "preview": {
       "additionalProperties": true,
       "type": "object"
@@ -3083,6 +3088,9 @@ ingest --json output
     "summary": {
       "additionalProperties": true,
       "type": "object"
+    },
+    "would_parse": {
+      "type": "integer"
     }
   },
   "required": [

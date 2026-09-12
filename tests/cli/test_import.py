@@ -325,9 +325,9 @@ class TestImportCommand:
         result = runner.invoke(app, ["--data-dir", str(data_dir), "import", str(xlsx_file)])
 
         # Assert - Should skip existing and show message
-        # Copy/extraction succeeds, but the synthetic bytes are not a valid workbook.
-        assert result.exit_code == 1
-        assert "ingest" in result.output
+        # A dest-exists skip without --force ingests nothing, so no workbook is
+        # parsed and the run succeeds even though the staged bytes are invalid.
+        assert result.exit_code == 0
         # File should not be overwritten
         assert existing.read_bytes() == b"PK\x03\x04old content"
         output = cli_text(result).lower()
