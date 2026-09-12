@@ -220,9 +220,6 @@ def _copy_and_maybe_run_pipeline(
 
     return _run_pipeline_after_copy(
         results,
-        imported_count,
-        skipped_count,
-        error_count,
         options,
         dependencies,
     )
@@ -295,22 +292,20 @@ def _ingest_file_paths(results: ImportFileResults) -> list[Path]:
     """
     destinations = [dest for _src, dest in results["imported"]]
     destinations.extend(
-        src.resolve()
-        for src, reason in results["skipped"]
-        if reason == _ALREADY_IN_IMPORTS
+        src.resolve() for src, reason in results["skipped"] if reason == _ALREADY_IN_IMPORTS
     )
     return destinations
 
 
 def _run_pipeline_after_copy(
     results: ImportFileResults,
-    imported_count: int,
-    skipped_count: int,
-    error_count: int,
     options: ImportOptions,
     dependencies: ImportDependencies,
 ) -> ImportResult:
     """Run the pipeline after successful copy and build the final result."""
+    imported_count = len(results["imported"])
+    skipped_count = len(results["skipped"])
+    error_count = len(results["errors"])
     try:
         summary = dependencies.run_full_pipeline(
             options.ctx,

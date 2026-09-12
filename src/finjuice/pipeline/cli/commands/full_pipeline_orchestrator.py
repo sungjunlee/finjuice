@@ -6,6 +6,7 @@ Runs ingest → tag → transfer → export and returns structured step summarie
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
@@ -15,6 +16,21 @@ logger = logging.getLogger(__name__)
 
 StepStartCallback = Callable[[str, int, int], None]
 StepCompleteCallback = Callable[[str, dict[str, Any], int, int], None]
+
+
+@dataclass(frozen=True)
+class FullPipelineOptions:
+    """Explicit ingest scope and step hooks for one pipeline run.
+
+    ``file_paths is None`` means glob ``imports/`` (refresh). An explicit list,
+    including empty, ingests only those workbooks and never falls back to glob.
+    """
+
+    command_name: str
+    export_emit_text: bool = False
+    file_paths: list[Any] | None = None
+    on_step_start: StepStartCallback | None = None
+    on_step_complete: StepCompleteCallback | None = None
 
 
 def compute_full_pipeline_ingest(
@@ -122,34 +138,33 @@ def compute_full_pipeline_export(
 def run_full_pipeline_orchestrator(
     ctx: typer.Context,
     config: Any,
-    *,
-    command_name: str,
-    export_emit_text: bool = False,
-    file_paths: list[Any] | None = None,
-    on_step_start: StepStartCallback | None = None,
-    on_step_complete: StepCompleteCallback | None = None,
+    options: FullPipelineOptions,
 ) -> dict[str, Any]:
     """Run all full-pipeline steps and return a structured summary."""
+    file_paths = options.file_paths
     step_runners: list[tuple[str, Callable[[], dict[str, Any]]]] = [
         ("ingest", lambda: compute_full_pipeline_ingest(config, file_paths=file_paths)),
         ("tag", lambda: compute_full_pipeline_tag(config)),
         ("transfer", lambda: compute_full_pipeline_transfer(config)),
-        ("export", lambda: compute_full_pipeline_export(ctx, config, emit_text=export_emit_text)),
+        (
+            "export",
+            lambda: compute_full_pipeline_export(ctx, config, emit_text=options.export_emit_text),
+        ),
     ]
     total_steps = len(step_runners)
     steps: dict[str, dict[str, Any]] = {}
 
     for index, (step_name, step_runner) in enumerate(step_runners, start=1):
-        if on_step_start is not None:
-            on_step_start(step_name, index, total_steps)
+        if options.on_step_start is not None:
+            options.on_step_start(step_name, index, total_steps)
 
         step_result = step_runner()
         steps[step_name] = step_result
 
-        if on_step_complete is not None:
-            on_step_complete(step_name, step_result, index, total_steps)
+        if options.on_step_complete is not None:
+            options.on_step_complete(step_name, step_result, index, total_steps)
 
     return {
-        "command": command_name,
+        "command": options.command_name,
         "steps": steps,
     }

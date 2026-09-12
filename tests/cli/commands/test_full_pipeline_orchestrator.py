@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from finjuice.pipeline.cli.commands.full_pipeline_orchestrator import (
+    FullPipelineOptions,
     compute_full_pipeline_ingest,
     run_full_pipeline_orchestrator,
 )
@@ -116,7 +117,7 @@ def test_orchestrator_default_uses_ingest_all_files(tmp_path: Path) -> None:
         ),
     ):
         mock_all.return_value = _INGEST_SUMMARY
-        run_full_pipeline_orchestrator(ctx, config, command_name="refresh")
+        run_full_pipeline_orchestrator(ctx, config, FullPipelineOptions(command_name="refresh"))
 
     mock_all.assert_called_once_with(config.import_dir, config.csv_base_dir, archive=False)
     mock_paths.assert_not_called()
@@ -151,8 +152,7 @@ def test_orchestrator_with_file_paths_uses_ingest_paths(tmp_path: Path) -> None:
         run_full_pipeline_orchestrator(
             ctx,
             config,
-            command_name="import",
-            file_paths=[target],
+            FullPipelineOptions(command_name="import", file_paths=[target]),
         )
 
     mock_paths.assert_called_once_with([target], config.csv_base_dir, archive=False)
