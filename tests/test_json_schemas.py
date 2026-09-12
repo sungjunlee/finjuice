@@ -54,6 +54,16 @@ CATALOGUED_COMMANDS = [
         "inspect_xlsx.schema.json",
     ),
     ("ingest", ["ingest", "--dry-run", "--json"], "ingest.schema.json"),
+    (
+        "reconcile",
+        [
+            "reconcile",
+            "--evidence",
+            str(REPO_ROOT / "tests" / "fixtures" / "sample_evidence.json"),
+            "--json",
+        ],
+        "reconcile.schema.json",
+    ),
     ("index", ["index", "--json"], "index.schema.json"),
     ("manifest", ["manifest", "--json"], "manifest.schema.json"),
     ("query", ["query", "SELECT 1 AS one", "--json"], "query.schema.json"),

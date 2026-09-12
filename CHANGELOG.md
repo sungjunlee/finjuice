@@ -9,8 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.8.0] - 2026-09-12
+
+### Highlights
+
+Feature release for agent ingest UX and a first evidence-reconcile slice.
+GitHub now tags this line as `v0.8.0` (0.7.3 existed only as an untagged
+`main` install).
+
 ### Added
 
+- `finjuice ingest --dry-run` skips workbooks already recorded in import
+  history. `--force` restores a full preview. `--only-unprocessed` writes only
+  history-missing files. JSON adds `history_skipped` and `would_parse`
+  (#472, #474).
+- `finjuice import PATH` ingests only that workbook when the path is already
+  inside `imports/`. `refresh` still restages every staged file (#471, #473).
+- `finjuice reconcile --evidence FILE [--json]` matches purchase/order/receipt
+  evidence to ledger payments as matched/partial/unmatched groups. Missing
+  ledger months keep unmatched evidence. Email/order exports are evidence only,
+  never the ledger SSOT (#446, #475).
 - An isolated SQLite storage foundation for preservation candidates, with exact
   decimal values, stable legacy occurrence IDs, immutable source objects, and
   schema/integrity checks (#433). The existing CSV dataset remains authoritative

@@ -74,6 +74,7 @@ finjuice --version
 ╭─ Advanced ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ ingest          Import XLSX files from imports/ into the selected storage authority.                                 │
 │ transfer        Detect and pair internal transfers.                                                                  │
+│ reconcile       Match evidence to ledger payments without writing transactions.                                      │
 │ audit           Inspect and manage audit logs                                                                        │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
