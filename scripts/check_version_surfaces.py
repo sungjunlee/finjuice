@@ -60,12 +60,7 @@ def _changelog_has_heading(changelog: str, heading: str) -> bool:
     return re.search(rf"(?m)^## \[{re.escape(heading)}\](?: |$)", changelog) is not None
 
 
-def main() -> int:
-    version = _pyproject_version()
-    if not VERSION_RE.match(version):
-        print(f"error: invalid pyproject version {version!r}", file=sys.stderr)
-        return 1
-
+def _mismatch_errors(version: str) -> list[str]:
     errors: list[str] = []
     surfaces = {
         "src/finjuice/__init__.py": _init_version(),
@@ -93,7 +88,16 @@ def main() -> int:
         errors.append("skills/finjuice/SKILL.md: Minimum finjuice does not match pyproject")
     if f"--require-version {version}" not in skill:
         errors.append("skills/finjuice/SKILL.md: --require-version does not match pyproject")
+    return errors
 
+
+def main() -> int:
+    version = _pyproject_version()
+    if not VERSION_RE.match(version):
+        print(f"error: invalid pyproject version {version!r}", file=sys.stderr)
+        return 1
+
+    errors = _mismatch_errors(version)
     if errors:
         print("Version surfaces disagree:", file=sys.stderr)
         for error in errors:
