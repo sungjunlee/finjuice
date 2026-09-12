@@ -1,13 +1,50 @@
 """Tests for the networth CLI command group."""
 
+import ast
 import json
 from pathlib import Path
 
 import polars as pl
 from typer.testing import CliRunner
 
+from finjuice.pipeline.cli.commands import networth as networth_module
+from finjuice.pipeline.cli.commands import networth_forecast, networth_history, networth_payload
 from finjuice.pipeline.cli.commands.networth_rendering import _select_projection_rows
 from finjuice.pipeline.cli.main import app
+
+COMMANDS_DIR = Path("src/finjuice/pipeline/cli/commands")
+NETWORTH_COMMAND_PATH = COMMANDS_DIR / "networth.py"
+
+CALLBACK_SURFACES = (
+    ("_run_overview_command", "networth_callback", networth_payload),
+    ("_run_breakdown_command", "breakdown", networth_payload),
+    ("_run_history_command", "history", networth_history),
+    ("_run_forecast_command", "forecast", networth_forecast),
+)
+CALLBACK_HELPER_CALLS = {
+    "_build_networth_result",
+    "_parse_as_of",
+    "_resolve_as_of",
+    "_emit_networth_json",
+    "_render_overview",
+    "_render_breakdown",
+    "_render_history",
+    "_render_forecast",
+    "_render_forecast_comparison",
+    "_build_history_rows",
+    "_history_as_of",
+    "_build_all_scenario_forecasts",
+    "_serialize_forecast_scenario",
+    "_forecast_start_as_of",
+    "_handle_networth_exception",
+    "_raise_goals_validation_error",
+    "build_breakdown_rows",
+    "build_networth_position",
+    "load_assets_config",
+    "load_scenarios_config",
+    "load_goals_file",
+    "get_config",
+}
 
 runner = CliRunner()
 
@@ -1069,3 +1106,78 @@ def test_select_projection_rows_for_long_horizons_keeps_yearly_checkpoints_and_e
     assert projections[24] in selected
     assert selected[-1]["date"] == projections[-1]["date"]
     assert projections[11] not in selected
+
+
+def _top_level_function(path: Path, name: str) -> ast.FunctionDef:
+    """Return one top-level function definition from a module file."""
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name == name:
+            return node
+    raise AssertionError(f"{name} is not defined in {path}")
+
+
+def _called_function_names(func: ast.FunctionDef) -> set[str]:
+    """Return Name/Attribute call targets in a function body."""
+    names: set[str] = set()
+    for node in ast.walk(func):
+        if not isinstance(node, ast.Call):
+            continue
+        if isinstance(node.func, ast.Name):
+            names.add(node.func.id)
+        elif isinstance(node.func, ast.Attribute):
+            names.add(node.func.attr)
+    return names
+
+
+def test_networth_help_and_subcommand_names_unchanged(tmp_path: Path) -> None:
+    """CLI help text and subcommand names stay on the Typer parsers."""
+    data_dir = _init_data_dir(tmp_path, "help")
+
+    result = runner.invoke(app, ["--data-dir", str(data_dir), "networth", "--help"])
+
+    assert result.exit_code == 0
+    assert "View aggregated net worth from asset snapshots plus assets.yaml." in result.output
+    for name in ("breakdown", "history", "forecast", "init", "validate"):
+        assert name in result.output
+
+
+def test_callback_bodies_live_beside_payload_forecast_history_modules() -> None:
+    """Overview/breakdown, history, and forecast callbacks are identity re-exports."""
+    command_text = NETWORTH_COMMAND_PATH.read_text(encoding="utf-8")
+
+    for callback_name, parser_name, sibling in CALLBACK_SURFACES:
+        assert sibling.__file__ is not None
+        sibling_text = Path(sibling.__file__).read_text(encoding="utf-8")
+        assert f"def {parser_name}" in command_text
+        assert f"def {callback_name}" not in command_text
+        assert f"def {callback_name}" in sibling_text
+        assert getattr(networth_module, callback_name) is getattr(sibling, callback_name)
+        assert getattr(sibling, callback_name).__module__ == sibling.__name__
+
+
+def test_subcommand_handlers_do_not_reimplement_callback_bodies() -> None:
+    """Identity fails if a Typer handler copies payload/forecast/history callback logic."""
+    for callback_name, parser_name, sibling in CALLBACK_SURFACES:
+        parser = _top_level_function(NETWORTH_COMMAND_PATH, parser_name)
+        called = _called_function_names(parser)
+
+        assert callback_name in called
+        assert called.isdisjoint(CALLBACK_HELPER_CALLS)
+        assert getattr(networth_module, parser_name) is not getattr(sibling, callback_name)
+
+    callback = _top_level_function(NETWORTH_COMMAND_PATH, "networth_callback")
+    callback_source = ast.get_source_segment(
+        NETWORTH_COMMAND_PATH.read_text(encoding="utf-8"),
+        callback,
+    )
+    assert callback_source is not None
+    assert "invoked_subcommand" in callback_source
+    for parser_name in ("breakdown", "history", "forecast"):
+        parser = _top_level_function(NETWORTH_COMMAND_PATH, parser_name)
+        parser_source = ast.get_source_segment(
+            NETWORTH_COMMAND_PATH.read_text(encoding="utf-8"),
+            parser,
+        )
+        assert parser_source is not None
+        assert "invoked_subcommand" not in parser_source

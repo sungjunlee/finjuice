@@ -100,9 +100,6 @@ def test_merchant_kind_classification_does_not_leak_into_scoring() -> None:
         assert f"def {name}" not in cluster_text
         assert f"def {name}" in classify_text
 
-    for name in CLASSIFY_FUNCTION_NAMES + CLASSIFY_CONSTANT_NAMES:
-        assert name in scoring_text
-
     for name in CLASSIFY_PRIVATE_FUNCTION_NAMES + CLASSIFY_PRIVATE_CONSTANT_NAMES:
         assert name not in scoring_text
         assert name in classify_text

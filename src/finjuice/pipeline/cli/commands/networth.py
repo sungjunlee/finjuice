@@ -12,25 +12,27 @@ runtime error envelopes live in
 :mod:`finjuice.pipeline.cli.commands.networth_errors`. assets.yaml
 init/validate helpers live in
 :mod:`finjuice.pipeline.cli.commands.networth_helpers`.
+
+Typer parsers stay here. Overview/breakdown, history, and forecast
+callback bodies live beside the payload, history, and forecast modules.
 """
 
 from __future__ import annotations
 
-import logging
-from typing import Literal, cast
+from typing import Literal
 
 import typer
 
-from finjuice.pipeline.asset_config import load_assets_config
 from finjuice.pipeline.cli.commands.networth_errors import (
-    _handle_networth_exception,
-    _raise_goals_validation_error,
+    _handle_networth_exception,  # noqa: F401 — re-exported for existing networth imports
+    _raise_goals_validation_error,  # noqa: F401 — re-exported for existing networth imports
     _validation_issue_to_problem,  # noqa: F401 — re-exported for existing networth imports
 )
 from finjuice.pipeline.cli.commands.networth_forecast import (
-    _build_all_scenario_forecasts,
-    _forecast_start_as_of,
-    _serialize_forecast_scenario,
+    _build_all_scenario_forecasts,  # noqa: F401 — re-exported for existing networth imports
+    _forecast_start_as_of,  # noqa: F401 — re-exported for existing networth imports
+    _run_forecast_command,
+    _serialize_forecast_scenario,  # noqa: F401 — re-exported for existing networth imports
 )
 from finjuice.pipeline.cli.commands.networth_guidance import (
     _build_networth_guidance,  # noqa: F401 — re-exported for existing networth imports
@@ -47,31 +49,18 @@ from finjuice.pipeline.cli.commands.networth_helpers import (
     _write_starter_assets_yaml,  # noqa: F401 — re-exported for existing networth imports
 )
 from finjuice.pipeline.cli.commands.networth_history import (
-    _build_history_rows,
-    _history_as_of,
+    _build_history_rows,  # noqa: F401 — re-exported for existing networth imports
+    _history_as_of,  # noqa: F401 — re-exported for existing networth imports
+    _run_history_command,
 )
 from finjuice.pipeline.cli.commands.networth_payload import (
-    _build_networth_result,
-    _emit_networth_json,
-    _parse_as_of,
-    _resolve_as_of,
+    _build_networth_result,  # noqa: F401 — re-exported for existing networth imports
+    _emit_networth_json,  # noqa: F401 — re-exported for existing networth imports
+    _parse_as_of,  # noqa: F401 — re-exported for existing networth imports
+    _resolve_as_of,  # noqa: F401 — re-exported for existing networth imports
+    _run_breakdown_command,
+    _run_overview_command,
 )
-from finjuice.pipeline.cli.commands.networth_rendering import (
-    _render_breakdown,
-    _render_forecast,
-    _render_forecast_comparison,
-    _render_history,
-    _render_overview,
-)
-from finjuice.pipeline.cli.utils import get_config
-from finjuice.pipeline.forecast import load_scenarios_config
-from finjuice.pipeline.goals import load_goals_file
-from finjuice.pipeline.networth import (
-    build_breakdown_rows,
-    build_networth_position,
-)
-
-logger = logging.getLogger(__name__)
 
 networth_app = typer.Typer(
     name="networth",
@@ -93,29 +82,7 @@ def networth_callback(
     """Show aggregated net worth from snapshots + assets.yaml."""
     if ctx.invoked_subcommand is not None:
         return
-
-    try:
-        result = _build_networth_result(
-            ctx,
-            as_of=_parse_as_of(date_value),
-            json_output=json_output,
-            command="networth",
-        )
-        json_result = {key: value for key, value in result.items() if not key.startswith("_")}
-        if json_output:
-            _emit_networth_json(
-                json_result,
-                command="networth",
-                as_of=result["as_of"],
-                filters_applied=result["_filters_applied"],
-            )
-            return
-        _render_overview(result)
-    except typer.Exit:
-        raise
-    except Exception as exc:  # intended catch-all for CLI robustness
-        logger.error("Failed to compute net worth: %s", exc, exc_info=True)
-        _handle_networth_exception(exc, json_output=json_output, command="networth")
+    _run_overview_command(ctx, date_value=date_value, json_output=json_output)
 
 
 @networth_app.command()
@@ -130,32 +97,7 @@ def breakdown(
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
     """Show aggregated asset breakdown by category or asset."""
-    try:
-        result = _build_networth_result(
-            ctx,
-            as_of=_resolve_as_of(ctx, date_value),
-            json_output=json_output,
-            command="networth breakdown",
-        )
-        rows = build_breakdown_rows(result["_assets"], by=by)
-        payload = {
-            "as_of": result["as_of"],
-            "breakdown": rows,
-        }
-        if json_output:
-            _emit_networth_json(
-                payload,
-                command="networth breakdown",
-                as_of=result["as_of"],
-                filters_applied=result["_filters_applied"],
-            )
-            return
-        _render_breakdown(result["as_of"], rows, by=by)
-    except typer.Exit:
-        raise
-    except Exception as exc:  # intended catch-all for CLI robustness
-        logger.error("Failed to compute net worth breakdown: %s", exc, exc_info=True)
-        _handle_networth_exception(exc, json_output=json_output, command="networth breakdown")
+    _run_breakdown_command(ctx, by=by, date_value=date_value, json_output=json_output)
 
 
 @networth_app.command()
@@ -165,31 +107,7 @@ def history(
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
     """Show monthly net worth history from available snapshots."""
-    command = "networth history"
-    try:
-        config = get_config(ctx)
-        assets_config = load_assets_config(config.assets_file, allow_missing_file=True)
-        rows = _build_history_rows(
-            config.data_dir / "assets" / "snapshots",
-            assets_config,
-            months=months,
-        )
-        as_of = _history_as_of(rows)
-        payload = {"history": rows}
-        if json_output:
-            _emit_networth_json(
-                payload,
-                command=command,
-                as_of=as_of,
-                filters_applied=0,
-            )
-            return
-        _render_history(rows)
-    except typer.Exit:
-        raise
-    except Exception as exc:  # intended catch-all for CLI robustness
-        logger.error("Failed to compute net worth history: %s", exc, exc_info=True)
-        _handle_networth_exception(exc, json_output=json_output, command=command)
+    _run_history_command(ctx, months=months, json_output=json_output)
 
 
 @networth_app.command()
@@ -205,87 +123,13 @@ def forecast(
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
     """Project net worth under deterministic scenario assumptions."""
-    command = "networth forecast"
-    try:
-        config = get_config(ctx)
-        start_date = _resolve_as_of(ctx, from_value)
-        position = build_networth_position(
-            config.data_dir / "assets" / "snapshots",
-            config.assets_file,
-            as_of=start_date,
-            balance_dir=config.data_dir / "banksalad" / "balance",
-        )
-        scenarios_config = load_scenarios_config(config.scenarios_file)
-        goals_result = load_goals_file(config.goals_file)
-        if goals_result.problems:
-            _raise_goals_validation_error(
-                command=command,
-                problems=goals_result.problems,
-                json_output=json_output,
-            )
-        target_net_worth = (
-            goals_result.document.net_worth_target if goals_result.document is not None else None
-        )
-
-        if scenario == "all":
-            scenario_payloads = _build_all_scenario_forecasts(
-                position,
-                scenarios_config,
-                years=years,
-                target_net_worth=target_net_worth,
-            )
-            payload = {"scenarios": scenario_payloads}
-            start_as_of = _forecast_start_as_of(position)
-            total_events = sum(
-                scenario_payload["summary"]["events_count"]
-                for scenario_payload in scenario_payloads.values()
-            )
-            if json_output:
-                _emit_networth_json(
-                    payload,
-                    command=command,
-                    as_of=start_as_of,
-                    filters_applied=0,
-                    extras={
-                        "scenario": "all",
-                        "years": years,
-                        "start_date": start_as_of,
-                        "events_fired": total_events,
-                    },
-                )
-                return
-            _render_forecast_comparison(scenario_payloads, years=years)
-            return
-
-        selected_scenario = cast(Literal["conservative", "neutral", "optimistic"], scenario)
-        result = _serialize_forecast_scenario(
-            position,
-            scenarios_config,
-            scenario=selected_scenario,
-            years=years,
-            target_net_worth=target_net_worth,
-        )
-        start_as_of = _forecast_start_as_of(position)
-        if json_output:
-            _emit_networth_json(
-                result,
-                command=command,
-                as_of=start_as_of,
-                filters_applied=0,
-                extras={
-                    "scenario": scenario,
-                    "years": years,
-                    "start_date": result["summary"]["start"],
-                    "events_fired": result["summary"]["events_count"],
-                },
-            )
-            return
-        _render_forecast(result)
-    except typer.Exit:
-        raise
-    except Exception as exc:  # intended catch-all for CLI robustness
-        logger.error("Failed to compute net worth forecast: %s", exc, exc_info=True)
-        _handle_networth_exception(exc, json_output=json_output, command=command)
+    _run_forecast_command(
+        ctx,
+        years=years,
+        scenario=scenario,
+        from_value=from_value,
+        json_output=json_output,
+    )
 
 
 @networth_app.command("init")

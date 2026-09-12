@@ -11,6 +11,7 @@ MOVED_HELPER_NAMES = (
     "_forecast_start_as_of",
     "_serialize_forecast_scenario",
     "_build_all_scenario_forecasts",
+    "_run_forecast_command",
 )
 
 
