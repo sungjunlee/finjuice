@@ -328,7 +328,9 @@ def _run_pipeline_after_copy(
         _raise_import_error(
             str(exc),
             json_output=options.json_output,
-            context=ImportErrorContext(meta_extras=exc.metadata()),
+            context=ImportErrorContext(
+                error_code=exc.error_code, exit_code=exc.exit_code, meta_extras=exc.metadata()
+            ),
         )
     except Exception as exc:  # intended catch-all for CLI robustness
         logger.error(f"Pipeline failed: {exc}", exc_info=True)
@@ -381,7 +383,9 @@ def _active_error_context(exc: BaseException) -> ImportErrorContext | None:
             error_code=ErrorCode.VALIDATION_FAILED, exit_code=ExitCode.VALIDATION_ERROR
         )
     if isinstance(exc, FullPipelineError):
-        return ImportErrorContext(meta_extras=exc.metadata())
+        return ImportErrorContext(
+            error_code=exc.error_code, exit_code=exc.exit_code, meta_extras=exc.metadata()
+        )
     return None
 
 
@@ -473,6 +477,8 @@ def _active_dry_run(
     """Preview captured XLSX without DB, object, or legacy writes."""
     batch = import_xlsx_paths(facade, list(prepared.files), identity, preview=True)
     payload = _active_dry_run_payload(batch, prepared, options)
+    if batch.failed_files:
+        raise FullPipelineError("ingest", {"ingest": payload}, error_type="PartialIngestFailure")
     if options.emit_text:
         render_active_dry_run(payload)
     return ImportResult(payload=payload, dry_run=True)

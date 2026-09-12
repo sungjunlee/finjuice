@@ -8,6 +8,7 @@ import pytest
 
 from finjuice.pipeline.cli.commands import full_pipeline_orchestrator as pipeline
 from finjuice.pipeline.cli.output import ExitCode
+from finjuice.pipeline.storage.sqlite.errors import MutationConflictError, MutationValidationError
 from tests.cli.commands.test_repository_bulk_commands import _invoke
 from tests.cli.commands.test_repository_mutation_fences import _ActiveRoot, _authority_state
 from tests.cli.commands.test_repository_mutation_fences import active_root as _active_root_fixture
@@ -50,6 +51,38 @@ def test_partial_ingest_stops_later_steps_and_returns_committed_receipts(
         assert "파이프라인 완료" not in result.output
         assert "ingest" in result.output
     assert _authority_state(active_root) == before
+
+
+@pytest.mark.parametrize("json_output", [False, True], ids=["human", "json"])
+@pytest.mark.parametrize(
+    ("error_class", "expected"),
+    [
+        (MutationValidationError, (ExitCode.USAGE_ERROR, "INVALID_ARGS")),
+        (MutationConflictError, (ExitCode.VALIDATION_ERROR, "VALIDATION_FAILED")),
+    ],
+)
+def test_typed_failure_retains_status_and_prior_receipts(
+    active_root, monkeypatch, json_output, error_class, expected
+) -> None:
+    expected_exit, expected_code = expected
+    completed = {
+        "summary": {"failed": 0, "new_transactions": 1, "updated": 0},
+        "receipts": [{"changeset_id": "committed"}],
+    }
+    monkeypatch.setattr(pipeline, "compute_full_pipeline_ingest", lambda *a, **k: completed)
+
+    def fail_tag(*args, **kwargs):
+        raise error_class("synthetic-sensitive-detail")
+
+    monkeypatch.setattr(pipeline, "compute_full_pipeline_tag", fail_tag)
+    result = _invoke(active_root, "refresh", *(["--json"] if json_output else []))
+
+    assert result.exit_code == expected_exit, result.output
+    assert "synthetic-sensitive-detail" not in result.output
+    if json_output:
+        data = json.loads(result.output)
+        assert data["error"]["code"] == expected_code
+        assert data["_meta"]["pipeline"]["steps"]["ingest"] == completed
 
 
 def test_export_exception_retains_prior_step_results_without_raw_error_text(

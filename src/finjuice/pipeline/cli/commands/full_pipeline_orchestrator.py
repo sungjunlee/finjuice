@@ -218,7 +218,7 @@ def run_full_pipeline_orchestrator(
         except typer.Exit:
             raise
         except Exception as exc:
-            raise FullPipelineError(step_name, steps, error_type=type(exc).__name__) from exc
+            raise FullPipelineError.from_exception(step_name, steps, exc) from exc
         steps[step_name] = step_result
 
         if callbacks.on_complete is not None:

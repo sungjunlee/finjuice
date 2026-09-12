@@ -281,6 +281,57 @@ def test_active_ingest_partial_failure_exits_nonzero(
         assert "Partial results" in result.output
 
 
+@pytest.mark.parametrize("json_output", [False, True], ids=["human", "json"])
+def test_active_import_preview_failure_exits_nonzero_without_writes(
+    active_root: _ActiveRoot, tmp_path: Path, json_output: bool
+) -> None:
+    good = tmp_path / "a.xlsx"
+    bad = tmp_path / "b.xlsx"
+    _write_xlsx(good)
+    bad.write_bytes(b"invalid workbook")
+    before = _authority_state(active_root)
+
+    result = _import_cli(
+        active_root, str(good), str(bad), "--dry-run", *(["--json"] if json_output else [])
+    )
+
+    assert result.exit_code == ExitCode.GENERAL_ERROR, result.output
+    assert _authority_state(active_root) == before
+    if json_output:
+        step = json.loads(result.output)["_meta"]["pipeline"]["steps"]["ingest"]
+        assert len(step["receipts"]) == 1
+        assert step["summary"]["failed"] == 1
+
+
+@pytest.mark.parametrize("count", [0, 2])
+@pytest.mark.parametrize("json_output", [False, True], ids=["human", "json"])
+def test_refresh_batch_identity_preserves_usage_error(
+    active_root: _ActiveRoot, count: int, json_output: bool
+) -> None:
+    for index in range(count):
+        _write_xlsx(active_root.root / "imports" / f"{index}.xlsx")
+    before = _authority_state(active_root)
+
+    result = _invoke(
+        active_root,
+        "refresh",
+        "--idempotency-key",
+        "single-file",
+        "--expected-generation",
+        active_root.generation,
+        "--expected-revision",
+        "0",
+        *(["--json"] if json_output else []),
+    )
+
+    assert result.exit_code == ExitCode.USAGE_ERROR, result.output
+    assert _authority_state(active_root) == before
+    if json_output:
+        data = json.loads(result.output)
+        assert data["error"]["code"] == "INVALID_ARGS"
+        assert data["_meta"]["pipeline"]["steps"] == {}
+
+
 def test_batch_identity_is_rejected_before_file_effects(
     active_root: _ActiveRoot, tmp_path: Path
 ) -> None:

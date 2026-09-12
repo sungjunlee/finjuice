@@ -64,7 +64,7 @@ def _raise_import_error(
     error(message)
     for hint in resolved_context.hints:
         console.print(hint, style="dim")
-    raise typer.Exit(code=1)
+    raise typer.Exit(code=resolved_context.exit_code)
 
 
 def _build_import_result(

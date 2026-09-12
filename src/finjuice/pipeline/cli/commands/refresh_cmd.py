@@ -189,7 +189,8 @@ def run_full_pipeline_command(
     except FullPipelineError as exc:
         emit_error(
             str(exc),
-            error_code=ErrorCode.GENERAL_ERROR,
+            error_code=exc.error_code,
+            exit_code=exc.exit_code,
             json_output=json_output,
             command=command_name,
             meta_extras=exc.metadata(),
