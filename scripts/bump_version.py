@@ -156,6 +156,9 @@ def main() -> None:
         print(f"✅ Version bumped to {args.version}")
         for path, old in updated.items():
             print(f"   {path}: {old} → {args.version}")
+        print("Next: uv lock  (just bump-version already does this)")
+        print(f"Then: move CHANGELOG Unreleased notes into ## [{args.version}]")
+        print("Then: just version-check")
     else:
         print(f"[dry-run] Would bump version to {args.version} ({len(updated)} files)")
 

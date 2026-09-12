@@ -86,12 +86,20 @@ qa: test lint typecheck pii-log-check
 
 # Release targets
 
-# Bump version across all source locations (dry-run first with just bump-version-check)
+# Bump version across all source locations, then refresh the lockfile.
+# Dry-run first with just bump-version-check. Then edit CHANGELOG.md.
 bump-version VERSION:
     @echo "🔢 Bumping version to {{VERSION}}..."
     @uv run python scripts/bump_version.py {{VERSION}}
+    @uv lock
+    @echo "Next: move CHANGELOG Unreleased notes into ## [{{VERSION}}] - YYYY-MM-DD"
+    @echo "Then: just version-check"
 
 # Preview version bump without modifying any files
 bump-version-check VERSION:
     @echo "🔍 Previewing version bump to {{VERSION}}..."
     @uv run python scripts/bump_version.py --dry-run {{VERSION}}
+
+# Fail if pyproject, lock, __version__, skills, and CHANGELOG disagree
+version-check:
+    @uv run python scripts/check_version_surfaces.py
