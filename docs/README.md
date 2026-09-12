@@ -45,6 +45,7 @@ Complete documentation for the finjuice project.
 
 ### Development
 - [User Guide](guides/user_guide.md)
+- [Release process](development/release.md)
 - [SQLite Preservation Storage](development/sqlite-storage.md)
 - [Development Workflows](guides/workflows/) (Coming soon)
 - [Agentic Direction Roadmap](plans/agentic-direction-roadmap.md)
