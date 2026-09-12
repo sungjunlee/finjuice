@@ -104,3 +104,29 @@ def list_source_files(metadata_dir: Path) -> pl.DataFrame:
         )
 
     return pl.read_csv(metadata_path, schema_overrides={"file_id": pl.Utf8})
+
+
+def processed_original_filenames(metadata_dir: Path) -> frozenset[str]:
+    """Return basenames already recorded in import history.
+
+    Missing history is treated as empty. Callers that need to distinguish
+    \"no history file\" from \"history exists and every file is new\" should
+    check :func:`get_metadata_path` themselves.
+    """
+    history = list_source_files(metadata_dir)
+    if history.is_empty() or "original_filename" not in history.columns:
+        return frozenset()
+    return frozenset(
+        filename
+        for filename in history["original_filename"].to_list()
+        if filename is not None and str(filename) != ""
+    )
+
+
+def list_unprocessed_xlsx(import_dir: Path, metadata_dir: Path) -> list[Path]:
+    """Return staged ``*.xlsx`` files whose basename is not in import history.
+
+    Glob order is preserved so doctor and ingest see the same sequence.
+    """
+    processed = processed_original_filenames(metadata_dir)
+    return [path for path in import_dir.glob("*.xlsx") if path.name not in processed]

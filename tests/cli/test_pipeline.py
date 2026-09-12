@@ -13,6 +13,18 @@ from finjuice.pipeline.cli.main import app
 runner = CliRunner()
 
 
+def _write_import_history(data_dir: Path, filenames: list[str]) -> None:
+    """Write a minimal import_history.csv for history-skip tests."""
+    metadata_dir = data_dir / "metadata"
+    metadata_dir.mkdir(parents=True, exist_ok=True)
+    lines = [
+        "file_id,original_filename,imported_from,archived,archived_path,imported_at,source_rows"
+    ]
+    for index, name in enumerate(filenames, start=1):
+        lines.append(f"250101_{index},{name},/tmp/{name},no,,2025-01-01T00:00:00,1")
+    (metadata_dir / "import_history.csv").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def _snapshot_tree(root: Path) -> dict[str, int]:
     """Capture a filesystem snapshot for no-write dry-run assertions."""
     snapshot = {".": root.stat().st_mtime_ns}
@@ -243,6 +255,101 @@ class TestIngestCommand:
         assert payload["preview"]["transactions"]["estimated_new_rows"] == 1
         assert payload["preview"]["transactions"]["estimated_dedup_skips"] == 0
         assert len(payload["preview"]["transactions"]["affected_partitions"]) == 1
+        assert payload["history_skipped"] == 0
+        assert payload["would_parse"] == 1
+
+    def test_ingest_dry_run_skips_history_without_parsing_garbage(
+        self, data_dir_with_xlsx: Path
+    ) -> None:
+        """Dry-run should not open workbooks already recorded in import history."""
+        leftover = data_dir_with_xlsx / "imports" / "leftover.xlsx"
+        leftover.write_bytes(b"not-an-xlsx")
+        _write_import_history(data_dir_with_xlsx, ["leftover.xlsx"])
+
+        result = runner.invoke(
+            app,
+            ["--data-dir", str(data_dir_with_xlsx), "ingest", "--dry-run", "--json"],
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        assert payload["history_skipped"] == 1
+        assert payload["would_parse"] == 1
+        assert payload["preview"]["files_found"] == 2
+        assert payload["preview"]["failed"] == 0
+        source_names = [
+            Path(file_preview["source_file"]).name for file_preview in payload["preview"]["files"]
+        ]
+        assert source_names == ["test_export.xlsx"]
+
+    def test_ingest_dry_run_force_parses_history_files(self, data_dir_with_xlsx: Path) -> None:
+        """--force should preview every staged workbook, including history hits."""
+        leftover = data_dir_with_xlsx / "imports" / "leftover.xlsx"
+        leftover.write_bytes(b"not-an-xlsx")
+        _write_import_history(data_dir_with_xlsx, ["leftover.xlsx"])
+
+        result = runner.invoke(
+            app,
+            [
+                "--data-dir",
+                str(data_dir_with_xlsx),
+                "ingest",
+                "--dry-run",
+                "--force",
+                "--json",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        assert payload["history_skipped"] == 0
+        assert payload["would_parse"] == 2
+        assert payload["preview"]["failed"] == 1
+        failed_names = [name for name, _reason in payload["preview"]["failed_files"]]
+        assert "leftover.xlsx" in failed_names
+
+    def test_ingest_only_unprocessed_skips_garbage_history_file(
+        self, data_dir_with_xlsx: Path
+    ) -> None:
+        """Write-path --only-unprocessed should not ingest history-recorded files."""
+        leftover = data_dir_with_xlsx / "imports" / "leftover.xlsx"
+        leftover.write_bytes(b"not-an-xlsx")
+        _write_import_history(data_dir_with_xlsx, ["leftover.xlsx"])
+
+        result = runner.invoke(
+            app,
+            [
+                "--data-dir",
+                str(data_dir_with_xlsx),
+                "ingest",
+                "--only-unprocessed",
+                "--json",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        assert payload["history_skipped"] == 1
+        assert payload["would_parse"] == 1
+        assert payload["summary"]["files_processed"] == 1
+        assert payload["summary"]["failed"] == 0
+        assert payload["summary"]["new_transactions"] == 1
+
+    def test_ingest_force_and_only_unprocessed_conflict(self, data_dir_with_xlsx: Path) -> None:
+        result = runner.invoke(
+            app,
+            [
+                "--data-dir",
+                str(data_dir_with_xlsx),
+                "ingest",
+                "--force",
+                "--only-unprocessed",
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "--force" in result.output
+        assert "--only-unprocessed" in result.output
 
 
 class TestTagCommand:

@@ -6,6 +6,7 @@ Human rendering lives in :mod:`finjuice.pipeline.cli.commands.ingest_rendering`.
 """
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
@@ -26,7 +27,16 @@ from finjuice.pipeline.metadata import write_schema_version
 logger = logging.getLogger(__name__)
 
 
-def ingest_command(
+@dataclass(frozen=True)
+class _StandardIngestRequest:
+    archive: bool
+    dry_run: bool
+    json_output: bool
+    force: bool
+    only_unprocessed: bool
+
+
+def ingest_command(  # noqa: PLR0913 - Typer command signature mirrors public CLI flags.
     ctx: typer.Context,
     from_archive: Optional[str] = typer.Option(
         None,
@@ -42,6 +52,16 @@ def ingest_command(
         False,
         "--dry-run/--no-dry-run",
         help="Preview changes without writing to CSV files",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Parse every staged workbook even if it is already in import history",
+    ),
+    only_unprocessed: bool = typer.Option(
+        False,
+        "--only-unprocessed",
+        help="Ingest only workbooks whose filenames are missing from import history",
     ),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
@@ -63,11 +83,15 @@ def ingest_command(
 
         # Ingest from custom location
         finjuice --data-dir ~/my-finance-data ingest
+
+        # Preview only files missing from import history
+        finjuice ingest --dry-run --json
+
+        # Ingest only history-missing files
+        finjuice ingest --only-unprocessed
     """
     from finjuice.pipeline.ingest.pipeline import (
-        ingest_all_files,
         ingest_file_detailed,
-        preview_ingest_all_files,
         preview_ingest_paths,
     )
     from finjuice.pipeline.metadata import get_source_file_info
@@ -77,6 +101,15 @@ def ingest_command(
 
     try:
         warn_on_schema_mismatch(config.data_dir)
+
+        if force and only_unprocessed:
+            emit_error(
+                "--force and --only-unprocessed cannot be combined.",
+                error_code=ErrorCode.INVALID_ARGS,
+                exit_code=ExitCode.USAGE_ERROR,
+                json_output=json_output,
+                command="ingest",
+            )
 
         # Handle --from-archive mode
         if from_archive:
@@ -94,11 +127,13 @@ def ingest_command(
         # Standard ingestion mode
         _ingest_standard(
             config,
-            archive,
-            dry_run,
-            json_output,
-            preview_ingest_all_files,
-            ingest_all_files,
+            _StandardIngestRequest(
+                archive=archive,
+                dry_run=dry_run,
+                json_output=json_output,
+                force=force,
+                only_unprocessed=only_unprocessed,
+            ),
         )
 
     except typer.Exit:
@@ -230,39 +265,69 @@ def _ingest_from_archive(
         )
 
 
+def _select_standard_ingest_paths(
+    config: Any, request: _StandardIngestRequest
+) -> tuple[list[Path], int]:
+    """Return workbooks to parse and how many history hits were skipped."""
+    from finjuice.pipeline.metadata.import_history_helpers import list_unprocessed_xlsx
+
+    staged = list(config.import_dir.glob("*.xlsx"))
+    if request.force or not (request.dry_run or request.only_unprocessed):
+        return staged, 0
+    selected = list_unprocessed_xlsx(config.import_dir, config.data_dir / "metadata")
+    return selected, len(staged) - len(selected)
+
+
 def _ingest_standard(
     config: Any,
-    archive: bool,
-    dry_run: bool,
-    json_output: bool,
-    preview_ingest_all_files: Any,
-    ingest_all_files: Any,
+    request: _StandardIngestRequest,
 ) -> None:
     """Handle standard ingest mode."""
+    from finjuice.pipeline.ingest.pipeline import (
+        ingest_all_files,
+        ingest_paths,
+        preview_ingest_all_files,
+    )
+
     logger.info(f"CSV partitions: {config.csv_base_dir}")
 
-    if archive:
+    if request.archive:
         logger.info("Archiving enabled: source files will be copied to metadata/archives/")
 
-    if dry_run:
-        preview = preview_ingest_all_files(config.import_dir, config.csv_base_dir, archive=archive)
+    selected, skipped = _select_standard_ingest_paths(config, request)
+
+    if request.dry_run:
+        preview = preview_ingest_all_files(
+            config.import_dir,
+            config.csv_base_dir,
+            archive=request.archive,
+            skip_processed=not request.force,
+            metadata_dir=config.data_dir / "metadata",
+        )
         result = {
             "command": "ingest",
             "dry_run": True,
             "source": "imports",
-            "archive_requested": archive,
+            "archive_requested": request.archive,
+            "history_skipped": preview.get("history_skipped", skipped),
+            "would_parse": preview.get("would_parse", len(selected)),
             "preview": preview,
         }
-        emit(result, json_output, _render_standard_dry_run, command="ingest")
+        emit(result, request.json_output, _render_standard_dry_run, command="ingest")
         return
 
-    summary = ingest_all_files(config.import_dir, config.csv_base_dir, archive=archive)
+    if request.only_unprocessed:
+        summary = ingest_paths(selected, config.csv_base_dir, archive=request.archive)
+    else:
+        summary = ingest_all_files(config.import_dir, config.csv_base_dir, archive=request.archive)
 
     result = {
         "command": "ingest",
         "dry_run": False,
         "source": "imports",
-        "archive_requested": archive,
+        "archive_requested": request.archive,
+        "history_skipped": skipped,
+        "would_parse": len(selected),
         "summary": {
             "files_processed": summary["files"],
             "new_transactions": summary["inserted"],
@@ -273,4 +338,4 @@ def _ingest_standard(
         },
     }
     write_schema_version(config.data_dir, SCHEMA_VERSION)
-    emit(result, json_output, _render_ingest_result, command="ingest")
+    emit(result, request.json_output, _render_ingest_result, command="ingest")

@@ -18,9 +18,13 @@ def test_lookup_helpers_live_in_helper_module() -> None:
     assert "def get_metadata_path" not in history_text
     assert "def get_source_file_info" not in history_text
     assert "def list_source_files" not in history_text
+    assert "def processed_original_filenames" not in history_text
+    assert "def list_unprocessed_xlsx" not in history_text
     assert "def get_metadata_path" in helpers_text
     assert "def get_source_file_info" in helpers_text
     assert "def list_source_files" in helpers_text
+    assert "def processed_original_filenames" in helpers_text
+    assert "def list_unprocessed_xlsx" in helpers_text
 
 
 def test_lookup_helpers_reexport_from_import_history() -> None:
@@ -28,6 +32,11 @@ def test_lookup_helpers_reexport_from_import_history() -> None:
     assert import_history.get_metadata_path is import_history_helpers.get_metadata_path
     assert import_history.get_source_file_info is import_history_helpers.get_source_file_info
     assert import_history.list_source_files is import_history_helpers.list_source_files
+    assert (
+        import_history.processed_original_filenames
+        is import_history_helpers.processed_original_filenames
+    )
+    assert import_history.list_unprocessed_xlsx is import_history_helpers.list_unprocessed_xlsx
     assert callable(import_history.record_import)
     assert callable(import_history.generate_file_id)
     assert callable(import_history.archive_source_file)

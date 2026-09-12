@@ -39,7 +39,7 @@ def _next_step_from_data_status(data_results: list[CheckResult]) -> str | None:
             return "finjuice import"
     for result in data_results:
         if "처리되지 않은 XLSX" in result.message:
-            return "finjuice refresh"
+            return "finjuice ingest --only-unprocessed"
     return None
 
 

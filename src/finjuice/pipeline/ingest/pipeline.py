@@ -21,6 +21,7 @@ from zipfile import BadZipFile
 
 import polars as pl
 
+from ..metadata.import_history_helpers import list_unprocessed_xlsx
 from ..validation import ValidationError
 from ._preview import (
     _accumulate_preview_file,
@@ -63,7 +64,9 @@ def preview_ingest_paths(
     totals = _PreviewTotals()
     failed_files: list[tuple[str, str]] = []
 
-    for file_path in file_paths:
+    total = len(file_paths)
+    for index, file_path in enumerate(file_paths, start=1):
+        logger.info("Previewing file %s/%s: %s", index, total, file_path.name)
         try:
             _accumulate_preview_file(totals, _preview_ingest_path(file_path, context))
         except (FileNotFoundError, PermissionError) as e:
@@ -90,10 +93,32 @@ def preview_ingest_paths(
 
 
 def preview_ingest_all_files(
-    import_dir: Path, csv_base_dir: Path, archive: bool = False
+    import_dir: Path,
+    csv_base_dir: Path,
+    archive: bool = False,
+    *,
+    skip_processed: bool = False,
+    metadata_dir: Path | None = None,
 ) -> dict[str, Any]:
-    """Preview batch ingest for all XLSX files in the import directory."""
-    return preview_ingest_paths(list(import_dir.glob("*.xlsx")), csv_base_dir, archive=archive)
+    """Preview batch ingest for XLSX files in the import directory.
+
+    When ``skip_processed`` is true, workbooks whose basename is already in
+    import history are not opened. ``files_found`` stays the staged glob
+    count; ``history_skipped`` / ``would_parse`` report the filter.
+    """
+    staged = list(import_dir.glob("*.xlsx"))
+    selected = staged
+    skipped = 0
+    if skip_processed:
+        history_dir = metadata_dir or (csv_base_dir.parent / "metadata")
+        selected = list_unprocessed_xlsx(import_dir, history_dir)
+        skipped = len(staged) - len(selected)
+
+    preview = preview_ingest_paths(selected, csv_base_dir, archive=archive)
+    preview["files_found"] = len(staged)
+    preview["history_skipped"] = skipped
+    preview["would_parse"] = len(selected)
+    return preview
 
 
 def ingest_file(
@@ -172,8 +197,10 @@ def ingest_paths(
 
     totals = _IngestTotals()
     failed_files: list[tuple[str, str]] = []
+    total = len(file_paths)
 
-    for file_path in file_paths:
+    for index, file_path in enumerate(file_paths, start=1):
+        logger.info("Ingesting file %s/%s: %s", index, total, file_path.name)
         try:
             _accumulate_ingest_file(
                 totals, ingest_file_detailed(file_path, csv_base_dir, archive=archive)

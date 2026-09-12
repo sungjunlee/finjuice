@@ -29,6 +29,9 @@ def _render_ingest_result(result: dict[str, Any]) -> None:
     s = result["summary"]
     output.success("[OK] Ingestion complete:")
     output.info(f"  Files processed: {s['files_processed']}")
+    history_skipped = int(result.get("history_skipped") or 0)
+    if history_skipped:
+        output.info(f"  History skipped: {history_skipped}")
     output.info(f"  New transactions: {s['new_transactions']}")
     output.info(f"  Updated: {s['updated']}")
     _render_overview_write_summary(s.get("banksalad_overview"))
@@ -52,6 +55,10 @@ def _render_ingest_dry_run(preview: dict[str, Any]) -> None:
 
     output.info("[Dry-run Summary]")
     output.info(f"  Source XLSX files found: {preview['files_found']}")
+    history_skipped = int(preview.get("history_skipped") or 0)
+    if history_skipped:
+        output.info(f"  History skipped: {history_skipped}")
+        output.info(f"  Would parse: {preview.get('would_parse', preview['files_found'])}")
     output.info(f"  Estimated new rows: {tx_preview['estimated_new_rows']}")
     output.info(f"  Dedup skips: {tx_preview['estimated_dedup_skips']}")
     output.info(f"  Validation skips: {tx_preview['validation_skips']}")
