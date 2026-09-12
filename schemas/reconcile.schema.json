@@ -1,0 +1,47 @@
+{
+  "$id": "reconcile.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "command": {
+      "type": "string"
+    },
+    "evidence_count": {
+      "type": "integer"
+    },
+    "groups": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "matched": {
+      "type": "integer"
+    },
+    "partial": {
+      "type": "integer"
+    },
+    "payment_count": {
+      "type": "integer"
+    },
+    "unmatched": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "_meta",
+    "command",
+    "evidence_count",
+    "payment_count",
+    "matched",
+    "partial",
+    "unmatched",
+    "groups"
+  ],
+  "title": "reconcile --json output",
+  "type": "object"
+}

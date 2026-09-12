@@ -43,6 +43,7 @@ from finjuice.pipeline.cli.commands.manifest import register_manifest_command
 from finjuice.pipeline.cli.commands.networth import networth_app
 from finjuice.pipeline.cli.commands.open_cmd import register_open_command
 from finjuice.pipeline.cli.commands.query import register_query_command
+from finjuice.pipeline.cli.commands.reconcile_cmd import reconcile_command
 from finjuice.pipeline.cli.commands.refresh_cmd import refresh_command
 from finjuice.pipeline.cli.commands.review import review_command
 from finjuice.pipeline.cli.commands.rules import rules_app
@@ -184,6 +185,7 @@ def version_command(
 # Register advanced pipeline commands
 app.command(name="ingest", rich_help_panel="Advanced")(ingest_command)
 app.command(name="transfer", rich_help_panel="Advanced")(transfer_command)
+app.command(name="reconcile", rich_help_panel="Advanced")(reconcile_command)
 
 # Register remaining subcommand groups
 app.add_typer(audit.app, name="audit", rich_help_panel="Advanced")
