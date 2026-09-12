@@ -465,7 +465,7 @@ def _materialize_migration_catalog_args(schema_data_dir: Path, label: str) -> li
     candidate = schema_data_dir.parent / "migration-candidate"
     if label == "ssot migrate plan":
         return ["ssot", "migrate", "plan", "--manifest", str(capture), "--json"]
-    plan_migration(capture, output=plan)
+    plan_migration(capture, output=plan, active_data_dir=schema_data_dir)
     if label == "ssot migrate build":
         return [
             "ssot",

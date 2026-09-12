@@ -18,6 +18,19 @@ def exact(
     *,
     unit: str | None = None,
 ) -> str | None:
+    parsed = parse_exact(emitter, row, field, kind, unit=unit)
+    return emit_exact(emitter, field, parsed)
+
+
+def parse_exact(
+    emitter: Emitter,
+    row: dict[str, str | None],
+    field: str,
+    kind: ValueKind = "money",
+    *,
+    unit: str | None = None,
+) -> ExactValue | None:
+    """Decode exact evidence before any typed row or value is inserted."""
     value = row.get(field)
     if value is None:
         return None
@@ -31,6 +44,13 @@ def exact(
         )
     except ExactValueError:
         emitter.issue("invalid_exact_value", field, value)
+        return None
+    return parsed
+
+
+def emit_exact(emitter: Emitter, field: str, parsed: ExactValue | None) -> str | None:
+    """Insert a parsed value after the containing row passes target constraints."""
+    if parsed is None:
         return None
     identifier = emitter.identifier("exact_value", field=field)
     emitter.call(

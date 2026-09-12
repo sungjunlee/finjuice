@@ -179,8 +179,8 @@ def build_migration(
         write_text_atomic(work / MARKER, evidence["canonical_digest"] + "\n")
         atomic_publish(work, destination, replace_empty=existing is not None)
     except BaseException:
-        # Failed work remains inspectable but has no published candidate authority.
-        # The caller retries at a fresh target with this attempt as its parent.
+        # Unpublished work has no candidate authority and publication I/O errors may remove it.
+        # Durable failure records and validated parent-attempt lineage remain future work.
         raise
     return verify_migration(destination / "manifests" / MANIFEST)
 

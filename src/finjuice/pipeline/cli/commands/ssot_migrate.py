@@ -124,6 +124,7 @@ def _active_data_dir(ctx: typer.Context) -> Path:
 
 @migrate_app.command("plan")
 def migrate_plan(
+    ctx: typer.Context,
     manifest: Path = typer.Option(..., "--manifest", help="Verified frozen capture manifest."),
     output: Optional[Path] = typer.Option(
         None, "--output", help="New private plan file. Omit for a read-only summary."
@@ -132,7 +133,11 @@ def migrate_plan(
 ) -> None:
     """Inspect a verified capture and optionally write an immutable preservation plan."""
     _run(
-        lambda: plan_migration(manifest, output=output),
+        lambda: plan_migration(
+            manifest,
+            output=output,
+            active_data_dir=_active_data_dir(ctx) if output is not None else None,
+        ),
         command="ssot migrate plan",
         json_output=json_output,
     )

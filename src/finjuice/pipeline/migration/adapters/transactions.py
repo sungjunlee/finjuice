@@ -9,7 +9,7 @@ from finjuice.pipeline.storage.csv_schema import CSV_COLUMNS
 from finjuice.pipeline.storage.sqlite.records import AccountRecord, TransactionRecord
 
 from .model import Emitter
-from .values import exact, flag, tags
+from .values import emit_exact, exact, flag, parse_exact, tags
 
 MARKER = "__finjuice_category_override__:"
 
@@ -17,7 +17,7 @@ MARKER = "__finjuice_category_override__:"
 def transaction(emitter: Emitter, row: dict[str, str | None], observation: str) -> bool:
     for name in sorted(row.keys() - set(CSV_COLUMNS)):
         emitter.issue("unknown_field", name, row[name])
-    amount = exact(emitter, row, "amount")
+    amount_value = parse_exact(emitter, row, "amount")
     if row.get("amount") in (None, ""):
         emitter.issue("missing_required_field", "amount", row.get("amount"))
     required = ("date", "time", "datetime", "type_norm", "account")
@@ -28,8 +28,18 @@ def transaction(emitter: Emitter, row: dict[str, str | None], observation: str) 
         name: tags(emitter, row, name)
         for name in ("tags_rule", "tags_ai", "tags_manual", "tags_final")
     }
-    if amount is None or missing or any(value is None for value in sequences.values()):
+    supported_type = row.get("type_norm") in {"expense", "income", "transfer", "other"}
+    if not supported_type:
+        emitter.issue("unsupported_transaction_type", "type_norm", row.get("type_norm"))
+    if (
+        amount_value is None
+        or missing
+        or not supported_type
+        or any(value is None for value in sequences.values())
+    ):
         return False
+    amount = emit_exact(emitter, "amount", amount_value)
+    assert amount is not None
     manual = sequences["tags_manual"] or []
     visible = [tag for tag in manual if not tag.startswith(MARKER)]
     markers = [tag[len(MARKER) :] for tag in manual if tag.startswith(MARKER)]

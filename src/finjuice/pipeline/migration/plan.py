@@ -10,7 +10,11 @@ from typing import Any
 from finjuice.pipeline.backup import verify_backup
 from finjuice.pipeline.backup.io import fsync_parent_chain, write_text_atomic
 from finjuice.pipeline.backup.manifest import backup_dir_from_manifest_path, payload_relative
-from finjuice.pipeline.backup.paths import reject_overlap, reject_symlink_chain
+from finjuice.pipeline.backup.paths import (
+    reject_overlap,
+    reject_symlink_chain,
+    require_outside_program_repo,
+)
 from finjuice.pipeline.backup.types import COMPLETION_MARKER, MANIFEST_FILENAME
 from finjuice.pipeline.migration.adapters import FileContext, analyze_file
 from finjuice.pipeline.migration.common import (
@@ -57,19 +61,28 @@ def analyze_capture(root: Path, capture: dict[str, Any]) -> list[dict[str, Any]]
     return inputs
 
 
-def plan_migration(manifest: Path, *, output: Path | None = None) -> MigrationResult:
-    """Plan from a verified capture; optionally create a new immutable plan file."""
+def plan_migration(
+    manifest: Path,
+    *,
+    output: Path | None = None,
+    active_data_dir: Path | None = None,
+) -> MigrationResult:
+    """Plan from a verified capture; saving requires an explicit active-data boundary."""
     location = reject_symlink_chain(manifest)
     root = backup_dir_from_manifest_path(location)
+    if output is not None:
+        if active_data_dir is None:
+            raise MigrationError("Active data directory is required when saving a migration plan.")
+        output = require_outside_program_repo(output, context="migration plan")
+        reject_overlap(root, output)
+        reject_overlap(reject_symlink_chain(active_data_dir), output)
     verify_backup(location)
     before = tree_inventory(root)
     capture = json.loads((root / MANIFEST_FILENAME).read_text(encoding="utf-8"))
     allowed = {MANIFEST_FILENAME, COMPLETION_MARKER}
     if any(item["path"].split("/")[0] not in allowed | {"payload"} for item in before):
         raise MigrationError("Capture contains files outside the closed M1 inventory.")
-    base = Path.cwd() if output is None else reject_symlink_chain(output).parent
-    if output is not None:
-        reject_overlap(root, reject_symlink_chain(output))
+    base = Path.cwd() if output is None else output.parent
     plan = seal(
         {
             "schema_version": PLAN_VERSION,

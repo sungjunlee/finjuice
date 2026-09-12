@@ -16,13 +16,18 @@ from finjuice.pipeline.storage.sqlite.records import (
 )
 
 from .model import Emitter
-from .values import exact
+from .values import emit_exact, parse_exact
 
 
 def asset(emitter: Emitter, row: dict[str, str | None], observation: str) -> bool:
     required = ("snapshot_date", "account_id", "instrument_id")
     if any(row.get(name) is None for name in required):
         emitter.issue("incomplete_asset_snapshot")
+        return False
+    quantity = parse_exact(emitter, row, "quantity", "quantity", unit="legacy_quantity.v1")
+    market_value = parse_exact(emitter, row, "market_value")
+    if quantity is None and market_value is None:
+        emitter.issue("asset_snapshot_without_value")
         return False
     account = emitter.identifier("account")
     resource = emitter.identifier("resource")
@@ -39,8 +44,8 @@ def asset(emitter: Emitter, row: dict[str, str | None], observation: str) -> boo
             emitter.identifier("provenance"),
             account,
             resource,
-            exact(emitter, row, "quantity", "quantity", unit="legacy_quantity.v1"),
-            exact(emitter, row, "market_value"),
+            emit_exact(emitter, "quantity", quantity),
+            emit_exact(emitter, "market_value", market_value),
             row["snapshot_date"] or "",
         ),
     )
@@ -63,8 +68,14 @@ def fact(emitter: Emitter, row: dict[str, str | None], observation: str) -> bool
         return False
     kwargs: dict[str, Any] = {name: row[name] for name in required}
     kwargs["value_type"] = value_type
-    numeric = exact(emitter, row, "value_numeric", "number", unit="overview_number.v1")
-    if value_type == "number" and numeric is None:
+    numeric = parse_exact(emitter, row, "value_numeric", "number", unit="overview_number.v1")
+    if (value_type == "number") != (numeric is not None):
+        emitter.issue(
+            "overview_fact_numeric_type_mismatch", "value_numeric", row.get("value_numeric")
+        )
+        return False
+    if value_type not in {"number", "empty"} and row.get("value_text") is None:
+        emitter.issue("overview_fact_missing_text", "value_text")
         return False
     identifier = emitter.identifier("overview_fact")
     emitter.entity(
@@ -73,7 +84,7 @@ def fact(emitter: Emitter, row: dict[str, str | None], observation: str) -> bool
             identifier,
             observation,
             emitter.identifier("provenance"),
-            numeric_value_id=numeric,
+            numeric_value_id=emit_exact(emitter, "value_numeric", numeric),
             value_text=row.get("value_text"),
             row_label=row.get("row_label"),
             column_label=row.get("column_label"),

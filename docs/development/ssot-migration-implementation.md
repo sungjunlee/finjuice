@@ -12,7 +12,7 @@ without `--output` reads the capture and prints a summary. Building requires a
 new private plan file:
 
 ```sh
-finjuice ssot migrate plan --manifest <capture-manifest> --output <new-plan.json> --json
+finjuice --data-dir <active-data-dir> ssot migrate plan --manifest <capture-manifest> --output <new-plan.json> --json
 finjuice --data-dir <active-data-dir> ssot migrate build --plan <new-plan.json> --staging <new-candidate> --json
 finjuice ssot migrate verify --candidate <candidate>/manifests/migration-manifest.json --json
 ```
@@ -22,6 +22,10 @@ contains counts, digests, check statuses, and limitations. Treat both the plan
 and candidate directory as private financial artifacts. The capture locator is
 relative to the plan file, so moving a plan alone can invalidate its locator.
 Neither planning nor verification runs existing tagging or transfer rules.
+Saving a plan applies the existing repository, active-data, and capture isolation
+boundaries. The Python API requires `active_data_dir` when `output` is supplied;
+the CLI supplies it from the existing data-dir context. A read-only preview does
+not require an active-data boundary.
 
 ## Implemented preservation
 
@@ -31,9 +35,15 @@ Neither planning nor verification runs existing tagging or transfer rules.
 - CSV evidence retains header order, duplicate columns, raw records, quoted
   blanks, unquoted empty cells, missing cells, unknown fields, and duplicate rows.
   Unsupported records retain explicit preservation issues and dispositions.
+  A row marked `preserved_opaque` may also have supported typed fields; its reason,
+  typed record counts, and issues must be read together. The disposition does not
+  claim that the row has no typed representation.
 - Supported transactions, overview facts, and asset snapshots receive typed rows
   and deterministic legacy mappings. Amounts retain their original decimal
   spelling and exact coefficient/scale. Missing currency remains unknown.
+  Unsupported transaction types and invalid asset/fact field combinations are
+  retained as evidence with explicit issues before financial typed insertion.
+  Analysis and build use the same checks without reclassifying invalid values.
 - Transaction rows preserve persisted final category, notes, transfer flags and
   group identifiers. The last nonempty hidden category marker becomes the manual
   category; visible manual tags retain their order and duplicates. Original
@@ -54,6 +64,10 @@ verified before atomic directory publication. A matching completed retry is
 reverified and returns `already_complete`. An incomplete attempt cannot be used
 as a completed candidate; retry with a new target and optional
 `--parent-attempt-id`.
+Publication I/O failures may remove the unpublished attempt workspace; failed
+work is not guaranteed to remain inspectable. A failure after directory
+publication can leave a complete candidate that must be reverified before an
+`already_complete` retry is accepted.
 
 Verification checks database integrity, foreign keys, content hashes, immutable
 plan/manifest bindings, and preserved input dispositions. It reconstructs the M1
@@ -66,9 +80,19 @@ directory and does not write to the candidate database.
 Adapter replay detects corruption and inconsistency; it is not an independent
 parser oracle. Separate synthetic assertions check expected transaction meaning,
 exact values, duplicate identity, config status, and raw evidence.
+Synthetic exception tests cover ENOSPC and ordinary failures during capture-copy
+and repository-replay verification, publication failure cleanup, and a parent
+sync failure after publication. They check scratch cleanup and unchanged source,
+capture, and candidate evidence. These tests do not establish a free-space sizing
+rule or crash-durability guarantee, and no disk was filled for testing.
 
 ## Remaining gates
 
+- Hidden category selection remains an unresolved acceptance question: the legacy
+  helper strips/deduplicates tags, while the preservation contract specifies the
+  original last nonempty marker and ordered visible subsequence. This slice keeps
+  its existing selection, original sequence, and persisted final category; it does
+  not resolve that conflict by changing either rule.
 - Derived balance/cashflow/insurance/investment/loan rows need a capture-wide
   source-fact lookup before typed foreign keys can be assigned. They currently
   retain opaque row evidence with `unresolved_source_fact` when that field exists.

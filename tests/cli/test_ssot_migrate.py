@@ -44,7 +44,8 @@ def test_plan_passes_optional_output_and_hides_evidence(
     monkeypatch.setattr(ssot_migrate, "plan_migration", operation)
     manifest = tmp_path / PRIVATE
     plan = tmp_path / "private-plan.json"
-    args = ["ssot", "migrate", "plan", "--manifest", str(manifest)]
+    active = tmp_path / "active"
+    args = ["--data-dir", str(active), "ssot", "migrate", "plan", "--manifest", str(manifest)]
     if with_output:
         args.extend(["--output", str(plan)])
     if json_output:
@@ -55,7 +56,11 @@ def test_plan_passes_optional_output_and_hides_evidence(
 
     # Assert.
     assert result.exit_code == 0, result.output
-    operation.assert_called_once_with(manifest, output=plan if with_output else None)
+    operation.assert_called_once_with(
+        manifest,
+        output=plan if with_output else None,
+        active_data_dir=active if with_output else None,
+    )
     assert PRIVATE not in result.output
     assert "123456.78" not in result.output
     assert str(tmp_path) not in result.output
@@ -220,3 +225,34 @@ def test_public_summary_rejects_private_values_inside_known_fields() -> None:
     assert public["cutover_ready"] is False
     assert "dataset_revision" not in public
     assert public["checks"] == {}
+
+
+@pytest.mark.parametrize("json_output", [True, False])
+@pytest.mark.parametrize("with_output", [True, False])
+def test_plan_unresolved_active_directory_only_blocks_writes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, json_output: bool, with_output: bool
+) -> None:
+    # Arrange.
+    operation = Mock(return_value=_payload())
+    monkeypatch.setattr(ssot_migrate, "plan_migration", operation)
+    monkeypatch.setattr(main, "_resolve_active_data_dir", lambda _: None)
+    manifest = tmp_path / PRIVATE
+    plan = tmp_path / "private-plan.json"
+    args = ["ssot", "migrate", "plan", "--manifest", str(manifest)]
+    if with_output:
+        args.extend(["--output", str(plan)])
+    if json_output:
+        args.append("--json")
+
+    # Act.
+    result = runner.invoke(main.app, args)
+
+    # Assert.
+    assert result.exit_code == (3 if with_output else 0), result.output
+    if with_output:
+        operation.assert_not_called()
+    else:
+        operation.assert_called_once_with(manifest, output=None, active_data_dir=None)
+    assert not plan.exists()
+    assert PRIVATE not in result.output
+    assert str(tmp_path) not in result.output

@@ -289,3 +289,215 @@ def test_unknown_fields_and_invalid_flags_are_not_silently_dropped(tmp_path: Pat
     assert analysis["disposition_counts"]["preserved_opaque"] == 1
     with RepositoryReader(paths.database) as repository:
         assert repository.rows("transactions")[0]["needs_review"] is None
+
+
+def _csv_dicts(rows: list[dict[str, str | None]]) -> bytes:
+    output = io.StringIO(newline="")
+    writer = csv.DictWriter(output, fieldnames=list(rows[0]))
+    writer.writeheader()
+    writer.writerows(rows)
+    return output.getvalue().encode()
+
+
+@pytest.mark.parametrize("type_norm", ["unsupported", "Expense", " expense", "", None])
+def test_transaction_type_constraint_preserves_bad_row_and_continues(
+    tmp_path: Path,
+    type_norm: str | None,
+) -> None:
+    original = list(csv.DictReader(io.StringIO(transaction_bytes(("10.10",)).decode())))[0]
+    bad = {**original, "type_norm": type_norm}
+    data = _csv_dicts([bad, original])
+
+    paths, analysis = build(tmp_path, data)
+
+    assert analysis["issue_counts"]["unsupported_transaction_type"] == 1
+    assert analysis["record_counts"]["transaction"] == 1
+    assert analysis["record_counts"]["exact_value"] == 1
+    assert analysis["disposition_counts"]["preserved_opaque"] == 1
+    with RepositoryReader(paths.database) as reader:
+        assert reader.rows("transactions")[0]["type_norm"] == "expense"
+        assert len(reader.rows("accounts")) == 1
+        assert len(reader.rows("exact_values")) == 1
+        assert len(reader.rows("legacy_payloads")) == 3
+        row_provenance = reader.rows("transactions")[0]["provenance_id"]
+        provenance = next(
+            row
+            for row in reader.rows("record_provenance")
+            if row["provenance_id"] == row_provenance
+        )
+        assert json.loads(provenance["source_coordinate_json"])["row"] == 2
+    assert paths.object_path(hashlib.sha256(data).hexdigest()).read_bytes() == data
+
+
+@pytest.mark.parametrize("type_norm", ["expense", "income", "transfer", "other"])
+def test_supported_transaction_types_are_not_reclassified(tmp_path: Path, type_norm: str) -> None:
+    original = list(csv.DictReader(io.StringIO(transaction_bytes(("10.10",)).decode())))[0]
+    paths, analysis = build(tmp_path, _csv_dicts([{**original, "type_norm": type_norm}]))
+    assert analysis["issue_counts"] == {}
+    with RepositoryReader(paths.database) as reader:
+        assert reader.rows("transactions")[0]["type_norm"] == type_norm
+
+
+@pytest.mark.parametrize(
+    ("quantity", "market_value"),
+    [
+        (None, None),
+        ("", ""),
+        ("NaN", "invalid"),
+        (None, "1e-256"),
+    ],
+)
+def test_asset_requires_one_typed_value_before_creating_entities(
+    tmp_path: Path,
+    quantity: str | None,
+    market_value: str | None,
+) -> None:
+    row = {
+        "snapshot_date": "2026-01-01",
+        "account_id": "synthetic-account",
+        "instrument_id": "synthetic-resource",
+        "quantity": quantity,
+        "market_value": market_value,
+        "currency": "USD",
+    }
+    data = _csv_dicts([row, {**row, "quantity": "0.0037", "market_value": "10.10"}])
+
+    paths, analysis = build(tmp_path, data, "assets/snapshots.csv")
+
+    assert analysis["issue_counts"]["asset_snapshot_without_value"] == 1
+    assert analysis["disposition_counts"]["preserved_opaque"] == 1
+    assert analysis["record_counts"]["asset_snapshot"] == 1
+    assert analysis["record_counts"]["exact_value"] == 2
+    with RepositoryReader(paths.database) as reader:
+        assert len(reader.rows("asset_snapshots")) == 1
+        assert len(reader.rows("accounts")) == len(reader.rows("resources")) == 1
+        assert len(reader.rows("exact_values")) == 2
+        assert len(reader.rows("legacy_payloads")) == 3
+
+
+@pytest.mark.parametrize(("quantity", "market_value"), [("0", None), (None, "0")])
+def test_asset_one_zero_value_satisfies_existing_constraint(
+    tmp_path: Path,
+    quantity: str | None,
+    market_value: str | None,
+) -> None:
+    data = _csv_dicts(
+        [
+            {
+                "snapshot_date": "2026-01-01",
+                "account_id": "account",
+                "instrument_id": "resource",
+                "quantity": quantity,
+                "market_value": market_value,
+                "currency": "USD",
+            }
+        ]
+    )
+    paths, analysis = build(tmp_path, data, "assets/snapshots.csv")
+    assert analysis["issue_counts"] == {}
+    assert analysis["record_counts"]["asset_snapshot"] == 1
+    with RepositoryReader(paths.database) as reader:
+        assert reader.rows("exact_values")[0]["coefficient"] == "0"
+
+
+@pytest.mark.parametrize(
+    ("value_type", "numeric", "text", "issue"),
+    [
+        ("unknown", "10.10", "retained", "incomplete_overview_fact"),
+        ("number", None, None, "overview_fact_numeric_type_mismatch"),
+        ("number", "NaN", "retained", "overview_fact_numeric_type_mismatch"),
+        ("text", "10.10", "retained", "overview_fact_numeric_type_mismatch"),
+        ("date", "10.10", "2026-01-01", "overview_fact_numeric_type_mismatch"),
+        ("empty", "0", None, "overview_fact_numeric_type_mismatch"),
+        ("unsupported", "10.10", "retained", "overview_fact_numeric_type_mismatch"),
+        ("text", None, None, "overview_fact_missing_text"),
+        ("date", None, None, "overview_fact_missing_text"),
+        ("unsupported", None, None, "overview_fact_missing_text"),
+    ],
+)
+def test_fact_constraint_rejection_leaves_no_partial_numeric_insert(
+    tmp_path: Path,
+    value_type: str,
+    numeric: str | None,
+    text: str | None,
+    issue: str,
+) -> None:
+    row = {
+        "fact_id": "synthetic-fact",
+        "snapshot_date": "2026-01-01",
+        "sheet_name": "sheet",
+        "block_id": "block",
+        "block_title": "title",
+        "fact_kind": "total",
+        "value_type": value_type,
+        "value_numeric": numeric,
+        "value_text": text,
+    }
+    data = _csv_dicts([row, {**row, "value_type": "number", "value_numeric": "10.10"}])
+
+    paths, analysis = build(tmp_path, data, "overview/facts.csv")
+
+    assert analysis["issue_counts"][issue] == 1
+    assert analysis["disposition_counts"]["preserved_opaque"] == 1
+    assert analysis["record_counts"]["overview_fact"] == 1
+    assert analysis["record_counts"]["exact_value"] == 1
+    with RepositoryReader(paths.database) as reader:
+        assert len(reader.rows("overview_facts")) == 1
+        assert len(reader.rows("exact_values")) == 1
+        assert len(reader.rows("legacy_payloads")) == 3
+        facts = reader.rows("overview_facts")
+        assert facts[0]["value_type"] == "number"
+        assert reader.rows("exact_values")[0]["provenance_id"] == facts[0]["provenance_id"]
+    assert paths.object_path(hashlib.sha256(data).hexdigest()).read_bytes() == data
+
+
+@pytest.mark.parametrize(
+    ("value_type", "numeric", "text"),
+    [
+        ("number", "0", None),
+        ("number", "10.10", "retained"),
+        ("empty", None, None),
+        ("empty", None, "retained"),
+        ("text", None, "text"),
+        ("date", None, "2026-01-01"),
+        ("unsupported", None, "retained"),
+    ],
+)
+def test_fact_supported_combinations_keep_original_type(
+    tmp_path: Path,
+    value_type: str,
+    numeric: str | None,
+    text: str | None,
+) -> None:
+    data = _csv_dicts(
+        [
+            {
+                "fact_id": "fact",
+                "snapshot_date": "2026-01-01",
+                "sheet_name": "sheet",
+                "block_id": "block",
+                "block_title": "title",
+                "fact_kind": "total",
+                "value_type": value_type,
+                "value_numeric": numeric,
+                "value_text": text,
+            }
+        ]
+    )
+    paths, analysis = build(tmp_path, data, "overview/facts.csv")
+    assert analysis["issue_counts"] == {}
+    with RepositoryReader(paths.database) as reader:
+        fact = reader.rows("overview_facts")[0]
+        assert fact["value_type"] == value_type
+        assert fact["value_text"] == text
+
+
+def test_fact_quoted_empty_text_remains_valid_blank(tmp_path: Path) -> None:
+    data = (
+        b"fact_id,snapshot_date,sheet_name,block_id,block_title,fact_kind,value_type,value_text\n"
+        b'fact,2026-01-01,sheet,block,title,total,text,""\n'
+    )
+    paths, analysis = build(tmp_path, data, "overview/facts.csv")
+    assert analysis["issue_counts"] == {}
+    with RepositoryReader(paths.database) as reader:
+        assert reader.rows("overview_facts")[0]["value_text"] == ""

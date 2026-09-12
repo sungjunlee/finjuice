@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import errno
 import json
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -15,6 +18,7 @@ from finjuice.pipeline.backup import (
     SourceRoot,
     create_backup,
 )
+from finjuice.pipeline.backup import io as backup_io
 from finjuice.pipeline.migration import (
     MigrationError,
     build_migration,
@@ -22,6 +26,7 @@ from finjuice.pipeline.migration import (
     verify_migration,
 )
 from finjuice.pipeline.migration import build as workflow
+from finjuice.pipeline.migration import verify as verification
 from finjuice.pipeline.migration.common import MARKER, tree_inventory
 from finjuice.pipeline.migration.verify import semantic_snapshot
 from finjuice.pipeline.storage.sqlite import RepositoryReader
@@ -43,7 +48,7 @@ def capture(tmp_path: Path) -> tuple[Path, Path, Path]:
         )
     )
     plan = tmp_path / "plan.json"
-    plan_migration(backup / "backup-manifest.json", output=plan)
+    plan_migration(backup / "backup-manifest.json", output=plan, active_data_dir=source)
     return source, backup, plan
 
 
@@ -167,14 +172,14 @@ def test_empty_target_and_missing_marker_retry(capture, tmp_path):
 
 
 def test_plan_is_immutable_and_requires_completed_capture(capture, tmp_path):
-    _source, backup, plan = capture
+    source, backup, plan = capture
     before = plan.read_bytes()
     with pytest.raises(BackupError):
-        plan_migration(backup, output=plan)
+        plan_migration(backup, output=plan, active_data_dir=source)
     assert plan.read_bytes() == before
     (backup / "FINJUICE_BACKUP_COMPLETE").unlink()
     with pytest.raises(BackupError):
-        plan_migration(backup, output=tmp_path / "another-plan")
+        plan_migration(backup, output=tmp_path / "another-plan", active_data_dir=source)
 
 
 def test_rehashed_database_tamper_fails_source_parity(capture, tmp_path):
@@ -195,3 +200,114 @@ def test_rehashed_database_tamper_fails_source_parity(capture, tmp_path):
     (target / MARKER).write_text(manifest["canonical_digest"] + "\n")
     with pytest.raises(MigrationError, match="differ from source"):
         verify_migration(target)
+
+
+@pytest.mark.parametrize("stage", ["capture_copy", "repository_replay"])
+@pytest.mark.parametrize(
+    "error", [OSError(errno.ENOSPC, "synthetic full"), RuntimeError("synthetic")]
+)
+def test_verify_failure_cleans_scratch_and_preserves_evidence(
+    capture, tmp_path, monkeypatch, stage, error
+):
+    source, backup, plan = capture
+    target = tmp_path / "candidate"
+    build_migration(plan, target, active_data_dir=source)
+    original = tuple(tree_inventory(path) for path in (source, backup, target))
+    plan_bytes = plan.read_bytes()
+    scratch_parent = tmp_path / "scratch"
+    scratch_parent.mkdir()
+    allocated = []
+    real_temporary = verification.tempfile.TemporaryDirectory
+    real_populate = workflow.populate_repository
+
+    @contextmanager
+    def temporary(**kwargs):
+        with real_temporary(dir=scratch_parent, **kwargs) as directory:
+            allocated.append(Path(directory))
+            yield directory
+
+    def broken_copy(_source, destination):
+        destination.write_bytes(b"partial synthetic copy")
+        raise error
+
+    def broken_replay(root, manifest, paths):
+        real_populate(root, manifest, paths)
+        raise error
+
+    with monkeypatch.context() as patch:
+        patch.setattr(verification, "tempfile", SimpleNamespace(TemporaryDirectory=temporary))
+        if stage == "capture_copy":
+            patch.setattr(verification, "shutil", SimpleNamespace(copyfile=broken_copy))
+        else:
+            patch.setattr(workflow, "populate_repository", broken_replay)
+        with pytest.raises(type(error)) as raised:
+            verify_migration(target)
+        assert raised.value is error
+
+    assert len(allocated) == 1
+    assert not allocated[0].exists()
+    assert list(scratch_parent.iterdir()) == []
+    assert tuple(tree_inventory(path) for path in (source, backup, target)) == original
+    assert plan.read_bytes() == plan_bytes
+    assert verify_migration(target).to_dict()["status"] == "ok"
+
+
+@pytest.mark.parametrize("empty_target", [False, True])
+@pytest.mark.parametrize("error_number", [errno.ENOSPC, errno.EIO])
+def test_publish_failure_cleans_attempt_and_keeps_originals(
+    capture, tmp_path, monkeypatch, empty_target, error_number
+):
+    source, backup, plan = capture
+    target = tmp_path / "candidate"
+    if empty_target:
+        target.mkdir()
+    original = tuple(tree_inventory(path) for path in (source, backup))
+    target_stat = target.stat() if empty_target else None
+    plan_bytes = plan.read_bytes()
+    real_rename = backup_io.os.rename
+
+    def broken_rename(staging, output):
+        if Path(staging).name.startswith(".migration-attempt-"):
+            raise OSError(error_number, "synthetic publication failure")
+        return real_rename(staging, output)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(backup_io, "rename_exclusive", broken_rename)
+        patch.setattr(backup_io.os, "rename", broken_rename)
+        with pytest.raises(BackupError, match="Disk is full|Backup I/O failed"):
+            build_migration(plan, target, active_data_dir=source)
+
+    assert list(tmp_path.glob(".migration-attempt-*")) == []
+    assert target.exists() is empty_target
+    if empty_target:
+        assert list(target.iterdir()) == []
+        current = target.stat()
+        for field in ("st_dev", "st_ino", "st_mode", "st_mtime_ns"):
+            assert getattr(current, field) == getattr(target_stat, field)
+    assert tuple(tree_inventory(path) for path in (source, backup)) == original
+    assert plan.read_bytes() == plan_bytes
+    assert build_migration(plan, target, active_data_dir=source).to_dict()["status"] == "ok"
+
+
+def test_post_publication_sync_failure_can_verify_and_retry(capture, tmp_path, monkeypatch):
+    source, backup, plan = capture
+    target = tmp_path / "candidate"
+    original = tuple(tree_inventory(path) for path in (source, backup))
+    real_sync = backup_io.fsync_parent_chain
+
+    def broken_sync(parent):
+        if target.exists():
+            raise OSError(errno.ENOSPC, "synthetic parent sync failure")
+        return real_sync(parent)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(backup_io, "fsync_parent_chain", broken_sync)
+        with pytest.raises(OSError, match="synthetic parent sync failure"):
+            build_migration(plan, target, active_data_dir=source)
+
+    verified = verify_migration(target).to_dict()
+    retry = build_migration(plan, target, active_data_dir=source).to_dict()
+    assert retry["status"] == "already_complete"
+    assert retry["manifest_digest"] == verified["manifest_digest"]
+    assert list(tmp_path.glob(".migration-attempt-*")) == []
+    assert tuple(tree_inventory(path) for path in (source, backup)) == original
