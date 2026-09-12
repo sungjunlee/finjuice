@@ -18,6 +18,12 @@ Release prep moves these bullets into `## [X.Y.Z]`. Refactor-only PRs skip this.
   refreshes `uv.lock`, and `just version-check` fails when package version,
   lock, skills, and CHANGELOG disagree.
 
+### Fixed
+
+- `finjuice reconcile` no longer greedy-partials unrelated in-window spend onto
+  a much larger evidence amount, and installment combination search is capped
+  so a busy ledger month stays unmatched instead of hanging (#478).
+
 ---
 
 ## [0.8.0] - 2026-09-12

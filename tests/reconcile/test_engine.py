@@ -92,6 +92,47 @@ def test_partial_installment_keeps_residual() -> None:
     assert report.groups[0].status == "partial"
 
 
+def test_unrelated_same_day_spend_does_not_greedy_partial() -> None:
+    """A much larger evidence amount must stay unmatched, not eat nearby spend."""
+    report = reconcile(
+        [_evidence("e1", "2024-08-15", "424242421")],
+        [_payment("p1", "2024-08-15", "-5000"), _payment("p2", "2024-08-15", "-7000")],
+    )
+
+    assert report.unmatched == 1
+    assert report.partial == 0
+    assert report.groups[0].payment_ids == ()
+    assert report.groups[0].reason == "missing_ledger_coverage"
+
+
+def test_busy_window_stays_unmatched_and_bounded() -> None:
+    """Many in-window payments must not enumerate C(n,5) or attach as partial."""
+    payments = [_payment(f"p{index}", "2024-08-15", "-5000") for index in range(80)]
+    report = reconcile([_evidence("e1", "2024-08-15", "424242421")], payments)
+
+    assert report.unmatched == 1
+    assert report.partial == 0
+    assert report.groups[0].payment_ids == ()
+
+
+def test_installment_still_matches_among_other_small_payments() -> None:
+    extras = [_payment(f"x{index}", "2024-01-10", "-5000") for index in range(20)]
+    report = reconcile(
+        [_evidence("e1", "2024-01-10", "300000")],
+        [
+            *extras,
+            _payment("p1", "2024-01-10", "-100000"),
+            _payment("p2", "2024-02-10", "-100000"),
+            _payment("p3", "2024-03-10", "-100000"),
+        ],
+        window_days=70,
+    )
+
+    assert report.matched == 1
+    assert report.groups[0].reason == "installment_one_to_many"
+    assert set(report.groups[0].payment_ids) == {"p1", "p2", "p3"}
+
+
 def test_refund_inflow_matches_purchase_evidence() -> None:
     report = reconcile(
         [_evidence("e1", "2024-06-01", "50000")],
