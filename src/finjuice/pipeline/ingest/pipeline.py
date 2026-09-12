@@ -66,7 +66,7 @@ def preview_ingest_paths(
 
     total = len(file_paths)
     for index, file_path in enumerate(file_paths, start=1):
-        logger.info("Previewing file %s/%s: %s", index, total, file_path.name)
+        logger.info("Previewing file %s/%s", index, total)
         try:
             _accumulate_preview_file(totals, _preview_ingest_path(file_path, context))
         except (FileNotFoundError, PermissionError) as e:
@@ -200,7 +200,7 @@ def ingest_paths(
     total = len(file_paths)
 
     for index, file_path in enumerate(file_paths, start=1):
-        logger.info("Ingesting file %s/%s: %s", index, total, file_path.name)
+        logger.info("Ingesting file %s/%s", index, total)
         try:
             _accumulate_ingest_file(
                 totals, ingest_file_detailed(file_path, csv_base_dir, archive=archive)
