@@ -1433,6 +1433,29 @@ ingest_schema = command_schema(
     ["command", "dry_run", "source"],
 )
 
+reconcile_schema = command_schema(
+    "reconcile.schema.json",
+    "reconcile --json output",
+    {
+        "command": string,
+        "evidence_count": integer,
+        "groups": array_of(object_any),
+        "matched": integer,
+        "partial": integer,
+        "payment_count": integer,
+        "unmatched": integer,
+    },
+    [
+        "command",
+        "evidence_count",
+        "payment_count",
+        "matched",
+        "partial",
+        "unmatched",
+        "groups",
+    ],
+)
+
 export_output_file_schema = object_schema(
     {
         "available": boolean,
@@ -1905,6 +1928,7 @@ SCHEMAS: dict[str, JsonSchema] = {
     "import.schema.json": import_schema,
     "inspect_xlsx.schema.json": inspect_xlsx_schema,
     "ingest.schema.json": ingest_schema,
+    "reconcile.schema.json": reconcile_schema,
     "index.schema.json": index_schema,
     "journal_list.schema.json": journal_list_schema,
     "manifest.schema.json": manifest_schema,

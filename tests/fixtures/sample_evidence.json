@@ -1,0 +1,12 @@
+{
+  "evidence": [
+    {
+      "evidence_id": "sample-order-1",
+      "occurred_on": "2024-01-15",
+      "amount": "10000",
+      "currency": "KRW",
+      "source_kind": "order",
+      "order_id": "ORDER-1"
+    }
+  ]
+}

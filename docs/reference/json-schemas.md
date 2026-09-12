@@ -67,6 +67,7 @@ command/code/exit-code combinations against this schema.
 | `schemas/networth_init.schema.json` | networth init --json output | `path`, `created`, `message` |
 | `schemas/networth_validate.schema.json` | networth validate --json output | `path`, `exists`, `valid`, `status`, `version`, `manual_assets`, `liabilities`, `errors`, `warnings`, `problems` |
 | `schemas/query.schema.json` | query --json output | `rows`, `row_count`, `pagination` |
+| `schemas/reconcile.schema.json` | reconcile --json output | `command`, `evidence_count`, `payment_count`, `matched`, `partial`, `unmatched`, `groups` |
 | `schemas/refresh.schema.json` | refresh --json output | `command`, `steps` |
 | `schemas/review.schema.json` | review --json output | `transactions`, `total_count`, `filters`, `month`, `health`, `actionable`, `signals`, `rule_notes`, `next_steps`, `pagination` |
 | `schemas/rules_add.schema.json` | rules add --json output | `action`, `rule`, `validation` |
@@ -4195,6 +4196,71 @@ query --json output
     "pagination"
   ],
   "title": "query --json output",
+  "type": "object"
+}
+```
+
+## `schemas/reconcile.schema.json`
+
+reconcile --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `command` | `string` | yes |
+| `evidence_count` | `integer` | yes |
+| `groups` | `array`[`object`] | yes |
+| `matched` | `integer` | yes |
+| `partial` | `integer` | yes |
+| `payment_count` | `integer` | yes |
+| `unmatched` | `integer` | yes |
+
+```json
+{
+  "$id": "reconcile.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "command": {
+      "type": "string"
+    },
+    "evidence_count": {
+      "type": "integer"
+    },
+    "groups": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "matched": {
+      "type": "integer"
+    },
+    "partial": {
+      "type": "integer"
+    },
+    "payment_count": {
+      "type": "integer"
+    },
+    "unmatched": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "_meta",
+    "command",
+    "evidence_count",
+    "payment_count",
+    "matched",
+    "partial",
+    "unmatched",
+    "groups"
+  ],
+  "title": "reconcile --json output",
   "type": "object"
 }
 ```
