@@ -56,7 +56,13 @@ def _collect_pending_imports(
     sample_limit: int,
 ) -> PendingImportsSignal:
     """Use ingest preview to identify actionable files still sitting in imports/."""
-    preview = preview_ingest_all_files(config.import_dir, config.csv_base_dir, archive=False)
+    preview = preview_ingest_all_files(
+        config.import_dir,
+        config.csv_base_dir,
+        archive=False,
+        skip_processed=True,
+        metadata_dir=config.data_dir / "metadata",
+    )
 
     sample_files: list[PendingImportFile] = []
     pending_file_count = 0

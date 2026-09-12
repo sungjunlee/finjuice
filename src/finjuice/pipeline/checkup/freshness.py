@@ -164,7 +164,13 @@ def _collect_import_preview_counts(
             return 0, 0
         return len(list(config.import_dir.glob("*.xlsx"))), 0
 
-    preview = preview_ingest_all_files(config.import_dir, config.csv_base_dir, archive=False)
+    preview = preview_ingest_all_files(
+        config.import_dir,
+        config.csv_base_dir,
+        archive=False,
+        skip_processed=True,
+        metadata_dir=config.data_dir / "metadata",
+    )
     pending_files = 0
 
     for file_summary in preview.get("files", []):

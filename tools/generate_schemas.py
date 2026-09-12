@@ -1424,6 +1424,8 @@ ingest_schema = command_schema(
         "command": string,
         "dry_run": boolean,
         "from_archive": string,
+        "history_skipped": integer,
+        "would_parse": integer,
         "preview": object_any,
         "source": string,
         "summary": object_any,

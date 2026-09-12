@@ -18,6 +18,9 @@
     "from_archive": {
       "type": "string"
     },
+    "history_skipped": {
+      "type": "integer"
+    },
     "preview": {
       "additionalProperties": true,
       "type": "object"
@@ -28,6 +31,9 @@
     "summary": {
       "additionalProperties": true,
       "type": "object"
+    },
+    "would_parse": {
+      "type": "integer"
     }
   },
   "required": [
