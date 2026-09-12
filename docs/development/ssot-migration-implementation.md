@@ -93,9 +93,13 @@ rule or crash-durability guarantee, and no disk was filled for testing.
   original last nonempty marker and ordered visible subsequence. This slice keeps
   its existing selection, original sequence, and persisted final category; it does
   not resolve that conflict by changing either rule.
-- Derived balance/cashflow/insurance/investment/loan rows need a capture-wide
-  source-fact lookup before typed foreign keys can be assigned. They currently
-  retain opaque row evidence with `unresolved_source_fact` when that field exists.
+- Derived balance/cashflow/insurance/investment/loan rows retain opaque evidence
+  with `unresolved_source_fact`. A capture-wide lookup alone cannot link separate
+  files: each file has its own source occurrence, while the current repository
+  invariant requires a projection and its fact to share one occurrence. The
+  remaining contract decision is how to represent verified cross-file derivation
+  while preserving distinct original file occurrences; even a unique legacy ID
+  match is not a completed link.
 - Config head selection is not implemented. Revisions alone must not be treated
   as active rules/goals configuration.
 - Failed attempts are rejected through their unpublished workspace and missing
