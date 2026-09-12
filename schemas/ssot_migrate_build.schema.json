@@ -1,0 +1,78 @@
+{
+  "$id": "ssot_migrate_build.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "attempt_id": {
+      "pattern": "^[a-f0-9]{32}$",
+      "type": "string"
+    },
+    "checks": {
+      "additionalProperties": {
+        "enum": [
+          "passed",
+          "not_run",
+          "failed"
+        ]
+      },
+      "type": "object"
+    },
+    "cutover_ready": {
+      "const": false
+    },
+    "dataset_revision": {
+      "const": 0
+    },
+    "generation_status": {
+      "const": "inactive"
+    },
+    "input_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "manifest_digest": {
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "origin_kind": {
+      "const": "legacy_current_state"
+    },
+    "phase": {
+      "enum": [
+        "migration_plan",
+        "migration_verify"
+      ]
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "already_complete"
+      ]
+    }
+  },
+  "required": [
+    "_meta",
+    "status",
+    "phase",
+    "manifest_digest",
+    "input_count",
+    "cutover_ready",
+    "limitations",
+    "generation_status",
+    "attempt_id",
+    "origin_kind",
+    "dataset_revision",
+    "checks"
+  ],
+  "title": "ssot migrate build --json output",
+  "type": "object"
+}

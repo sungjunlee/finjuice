@@ -79,6 +79,9 @@ command/code/exit-code combinations against this schema.
 | `schemas/rules_test.schema.json` | rules test --json output | `rule_name`, `scope`, `match_count`, `sample`, `monthly_distribution`, `cross_tags_top` |
 | `schemas/rules_validate.schema.json` | rules validate --json output | `status`, `total_rules`, `errors`, `warnings`, `passed`, `problems` |
 | `schemas/show.schema.json` | show --json output | `rows`, `row_count`, `total_matches`, `pagination` |
+| `schemas/ssot_migrate_build.schema.json` | ssot migrate build --json output | `status`, `phase`, `manifest_digest`, `input_count`, `cutover_ready`, `limitations`, `generation_status`, `attempt_id`, `origin_kind`, `dataset_revision`, `checks` |
+| `schemas/ssot_migrate_plan.schema.json` | ssot migrate plan --json output | `status`, `phase`, `manifest_digest`, `input_count`, `cutover_ready`, `limitations` |
+| `schemas/ssot_migrate_verify.schema.json` | ssot migrate verify --json output | `status`, `phase`, `manifest_digest`, `input_count`, `cutover_ready`, `limitations`, `generation_status`, `attempt_id`, `origin_kind`, `dataset_revision`, `checks` |
 | `schemas/status.schema.json` | status --json output | `data_directory`, `transactions`, `last_import`, `terminology`, `tagging`, `rules_file`, `health`, `actionable`, `signals`, `next_steps` |
 | `schemas/tag.schema.json` | tag --json output | `status` |
 | `schemas/template_list.schema.json` | template list --json output | `templates` |
@@ -5833,6 +5836,273 @@ show --json output
     "pagination"
   ],
   "title": "show --json output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_migrate_build.schema.json`
+
+ssot migrate build --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `attempt_id` | `string` | yes |
+| `checks` | `object` | yes |
+| `cutover_ready` | `any` | yes |
+| `dataset_revision` | `any` | yes |
+| `generation_status` | `any` | yes |
+| `input_count` | `integer` | yes |
+| `limitations` | `array`[`string`] | yes |
+| `manifest_digest` | `string` | yes |
+| `origin_kind` | `any` | yes |
+| `phase` | enum(`migration_plan`, `migration_verify`) | yes |
+| `status` | enum(`ok`, `already_complete`) | yes |
+
+```json
+{
+  "$id": "ssot_migrate_build.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "attempt_id": {
+      "pattern": "^[a-f0-9]{32}$",
+      "type": "string"
+    },
+    "checks": {
+      "additionalProperties": {
+        "enum": [
+          "passed",
+          "not_run",
+          "failed"
+        ]
+      },
+      "type": "object"
+    },
+    "cutover_ready": {
+      "const": false
+    },
+    "dataset_revision": {
+      "const": 0
+    },
+    "generation_status": {
+      "const": "inactive"
+    },
+    "input_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "manifest_digest": {
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "origin_kind": {
+      "const": "legacy_current_state"
+    },
+    "phase": {
+      "enum": [
+        "migration_plan",
+        "migration_verify"
+      ]
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "already_complete"
+      ]
+    }
+  },
+  "required": [
+    "_meta",
+    "status",
+    "phase",
+    "manifest_digest",
+    "input_count",
+    "cutover_ready",
+    "limitations",
+    "generation_status",
+    "attempt_id",
+    "origin_kind",
+    "dataset_revision",
+    "checks"
+  ],
+  "title": "ssot migrate build --json output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_migrate_plan.schema.json`
+
+ssot migrate plan --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `cutover_ready` | `any` | yes |
+| `input_count` | `integer` | yes |
+| `limitations` | `array`[`string`] | yes |
+| `manifest_digest` | `string` | yes |
+| `phase` | enum(`migration_plan`, `migration_verify`) | yes |
+| `status` | enum(`ok`, `already_complete`) | yes |
+
+```json
+{
+  "$id": "ssot_migrate_plan.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "cutover_ready": {
+      "const": false
+    },
+    "input_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "manifest_digest": {
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "phase": {
+      "enum": [
+        "migration_plan",
+        "migration_verify"
+      ]
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "already_complete"
+      ]
+    }
+  },
+  "required": [
+    "_meta",
+    "status",
+    "phase",
+    "manifest_digest",
+    "input_count",
+    "cutover_ready",
+    "limitations"
+  ],
+  "title": "ssot migrate plan --json output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_migrate_verify.schema.json`
+
+ssot migrate verify --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `attempt_id` | `string` | yes |
+| `checks` | `object` | yes |
+| `cutover_ready` | `any` | yes |
+| `dataset_revision` | `any` | yes |
+| `generation_status` | `any` | yes |
+| `input_count` | `integer` | yes |
+| `limitations` | `array`[`string`] | yes |
+| `manifest_digest` | `string` | yes |
+| `origin_kind` | `any` | yes |
+| `phase` | enum(`migration_plan`, `migration_verify`) | yes |
+| `status` | enum(`ok`, `already_complete`) | yes |
+
+```json
+{
+  "$id": "ssot_migrate_verify.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "attempt_id": {
+      "pattern": "^[a-f0-9]{32}$",
+      "type": "string"
+    },
+    "checks": {
+      "additionalProperties": {
+        "enum": [
+          "passed",
+          "not_run",
+          "failed"
+        ]
+      },
+      "type": "object"
+    },
+    "cutover_ready": {
+      "const": false
+    },
+    "dataset_revision": {
+      "const": 0
+    },
+    "generation_status": {
+      "const": "inactive"
+    },
+    "input_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "manifest_digest": {
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "origin_kind": {
+      "const": "legacy_current_state"
+    },
+    "phase": {
+      "enum": [
+        "migration_plan",
+        "migration_verify"
+      ]
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "already_complete"
+      ]
+    }
+  },
+  "required": [
+    "_meta",
+    "status",
+    "phase",
+    "manifest_digest",
+    "input_count",
+    "cutover_ready",
+    "limitations",
+    "generation_status",
+    "attempt_id",
+    "origin_kind",
+    "dataset_revision",
+    "checks"
+  ],
+  "title": "ssot migrate verify --json output",
   "type": "object"
 }
 ```

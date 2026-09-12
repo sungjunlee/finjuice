@@ -40,6 +40,8 @@ MUTATING_COMMANDS = {
     "rules gaps",
     "rules remove",
     "rules suggest",
+    "ssot migrate plan",
+    "ssot migrate build",
     "tag",
     "template run",
     "transfer",
@@ -66,6 +68,9 @@ RUNTIME_METADATA_COMMANDS = {
 }
 
 ARTIFACT_COMMANDS = {
+    "ssot migrate plan",
+    "ssot migrate build",
+    "ssot migrate verify",
     "backup create",
     "backup restore",
     "backup verify",

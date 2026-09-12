@@ -26,6 +26,7 @@ from .generate_schemas_helpers import (
     schema_from_structured_model,  # noqa: F401 — re-exported for existing generate_schemas imports
     schema_from_typed_dict_type,  # noqa: F401 — re-exported for existing generate_schemas imports
 )
+from .migration_schemas import migration_schemas
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = ROOT / "src"
@@ -1902,6 +1903,7 @@ backup_restore_schema = command_schema(
 )
 
 SCHEMAS: dict[str, JsonSchema] = {
+    **migration_schemas(),
     "_error.schema.json": error_schema,
     "_meta.schema.json": meta_schema,
     "_pagination.schema.json": pagination_schema,

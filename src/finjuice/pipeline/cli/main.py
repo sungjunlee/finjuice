@@ -47,6 +47,7 @@ from finjuice.pipeline.cli.commands.reconcile_cmd import reconcile_command
 from finjuice.pipeline.cli.commands.refresh_cmd import refresh_command
 from finjuice.pipeline.cli.commands.review import review_command
 from finjuice.pipeline.cli.commands.rules import rules_app
+from finjuice.pipeline.cli.commands.ssot_migrate import ssot_app
 from finjuice.pipeline.cli.commands.tag import tag_command
 from finjuice.pipeline.cli.commands.template_cmd import template_app
 from finjuice.pipeline.cli.commands.transfer import transfer_command
@@ -196,6 +197,7 @@ app.add_typer(networth_app, name="networth", rich_help_panel="Analysis")
 app.add_typer(budget_app, name="budget", rich_help_panel="Analysis")
 app.add_typer(journal_app, name="journal", rich_help_panel="Commands")
 app.add_typer(backup_app, name="backup", rich_help_panel="Admin")
+app.add_typer(ssot_app, name="ssot", rich_help_panel="Admin")
 
 
 def _resolve_active_data_dir(data_dir: Optional[Path]) -> Optional[Path]:
@@ -283,6 +285,7 @@ def main(
         "manifest",
         "inspect",
         "backup",
+        "ssot",
     }
     # Also check for resilient_parsing (used during completion/help)
     if help_requested or utility_without_data_dir_requested or ctx.resilient_parsing:

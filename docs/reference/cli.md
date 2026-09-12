@@ -70,6 +70,7 @@ finjuice --version
 │ version         Show finjuice CLI version and data schema version.                                                   │
 │ workspace       Manage workspace directories (symlink-based)                                                         │
 │ backup          Create, verify, and restore a complete legacy data-tree backup.                                      │
+│ ssot            Manage inactive SQLite migration candidates.                                                         │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Advanced ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ ingest          Import XLSX files from imports/ into the selected storage authority.                                 │

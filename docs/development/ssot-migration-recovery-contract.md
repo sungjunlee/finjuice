@@ -292,7 +292,7 @@ and POSIX directory file descriptors are not a compatible fallback.
 #435 implements the frozen migration command names and JSON concepts:
 
 ```text
-finjuice ssot migrate plan --manifest <capture-manifest> --json
+finjuice ssot migrate plan --manifest <capture-manifest> --output <new-plan> --json
 finjuice ssot migrate build --plan <plan> --staging <new-path> --json
 finjuice ssot migrate verify --candidate <migration-manifest> --json
 ```

@@ -114,3 +114,5 @@ scope: ["**"]
 
 - `b8ada1a`의 최종 원격 CI는 Linux 3,161 PASS·4 플랫폼 SKIP(142.58초), coverage 89.18%이며 적용 gate를 모두 통과했다. #434의 AC 5개에 구현 검증 근거를 반영했으나 이슈는 필수 리뷰/머지 전까지 OPEN이다.
 - 이후 main에 PR #475(증빙 대사 첫 부분)·#476(0.8.0 버전)이 추가돼 GitHub의 정상 브랜치 업데이트로 `a76798d`에 통합했다. 로컬도 해당 head로 fast-forward했고 대사·schema·버전 관련 136개가 통과했다. `just docs`는 누락된 새 reconcile 도구 정의까지 포함해 `templates/tools.json` 62개를 생성했다. 이 버전 기준의 전체/설치본/원격 검증 결과는 PR #463과 Issue #434에 보존한다. #475는 #446의 첫 부분이며 전체 M5 완료가 아니다. 새 `reconcile`의 원장 조회는 현재 CSV이므로 #436의 SQLite 조회 전환 대상에 포함해 확인한다. 원격 main과 운영 설치본은 서로 다른 상태로 취급하며 이번 통합에서 운영 호스트를 변경하지 않았다.
+
+- 2026-09-12 추가 위임: #463 승인 대기 중 독립 합성 #435 준비·구현을 별도 stacked branch `codex/ssot-m2-migrate`에서 허용했다. 기존 #463 checkout/PR/보호 규칙은 변경하지 않는다. plan/build/verify, 원문·CSV lexical 보존 adapter, 비활성 후보 CLI를 구현했으며 파생 overview FK 연결과 config head 선택은 명시적 미완성이다. 구현 범위와 제한은 `docs/development/ssot-migration-implementation.md`에 기록한다. 실제 자료·배포·activation은 실행하지 않았고 #435 AC를 완료 처리하지 않는다.
