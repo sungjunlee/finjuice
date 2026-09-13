@@ -551,3 +551,34 @@ dispositions appear in metadata. Unknown filenames remain null. Raw, redacted an
 compact profiles preserve their established sample handling; merchant amounts
 may be null in redacted output and the schema reflects that existing behavior.
 Checkup shares the same per-file evaluation while retaining its aggregate output.
+
+## Journal snapshot notes
+
+`journal new` derives its front matter from one validated canonical analysis snapshot
+under `legacy_journal_snapshot.v1`. Transaction rows, selected rules/report filters and
+goals bytes stay pinned to that revision; live CSV or YAML edits cannot alter the note.
+Invalid authority, incomplete transactions, invalid/unselected rules, and non-finite
+input or aggregate amounts fail before creating the journal directory or a note.
+
+The existing float calculation uses represented months for averages and the latest
+three represented months for rates. `snapshot_metadata.calculation_as_of` is null;
+`created` is the local note creation clock, not a financial cutoff. The data range
+comes from included rows before report filters. Active filter count reports the
+canonical filters actually applied, rather than a separate live filter file.
+
+Absent goals permit existing empty-goal calculations. Invalid or unselected goals
+produce a static warning and save null for the six goal-dependent structural and
+consumption fields listed in `snapshot_metadata.unavailable_fields`. `active_goals`
+is always null with `active_goals_state=not_computed`, because the shared snapshot
+calculator does not compute an active-goal list. Unknown values are not saved as zero.
+
+Canonical notes remain external Markdown artifacts. Destination validation protects
+canonical/control/configuration/input paths and rejects leaf symlinks. A private
+temporary file is published exclusively, preserving existing or concurrently created
+notes; this does not claim protection against arbitrary concurrent parent-directory
+replacement. Validation precedes the existing optional interactive gitignore prompt. Its canonical
+writer also checks protected destinations and atomically replaces an ordinary ignore
+file, preserving any hardlinked source inode; symlink ignore files are rejected.
+`journal list` and `resume` continue reading historical notes independently of current
+financial authority. Legacy note front matter and the three body templates retain
+their existing shape. No new JSON command is introduced.

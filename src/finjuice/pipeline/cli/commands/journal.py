@@ -14,6 +14,7 @@ import os
 import shlex
 import subprocess
 import sys
+from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
@@ -32,6 +33,11 @@ from finjuice.pipeline.cli.commands.journal_paths import (
     _resolve_new_entry_path,
     _resolve_topic,
 )
+from finjuice.pipeline.cli.commands.journal_repository_output import (
+    validate_journal_destination,
+    write_journal_entry,
+    write_journal_gitignore,
+)
 from finjuice.pipeline.cli.output import (
     ErrorCode,
     ExitCode,
@@ -41,9 +47,10 @@ from finjuice.pipeline.cli.output import (
     info,
     warning,
 )
-from finjuice.pipeline.cli.utils import get_config
+from finjuice.pipeline.cli.utils import get_activation_evidence_provider, get_config
 from finjuice.pipeline.insights import StatusSnapshot, collect_status_snapshot
 from finjuice.pipeline.journal import JournalEntry, load_journal_entries
+from finjuice.pipeline.journal_repository import collect_repository_journal_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -78,16 +85,18 @@ def new_entry(
     """Create a journal entry with snapshot front matter."""
     config = get_config(ctx)
     now = _now()
+    normalized_topic = _resolve_topic(topic, now)
+    template_body = _load_template_body(template)
+    if _new_repository_entry(ctx, now, normalized_topic, template_body, no_gitignore_check):
+        return
     journal_dir = _ensure_journal_dir(config.journal_dir)
     non_interactive = not sys.stdin.isatty()
 
     if not no_gitignore_check and not non_interactive:
         _maybe_prompt_for_gitignore(journal_dir)
 
-    normalized_topic = _resolve_topic(topic, now)
     file_path = _resolve_new_entry_path(journal_dir, normalized_topic, now)
     snapshot_result = collect_status_snapshot(config)
-    template_body = _load_template_body(template)
 
     front_matter = {
         "created": now.isoformat(timespec="seconds"),
@@ -107,6 +116,69 @@ def new_entry(
     if snapshot_result.warning:
         warning(snapshot_result.warning)
     typer.echo(str(file_path.resolve()))
+
+
+def _new_repository_entry(
+    ctx: typer.Context,
+    now: datetime,
+    topic: str,
+    template_body: str,
+    no_gitignore_check: bool,
+) -> bool:
+    """Validate one canonical snapshot before creating an external journal note."""
+    config = get_config(ctx)
+    try:
+        result = collect_repository_journal_snapshot(config, get_activation_evidence_provider(ctx))
+        if result is None:
+            return False
+        path = _resolve_new_entry_path(config.journal_dir, topic, now)
+        path = validate_journal_destination(config, path)
+        snapshot = _snapshot_front_matter(result.snapshot)
+        metadata = deepcopy(result.metadata)
+        for field in metadata["unavailable_fields"]:
+            if field not in snapshot:
+                raise ValueError("Unknown journal snapshot field.")
+            snapshot[field] = None
+        metadata["warning"] = result.warning
+        front_matter = {
+            "created": now.isoformat(timespec="seconds"),
+            "topic": topic,
+            "data_range": result.snapshot.data_range,
+            "snapshot": snapshot,
+            "snapshot_metadata": metadata,
+        }
+        content = (
+            "---\n"
+            + yaml.safe_dump(front_matter, allow_unicode=True, sort_keys=False).strip()
+            + "\n---\n\n"
+            + template_body.strip()
+            + "\n"
+        )
+        check_gitignore = not no_gitignore_check and sys.stdin.isatty()
+        if check_gitignore and (git_root := _find_git_root(path.parent)) is not None:
+            validate_journal_destination(config, git_root / ".gitignore")
+        journal_dir = _ensure_journal_dir(config.journal_dir)
+        if check_gitignore:
+            _maybe_prompt_for_gitignore(
+                journal_dir,
+                writer=lambda ignore_path, text: write_journal_gitignore(config, ignore_path, text),
+            )
+        write_journal_entry(config, path, content)
+    except typer.Exit:
+        raise
+    except Exception:
+        emit_error(
+            "Canonical journal could not be created from validated evidence at a safe destination.",
+            error_code=ErrorCode.VALIDATION_FAILED,
+            exit_code=ExitCode.VALIDATION_ERROR,
+            json_output=False,
+            command="journal new",
+        )
+        raise AssertionError("emit_error must exit") from None
+    if result.warning:
+        warning(result.warning)
+    typer.echo(str(path))
+    return True
 
 
 @journal_app.command("list")

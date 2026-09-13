@@ -7,13 +7,16 @@ local gitignore prompt. Typer commands stay in
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Optional
 
 import typer
 
 
-def _maybe_prompt_for_gitignore(journal_dir: Path) -> None:
+def _maybe_prompt_for_gitignore(
+    journal_dir: Path, *, writer: Callable[[Path, str], None] | None = None
+) -> None:
     """Offer to add a local ignore rule for underscore-prefixed journal dirs."""
     git_root = _find_git_root(journal_dir)
     if git_root is None:
@@ -29,7 +32,11 @@ def _maybe_prompt_for_gitignore(journal_dir: Path) -> None:
 
     existing = gitignore_path.read_text(encoding="utf-8") if gitignore_path.exists() else ""
     prefix = "" if not existing or existing.endswith("\n") else "\n"
-    gitignore_path.write_text(f"{existing}{prefix}_*/\n", encoding="utf-8")
+    content = f"{existing}{prefix}_*/\n"
+    if writer is None:
+        gitignore_path.write_text(content, encoding="utf-8")
+    else:
+        writer(gitignore_path, content)
 
 
 def _find_git_root(start: Path) -> Optional[Path]:

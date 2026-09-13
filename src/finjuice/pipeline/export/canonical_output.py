@@ -66,3 +66,12 @@ def _require_output_destination(config: Config, target: Path) -> None:
 def _namespace_path(path: Path) -> Path:
     """Reserve equivalent spellings even on case-sensitive output filesystems."""
     return Path(unicodedata.normalize("NFC", str(path)).casefold())
+
+
+def validate_canonical_output_destination(config: Config, output: Path) -> Path:
+    """Validate lexical and resolved namespaces without creating any files."""
+    lexical = Path(os.path.abspath(output.expanduser()))
+    _require_output_destination(config, lexical)
+    target = lexical.resolve()
+    _require_output_destination(config, target)
+    return target
