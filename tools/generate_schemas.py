@@ -197,7 +197,7 @@ status_schema = command_schema(
         ),
         "next_steps": array_of(next_step_schema),
         "rules_file": object_schema(
-            {"exists": boolean, "modified_at": string_or_null, "path": string},
+            {"exists": boolean, "modified_at": string_or_null, "path": string_or_null},
             required=["path", "exists", "modified_at"],
         ),
         "terminology": tagging_terminology_schema,

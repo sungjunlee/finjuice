@@ -36,12 +36,29 @@ def _add_data_rows(table: Table, result: dict[str, Any]) -> None:
     table.add_row("Data directory", f"{data_dir_resolved} [dim]({data_dir_source})[/dim]")
     table.add_row("Transactions", f"{result['transactions']['count']:,} rows")
     table.add_row("Date range", date_range)
-    table.add_row("Partitions", f"{result['transactions']['partition_count']} months")
+    label = "Proven partition months" if "repository" in result else "Partitions"
+    table.add_row(label, f"{result['transactions']['partition_count']} months")
+    if "repository" in result:
+        metadata = result["repository"]["metadata"]
+        counts = result["repository"]["source_counts"]
+        table.add_row("Repository revision", str(metadata["dataset_revision"]))
+        table.add_row("Dataset generation", str(metadata["dataset_generation"]))
+        table.add_row(
+            "Source rows",
+            (
+                f"{counts['total_rows']} total; {counts['primary_scope_rows']} primary scope; "
+                f"{counts['out_of_scope_rows']} outside primary scope; "
+                f"{counts['unknown_month_rows']} unknown month"
+            ),
+        )
 
 
 def _add_schema_row(table: Table, result: dict[str, Any]) -> None:
     """Add schema compatibility state and migration hint."""
     schema = result["schema"]
+    if schema.get("authority") == "repository":
+        table.add_row("Schema", f"SQLite active v{schema['sqlite_schema_version']}")
+        return
     state = schema["state"]
     if state == SchemaCompatibilityState.ACTIVE.value:
         versions = schema.get("active_versions") or [schema["current_version"]]
@@ -65,6 +82,28 @@ def _add_schema_row(table: Table, result: dict[str, Any]) -> None:
 
 def _add_import_row(table: Table, result: dict[str, Any]) -> None:
     """Add the latest import row."""
+    if "repository" in result:
+        last_import = result["last_import"]
+        occurrence = last_import.get("occurrence_id")
+        if occurrence:
+            table.add_row(
+                "Last import",
+                (
+                    f"{last_import.get('imported_at') or 'Unknown time'} "
+                    f"(occurrence_id: {occurrence}; origin: {last_import.get('origin')})"
+                ),
+            )
+            if last_import.get("file_id"):
+                table.add_row("Import file_id", str(last_import["file_id"]))
+        elif last_import.get("origin") == "legacy_import_history":
+            table.add_row(
+                "Last import",
+                f"{last_import.get('imported_at') or 'Unknown time'} "
+                f"(file_id: {last_import.get('file_id') or 'Unknown'}; preserved history)",
+            )
+        else:
+            table.add_row("Last import", "[dim]No recorded import[/dim]")
+        return
     last_import_date = result["last_import"]["imported_at"]
     last_import_file = result["last_import"]["file_id"]
     if last_import_date and last_import_file:
@@ -148,6 +187,16 @@ def _add_untagged_rows(table: Table, result: dict[str, Any]) -> None:
 
 def _add_rules_row(table: Table, result: dict[str, Any]) -> None:
     """Add the rules file status row."""
+    if "repository" in result:
+        head = result["repository"]["rules_head"]
+        table.add_row(
+            "Canonical rules",
+            (
+                f"{head['parsed_status']} (revision: {head['revision_id'] or 'none'}; "
+                f"updated: {head['updated_at'] or 'unknown'})"
+            ),
+        )
+        return
     rules_path_str = result["rules_file"]["path"]
     rules_exists = result["rules_file"]["exists"]
     rules_modified = result["rules_file"]["modified_at"]

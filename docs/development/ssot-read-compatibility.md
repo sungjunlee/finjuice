@@ -168,3 +168,44 @@ unconstrained installation of Typer 0.27.2 changes its command class hierarchy a
 breaks the existing Click-based runtime manifest discovery. Operational deployment
 must retain the verified lock versions until that separate dependency compatibility
 work is completed.
+
+### Repository status and detailed insights
+
+Activated `status` and `status --detailed` select transactions, partition scopes,
+canonical rules/goals heads and import provenance through one validated reader.
+They never use a live CSV, rules/goals file, import-history file or second analytics
+reader. The legacy branch keeps its existing CSV diagnostics. Empty repositories
+remain valid status inputs. Stored classifications, tag arrays and notes are not
+rewritten by status.
+
+JSON metadata identifies generation/revision/schema and `legacy_status.v1`.
+`calculation_as_of` is the latest strictly valid source date, or null. Basic counts
+honor canonical report filters, while additive `source_counts` identifies all
+stored rows, primary-scope rows, out-of-scope rows and unknown-month rows. Month
+counts retain proven empty partitions. Detailed date range retains the legacy
+unfiltered source range; its financial metrics use the same canonical filters.
+Detailed `active_filters` counts configured filters, while `_meta.filters_applied`
+counts filters matching at least one row.
+
+`rules_file` remains a compatibility key: for repository authority its path is
+null and its revision/status/update time describe the canonical head. Missing,
+invalid and opaque rules remain diagnostic states. Invalid/opaque rules reject
+filtered collection; explicit `--no-filter` permits full counts but does not
+clear the critical diagnosis. Invalid canonical goals produce an explicit
+recurring-savings warning without reading a live replacement; human and JSON
+outputs retain the available transaction statistics alongside that warning. SQLite schema
+status never suggests CSV migration or `finjuice init`.
+
+Import occurrences distinguish completed native imports, migration captures and
+unproven origins. A capture timestamp is never a user import timestamp. Proven
+primary `metadata/import_history.csv` records remain separately available from
+preserved row provenance. `native_then_legacy_lexical.v1` selects a completed
+native import when present; otherwise it follows the legacy timestamp-string
+sort over preserved history. Native imports are post-baseline operations, so
+unknown-timezone legacy timestamps are not converted or compared to native UTC
+clocks. Native occurrence UUIDs remain separate from legacy file IDs; history
+rows expose their provenance instead of claiming the capture occurrence was the
+original import.
+
+This connects status only. Doctor, checkup/networth, overview/assets consumers and
+full private-corpus parity remain separate acceptance work.

@@ -53,3 +53,7 @@
 - 다음 explain 조사: 실행당 analytics하나를열어 snapshot rules/status와검색을고정. 기존 explain은report filters를적용하지않으므로queryfilterhelper를그대로사용하지않고 --no-filter도invalid tagging rules우회를허용하지않는다. #497의최대10검색/5후보/--pick표시범위/JSON첫행/human선택취소를유지한다. Native row_hash=None과별도transaction_id, matcher용전체필드+exact금액, 저장된수동/final과규칙simulation구분이필요. no-rules/no-match/success metadata를모두같은revision에연결한다. _search_transactions는기존wrapper유지+열린analyticshelper분리, _load_explain_rules는same-snapshot bytes로연결하는최소구조가유력하다.
 
 - 최신 #436 진행: explain은45460db로push했다. 이어 export의single-snapshot full/report분리,재생성transactions.csv, 실행별artifactmanifest/digest/stale검증과export-verify명령을구현중이다. 위초기기록의activeexport불가상태는현재branch에서해소했지만운영cutover는아직없다. 최종검증·review·commit근거는활성스프린트와PR481을따른다. 다음은status의정본facts와legacyCSV진단분리,이후overview/assets소비자연결이다.
+- export는4badf09커밋/push완료. 이어status기본/detailed single-reader연결을작업중이며저장snapshot·기존import_history증거·nativeidentity·diagnostic/rendering·goalsbytes순수계산을구현했다. 현재검증/리뷰상태는활성스프린트최신기록을따른다. 운영전환/전체#436완료아님.
+- 다음 portfolio 전제:현migration configs.py는rules/goals만head선택하며assets/scenarios는revision만보존한다. 읽기연결전에명시선택정책/구버전immutable replay를해결해야하며,head없음을수동자산없음으로해석하거나live YAML fallback금지.
+
+- status checkpoint검증완료: full3575PASS1SKIP89.99%(최종goals경고표시수정전), 수정후관련64PASS+설치본39PASS/446모듈/12SHA검증. Cursor최초P2를수정하고후속실제2테스트+재리뷰해소확인. commit/push와최신PR481근거는활성스프린트/원격head에서확인. 다음은assets/scenarios canonicalhead선택정책을먼저해결한뒤portfolio조회연결.

@@ -28,9 +28,14 @@ def _render_next_steps(
     suggestable_untagged_count: int,
     transfer_excluded_untagged_count: int,
     schema_migration: dict[str, str] | None,
+    repository_steps: list[dict[str, str]] | None = None,
 ) -> None:
     """Render human next-step recommendations."""
     next_steps: list[tuple[str, str]] = []
+
+    if repository_steps is not None:
+        _render_repository_steps(repository_steps)
+        return
 
     if schema_migration:
         next_steps.append((schema_migration["command"], schema_migration["message"]))
@@ -60,3 +65,12 @@ def _render_next_steps(
         for cmd, desc in next_steps:
             console.print(f"  [green]{cmd}[/green]  →  {desc}")
         console.print()
+
+
+def _render_repository_steps(steps: list[dict[str, str]]) -> None:
+    if not steps:
+        return
+    console.print("[bold cyan]💡 Next Steps[/bold cyan]")
+    for step in steps:
+        console.print(f"  [green]{step['command']}[/green]  →  {step['message']}")
+    console.print()

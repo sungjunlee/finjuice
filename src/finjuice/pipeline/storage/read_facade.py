@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
+from typing import TypeVar
 
 import polars as pl
 
@@ -16,7 +18,10 @@ from finjuice.pipeline.storage.authority import (
 from finjuice.pipeline.storage.csv_schema import CSV_COLUMNS, POLARS_SCHEMA
 from finjuice.pipeline.storage.sqlite.errors import RepositoryIntegrityError
 from finjuice.pipeline.storage.sqlite.repository import RepositoryReader
+from finjuice.pipeline.storage.sqlite.status_reads import StatusReadSnapshot
 from finjuice.pipeline.storage.sqlite.transaction_reads import TransactionReadSnapshot
+
+_Snapshot = TypeVar("_Snapshot")
 
 READ_POLICY = "legacy_transaction_display.v1"
 
@@ -31,6 +36,21 @@ def read_transaction_snapshot(
     activation or snapshot validation propagate; they never authorize CSV fallback.
     A shared lease prevents cutover while the selected generation is copied.
     """
+    return _read_snapshot(data_dir, evidence_provider, RepositoryReader.transaction_snapshot)
+
+
+def read_status_snapshot(
+    data_dir: Path, evidence_provider: ActivationEvidenceProvider | None = None
+) -> StatusReadSnapshot | None:
+    """Read status from one revision, with the same fail-closed authority checks."""
+    return _read_snapshot(data_dir, evidence_provider, RepositoryReader.status_snapshot)
+
+
+def _read_snapshot(
+    data_dir: Path,
+    evidence_provider: ActivationEvidenceProvider | None,
+    materialize: Callable[[RepositoryReader], _Snapshot],
+) -> _Snapshot | None:
     dispatch = resolve_storage_authority(data_dir, evidence_provider)
     if isinstance(dispatch.authority, LegacyAuthority):
         return None
@@ -48,7 +68,7 @@ def read_transaction_snapshot(
                 or reader.info.dataset_revision < selected.activation.dataset_revision
             ):
                 raise RepositoryIntegrityError("Read snapshot predates activation.")
-            return reader.transaction_snapshot()
+            return materialize(reader)
 
 
 def transaction_frame(snapshot: TransactionReadSnapshot) -> pl.DataFrame:

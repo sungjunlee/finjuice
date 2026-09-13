@@ -6536,7 +6536,10 @@ status --json output
           ]
         },
         "path": {
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [

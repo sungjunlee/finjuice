@@ -65,6 +65,7 @@ from finjuice.pipeline.storage.sqlite.schema import (
 )
 from finjuice.pipeline.storage.sqlite.schema_v5 import LEGACY_OVERVIEW_TABLES
 from finjuice.pipeline.storage.sqlite.snapshot import inspection_snapshot
+from finjuice.pipeline.storage.sqlite.status_reads import StatusReadSnapshot, status_snapshot
 from finjuice.pipeline.storage.sqlite.transaction_reads import (
     TransactionReadSnapshot,
     transaction_snapshot,
@@ -625,6 +626,11 @@ class RepositoryReader(AbstractContextManager["RepositoryReader"]):
         if self._closed:
             raise RuntimeError("Repository reader is already closed.")
         return transaction_snapshot(self._connection, self.info, self._repository_paths)
+
+    def status_snapshot(self) -> StatusReadSnapshot:
+        """Return status evidence from the same validated transaction snapshot."""
+        transactions = self.transaction_snapshot()
+        return status_snapshot(self._connection, self._repository_paths, transactions)
 
     def close(self) -> None:
         """Close the scratch connection and delete its temporary snapshot."""
