@@ -178,22 +178,33 @@ def tag_command(
     """
     config = _require_tag_config(ctx, edit)
 
-    try:
-        warn_on_schema_mismatch(config.data_dir)
+    if edit is None and (
+        add_tag or remove_tag or set_category is not None or set_note is not None
+    ):
+        emit_error(
+            "Manual edit flags require --edit <row_hash>.",
+            error_code=ErrorCode.INVALID_ARGS,
+            exit_code=ExitCode.USAGE_ERROR,
+            json_output=json_output,
+            command="tag",
+        )
 
-        if edit is None and (
-            add_tag or remove_tag or set_category is not None or set_note is not None
-        ):
+    if edit is not None:
+        try:
+            _validate_edit_row_hash(edit)
+        except ValueError as exc:
             emit_error(
-                "Manual edit flags require --edit <row_hash>.",
+                str(exc),
                 error_code=ErrorCode.INVALID_ARGS,
-                exit_code=ExitCode.USAGE_ERROR,
+                exit_code=ExitCode.VALIDATION_ERROR,
                 json_output=json_output,
                 command="tag",
             )
 
+    try:
+        warn_on_schema_mismatch(config.data_dir)
+
         if edit is not None:
-            _validate_edit_row_hash(edit)
             result = _compute_tag_edit(
                 config,
                 edit,

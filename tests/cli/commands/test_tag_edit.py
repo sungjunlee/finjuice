@@ -1,6 +1,7 @@
 """Tests for manual tag editing via `finjuice tag --edit`."""
 
 import json
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -612,12 +613,16 @@ def test_tag_edit_json_includes_needs_review(review_data_dir: Path) -> None:
     assert txn["confidence"] == 1.0
 
 
-def test_tag_edit_help_after_edit_flag_exits_without_traceback() -> None:
+def test_tag_edit_help_after_edit_flag_exits_without_traceback(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """`tag --edit --help` should show usage instead of crashing on missing config."""
-    result = runner.invoke(app, ["tag", "--edit", "--help"])
+    with caplog.at_level(logging.ERROR):
+        result = runner.invoke(app, ["tag", "--edit", "--help"])
 
     assert result.exit_code == 0, result.output
     assert "Traceback" not in result.output
+    assert "Traceback" not in caplog.text
     assert "AttributeError" not in result.output
     output = result.output
     assert "Usage" in output or "--edit" in output
@@ -637,15 +642,46 @@ def test_require_tag_config_missing_context_exits_nonzero() -> None:
     assert exc_info.value.exit_code != 0
 
 
-def test_tag_edit_malformed_hash_exits_with_readable_error(tag_edit_data_dir: Path) -> None:
+def test_tag_edit_malformed_hash_exits_with_readable_error(
+    tag_edit_data_dir: Path, caplog: pytest.LogCaptureFixture
+) -> None:
     """`--edit` with a non-hash value should fail fast with a readable error."""
-    result = runner.invoke(
-        app,
-        ["--data-dir", str(tag_edit_data_dir), "tag", "--edit", "not-a-hash"],
-    )
+    with caplog.at_level(logging.ERROR):
+        result = runner.invoke(
+            app,
+            ["--data-dir", str(tag_edit_data_dir), "tag", "--edit", "not-a-hash"],
+        )
 
-    assert result.exit_code != 0
+    assert result.exit_code == 3
     assert "Traceback" not in result.output
+    assert "Traceback" not in caplog.text
     output = result.output.lower()
     assert "row_hash" in output or "hexadecimal" in output
     assert "16" in result.output
+
+
+def test_tag_edit_malformed_hash_json_error(
+    tag_edit_data_dir: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """`--edit` with a non-hash value should emit structured JSON without a traceback."""
+    with caplog.at_level(logging.ERROR):
+        result = runner.invoke(
+            app,
+            [
+                "--data-dir",
+                str(tag_edit_data_dir),
+                "tag",
+                "--edit",
+                "not-a-hash",
+                "--json",
+            ],
+        )
+
+    assert result.exit_code == 3
+    assert "Traceback" not in result.output
+    assert "Traceback" not in caplog.text
+    payload = json.loads(result.output)
+    assert payload["error"]["code"] == "INVALID_ARGS"
+    assert payload["exit_code"] == 3
+    message = payload["error"]["message"].lower()
+    assert "row_hash" in message or "hexadecimal" in message
