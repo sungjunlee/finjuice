@@ -7,6 +7,7 @@ module.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from finjuice import get_version
@@ -14,6 +15,7 @@ from finjuice.pipeline.doctor.models import CheckResult
 
 SKILL_RUNTIME_REQUIRED_VERSION = "0.8.2"
 SKILL_RUNTIME_UPDATE_COMMAND = "skills/finjuice/scripts/ensure_finjuice_cli.sh --update --json"
+SKILL_RUNTIME_HELPER_ENV = "FINJUICE_SKILL_HELPER"
 KNOWN_SKILL_CAPABILITIES = {
     "tag.edit": "finjuice tag --edit",
 }
@@ -51,20 +53,39 @@ def _version_gte(local_version: str, required_version: str) -> bool:
     return local >= required
 
 
+def _helper_path_if_file(path: Path) -> Path | None:
+    """Return *path* when it resolves to an existing file."""
+    try:
+        resolved = path.expanduser()
+        is_file = resolved.is_file()
+    except (OSError, RuntimeError):
+        return None
+    if is_file:
+        return resolved
+    return None
+
+
 def _discover_skill_runtime_helper() -> Path | None:
     """Find the shared skill runtime helper without running it."""
-    candidate_paths = [
-        Path("skills/finjuice/scripts/ensure_finjuice_cli.sh"),
-        Path.cwd() / "skills/finjuice/scripts/ensure_finjuice_cli.sh",
-        Path.home() / ".codex/skills/finjuice/scripts/ensure_finjuice_cli.sh",
-        Path.home() / ".claude/skills/finjuice/scripts/ensure_finjuice_cli.sh",
-        Path(".claude/skills/finjuice/scripts/ensure_finjuice_cli.sh"),
-        Path("scripts/ensure_finjuice_cli.sh"),
-    ]
+    candidate_paths: list[Path] = []
+    env_helper = os.getenv(SKILL_RUNTIME_HELPER_ENV, "").strip()
+    if env_helper:
+        candidate_paths.append(Path(env_helper))
+    candidate_paths.extend(
+        [
+            Path("skills/finjuice/scripts/ensure_finjuice_cli.sh"),
+            Path.cwd() / "skills/finjuice/scripts/ensure_finjuice_cli.sh",
+            Path.home() / ".codex/skills/finjuice/scripts/ensure_finjuice_cli.sh",
+            Path.home() / ".claude/skills/finjuice/scripts/ensure_finjuice_cli.sh",
+            Path(".claude/skills/finjuice/scripts/ensure_finjuice_cli.sh"),
+            Path("scripts/ensure_finjuice_cli.sh"),
+        ]
+    )
 
     for candidate in candidate_paths:
-        if candidate.is_file():
-            return candidate
+        found = _helper_path_if_file(candidate)
+        if found is not None:
+            return found
     return None
 
 
@@ -130,7 +151,10 @@ def _check_skill_runtime() -> list[CheckResult]:
                 status="warning",
                 message="ensure_finjuice_cli.sh not found",
                 detail="Skill helper is not discoverable from this checkout or global skill paths.",
-                suggestion="Install/update finjuice skills before running skill CLI preflight.",
+                suggestion=(
+                    "Set FINJUICE_SKILL_HELPER to the helper path, or install/update "
+                    "finjuice skills before running skill CLI preflight."
+                ),
                 name="skill_runtime_helper",
             )
         )

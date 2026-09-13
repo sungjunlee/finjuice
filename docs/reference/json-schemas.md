@@ -2416,6 +2416,59 @@ explain --json output
     "candidates": {
       "items": {
         "additionalProperties": true,
+        "properties": {
+          "amount": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "category_final": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "index": {
+            "type": "integer"
+          },
+          "major_raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "memo_raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "merchant_raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "minor_raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "row_hash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
         "type": "object"
       },
       "type": "array"
