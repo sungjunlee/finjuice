@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from types import TracebackType
-from typing import Optional
+from typing import Any, Optional
 
 from finjuice.pipeline.analytics.duckdb_layer_helpers import (
     DUCKDB_INSTALL_HINT,
@@ -41,6 +41,8 @@ class DuckDBTransactionsView:
         memory_limit: Optional memory limit for DuckDB (e.g., "1GB")
         report_filters: Optional report filters applied to the transactions view
         require_transactions: If True, missing CSV partitions raise FileNotFoundError
+        source_frame: Optional decoded transaction frame (SQLite read-compat).
+            When set, the view is registered from this frame instead of CSV.
 
     Raises:
         ImportError: If duckdb package is not installed
@@ -54,6 +56,7 @@ class DuckDBTransactionsView:
         memory_limit: Optional[str] = None,
         report_filters: ReportFilters | None = None,
         require_transactions: bool = True,
+        source_frame: Any | None = None,
     ) -> None:
         if not DUCKDB_AVAILABLE:
             raise ImportError(DUCKDB_INSTALL_HINT)
@@ -61,6 +64,7 @@ class DuckDBTransactionsView:
         self.data_dir = Path(data_dir)
         self.partitions_path = self.data_dir / "transactions"
         self.report_filters = report_filters or ReportFilters()
+        self._source_frame = source_frame
 
         # Create in-memory connection for speed
         self.conn = duckdb.connect(":memory:")
@@ -82,14 +86,18 @@ class DuckDBTransactionsView:
     def register_transactions_view(self, *, require_transactions: bool = True) -> None:
         """Create centralized transactions view with type normalization (Issue #184).
 
-        This view abstracts the underlying CSV partitions and provides
-        normalized types (e.g., boolean flags) to simplify downstream queries.
+        This view abstracts CSV partitions or an injected SQLite read-compat
+        frame and provides normalized types (e.g., boolean flags) to simplify
+        downstream queries.
 
         Raises:
             FileNotFoundError: If no transaction CSV files are found.
             RuntimeError: If view creation fails.
         """
-        # Check if any CSV files exist
+        if self._source_frame is not None:
+            self._register_frame_as_transactions_view()
+            return
+
         has_files = any(self.partitions_path.glob("*/*/*.csv"))
         if not has_files:
             if not require_transactions:
@@ -100,8 +108,8 @@ class DuckDBTransactionsView:
             raise FileNotFoundError(f"No transaction data found in {self.partitions_path}")
 
         csv_path_literal = quote_duckdb_path_pattern(self.partitions_path)
-
-        raw_sql = f"""
+        self._create_normalized_transactions_views(
+            f"""
             CREATE OR REPLACE VIEW transactions_raw AS
             SELECT *
             FROM read_csv(
@@ -110,7 +118,24 @@ class DuckDBTransactionsView:
                 union_by_name=true,
                 parallel=true
             )
-        """
+            """
+        )
+
+    def _register_frame_as_transactions_view(self) -> None:
+        """Register the DuckDB view pipeline from a decoded Polars frame."""
+        from finjuice.pipeline.storage.csv_transactions_serialize import _serialize_tag_columns
+
+        frame = self._source_frame
+        if frame is None:
+            raise RuntimeError("SQLite source frame is missing")
+        raw_frame = _serialize_tag_columns(frame)
+        self.conn.register("_finjuice_sqlite_raw", raw_frame)
+        self._create_normalized_transactions_views(
+            "CREATE OR REPLACE VIEW transactions_raw AS SELECT * FROM _finjuice_sqlite_raw"
+        )
+
+    def _create_normalized_transactions_views(self, raw_sql: str) -> None:
+        """Create ``transactions_raw``/``_source``/``transactions`` from raw SQL."""
         try:
             self.conn.execute(raw_sql)
             source_columns = self._view_columns("transactions_raw")

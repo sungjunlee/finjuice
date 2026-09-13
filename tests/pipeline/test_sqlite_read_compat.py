@@ -1,7 +1,8 @@
 """Unit tests for the SQLite read-compatibility adapter (#436).
 
 The adapter projects authoritative repository rows into the legacy CSV
-transaction frame contract so ``show``/``status`` keep their output contracts.
+transaction frame contract so ``show``/``status``/``query``/``explain`` keep
+their output contracts.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from finjuice.pipeline.storage.sqlite import RepositoryReader
 from finjuice.pipeline.storage.sqlite.read_compat import (
     GENERATION_ENV_VAR,
     SqliteReadSourceError,
+    configured_transactions_frame,
     distinct_month_count,
     latest_month_label,
     read_month_frame,
@@ -76,6 +78,37 @@ def test_resolve_generation_database_returns_published_database(
 
     # Assert
     assert resolved == mirrored_dataset["database"]
+
+
+def test_configured_transactions_frame_unset_returns_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without runtime configuration the query/explain path stays on CSV."""
+    # Arrange
+    monkeypatch.delenv(GENERATION_ENV_VAR, raising=False)
+
+    # Act
+    frame = configured_transactions_frame()
+
+    # Assert
+    assert frame is None
+
+
+def test_configured_transactions_frame_returns_projected_rows(
+    mirrored_dataset: dict[str, Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A configured generation returns the same projected frame as a direct read."""
+    # Arrange
+    monkeypatch.setenv(GENERATION_ENV_VAR, str(mirrored_dataset["database"].parent))
+
+    # Act
+    configured = configured_transactions_frame()
+    direct = read_transactions_frame(mirrored_dataset["database"])
+
+    # Assert
+    assert configured is not None
+    assert_frame_equal(configured, direct)
 
 
 def test_frame_matches_csv_read_contract(mirrored_dataset: dict[str, Path]) -> None:
