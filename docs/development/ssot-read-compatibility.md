@@ -1,7 +1,7 @@
 # SQLite read compatibility
 
-Issue #436 remains open. This checkpoint connects transaction reads and the `query`
-and `template run` commands; it does not establish parity for every consumer, export,
+Issue #436 remains open. This checkpoint connects transaction reads and the `query`,
+`template run`, and `show` commands; it does not establish parity for every consumer, export,
 or arbitrary SQL.
 
 `RepositoryReader.transaction_snapshot()` materializes current transaction columns,
@@ -57,3 +57,33 @@ repository reads; overview/asset read projections, generated exports with revisi
 manifests/stale identification, partition-pattern repository reads, and complete
 human/JSON/SQL parity remain #436 work. SQLite activation and actual corpus memory,
 performance, preservation and operational recovery remain separate acceptance gates.
+
+## Show partition scope
+
+`show` uses `legacy_partition_scope.v1` alongside the transaction display policy.
+Migrated primary `data` root files matching `transactions/YYYY/MM/transactions.csv`
+contribute their original month, even if row dates disagree or are invalid. Empty
+captured files participate in latest-month selection. This scope is proven through
+transaction/observation/source migration identities and matching provenance evidence.
+Other captured roots and nonstandard paths remain preserved and queryable through
+`query`, but do not enter the primary legacy `show` partition scope.
+
+Native records use the calendar month of a valid observation `effective_at`, without
+timezone conversion. Records with unknown or invalid effective dates are unpartitioned
+and remain visible in all-scope searches (`--tag`, `--untagged`, or `--merchant` without
+`--month`). Bare `show` selects the latest known month and `--month` selects that scope.
+A dataset with only unknown-month records therefore needs an all-scope search.
+
+Source-backed CSV record ordinals restore original row order before the existing
+show sorting stages; all-scope reads retain the legacy preliminary ascending datetime
+sort. Equal-time transactions therefore keep the same page order as the CSV reader.
+Native ties start from stable transaction UUID order.
+
+The scope sidecar and empty-partition inventory are detached in the same reader
+snapshot as rows and canonical rules. Scope fields are internal; JSON adds the scope
+policy and revision metadata. Tag arrays are decoded for filtering, and the existing
+JSON sentinel-stripping/deduplication display behavior remains unchanged. No stored
+classification, date, or tag array is rewritten. A future native correction that
+reuses a migrated source occurrence must define its scope contract explicitly; the
+current importer always creates a new native occurrence, and mixed migration proof
+never authorizes a guessed native-month fallback.

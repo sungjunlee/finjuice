@@ -15,10 +15,14 @@ import polars as pl
 import typer
 
 from finjuice.pipeline.cli import output
+from finjuice.pipeline.cli.commands.show_reads import repository_show_filters, repository_show_rows
 from finjuice.pipeline.cli.commands.show_rendering import _render_show_table
 from finjuice.pipeline.cli.output import ErrorCode, ExitCode, emit_error
 from finjuice.pipeline.cli.report_filters import apply_report_filters, load_cli_report_filters
-from finjuice.pipeline.cli.utils import get_config
+from finjuice.pipeline.cli.utils import get_activation_evidence_provider, get_config
+from finjuice.pipeline.config import Config
+from finjuice.pipeline.storage.read_facade import read_transaction_snapshot, snapshot_metadata
+from finjuice.pipeline.storage.sqlite.transaction_scopes import READ_SCOPE_POLICY
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +64,62 @@ def _load_all_partitions(csv_base_dir: Path) -> tuple[Optional[pl.DataFrame], in
         return None, 0
 
     return get_all_transactions(csv_base_dir), len(partitions)
+
+
+def _load_legacy_show(
+    config: Config, month: str | None, *, search_all: bool, json_output: bool
+) -> tuple[pl.DataFrame, str, str]:
+    """Keep the existing CSV month selection and missing-data behavior."""
+    table_title = "Transactions"
+    scope_hint = ""
+    df: pl.DataFrame | None
+    if month:
+        # Specific month
+        year_str, mon_str = month.split("-")
+        year_int, mon_int = int(year_str), int(mon_str)
+        csv_path = config.csv_base_dir / year_str / mon_str / "transactions.csv"
+        if not csv_path.exists():
+            emit_error(
+                f"No data for {month}",
+                error_code=ErrorCode.NO_DATA,
+                exit_code=ExitCode.NO_DATA,
+                json_output=json_output,
+                command="show",
+            )
+        from finjuice.pipeline.storage.csv_transactions import read_month
+
+        df = read_month(config.csv_base_dir, year_int, mon_int)
+        table_title = f"Transactions ({month})"
+    else:
+        if search_all:
+            df, partition_count = _load_all_partitions(config.csv_base_dir)
+            if df is None:
+                emit_error(
+                    "No transaction data found",
+                    error_code=ErrorCode.NO_DATA,
+                    exit_code=ExitCode.NO_DATA,
+                    json_output=json_output,
+                    command="show",
+                )
+            partition_word = "partition" if partition_count == 1 else "partitions"
+            scope_hint = f" across {partition_count} {partition_word}"
+        else:
+            # Latest month
+            df, month_label = _load_latest_month(config.csv_base_dir)
+            if df is None:
+                emit_error(
+                    "No transaction data found",
+                    error_code=ErrorCode.NO_DATA,
+                    exit_code=ExitCode.NO_DATA,
+                    json_output=json_output,
+                    command="show",
+                )
+            assert month_label is not None, "month_label should not be None when df is not None"
+            month = month_label
+            table_title = f"Transactions ({month})"
+
+    assert df is not None
+    return df, table_title, scope_hint
 
 
 def show_command(
@@ -136,57 +196,38 @@ def show_command(
         filters_applied = 0
         scope_hint = ""
         table_title = "Transactions"
-        if month:
-            # Specific month
-            year_str, mon_str = month.split("-")
-            year_int, mon_int = int(year_str), int(mon_str)
-            csv_path = config.csv_base_dir / year_str / mon_str / "transactions.csv"
-            if not csv_path.exists():
+        snapshot = read_transaction_snapshot(config.data_dir, get_activation_evidence_provider(ctx))
+        read_metadata = {}
+        if snapshot is not None:
+            search_all = untagged or tag is not None or merchant is not None
+            df, selected_month, partition_count = repository_show_rows(
+                snapshot, month, search_all=search_all
+            )
+            if df is None:
                 emit_error(
-                    f"No data for {month}",
+                    f"No data for {month}" if month else "No transaction data found",
                     error_code=ErrorCode.NO_DATA,
                     exit_code=ExitCode.NO_DATA,
                     json_output=json_output,
                     command="show",
                 )
-            from finjuice.pipeline.storage.csv_transactions import read_month
-
-            df = read_month(config.csv_base_dir, year_int, mon_int)
-            table_title = f"Transactions ({month})"
+            read_metadata = {**snapshot_metadata(snapshot), "scope_policy": READ_SCOPE_POLICY}
+            if selected_month is not None:
+                table_title = f"Transactions ({selected_month})"
+            elif search_all:
+                scope_hint = f" across {partition_count} month scopes"
         else:
-            search_all_partitions = untagged or tag is not None or merchant is not None
-            if search_all_partitions:
-                df, partition_count = _load_all_partitions(config.csv_base_dir)
-                if df is None:
-                    emit_error(
-                        "No transaction data found",
-                        error_code=ErrorCode.NO_DATA,
-                        exit_code=ExitCode.NO_DATA,
-                        json_output=json_output,
-                        command="show",
-                    )
-                partition_word = "partition" if partition_count == 1 else "partitions"
-                scope_hint = f" across {partition_count} {partition_word}"
-            else:
-                # Latest month
-                df, month_label = _load_latest_month(config.csv_base_dir)
-                if df is None:
-                    emit_error(
-                        "No transaction data found",
-                        error_code=ErrorCode.NO_DATA,
-                        exit_code=ExitCode.NO_DATA,
-                        json_output=json_output,
-                        command="show",
-                    )
-                assert month_label is not None, "month_label should not be None when df is not None"
-                month = month_label
-                table_title = f"Transactions ({month})"
+            df, table_title, scope_hint = _load_legacy_show(
+                config,
+                month,
+                search_all=untagged or tag is not None or merchant is not None,
+                json_output=json_output,
+            )
 
-        report_filters = load_cli_report_filters(
-            ctx,
-            config,
-            command="show",
-            json_output=json_output,
+        report_filters = (
+            repository_show_filters(ctx, snapshot)
+            if snapshot is not None
+            else load_cli_report_filters(ctx, config, command="show", json_output=json_output)
         )
         assert df is not None, "df should not be None after data-loading guards"
         df, filters_applied = apply_report_filters(df, report_filters)
@@ -229,14 +270,14 @@ def show_command(
                 pagination=pagination,
                 max_bytes=max_bytes,
                 command="show",
-                meta_extras={"filters_applied": filters_applied},
+                meta_extras={"filters_applied": filters_applied, **read_metadata},
             )
             output.emit(
                 payload,
                 True,
                 lambda _: None,
                 command="show",
-                meta_extras={"filters_applied": filters_applied},
+                meta_extras={"filters_applied": filters_applied, **read_metadata},
             )
             return
 
@@ -250,7 +291,7 @@ def show_command(
     except typer.Exit:
         raise
     except Exception as e:  # intended catch-all for CLI robustness
-        logger.error(f"Failed to show transactions: {e}", exc_info=True)
+        logger.error("Failed to show transactions (%s)", type(e).__name__)
         emit_error(
             f"Failed to show transactions: {e}",
             error_code=ErrorCode.GENERAL_ERROR,

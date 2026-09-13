@@ -12,6 +12,7 @@ from finjuice.pipeline.storage.sqlite.errors import ObjectCorruptionError
 from finjuice.pipeline.storage.sqlite.objects import SourceObjectStore
 from finjuice.pipeline.storage.sqlite.paths import GenerationPaths
 from finjuice.pipeline.storage.sqlite.schema import RepositoryInfo
+from finjuice.pipeline.storage.sqlite.transaction_scopes import TransactionScope, transaction_scopes
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,8 @@ class TransactionReadSnapshot:
     rows: tuple[dict[str, Any], ...]
     rules_content: bytes | None
     rules_parsed_status: str | None = None
+    scopes: tuple[TransactionScope, ...] = ()
+    partition_months: tuple[str, ...] = ()
 
 
 _SQL = """
@@ -64,7 +67,8 @@ def transaction_snapshot(
     names = [column[0] for column in cursor.description]
     rows = tuple(_row(dict(zip(names, values, strict=True)), aliases) for values in cursor)
     rules_content, rules_parsed_status = _rules_content(connection, paths)
-    return TransactionReadSnapshot(info, rows, rules_content, rules_parsed_status)
+    scopes, months = transaction_scopes(connection, tuple(row["transaction_id"] for row in rows))
+    return TransactionReadSnapshot(info, rows, rules_content, rules_parsed_status, scopes, months)
 
 
 def _decimal(coefficient: str | None, scale: int | None) -> str | None:
