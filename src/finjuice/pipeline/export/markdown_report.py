@@ -150,6 +150,8 @@ def generate_markdown_report(
     output_path: Path,
     period: Optional[str] = None,
     source_df: "pl.DataFrame | None" = None,
+    *,
+    generated_at: str | None = None,
 ) -> Path:
     """
     Generate GitHub-friendly Markdown report.
@@ -185,6 +187,8 @@ def generate_markdown_report(
         tag_breakdown = calculate_tag_breakdown(df, top_n=10)
         top_merchants = calculate_top_merchants(df, limit=20)
         summary = calculate_summary_stats(df, period)
+        if generated_at is not None:
+            summary["generated_at"] = generated_at
 
         monthly_spend_rows = monthly_spend.to_dicts()
         tag_breakdown_rows = tag_breakdown.to_dicts()
@@ -206,4 +210,6 @@ def generate_markdown_report(
 
     except (OSError, ValueError, pl.exceptions.PolarsError) as e:
         logger.error("Failed to generate Markdown report (%s)", type(e).__name__)
-        raise RuntimeError(f"Markdown report generation failed: {e}") from e
+        raise RuntimeError(
+            f"Markdown report generation failed: {type(e).__name__ if generated_at is not None else e}"
+        ) from e

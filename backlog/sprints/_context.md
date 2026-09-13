@@ -51,3 +51,5 @@
 
 - show 구현 후속: 같은 snapshot의 scopes/partition_months로 primary 원래 path월과 빈월을 보존한다. Native effective_at 유효ISO달은 시간대변환없이사용하고unknown은all-scope검색포함. 원래CSV row ordinal을source_row로보존해 equal-datetime pagination에서 monthly/all의기존정렬단계를재현한다. 디스크CSV/rules는활성조회에영향없음. 최종검사/커밋은활성스프린트기록확인.
 - 다음 explain 조사: 실행당 analytics하나를열어 snapshot rules/status와검색을고정. 기존 explain은report filters를적용하지않으므로queryfilterhelper를그대로사용하지않고 --no-filter도invalid tagging rules우회를허용하지않는다. #497의최대10검색/5후보/--pick표시범위/JSON첫행/human선택취소를유지한다. Native row_hash=None과별도transaction_id, matcher용전체필드+exact금액, 저장된수동/final과규칙simulation구분이필요. no-rules/no-match/success metadata를모두같은revision에연결한다. _search_transactions는기존wrapper유지+열린analyticshelper분리, _load_explain_rules는same-snapshot bytes로연결하는최소구조가유력하다.
+
+- 최신 #436 진행: explain은45460db로push했다. 이어 export의single-snapshot full/report분리,재생성transactions.csv, 실행별artifactmanifest/digest/stale검증과export-verify명령을구현중이다. 위초기기록의activeexport불가상태는현재branch에서해소했지만운영cutover는아직없다. 최종검증·review·commit근거는활성스프린트와PR481을따른다. 다음은status의정본facts와legacyCSV진단분리,이후overview/assets소비자연결이다.

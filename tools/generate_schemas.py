@@ -1521,6 +1521,33 @@ export_schema = command_schema(
     [],
 )
 
+export_verify_schema = command_schema(
+    "export_verify.schema.json",
+    "export-verify --json output",
+    {
+        "command": {"const": "export-verify"},
+        "manifest_path": string,
+        "manifest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "source": object_any,
+        "current": object_any,
+        "stale": boolean,
+        "integrity": {"enum": ["intact", "mismatch"]},
+        "files": array_of(
+            object_schema(
+                {
+                    "path": string,
+                    "status": {"enum": ["intact", "modified", "missing"]},
+                },
+                required=["path", "status"],
+            )
+        ),
+        "verification_policy": {"const": "local_export_receipt.v1"},
+    },
+    ["command", "manifest_path", "source", "current", "stale", "integrity", "files"],
+)
+
+export_verify_schema["x-command"] = "export-verify"
+
 review_schema = command_schema(
     "review.schema.json",
     "review --json output",
@@ -1971,6 +1998,7 @@ SCHEMAS: dict[str, JsonSchema] = {
     "doctor.schema.json": doctor_schema,
     "explain.schema.json": explain_schema,
     "export.schema.json": export_schema,
+    "export_verify.schema.json": export_verify_schema,
     "history.schema.json": history_schema,
     "import.schema.json": import_schema,
     "inspect_xlsx.schema.json": inspect_xlsx_schema,

@@ -129,7 +129,7 @@ def calculate_tag_breakdown(
             pl.col("amount").sum().round(0).alias("total_amount"),
         )
         .rename({"tags_final": "tag"})
-        .sort("total_amount", descending=False)  # Largest expenses first (negative)
+        .sort(["total_amount", "tag"], descending=False)  # Stable ties before top-N.
     )
 
     # Calculate percentage
@@ -208,7 +208,7 @@ def calculate_top_merchants(
             pl.col("amount").sum().round(0).alias("total_amount"),
         )
         .rename({"merchant_raw": "merchant"})
-        .sort("total_amount", descending=False)  # Largest expenses first (negative)
+        .sort(["total_amount", "merchant"], descending=False)  # Stable ties before top-N.
         .head(limit)
     )
 

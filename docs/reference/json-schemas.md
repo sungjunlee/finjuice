@@ -52,6 +52,7 @@ command/code/exit-code combinations against this schema.
 | `schemas/doctor.schema.json` | doctor --json output | `checks`, `summary`, `missing_extras`, `install_hint` |
 | `schemas/explain.schema.json` | explain --json output | `query`, `date_filter` |
 | `schemas/export.schema.json` | export --json output | - |
+| `schemas/export_verify.schema.json` | export-verify --json output | `command`, `manifest_path`, `source`, `current`, `stale`, `integrity`, `files` |
 | `schemas/history.schema.json` | history --json output | `records`, `count` |
 | `schemas/import.schema.json` | import --json output | `files_processed`, `files_skipped`, `errors` |
 | `schemas/index.schema.json` | index --json output | `workspace`, `collections`, `recommended_next`, `schema_ref` |
@@ -2683,6 +2684,102 @@ export --json output
   ],
   "title": "export --json output",
   "type": "object"
+}
+```
+
+## `schemas/export_verify.schema.json`
+
+export-verify --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `command` | `any` | yes |
+| `current` | `object` | yes |
+| `files` | `array`[`object`] | yes |
+| `integrity` | enum(`intact`, `mismatch`) | yes |
+| `manifest_path` | `string` | yes |
+| `manifest_sha256` | `string` | no |
+| `source` | `object` | yes |
+| `stale` | `boolean` | yes |
+| `verification_policy` | `any` | no |
+
+```json
+{
+  "$id": "export_verify.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "command": {
+      "const": "export-verify"
+    },
+    "current": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "files": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "intact",
+              "modified",
+              "missing"
+            ]
+          }
+        },
+        "required": [
+          "path",
+          "status"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "integrity": {
+      "enum": [
+        "intact",
+        "mismatch"
+      ]
+    },
+    "manifest_path": {
+      "type": "string"
+    },
+    "manifest_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "source": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "stale": {
+      "type": "boolean"
+    },
+    "verification_policy": {
+      "const": "local_export_receipt.v1"
+    }
+  },
+  "required": [
+    "_meta",
+    "command",
+    "manifest_path",
+    "source",
+    "current",
+    "stale",
+    "integrity",
+    "files"
+  ],
+  "title": "export-verify --json output",
+  "type": "object",
+  "x-command": "export-verify"
 }
 ```
 

@@ -96,6 +96,7 @@ CATALOGUED_COMMANDS = [
     ("template show", ["template", "show", "monthly_spend", "--json"], "template_show.schema.json"),
     ("journal list", ["journal", "list", "--json"], "journal_list.schema.json"),
     ("export", ["export", "--dry-run", "--json"], "export.schema.json"),
+    ("export-verify", [], "export_verify.schema.json"),
     ("networth", ["networth", "--json"], "networth.schema.json"),
     (
         "networth breakdown",
@@ -493,7 +494,15 @@ def test_command_output_validates_against_schema(
         cmd_args = _materialize_backup_catalog_args(schema_data_dir, label)
     if label.startswith("ssot migrate "):
         cmd_args = _materialize_migration_catalog_args(schema_data_dir, label)
-    result = runner.invoke(app, ["--data-dir", str(schema_data_dir), *cmd_args])
+    if label == "export-verify":
+        from tests.cli.commands.test_repository_export import _export, _payload, _verify
+        from tests.cli.commands.test_repository_query import query_root
+
+        root = query_root.__wrapped__(schema_data_dir / "export-verification")
+        generated = _payload(_export(root))
+        result = _verify(root, Path(generated["manifest_path"]))
+    else:
+        result = runner.invoke(app, ["--data-dir", str(schema_data_dir), *cmd_args])
 
     assert result.exit_code == 0, f"{label} failed: {result.output[:500]}"
     payload = json.loads(result.output)

@@ -172,7 +172,7 @@ def _output_schema_ref(path: str, command: click.Command) -> str | None:
     """Return the conventional sibling JSON Schema artifact path for a command."""
     if not has_json_flag(command):
         return None
-    return f"schemas/{path.replace(' ', '_')}.schema.json"
+    return f"schemas/{path.replace(' ', '_').replace('-', '_')}.schema.json"
 
 
 def _command_safety_metadata(path: str) -> dict[str, Any]:

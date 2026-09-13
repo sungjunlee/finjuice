@@ -172,7 +172,9 @@ def load_output_schema_artifacts(schema_dir: Path = SCHEMAS_DIR) -> dict[str, di
         if not isinstance(schema, dict):
             continue
 
-        command_name = normalize_schema_artifact_name(schema_path.name)
+        command_name = schema.get("x-command", normalize_schema_artifact_name(schema_path.name))
+        if not isinstance(command_name, str):
+            continue
         output_schemas[command_name] = build_lightweight_output_schema(schema)
 
     return output_schemas

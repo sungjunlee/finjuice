@@ -33,6 +33,7 @@ from finjuice.pipeline.cli.commands.context import register_context_command
 from finjuice.pipeline.cli.commands.doctor import register_doctor_command
 from finjuice.pipeline.cli.commands.explain import register_explain_command
 from finjuice.pipeline.cli.commands.export_cmd import export_command
+from finjuice.pipeline.cli.commands.export_verify import export_verify_command
 from finjuice.pipeline.cli.commands.import_cmd import register_import_command
 from finjuice.pipeline.cli.commands.index import register_index_command
 from finjuice.pipeline.cli.commands.ingest import ingest_command
@@ -106,6 +107,7 @@ register_import_command(app)
 # Register core pipeline commands (split from pipeline.py, Issue #269)
 app.command(name="tag", rich_help_panel="Commands")(tag_command)
 app.command(name="export", rich_help_panel="Commands")(export_command)
+app.command(name="export-verify", rich_help_panel="Commands")(export_verify_command)
 app.command(
     name="refresh",
     rich_help_panel="Commands",

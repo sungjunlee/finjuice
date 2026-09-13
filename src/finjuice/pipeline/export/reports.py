@@ -227,7 +227,7 @@ def generate_all_reports(
             reports_count += 1
         except RuntimeError as e:
             # Expected errors from export function (already logged there)
-            logger.error(f"Failed to generate {report_key} report: {e}")
+            logger.error("Failed to generate %s report (%s)", report_key, type(e).__name__)
         except (OSError, ValueError) as e:
             logger.error("Unexpected error in %s report (%s)", report_key, type(e).__name__)
 

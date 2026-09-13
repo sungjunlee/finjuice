@@ -38,6 +38,7 @@ finjuice --version
 │ import          Import XLSX files and run full pipeline.                                                             │
 │ tag             Apply tagging rules to all transactions in the active storage.                                       │
 │ export          Generate master XLSX, HTML, and/or Markdown reports.                                                 │
+│ export-verify   Check export revision freshness and modified or missing artifacts without writing.                   │
 │ refresh         Re-process all existing data                                                                         │
 │ validate        Validate CSV partition files against the schema.                                                     │
 │ index           Emit workspace catalog                                                                               │

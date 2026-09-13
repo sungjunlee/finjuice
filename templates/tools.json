@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft-07/schema#",
   "name": "finjuice",
   "version": "0.8.3",
-  "generated_at": "2026-09-13T07:18:37+00:00",
+  "generated_at": "2026-09-13T10:30:09+00:00",
   "tools": [
     {
       "name": "assets.balance",
@@ -820,6 +820,45 @@
           "summary",
           "transaction_count",
           "year"
+        ]
+      }
+    },
+    {
+      "name": "export-verify",
+      "description": "Check export revision freshness and modified or missing artifacts without writing.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "manifest_path": {
+            "type": "string",
+            "format": "path",
+            "description": "Manifest inside this dataset's export runs"
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "manifest_path"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "export-verify --json output",
+        "top_level_keys": [
+          "_meta",
+          "command",
+          "current",
+          "files",
+          "integrity",
+          "manifest_path",
+          "manifest_sha256",
+          "source",
+          "stale",
+          "verification_policy"
         ]
       }
     },

@@ -119,3 +119,52 @@ Explanation matching exposes more row fields than the current bulk-tagging adapt
 these paths do not yet promise identical results for every arbitrary field condition.
 Text operations on amounts see the canonical exact representation, not necessarily
 the original lexical spelling.
+
+## Repository exports and receipts
+
+Activated `export` reads one validated snapshot for the full master/transaction CSV
+and the canonical-filtered reports. Invalid/opaque rules heads fail; `--no-filter`
+is the explicit report-filter bypass. HTML/Markdown apply `--period`, while master
+and the full transaction CSV remain unfiltered, including under `--format all`.
+Dry-run uses pinned counts and describes `exports/runs/<new-run>/` without writing.
+
+Each successful run is published by one directory rename beneath `exports/runs/`.
+It contains only newly generated artifacts and `export-manifest.json`; previous
+runs and legacy dated outputs are not overwritten or reused for empty results.
+Empty master/report outputs are explicitly skipped, while `transactions.csv` still
+has its schema header. A failed run removes staging and leaves earlier runs intact.
+Active import/refresh now execute this export step and retain preceding mutation
+receipts if export fails.
+
+Repository master and transaction CSV keep legacy column order then append UUID,
+manual category and exact amount evidence. Hidden manual-category marker strings
+remain internal; the explicit manual category represents their meaning. Visible tag
+spelling, duplicates, stored final classifications and manual notes are retained.
+CSV tags use JSON and spreadsheet formula neutralization remains enabled. These
+are derived display artifacts, not a lossless source reimport protocol.
+
+`legacy_export.v1` fixes the calculation basis to the latest valid raw transaction
+date, or null for an undated dataset. Date suffixes and report header timestamps use
+this basis instead of the wall clock. XLSX creation/ZIP metadata, Plotly IDs and tie
+ordering are stable. Equal input revision/options and the same renderer environment
+reproduce identical artifact bytes, including after the wall clock changes. Reports
+retain legacy Float64 calculations; exact amount evidence is separately exported,
+not claimed as exact aggregate accounting.
+
+The manifest links every file digest and byte count to generation, revision, SQLite
+schema, read/calculation policy, calculation basis and export options. Keep this
+receipt with the report files. `export-verify MANIFEST --json` validates bounded
+relative paths, rejects symbolic-link escapes, and compares the receipt with a fresh
+validated repository snapshot. `stale` describes the data identity comparison;
+`integrity` independently reports modified/missing declared files; extra files are not assessed. Checks do not rewrite
+artifacts or trust compatibility CSV. A local receipt is not authenticated: coordinated
+edits to both receipt and files cannot be detected as tampering by its own hashes.
+
+Status, overview/assets and the remaining runtime read consumers, private corpus
+parity/performance and operational cutover remain separate #436/operational gates.
+
+The verified CLI runtime uses the project's locked Typer/Click versions. An
+unconstrained installation of Typer 0.27.2 changes its command class hierarchy and
+breaks the existing Click-based runtime manifest discovery. Operational deployment
+must retain the verified lock versions until that separate dependency compatibility
+work is completed.
