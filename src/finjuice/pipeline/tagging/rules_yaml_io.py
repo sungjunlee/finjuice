@@ -43,6 +43,7 @@ from finjuice.pipeline.tagging.rules_yaml_load import (
     load_rules,
     load_rules_bytes,  # noqa: F401 — re-exported public YAML API
     load_rules_collecting,  # noqa: F401 — re-exported public YAML API
+    load_rules_collecting_bytes,  # noqa: F401 — re-exported public YAML API
 )
 from finjuice.pipeline.tagging.rules_yaml_roundtrip import (
     add_rule_roundtrip,  # noqa: F401 — re-exported public dump API

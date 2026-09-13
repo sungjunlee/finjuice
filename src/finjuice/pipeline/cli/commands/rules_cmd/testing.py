@@ -14,7 +14,7 @@ from typing import Any
 
 import typer
 
-from finjuice.pipeline.cli.output import ErrorCode, ExitCode, emit
+from finjuice.pipeline.cli.output import ErrorCode, ExitCode, emit, info
 from finjuice.pipeline.cli.utils import get_config
 from finjuice.pipeline.config import Config
 
@@ -247,11 +247,19 @@ def test_rule_command(
 ) -> None:
     """Dry-run a single rule against existing transactions without writing changes."""
     config = get_config(ctx)
-    result = _compute_rules_test(
-        config,
-        rule_name=rule_name,
-        limit=limit,
-        month=month,
-        json_output=json_output,
+    from .testing_repository import RepositoryRuleTestOptions, compute_repository_rules_test
+
+    result = compute_repository_rules_test(
+        ctx, RepositoryRuleTestOptions(rule_name, limit, month, json_output)
     )
-    emit(result, json_output, _render_rules_test, command="rules test")
+    if result is None:
+        result = _compute_rules_test(
+            config, rule_name=rule_name, limit=limit, month=month, json_output=json_output
+        )
+    metadata = result.pop("_repository_meta", None)
+    if metadata is not None and not json_output:
+        info(
+            f"Repository revision {metadata['dataset_revision']} "
+            f"({metadata['dataset_generation']}); policy canonical_rules_test.v1"
+        )
+    emit(result, json_output, _render_rules_test, command="rules test", meta_extras=metadata)

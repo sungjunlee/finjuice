@@ -49,10 +49,8 @@ def _compute_rules_gaps_json(
 ) -> dict[str, Any]:
     """Compute JSON payload for `rules gaps`."""
     from finjuice.pipeline.tagging.gap_analyzer import (
-        GapType,
         analyze_tag_category_gaps,
         simulate_coverage_improvement,
-        sort_mismatch_gaps,
     )
 
     if not config.csv_base_dir.exists():
@@ -79,6 +77,25 @@ def _compute_rules_gaps_json(
 
     gaps = analyze_tag_category_gaps(config.csv_base_dir)
 
+    simulations = []
+    if simulate:
+        simulations = simulate_coverage_improvement(
+            config.csv_base_dir,
+            top_n_values=[5, 10, 20],
+        )
+
+    return _assemble_rules_gaps_json(gaps, simulations, actionable_only=actionable_only)
+
+
+def _assemble_rules_gaps_json(
+    gaps: dict[Any, list[Any]],
+    simulations: list[Any],
+    *,
+    actionable_only: bool,
+) -> dict[str, Any]:
+    """Serialize shared gap and simulation results without loading transactions."""
+    from finjuice.pipeline.tagging.gap_analyzer import GapType, sort_mismatch_gaps
+
     critical_gaps = gaps.get(GapType.CRITICAL, [])
     all_mismatch_gaps = sort_mismatch_gaps(
         [
@@ -98,13 +115,6 @@ def _compute_rules_gaps_json(
     def _count_mismatch_type(mismatch_type: str) -> int:
         return sum(
             gap.transaction_count for gap in all_mismatch_gaps if gap.mismatch_type == mismatch_type
-        )
-
-    simulations = []
-    if simulate:
-        simulations = simulate_coverage_improvement(
-            config.csv_base_dir,
-            top_n_values=[5, 10, 20],
         )
 
     return {

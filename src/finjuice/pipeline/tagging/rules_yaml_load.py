@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import math
+import re
 from pathlib import Path
 from typing import Any, List
 
@@ -110,15 +111,35 @@ def _normalize_exact_rule_metadata(rule_dict: Any, index: int) -> Any:
     return normalized
 
 
-def _collect_validated_rules(raw_rules: List[Any]) -> CollectedLoadResult:
+def _collect_validated_rules(
+    raw_rules: List[Any],
+    *,
+    exact_metadata: bool = False,
+    validate_condition_regex: bool = False,
+    strict: bool = False,
+) -> CollectedLoadResult:
     """Validate raw YAML rule entries while collecting per-rule failures."""
     result = CollectedLoadResult()
 
     for idx, rule_dict in enumerate(raw_rules):
         try:
+            if exact_metadata:
+                rule_dict = _normalize_exact_rule_metadata(rule_dict, idx)
             validated_rule = _validate_rule(rule_dict, idx)
-            result.rules.append(TagRule(**validated_rule))
+            rule = TagRule(**validated_rule)
+            if validate_condition_regex:
+                for condition in rule.conditions:
+                    if condition.op == "regex":
+                        try:
+                            re.compile(condition.value)
+                        except re.error:
+                            raise ValueError(
+                                "Rule condition contains an invalid regular expression."
+                            ) from None
+            result.rules.append(rule)
         except ValueError as exc:
+            if strict:
+                raise
             result.errors.append(
                 RuleValidationError(
                     rule_index=idx,
@@ -177,3 +198,20 @@ def load_rules(rules_path: Path) -> List[TagRule]:
         rules.append(TagRule(**validated_rule))
 
     return sorted(rules, key=lambda rule: rule.priority, reverse=True)
+
+
+def load_rules_collecting_bytes(
+    content: bytes, *, validate_condition_regex: bool = False, strict: bool = False
+) -> CollectedLoadResult:
+    """Collect rule-local failures while retaining exact condition threshold text."""
+    try:
+        data = _make_yaml().load(content.decode("utf-8"))
+        raw_rules = _rules_payload_from_document(data, "authoritative rules")
+    except (UnicodeError, ValueError, RuamelYAMLError):
+        raise ValueError("Canonical rules document cannot be parsed.") from None
+    return _collect_validated_rules(
+        raw_rules,
+        exact_metadata=True,
+        validate_condition_regex=validate_condition_regex,
+        strict=strict,
+    )

@@ -433,3 +433,38 @@ Legacy initialization still creates its existing example file, and legacy valida
 its file diagnostics. Initialization registers structure, not actual family holdings; actual
 manual asset input and ownership facts must come from the user or verified source evidence.
 These changes do not establish full private-corpus parity or authorize operating activation.
+
+## Canonical rules diagnostics
+
+`rules validate`, `rules test` and `rules gaps` pin their canonical inputs to one analysis
+snapshot. JSON metadata identifies the source revision and calculation policy, and human
+output identifies repository authority. Edited live rules or transaction CSV cannot change
+these activated results. They do not apply rule changes or retag stored transactions.
+
+Validation keeps strict first-error and default collecting behavior. The collecting bytes
+loader normalizes float metadata while retaining exact numeric condition lexemes. It
+collects errors at their original YAML indices before priority sorting; invalid rules are
+excluded from the passed subset. Explicitly absent rules keep the missing-rules error,
+while unselected or non-parsed selection evidence cannot become a valid configuration.
+Configuration-level errors are not counted as extra rules. File-level parser failures and
+invalid-rule details use static public errors rather than source excerpts. Valid-subset
+conflict and informational diagnostics retain their existing meaning. In particular,
+substring match patterns are not forced to become regex patterns. Invalid actual regex
+conditions are diagnosed and cannot reach the matching engine's raw-pattern warning.
+Configuration validation remains available with incomplete transaction evidence.
+
+Rule testing keeps the existing matcher, default all-history scope, explicit path-month
+selection and separate row-date month distribution. Cross-tag counts use tags_rule, while
+samples show tags_final. Sample limit zero still computes complete match counts. The
+selected rule must be usable, and the selected transaction scope must be complete before
+an empty result can be returned. Report-filter bypass does not bypass these requirements.
+
+Gap analysis compares stored tags and source categories without reevaluating rules, so an
+invalid rule config does not prevent this analysis. Gap analysis and coverage simulation
+share one detached frame. Merchant classification keeps the first row's tags/category,
+amount impact is abs(sum(amount)), and missing merchants still participate in the coverage
+denominator. Existing actionable filtering and human/JSON option meanings are retained.
+Canonical output breaks equal-count merchant ties by name; the legacy file wrapper keeps
+its existing order. Saved canonical reports include generation, revision and policy. This
+stable ordering makes repeat reports from one revision deterministic without changing the
+classification or arithmetic. Failed incomplete reads do not publish a report.
