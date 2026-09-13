@@ -718,7 +718,9 @@ def _restore_manifest_document(
         raw = (source_root / MANIFEST_FILENAME).read_bytes()
     except OSError as exc:
         raise BackupIncompleteError("Backup completion manifest disappeared.") from exc
-    if _digest_text(raw) != manifest.manifest_digest:
+    payload = _manifest_payload_from_bytes(raw)
+    digest_payload = {k: v for k, v in payload.items() if k != "manifest_digest"}
+    if _digest_text(_canonical_json(digest_payload)) != manifest.manifest_digest:
         raise BackupVerificationError("Backup manifest bytes changed during restore.")
     staged = target_root / f"{_STAGING_PREFIX}manifest-{uuid.uuid4().hex}.tmp"
     try:
@@ -900,8 +902,8 @@ def _fsync_file(path: Path) -> None:
         os.close(descriptor)
 
 
-def _manifest_from_bytes(raw: bytes) -> BackupManifest:
-    """Decode and structurally validate manifest bytes."""
+def _manifest_payload_from_bytes(raw: bytes) -> dict[str, Any]:
+    """Decode raw manifest bytes into their JSON payload object."""
     try:
         payload = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -910,7 +912,12 @@ def _manifest_from_bytes(raw: bytes) -> BackupManifest:
         ) from exc
     if not isinstance(payload, dict):
         raise BackupIncompleteError("Backup completion manifest must be a JSON object.")
-    manifest = _manifest_from_payload(payload)
+    return payload
+
+
+def _manifest_from_bytes(raw: bytes) -> BackupManifest:
+    """Decode and structurally validate manifest bytes."""
+    manifest = _manifest_from_payload(_manifest_payload_from_bytes(raw))
     if _digest_text(_canonical_json(manifest.to_payload())) != manifest.manifest_digest:
         raise BackupVerificationError("Backup completion manifest does not match its own digest.")
     return manifest
