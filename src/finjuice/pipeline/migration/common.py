@@ -14,6 +14,7 @@ from finjuice.pipeline.backup.paths import reject_symlink_chain
 
 PLAN_VERSION = "finjuice.migration.plan.v1"
 MIGRATION_VERSION = "finjuice.migration.v1"
+ATTEMPT_MIGRATION_VERSION = "finjuice.migration.v2"
 MARKER = "FINJUICE_MIGRATION_COMPLETE"
 MANIFEST = "migration-manifest.json"
 
@@ -89,3 +90,11 @@ def tree_inventory(root: Path) -> list[dict[str, Any]]:
                 }
             )
     return sorted(result, key=lambda entry: entry["path"])
+
+
+def load_migration_manifest(path: Path) -> dict[str, Any]:
+    """Read either original preservation or required attempt-evidence manifests."""
+    try:
+        return load_sealed(path, ATTEMPT_MIGRATION_VERSION)
+    except MigrationError:
+        return load_sealed(path, MIGRATION_VERSION)

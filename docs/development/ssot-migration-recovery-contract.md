@@ -328,6 +328,18 @@ verified -> activated`. Each transition writes an immutable manifest. Failure
 is terminal for that candidate; retry creates a new attempt linked to it unless
 the operation is explicitly proven resumable.
 
+The implemented build protocol keeps immutable sealed phase records in the
+private sibling `.finjuice-migration-attempts/<attempt-id>/` journal. A linked
+retry requires a different target under the same staging parent and validates
+the retained parent's plan/capture binding and phase chain. It must acquire the
+parent's nonblocking OS lock; stale PID/time/lockfile presence is insufficient.
+Missing terminal evidence may mean an interrupted process or storage failure,
+not success. A lock-free, unpublished parent can be recorded as interrupted in
+the child while preserving its original records. A published candidate must be
+verified through the completed-retry path instead of being treated as failed.
+New migration manifest v2 requires portable parent evidence; legacy manifest v1
+continues to replay its original policy. Raw phase records remain private.
+
 ### 5.2 Capture manifest
 
 The capture walks a fixed inventory while all inventoried writers are stopped,

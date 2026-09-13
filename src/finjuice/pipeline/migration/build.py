@@ -19,7 +19,14 @@ from finjuice.pipeline.backup.paths import (
 from finjuice.pipeline.backup.publish import require_mutation_platform
 from finjuice.pipeline.backup.types import MANIFEST_FILENAME
 from finjuice.pipeline.migration.adapters import preserve_file
+from finjuice.pipeline.migration.attempts import (
+    AttemptJournal,
+    journal_root,
+    parent_evidence,
+    reject_used_target,
+)
 from finjuice.pipeline.migration.common import (
+    ATTEMPT_MIGRATION_VERSION,
     MANIFEST,
     MARKER,
     MIGRATION_VERSION,
@@ -28,6 +35,7 @@ from finjuice.pipeline.migration.common import (
     MigrationResult,
     canonical,
     file_digest,
+    load_migration_manifest,
     load_sealed,
     seal,
     tree_inventory,
@@ -139,6 +147,21 @@ def _check_target(destination: Path, expected: os.stat_result | None) -> None:
         raise MigrationError("Candidate target is no longer empty.")
 
 
+def _completed_candidate(
+    complete: Path, frozen: dict[str, Any], parent_attempt_id: str | None
+) -> MigrationResult:
+    from finjuice.pipeline.migration.verify import verify_migration
+
+    result = verify_migration(complete).to_dict()
+    previous = load_migration_manifest(complete)
+    if parent_attempt_id is not None and previous.get("parent_attempt_id") != parent_attempt_id:
+        raise MigrationError("Completed candidate has a different retry parent.")
+    if previous["plan_digest"] != frozen["canonical_digest"]:
+        raise MigrationError("Completed candidate belongs to a different plan.")
+    fsync_parent_chain(complete.parent.parent.parent)
+    return MigrationResult({**result, "status": "already_complete"})
+
+
 def build_migration(
     plan: Path,
     staging: Path,
@@ -164,39 +187,51 @@ def build_migration(
     reject_overlap(destination, source)
     reject_overlap(destination, reject_symlink_chain(active_data_dir))
     reject_overlap(destination, plan_path)
+    journal = journal_root(destination, (source, active_data_dir, plan_path))
     validate_source(source, frozen)
     complete = destination / "manifests" / MANIFEST
     if complete.exists():
-        result = verify_migration(complete).to_dict()
-        previous = load_sealed(complete, MIGRATION_VERSION)
-        if previous["plan_digest"] != frozen["canonical_digest"]:
-            raise MigrationError("Completed candidate belongs to a different plan.")
-        fsync_parent_chain(destination.parent)
-        return MigrationResult({**result, "status": "already_complete"})
+        return _completed_candidate(complete, frozen, parent_attempt_id)
+    parent = parent_evidence(journal, parent_attempt_id, destination, frozen)
+    reject_used_target(journal, destination)
     existing = _target(destination, source, active_data_dir)
     destination.parent.mkdir(parents=True, exist_ok=True)
     attempt = uuid.uuid4().hex
+    record = AttemptJournal(journal, attempt, destination, frozen, parent)
     work = destination.parent / f".migration-attempt-{attempt}"
-    work.mkdir(mode=0o700)
     try:
-        _build_attempt(work, source, frozen, attempt, parent_attempt_id)
+        record.append("building")
+        work.mkdir(mode=0o700)
+        _build_attempt(
+            work,
+            source,
+            frozen,
+            record,
+            parent_attempt_id,
+        )
+        record.append("built")
         validate_source(source, frozen)
         _check_target(destination, existing)
-        evidence = load_sealed(work / "manifests" / MANIFEST, MIGRATION_VERSION)
+        evidence = load_migration_manifest(work / "manifests" / MANIFEST)
         write_text_atomic(work / MARKER, evidence["canonical_digest"] + "\n")
+        record.append("publishing")
         atomic_publish(work, destination, replace_empty=existing is not None)
-    except BaseException:
-        # Unpublished work has no candidate authority and publication I/O errors may remove it.
-        # Durable failure records and validated parent-attempt lineage remain future work.
+        record.append("published")
+        verified = verify_migration(destination / "manifests" / MANIFEST)
+        record.append("verified")
+        return verified
+    except BaseException as exc:
+        record.failure(exc)
         raise
-    return verify_migration(destination / "manifests" / MANIFEST)
+    finally:
+        record.close()
 
 
 def _build_attempt(
     work: Path,
     source: Path,
     plan: dict[str, Any],
-    attempt: str,
+    attempt: AttemptJournal,
     parent: str | None,
 ) -> None:
     from finjuice.pipeline.migration.verify import semantic_snapshot, verify_contents
@@ -208,10 +243,11 @@ def _build_attempt(
     write_text_atomic(paths.manifests / "plan-evidence.json", canonical(portable_plan) + "\n")
     manifest = seal(
         {
-            "schema_version": MIGRATION_VERSION,
+            "schema_version": ATTEMPT_MIGRATION_VERSION,
             "completion_marker": MARKER,
-            "attempt_id": attempt,
+            "attempt_id": attempt.directory.name,
             "parent_attempt_id": parent,
+            "attempt_evidence": {"records": list(attempt.records)},
             "status": "inactive",
             "plan_digest": plan["canonical_digest"],
             "capture": capture,

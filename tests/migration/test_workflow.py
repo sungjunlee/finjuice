@@ -286,7 +286,14 @@ def test_publish_failure_cleans_attempt_and_keeps_originals(
             assert getattr(current, field) == getattr(target_stat, field)
     assert tuple(tree_inventory(path) for path in (source, backup)) == original
     assert plan.read_bytes() == plan_bytes
-    assert build_migration(plan, target, active_data_dir=source).to_dict()["status"] == "ok"
+    with pytest.raises(MigrationError, match="already used"):
+        build_migration(plan, target, active_data_dir=source)
+    parent = next((tmp_path / ".finjuice-migration-attempts").iterdir()).name
+    retry = build_migration(
+        plan, tmp_path / "retry", active_data_dir=source, parent_attempt_id=parent
+    )
+    assert retry.to_dict()["status"] == "ok"
+    assert tuple(tree_inventory(path) for path in (source, backup)) == original
 
 
 def test_post_publication_sync_failure_can_verify_and_retry(capture, tmp_path, monkeypatch):

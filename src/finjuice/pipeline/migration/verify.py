@@ -13,16 +13,18 @@ from finjuice.pipeline.backup import verify_backup
 from finjuice.pipeline.backup.manifest import payload_relative, validate_manifest_structure
 from finjuice.pipeline.backup.paths import reject_symlink_chain
 from finjuice.pipeline.backup.types import COMPLETION_MARKER, MANIFEST_FILENAME
+from finjuice.pipeline.migration.attempts import validate_evidence
 from finjuice.pipeline.migration.common import (
+    ATTEMPT_MIGRATION_VERSION,
     MANIFEST,
     MARKER,
-    MIGRATION_VERSION,
     PLAN_VERSION,
     MigrationError,
     MigrationResult,
     canonical,
     digest,
     file_digest,
+    load_migration_manifest,
     load_sealed,
 )
 from finjuice.pipeline.migration.plan import analyze_capture
@@ -77,10 +79,48 @@ def _metadata(path: Path, entry: dict[str, Any]) -> None:
     os.utime(path, ns=(entry["mtime_ns"], entry["mtime_ns"]))
 
 
+def _validate_attempt_bindings(manifest: dict[str, Any], evidence: Any) -> None:
+    attempt = manifest.get("attempt_id")
+    plan = manifest.get("plan_digest")
+    capture = manifest.get("capture")
+    if not isinstance(attempt, str) or not isinstance(plan, str) or not isinstance(capture, dict):
+        raise MigrationError("Candidate attempt bindings are missing or malformed.")
+    capture_digest = capture.get("canonical_digest")
+    if not isinstance(capture_digest, str):
+        raise MigrationError("Candidate capture digest is missing or malformed.")
+    validate_evidence(evidence, attempt, plan, capture_digest)
+
+
+def _verify_attempt_evidence(manifest: dict[str, Any]) -> None:
+    if (
+        manifest.get("schema_version") == ATTEMPT_MIGRATION_VERSION
+        and "attempt_evidence" not in manifest
+    ):
+        raise MigrationError("Migration v2 requires durable attempt evidence.")
+    if (
+        manifest.get("schema_version") != ATTEMPT_MIGRATION_VERSION
+        and "attempt_evidence" in manifest
+    ):
+        raise MigrationError("Legacy manifests cannot claim attempt evidence.")
+    if "attempt_evidence" in manifest:
+        evidence = manifest["attempt_evidence"]
+        _validate_attempt_bindings(manifest, evidence)
+        if "outcome" in evidence or [record["phase"] for record in evidence["records"]] != [
+            "started",
+            "building",
+        ]:
+            raise MigrationError("Candidate attempt must contain its pre-build phase snapshot.")
+        parent = evidence["records"][0].get("parent")
+        actual_parent = parent["records"][0]["attempt_id"] if parent else None
+        if actual_parent != manifest.get("parent_attempt_id"):
+            raise MigrationError("Candidate retry parent binding does not match.")
+
+
 def verify_contents(root: Path, manifest: dict[str, Any]) -> None:
     """Check candidate bytes and replay adapters solely from retained immutable evidence."""
     from finjuice.pipeline.migration.build import baseline_origin, populate_repository
 
+    _verify_attempt_evidence(manifest)
     paths = GenerationPaths(root)
     reject_symlink_chain(paths.database)
     evidence_file = paths.manifests / "plan-evidence.json"
@@ -137,7 +177,7 @@ def verify_migration(candidate: Path) -> MigrationResult:
     root = manifest_path.parent.parent
     if root.name.startswith(".migration-attempt-"):
         raise MigrationError("Unpublished attempt workspace is not a complete candidate.")
-    manifest = load_sealed(manifest_path, MIGRATION_VERSION)
+    manifest = load_migration_manifest(manifest_path)
     marker = reject_symlink_chain(root / MARKER)
     if (
         manifest.get("completion_marker") != MARKER

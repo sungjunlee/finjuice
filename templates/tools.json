@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
   "name": "finjuice",
-  "version": "0.8.0",
-  "generated_at": "2026-09-12T14:31:39+00:00",
+  "version": "0.8.2",
+  "generated_at": "2026-09-13T06:16:33+00:00",
   "tools": [
     {
       "name": "assets.balance",
@@ -1986,7 +1986,8 @@
         "top_level_keys": [
           "_meta",
           "action",
-          "rule_name"
+          "rule_name",
+          "validation"
         ]
       }
     },
@@ -2262,7 +2263,7 @@
               "string",
               "null"
             ],
-            "description": "Prior failed attempt ID for a linked fresh attempt.",
+            "description": "Failed/interrupted attempt ID retained in this staging parent; use a new target.",
             "default": null
           },
           "json": {

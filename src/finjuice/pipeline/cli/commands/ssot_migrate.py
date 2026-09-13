@@ -151,7 +151,9 @@ def migrate_build(
         ..., "--staging", help="New or empty inactive candidate directory."
     ),
     parent_attempt_id: Optional[str] = typer.Option(
-        None, "--parent-attempt-id", help="Prior failed attempt ID for a linked fresh attempt."
+        None,
+        "--parent-attempt-id",
+        help="Failed/interrupted attempt ID retained in this staging parent; use a new target.",
     ),
     json_output: bool = typer.Option(False, "--json", help="Output a privacy-safe JSON summary."),
 ) -> None:

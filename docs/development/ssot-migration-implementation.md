@@ -63,12 +63,13 @@ and after reading it. It rejects active, overlapping, nonempty, symlinked, and
 repository-contained destinations. A hidden sibling attempt is populated and
 verified before atomic directory publication. A matching completed retry is
 reverified and returns `already_complete`. An incomplete attempt cannot be used
-as a completed candidate; retry with a new target and optional
-`--parent-attempt-id`.
-Publication I/O failures may remove the unpublished attempt workspace; failed
-work is not guaranteed to remain inspectable. A failure after directory
-publication can leave a complete candidate that must be reverified before an
-`already_complete` retry is accepted.
+as a completed candidate. After an accepted attempt fails, its retained target name is
+rejected by the journal precheck; retry with a different target and the retained
+`--parent-attempt-id` in the same staging parent directory.
+Publication I/O failures may remove unpublished work, but phase evidence lives
+outside that workspace. A failure after directory publication can leave a
+complete candidate that must be reverified before an `already_complete` retry
+is accepted; it must not be relabelled as a failed parent.
 
 Verification checks database integrity, foreign keys, content hashes, immutable
 plan/manifest bindings, and preserved input dispositions. It reconstructs the M1
@@ -84,8 +85,10 @@ exact values, duplicate identity, config status, and raw evidence.
 Synthetic exception tests cover ENOSPC and ordinary failures during capture-copy
 and repository-replay verification, publication failure cleanup, and a parent
 sync failure after publication. They check scratch cleanup and unchanged source,
-capture, and candidate evidence. These tests do not establish a free-space sizing
-rule or crash-durability guarantee, and no disk was filled for testing.
+capture, and candidate evidence. These injected failures do not establish a
+free-space sizing rule or hardware power-loss guarantee, and no disk was filled for testing.
+Separate process-kill checks exercise actual OS lock release and recovery before
+and after directory publication.
 
 ## Remaining gates
 
@@ -102,11 +105,8 @@ rule or crash-durability guarantee, and no disk was filled for testing.
   as described below. Other configuration copies remain preserved revisions;
   missing or invalid canonical documents are not replaced with alternative copies.
   Older policy plans retain their original unselected-head behavior.
-- Failed attempts are rejected through their unpublished workspace and missing
-  publication authority. A durable failure-phase manifest and validated parent
-  attempt lineage are not implemented; `--parent-attempt-id` records a supplied
-  identifier rather than proving the preceding attempt. Crash recovery needs
-  further acceptance work before operational use.
+- Durable phases and validated retry lineage are implemented below. Physical
+  power-loss behavior and operational recovery remain separate evidence gates.
 - Historical audit bytes are retained without recreating a historical event chain.
 - No consumer parity, runtime restore, private-data migration, release, activation,
   or operator approval has been verified. Every result reports `cutover_ready=false`.
@@ -172,3 +172,49 @@ The sealed plan policy is the implemented discriminator for extraction semantics
 there is no emitted per-row sentinel representation-code field. Consumer parity
 must distinguish original stored visible tags from the normalized legacy display
 view instead of using storage equality as proof of display equality.
+
+## Durable attempt journal and retry lineage
+
+Each accepted build creates a private journal below the staging parent's
+`.finjuice-migration-attempts/<attempt-id>/` before creating its work directory.
+Numbered sealed records form a digest-linked sequence: started, building, built,
+publishing, published, verified. The build records each phase after completing
+the preceding phase; `built` includes the staging content verification. Caught
+failures append a terminal failure record containing the exception class, never
+the exception message or financial payload. Every record is fsynced and published
+exclusively from a unique temporary file, then its directory chain is synced.
+Existing records are not overwritten. Pending partial files are not phase records.
+
+A nonblocking POSIX file lock is held for the entire attempt. A requested parent
+must have a valid journal bound to the same sealed plan and capture. Unknown,
+tampered, live, successful and mismatched parents are rejected. No PID or lockfile
+presence is treated as proof of liveness. A retained nonterminal chain can be
+classified as interrupted only after acquiring its OS lock and excluding a
+published target. That classification is preserved in the child's sealed parent
+evidence; the original journal and abandoned workspace stay unchanged.
+
+When storage also rejects the failure record, the original exception and earlier
+durable records remain; a terminal record is not claimed. Failure before the
+initial record becomes durable never starts repository population. This protocol
+provides process-crash evidence, not a guarantee that a failed device can retain
+new bytes or that physical power-loss recovery has been tested.
+
+New candidate manifests use `finjuice.migration.v2` and require portable attempt
+evidence, including the parent chain. Verification works from that candidate
+without the external journal. Original `finjuice.migration.v1` manifests still
+verify/retry under their sealed adapter policy; the old reader rejects v2 rather
+than silently ignoring its required evidence. The SQLite schema and original
+source/parser identities do not change. A copied completed candidate can be
+verified without its journal, but starting a linked retry requires the retained
+private journal in the staging parent. Preflight rejections before an attempt
+is accepted do not create phase evidence.
+
+Target-name history is checked before starting a build; this check is not a
+per-target concurrency lock. Concurrent publishers still rely on the existing
+exclusive directory publication and empty-target identity checks, so a second
+writer cannot replace an already published nonempty candidate. A corrupt sibling
+journal fails this history check closed because its target history is unknown.
+Preserve the damaged journal and workspaces for diagnosis; an independent fresh
+plan/build can use a new isolated staging parent. Do not delete or edit evidence
+to bypass the check, and do not claim a linked retry if the parent evidence
+cannot be verified. This recovery path does not modify the original source.
