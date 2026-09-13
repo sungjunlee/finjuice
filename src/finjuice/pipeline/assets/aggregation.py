@@ -129,10 +129,12 @@ def _contribution(
 ) -> Contribution:
     if item.observation_id in conflict_ids:
         return "conflict"
+    if exclusion is not None:
+        return "excluded"
     special = _KIND_CONTRIBUTION.get(item.measure.kind)
     if special is not None:
         return special
-    if exclusion is not None or item.measure.kind not in NET_WORTH_MEASURES:
+    if item.measure.kind not in NET_WORTH_MEASURES:
         return "excluded"
     return "included"
 

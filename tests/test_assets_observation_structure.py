@@ -132,6 +132,59 @@ def test_later_partial_same_as_of_does_not_overwrite_complete() -> None:
     assert report.confirmed_total == Decimal("500000")
 
 
+def test_confirmed_partial_cannot_supersede_complete() -> None:
+    complete = _obs(
+        _Spec("c1", "acct-broker", "balance", "500000", "2026-09-01", "2026-09-01T09:00:00")
+    )
+    partial = _obs(
+        _Spec(
+            "p1",
+            "acct-broker",
+            "balance",
+            "1",
+            "2026-09-10",
+            "2026-09-10T18:00:00",
+            scope="partial",
+            source="screenshot",
+            confirmation="confirmed",
+            supersedes_id="c1",
+        )
+    )
+    report = _report([complete, partial], "2026-09-10")
+    assert report.current_ids == ("c1",)
+    assert report.confirmed_total == Decimal("500000")
+
+
+def test_excluded_cash_movement_does_not_enter_cash_total() -> None:
+    cash = _obs(
+        _Spec(
+            "cash1",
+            "acct-bank",
+            "cash_movement",
+            "100000",
+            "2026-09-01",
+            "2026-09-01T00:00:00",
+        )
+    )
+    summary = _obs(
+        _Spec("s1", "acct-bank", "balance", "900000", "2026-09-01", "2026-09-01T00:00:00")
+    )
+    assertion = InclusionAssertion(
+        assertion_id="inc-cash",
+        kind="summary_contains_holdings",
+        container_id="s1",
+        member_id="cash1",
+        review_state="confirmed",
+    )
+    report = evaluate_observations(
+        ObservationBundle(observations=(summary, cash), inclusions=(assertion,)),
+        _query("2026-09-01"),
+    )
+    assert report.exclusion_for("cash1") is not None
+    assert report.cash_flow_total == Decimal("0")
+    assert report.confirmed_total == Decimal("900000")
+
+
 def test_unconfirmed_supersession_does_not_replace_current_view() -> None:
     original = _obs(
         _Spec("c1", "acct-bank", "balance", "200000", "2026-09-01", "2026-09-01T00:00:00")

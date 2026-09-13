@@ -64,6 +64,13 @@ def _confirmed_superseded(evidence: Sequence[Observation]) -> set[str]:
             continue
         if item.lifecycle.confirmation_state != "confirmed":
             continue
+        target_obs = by_id.get(target)
+        if (
+            item.lifecycle.scope_state == "partial"
+            and target_obs is not None
+            and target_obs.lifecycle.scope_state == "complete"
+        ):
+            continue
         if target in by_id:
             superseded.add(target)
     return superseded
