@@ -582,3 +582,63 @@ file, preserving any hardlinked source inode; symlink ignore files are rejected.
 `journal list` and `resume` continue reading historical notes independently of current
 financial authority. Legacy note front matter and the three body templates retain
 their existing shape. No new JSON command is introduced.
+
+## Reconcile payment candidates
+
+`reconcile` reads included primary/native payment occurrences from one canonical
+transaction snapshot under `canonical_reconcile_exact.v1`. It reconstructs Decimal
+amounts directly from validated coefficient/scale/lexical evidence, without the legacy
+CSV float conversion or two-decimal rounding. UUID payment IDs retain duplicate legacy
+row aliases and native rows without aliases. `payment_identity_policy` identifies this
+change; ambiguous tie selection is not claimed to be byte-identical to hash ordering.
+
+Missing months permit unmatched evidence, but unmaterialized primary transaction
+evidence fails the whole read. Missing/invalid canonical date prefixes and unknown
+currencies fail instead of being skipped or defaulted to KRW. Dates retain the legacy
+first-ten-character ISO date interpretation. Different currencies do not match; no
+conversion, report filters, goals logic, or transfer exclusion is added.
+
+The explicit external evidence file is captured once. Its digest and external basis
+are separate from the payment generation/revision in `_meta`, which also records
+the requested `window_days`. Human output identifies
+the canonical revision and UUID identity. Evidence parsing, source selection and
+calculation failures use a static error message. No ledger, match decision or evidence
+file is written. Matching decisions remain proposals under the existing algorithm.
+
+Canonical arithmetic uses a dedicated Decimal context and finite exact inputs, with
+precision derived from all operand digits/scales and the matcher's maximum five-term
+sums. This keeps comparisons, partial thresholds and residuals independent of the
+calling process's Decimal settings. Explicit input and search limits reject unsupported
+work rather than return a truncated result; these bounds do not claim a bound on JSON
+file loading or on all other CLI processing. The legacy CSV path keeps its existing
+amount conversion and matcher. This checkpoint does not persist M5 evidence inboxes or
+confirmed/withdrawn allocation decisions, and does not establish full private-corpus
+or operational acceptance.
+
+The canonical limits are 10,000 total input items, 1,000,000 input coefficient
+digits, 1,000,000 evidence/payment pairs, 1,000,000 actual metered work units, and
+20,000,000 precision-weighted work units. Individual amounts retain the
+100,000-coefficient-digit and 255-scale support boundary. The matcher runs once on
+frozen inputs and charges candidate checks, absolute-value
+operations and each visited combination's operand count. Early one-to-one and N:M
+matches do not consume the cost of unvisited combinations. The scoped meter is
+restored after success or failure. Its work units are an explicit proxy rather than
+a CPU instruction or wall-clock guarantee. Metadata reports these
+limits. The existing five-item search and sixteen-payment candidate cap remain.
+
+Canonical evidence combination searches first exclude amounts above the target,
+then skip targets not divisible by the exact common-unit amount GCD and sizes
+whose minimum/maximum sums cannot reach the target. These checks preserve the
+order of feasible combinations and use exact integer conversion even at the
+maximum coefficient/scale boundaries. They add no arithmetic to the legacy path;
+payment exact searches also check fixed-size minimum/maximum sums, and partial
+searches skip sizes that cannot reach 50% coverage below the target. Searches
+remaining after these bounds may still exhaust the explicit work budget.
+
+Like the other consumers, reconciliation follows the shared authority resolver: a
+present invalid activation or absent trusted evidence fails, while no activation
+pointer selects legacy authority. Removing a pointer after activation cannot be
+distinguished from an unactivated root by this consumer; operational mode/binding
+protection remains a cutover acceptance concern, not a claim of this adapter. Shared
+read coordination may create its control lock; financial and evidence files stay
+unchanged.
