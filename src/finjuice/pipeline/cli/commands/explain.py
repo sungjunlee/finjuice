@@ -91,9 +91,10 @@ def _prompt_transaction_choice(df: pl.DataFrame) -> tuple[dict[str, Any], int] |
 
     if selection == 0:
         return None
-    if 1 <= selection <= len(df):
+    listed = min(len(df), _MAX_LISTED_CANDIDATES)
+    if 1 <= selection <= listed:
         return _row_at(df, selection), selection
-    error("Invalid selection")
+    error(f"Invalid selection: choose a number from 1 to {listed}")
     return None
 
 
