@@ -52,6 +52,12 @@ from finjuice.pipeline.tagging.suggestion_queries import (
     get_suggestion_coverage_stats,  # noqa: F401 — re-exported for suggestions callers.
 )
 from finjuice.pipeline.tagging.suggestion_scoring_classify import (
+    GENERIC_LEDGER_AMBIGUOUS_REASON as GENERIC_LEDGER_AMBIGUOUS_REASON,
+)
+from finjuice.pipeline.tagging.suggestion_scoring_classify import (
+    MASKED_LABEL_AMBIGUOUS_REASON as MASKED_LABEL_AMBIGUOUS_REASON,
+)
+from finjuice.pipeline.tagging.suggestion_scoring_classify import (
     PAYMENT_GATEWAY_AMBIGUOUS_REASON as PAYMENT_GATEWAY_AMBIGUOUS_REASON,
 )
 from finjuice.pipeline.tagging.suggestion_scoring_classify import (
@@ -78,6 +84,7 @@ from finjuice.pipeline.tagging.suggestion_scoring_helpers import (
 )
 from finjuice.pipeline.tagging.suggestion_similarity import (
     MERCHANT_CLUSTER_REASON,  # noqa: F401 — re-exported for suggestions callers.
+    TRUNCATED_MERCHANT_CLUSTER_REASON,  # noqa: F401 — re-exported for suggestions callers.
     _build_fuzzy_merchant_clusters,
     _empty_merchant_cluster,
     _find_similar_merchants,

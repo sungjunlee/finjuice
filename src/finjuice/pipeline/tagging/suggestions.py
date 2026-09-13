@@ -32,10 +32,13 @@ from finjuice.pipeline.tagging.suggestion_format import (
     get_banksalad_category,
 )
 from finjuice.pipeline.tagging.suggestion_scoring import (
+    GENERIC_LEDGER_AMBIGUOUS_REASON,
+    MASKED_LABEL_AMBIGUOUS_REASON,
     MERCHANT_CLUSTER_REASON,
     PAYMENT_GATEWAY_AMBIGUOUS_REASON,
     RECURRING_PRIORITY_BOOST,
     SUGGESTED_RULE_PRIORITY,
+    TRUNCATED_MERCHANT_CLUSTER_REASON,
     _deduplicate_rule_name,  # noqa: F401 — tests import the private helper via this module.
     _escape_regex_special_chars,  # noqa: F401 — tests import the private helper via this module.
     _generate_match_pattern,  # noqa: F401 — tests import the private helper via this module.
@@ -52,10 +55,13 @@ from finjuice.pipeline.tagging.suggestion_scoring import (
 
 __all__ = [
     "TAG_TO_BANKSALAD_CATEGORY",
+    "GENERIC_LEDGER_AMBIGUOUS_REASON",
+    "MASKED_LABEL_AMBIGUOUS_REASON",
     "MERCHANT_CLUSTER_REASON",
     "PAYMENT_GATEWAY_AMBIGUOUS_REASON",
     "RECURRING_PRIORITY_BOOST",
     "SUGGESTED_RULE_PRIORITY",
+    "TRUNCATED_MERCHANT_CLUSTER_REASON",
     "apply_suggestion_to_rules",
     "build_rule_dict_from_suggestion",
     "build_suggested_rule_field",

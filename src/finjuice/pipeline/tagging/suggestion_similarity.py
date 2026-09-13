@@ -1,7 +1,8 @@
 """Merchant similarity and clustering helpers for `finjuice rules suggest`.
 
 This module owns text normalization used by similarity comparisons, spend-profile
-look-alikes, and suggestion-only fuzzy merchant clusters.
+look-alikes, and suggestion-only fuzzy merchant clusters, including truncated
+card-statement names that share a specific prefix.
 
 :mod:`finjuice.pipeline.tagging.suggestion_scoring` re-exports the names that
 existing callers import from that module.
@@ -14,6 +15,8 @@ from difflib import SequenceMatcher
 from typing import Any
 
 MERCHANT_CLUSTER_REASON = "normalized_merchant_match"
+TRUNCATED_MERCHANT_CLUSTER_REASON = "truncated_merchant_prefix"
+MIN_TRUNCATED_PREFIX_LEN = 7
 
 
 def _normalize_text(value: Any) -> str | None:
@@ -112,10 +115,113 @@ def _empty_merchant_cluster(merchant: str) -> dict[str, Any]:
     }
 
 
+def _unique_cluster_merchants(contexts: list[dict[str, Any]]) -> list[str]:
+    """Return sorted unique merchant names from cluster member contexts."""
+    return sorted(
+        {
+            str(context["merchant"])
+            for context in contexts
+            if _normalize_text(context.get("merchant"))
+        }
+    )
+
+
+def _is_truncated_prefix_pair(short_key: str, long_key: str) -> bool:
+    """Return whether *short_key* looks like a card-statement truncation of *long_key*.
+
+    The prefix must be long enough that a conglomerate stem such as ``롯데쇼핑``
+    or ``롯데쇼핑(주)`` does not pull unrelated banners like ``롯데마트`` into the
+    same cluster.
+    """
+    if not short_key or not long_key or short_key == long_key:
+        return False
+    if len(short_key) < MIN_TRUNCATED_PREFIX_LEN:
+        return False
+    return long_key.startswith(short_key)
+
+
+def _merge_truncated_prefix_groups(
+    grouped: dict[str, list[dict[str, Any]]],
+) -> dict[str, list[dict[str, Any]]]:
+    """Merge normalized groups when a unique longer name continues a truncated prefix."""
+    keys = list(grouped)
+    parent = {key: key for key in keys}
+
+    def find(key: str) -> str:
+        while parent[key] != key:
+            parent[key] = parent[parent[key]]
+            key = parent[key]
+        return key
+
+    def union(left: str, right: str) -> None:
+        left_root = find(left)
+        right_root = find(right)
+        if left_root == right_root:
+            return
+        if len(left_root) <= len(right_root):
+            parent[right_root] = left_root
+        else:
+            parent[left_root] = right_root
+
+    for short_key in keys:
+        longer_matches = [
+            long_key for long_key in keys if _is_truncated_prefix_pair(short_key, long_key)
+        ]
+        if len(longer_matches) != 1:
+            continue
+        union(short_key, longer_matches[0])
+
+    merged: dict[str, list[dict[str, Any]]] = {}
+    for key, contexts in grouped.items():
+        merged.setdefault(find(key), []).extend(contexts)
+    return merged
+
+
+def _merchant_cluster_payload(
+    key: str,
+    contexts: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Return the public cluster payload, or None when the group is a singleton."""
+    unique_merchants = _unique_cluster_merchants(contexts)
+    if len(unique_merchants) < 2:
+        return None
+
+    members = [
+        member
+        for member in (_merchant_cluster_member(context) for context in contexts)
+        if member is not None
+    ]
+    members.sort(
+        key=lambda member: (
+            -int(member["transaction_count"]),
+            str(member["merchant"]),
+        )
+    )
+    confidence = min(
+        _merchant_similarity_score(left, right)
+        for index, left in enumerate(unique_merchants)
+        for right in unique_merchants[index + 1 :]
+    )
+    normalized_keys = {
+        _normalize_merchant_for_similarity(merchant) for merchant in unique_merchants
+    }
+    reason = (
+        MERCHANT_CLUSTER_REASON
+        if len(normalized_keys) == 1
+        else TRUNCATED_MERCHANT_CLUSTER_REASON
+    )
+    return {
+        "key": key,
+        "members": members,
+        "reason": reason,
+        "confidence": round(float(confidence), 2),
+    }
+
+
 def _build_fuzzy_merchant_clusters(
     merchant_contexts: list[dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:
-    """Build suggestion-only clusters for merchants with identical normalized forms."""
+    """Build suggestion-only clusters for spacing variants and truncated store names."""
     grouped: dict[str, list[dict[str, Any]]] = {}
     for context in merchant_contexts:
         merchant = _normalize_text(context.get("merchant"))
@@ -125,40 +231,11 @@ def _build_fuzzy_merchant_clusters(
         grouped.setdefault(key, []).append(context)
 
     clusters: dict[str, dict[str, Any]] = {}
-    for key, contexts in grouped.items():
-        unique_merchants = sorted(
-            {
-                str(context["merchant"])
-                for context in contexts
-                if _normalize_text(context.get("merchant"))
-            }
-        )
-        if len(unique_merchants) < 2:
+    for key, contexts in _merge_truncated_prefix_groups(grouped).items():
+        cluster = _merchant_cluster_payload(key, contexts)
+        if cluster is None:
             continue
-
-        members = [
-            member
-            for member in (_merchant_cluster_member(context) for context in contexts)
-            if member is not None
-        ]
-        members.sort(
-            key=lambda member: (
-                -int(member["transaction_count"]),
-                str(member["merchant"]),
-            )
-        )
-        confidence = min(
-            _merchant_similarity_score(left, right)
-            for index, left in enumerate(unique_merchants)
-            for right in unique_merchants[index + 1 :]
-        )
-        cluster = {
-            "key": key,
-            "members": members,
-            "reason": MERCHANT_CLUSTER_REASON,
-            "confidence": round(float(confidence), 2),
-        }
-        for merchant in unique_merchants:
+        for merchant in _unique_cluster_merchants(contexts):
             clusters[merchant] = cluster
 
     return clusters

@@ -60,7 +60,8 @@ def _interactive_apply_suggestions(
         typer.echo(f"     카테고리: {default_rule.get('category') or '미분류'}")
         typer.echo(f"     기본 태그: {default_rule['tags']}")
         if not is_auto_apply_eligible(suggestion):
-            typer.echo("     권장: 규칙 생성 비추천 (payment_gateway)")
+            reason = suggestion.get("ambiguous_reason") or "skip_rule"
+            typer.echo(f"     권장: 규칙 생성 비추천 ({reason})")
 
         if yes:
             if not is_auto_apply_eligible(suggestion):

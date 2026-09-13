@@ -309,6 +309,132 @@ class TestGenerateMerchantContext:
             "default_action": "create_rule",
         }
 
+    def test_flags_easy_pay_masked_and_generic_labels_as_skip_rule(self, tmp_path: Path) -> None:
+        """Easy-pay brands, masked labels, and generic ledger phrases are not create_rule."""
+        data_dir = tmp_path / "data"
+        create_test_transactions(
+            data_dir,
+            [
+                _transaction("npay_1", "2024-10-01", "네이버페이", -4300.0, tags_final=[]),
+                _transaction("npay_2", "2024-10-02", "네이버페이", -5100.0, tags_final=[]),
+                _transaction("mask_1", "2024-10-03", "*****", -2200.0, tags_final=[]),
+                _transaction("mask_2", "2024-10-04", "*****", -2300.0, tags_final=[]),
+                _transaction("ledger_1", "2024-10-05", "송금 내역", -15000.0, tags_final=[]),
+                _transaction("ledger_2", "2024-10-06", "송금 내역", -16000.0, tags_final=[]),
+            ],
+        )
+
+        suggestions = generate_merchant_context(data_dir, top_n=10, min_count=2)
+
+        by_merchant = {suggestion["merchant"]: suggestion for suggestion in suggestions}
+        naver_pay = by_merchant["네이버페이"]
+        assert naver_pay["merchant_kind"] == "payment_gateway"
+        assert naver_pay["ambiguous_reason"] == "payment_gateway"
+        assert naver_pay["default_action"] == "skip_rule"
+        assert naver_pay["auto_apply_eligible"] is False
+        assert naver_pay["transaction_count"] == 2
+        assert naver_pay["total_amount"] == 9400.0
+
+        masked = by_merchant["*****"]
+        assert masked["merchant_kind"] == "non_merchant"
+        assert masked["ambiguous_reason"] == "masked_label"
+        assert masked["default_action"] == "skip_rule"
+        assert masked["auto_apply_eligible"] is False
+        assert masked["transaction_count"] == 2
+        assert masked["total_amount"] == 4500.0
+
+        ledger = by_merchant["송금 내역"]
+        assert ledger["merchant_kind"] == "non_merchant"
+        assert ledger["ambiguous_reason"] == "generic_ledger"
+        assert ledger["default_action"] == "skip_rule"
+        assert ledger["auto_apply_eligible"] is False
+        assert ledger["transaction_count"] == 2
+        assert ledger["total_amount"] == 31000.0
+
+    def test_merges_truncated_store_names_without_swallowing_lotte_mart(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """Card-statement truncation clusters the same store, not a 롯데쇼핑 stem."""
+        data_dir = tmp_path / "data"
+        truncated = "롯데쇼핑(주) 프리"
+        full_name = "롯데쇼핑(주) 프리미엄아울렛 의왕점"
+        mart = "롯데마트"
+        create_test_transactions(
+            data_dir,
+            [
+                *[
+                    _transaction(
+                        f"trunc_{index}",
+                        "2024-10-01",
+                        truncated,
+                        -7000.0,
+                        tags_final=[],
+                        time=f"10:0{index}:00",
+                        source_row=index,
+                    )
+                    for index in range(1, 8)
+                ],
+                *[
+                    _transaction(
+                        f"full_{index}",
+                        "2024-10-02",
+                        full_name,
+                        -8000.0,
+                        tags_final=[],
+                        time=f"11:{index:02d}:00",
+                        source_row=10 + index,
+                    )
+                    for index in range(1, 26)
+                ],
+                *[
+                    _transaction(
+                        f"mart_{index}",
+                        "2024-10-03",
+                        mart,
+                        -3000.0,
+                        tags_final=[],
+                        time=f"12:0{index}:00",
+                        source_row=40 + index,
+                    )
+                    for index in range(1, 4)
+                ],
+            ],
+        )
+
+        suggestions = generate_merchant_context(data_dir, top_n=10, min_count=2)
+
+        by_merchant = {suggestion["merchant"]: suggestion for suggestion in suggestions}
+        truncated_suggestion = by_merchant[truncated]
+        full_suggestion = by_merchant[full_name]
+        mart_suggestion = by_merchant[mart]
+
+        assert truncated_suggestion["transaction_count"] == 7
+        assert truncated_suggestion["total_amount"] == 49000.0
+        assert full_suggestion["transaction_count"] == 25
+        assert full_suggestion["total_amount"] == 200000.0
+        assert mart_suggestion["transaction_count"] == 3
+        assert mart_suggestion["total_amount"] == 9000.0
+
+        assert truncated_suggestion["merchant_kind"] == "merchant"
+        assert truncated_suggestion["default_action"] == "create_rule"
+        assert "롯데마트" not in truncated_suggestion["pattern"]
+        assert truncated_suggestion["pattern"] != "롯데쇼핑"
+        assert full_suggestion["pattern"] != "롯데쇼핑"
+
+        cluster = truncated_suggestion["merchant_cluster"]
+        assert cluster == full_suggestion["merchant_cluster"]
+        assert cluster["reason"] == "truncated_merchant_prefix"
+        member_merchants = {member["merchant"] for member in cluster["members"]}
+        assert member_merchants == {truncated, full_name}
+        assert mart not in member_merchants
+        assert mart_suggestion["merchant_cluster"]["reason"] == "none"
+        member_counts = {
+            member["merchant"]: member["transaction_count"] for member in cluster["members"]
+        }
+        assert member_counts[truncated] == 7
+        assert member_counts[full_name] == 25
+
     def test_file_id_filter_limits_suggestions_to_one_import(self, tmp_path: Path) -> None:
         """rules suggest engine should support import-scoped curation."""
         data_dir = tmp_path / "data"
