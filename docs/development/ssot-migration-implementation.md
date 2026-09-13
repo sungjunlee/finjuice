@@ -99,7 +99,9 @@ rule or crash-durability guarantee, and no disk was filled for testing.
   invariant requires a projection and its fact to share one occurrence. The
   remaining contract decision is how to represent verified cross-file derivation
   while preserving distinct original file occurrences; even a unique legacy ID
-  match is not a completed link.
+  match is not a completed link. The proposed options and recommended contract
+  are in [ADR-0015](../architecture/decisions/0015-cross-file-overview-derivation.md);
+  adoption and implementation remain pending.
 - Config head selection is not implemented. Revisions alone must not be treated
   as active rules/goals configuration.
 - Failed attempts are rejected through their unpublished workspace and missing
