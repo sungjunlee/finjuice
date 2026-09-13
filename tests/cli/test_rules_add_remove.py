@@ -526,6 +526,8 @@ rules:
         assert add_payload["action"] == "added"
         assert remove_payload["_meta"]["command"] == "rules remove"
         assert remove_payload["action"] == "removed"
+        assert "validation" in remove_payload
+        assert "total_problems" in remove_payload["validation"]
 
     def test_add_rule_validation_on_write(self, tmp_path: Path) -> None:
         """Validation warnings are included when the new rule overlaps existing ones."""
@@ -563,9 +565,124 @@ rules:
 
         assert result.exit_code == 0
         payload = json.loads(result.output)
-        assert payload["validation"]["warnings"] >= 1
-        problem_types = {problem["type"] for problem in payload["validation"]["problems"]}
+        validation = payload["validation"]
+        assert validation["warnings"] >= 1
+        assert "total_problems" in validation
+        assert validation["total_problems"] >= 1
+        assert validation["total_problems"] >= len(validation["problems"])
+        problem_types = {problem["type"] for problem in validation["problems"]}
         assert "pattern_overlap" in problem_types or "priority_inversion" in problem_types
+        for problem in validation["problems"]:
+            assert "coffee_specific" in problem["rules"]
+
+    def test_add_rule_json_filters_unrelated_overlap_warnings(self, tmp_path: Path) -> None:
+        """rules add --json should not flood problems with pre-existing overlaps."""
+        data_dir = tmp_path / "data"
+        _write_rules(
+            data_dir,
+            """version: 1
+rules:
+  - name: coffee_general
+    match: "Star"
+    fields: [merchant_raw]
+    tags: ["cafe"]
+    priority: 90
+  - name: coffee_specific
+    match: "Starbucks"
+    fields: [merchant_raw]
+    tags: ["cafe", "coffee"]
+    priority: 80
+""",
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "--data-dir",
+                str(data_dir),
+                "rules",
+                "add",
+                "--name",
+                "unique_widget",
+                "--match",
+                "UniqueWidgetXYZ",
+                "--tags",
+                "misc",
+                "--json",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        validation = payload["validation"]
+        assert validation["problems"] == []
+        assert validation["total_problems"] > 0
+        assert validation["warnings"] >= 1
+
+        validate_result = runner.invoke(
+            app,
+            ["--data-dir", str(data_dir), "rules", "validate", "--json"],
+        )
+        assert validate_result.exit_code == 0, validate_result.output
+        validate_payload = json.loads(validate_result.output)
+        assert len(validate_payload["problems"]) == validation["total_problems"]
+        assert "total_problems" not in validate_payload
+
+    def test_remove_rule_json_filters_unrelated_overlap_warnings(self, tmp_path: Path) -> None:
+        """rules remove --json should not flood problems with unrelated overlaps."""
+        data_dir = tmp_path / "data"
+        _write_rules(
+            data_dir,
+            """version: 1
+rules:
+  - name: coffee_general
+    match: "Star"
+    fields: [merchant_raw]
+    tags: ["cafe"]
+    priority: 90
+  - name: coffee_specific
+    match: "Starbucks"
+    fields: [merchant_raw]
+    tags: ["cafe", "coffee"]
+    priority: 80
+  - name: unique_widget
+    match: "UniqueWidgetXYZ"
+    fields: [merchant_raw]
+    tags: ["misc"]
+    priority: 50
+""",
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "--data-dir",
+                str(data_dir),
+                "rules",
+                "remove",
+                "--name",
+                "unique_widget",
+                "--json",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        validation = payload["validation"]
+        assert validation["problems"] == []
+        assert validation["total_problems"] >= 1
+
+        rules = load_rules(data_dir / "rules.yaml")
+        assert [rule.name for rule in rules] == ["coffee_general", "coffee_specific"]
+
+    def test_add_rule_help_describes_substring_match(self) -> None:
+        """rules add --match help should describe substring matching, not regex."""
+        result = runner.invoke(app, ["rules", "add", "--help"])
+
+        assert result.exit_code == 0, result.output
+        output = result.output
+        assert "substring" in output.lower()
+        assert "Pipe-separated regex patterns" not in output
 
 
 def test_update_preserves_omitted_rule_fields_and_reports_merged_state(tmp_path: Path) -> None:

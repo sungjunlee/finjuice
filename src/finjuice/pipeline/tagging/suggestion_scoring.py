@@ -52,6 +52,12 @@ from finjuice.pipeline.tagging.suggestion_queries import (
     get_suggestion_coverage_stats,  # noqa: F401 — re-exported for suggestions callers.
 )
 from finjuice.pipeline.tagging.suggestion_scoring_classify import (
+    GENERIC_LABEL_AMBIGUOUS_REASON as GENERIC_LABEL_AMBIGUOUS_REASON,
+)
+from finjuice.pipeline.tagging.suggestion_scoring_classify import (
+    MASKED_LABEL_AMBIGUOUS_REASON as MASKED_LABEL_AMBIGUOUS_REASON,
+)
+from finjuice.pipeline.tagging.suggestion_scoring_classify import (
     PAYMENT_GATEWAY_AMBIGUOUS_REASON as PAYMENT_GATEWAY_AMBIGUOUS_REASON,
 )
 from finjuice.pipeline.tagging.suggestion_scoring_classify import (
@@ -78,9 +84,13 @@ from finjuice.pipeline.tagging.suggestion_scoring_helpers import (
 )
 from finjuice.pipeline.tagging.suggestion_similarity import (
     MERCHANT_CLUSTER_REASON,  # noqa: F401 — re-exported for suggestions callers.
+    TRUNCATED_STORE_CLUSTER_REASON,
     _build_fuzzy_merchant_clusters,
+    _collapse_truncated_store_contexts,
+    _context_name_variants,
     _empty_merchant_cluster,
     _find_similar_merchants,
+    _match_source_merchant,
     _merchant_similarity_score,  # noqa: F401 — tests import via suggestions.
     _normalize_merchant_for_similarity,  # noqa: F401 — tests import via suggestions.
     _normalize_text,
@@ -110,6 +120,68 @@ def _round_ratio(value: Any) -> float:
     if value is None:
         return 0.0
     return round(float(value), 2)
+
+
+def _cluster_for_suggestion(
+    context: dict[str, Any],
+    merchant: str,
+    merchant_clusters: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Prefer a truncated-store cluster when contexts were prefix-merged."""
+    prebuilt = context.get("merchant_cluster")
+    if isinstance(prebuilt, dict) and prebuilt.get("reason") == TRUNCATED_STORE_CLUSTER_REASON:
+        return prebuilt
+    return merchant_clusters.get(merchant, _empty_merchant_cluster(merchant))
+
+
+def _build_merchant_suggestion(
+    context: dict[str, Any],
+    merchant: str,
+    tagged_merchants: list[dict[str, Any]],
+    merchant_clusters: dict[str, dict[str, Any]],
+    used_names: set[str],
+) -> dict[str, Any]:
+    """Assemble one public suggestion payload from a merchant context row."""
+    avg_amount = float(context.get("avg_amount") or 0.0)
+    match_pattern = _generate_match_pattern(_match_source_merchant(context, merchant))
+    suggestion: dict[str, Any] = {
+        "merchant": merchant,
+        "name_variants": _context_name_variants(context, merchant),
+        "transaction_count": int(context.get("transaction_count") or 0),
+        "distinct_dates": int(context.get("distinct_dates") or 0),
+        "total_amount": round(float(context.get("total_amount") or 0.0), 2),
+        "avg_amount": round(avg_amount, 2),
+        "amount_stddev": round(float(context.get("amount_stddev") or 0.0), 2),
+        "active_months": sorted(_normalize_text_list(context.get("active_months"))),
+        "is_recurring": bool(context.get("is_recurring")),
+        "banksalad_category": {
+            "major": _normalize_text(context.get("major_raw")),
+            "minor": _normalize_text(context.get("minor_raw")),
+        },
+        "payment_method": _normalize_text(context.get("payment_method")) or "",
+        "time_patterns": {
+            "weekday_pct": _round_ratio(context.get("weekday_pct")),
+            "lunch_pct": _round_ratio(context.get("lunch_pct")),
+        },
+        "similar_merchants": _find_similar_merchants(
+            merchant,
+            avg_amount,
+            tagged_merchants,
+        ),
+        "merchant_cluster": _cluster_for_suggestion(
+            context,
+            merchant,
+            merchant_clusters,
+        ),
+        "pattern": match_pattern,
+        "sample_memos": _normalize_text_list(context.get("sample_memos"))[:3],
+    }
+    suggestion.update(classify_merchant_kind(merchant))
+    suggestion["auto_apply_eligible"] = is_auto_apply_eligible(suggestion)
+    rule_field = build_suggested_rule_field(suggestion, used_names)
+    used_names.add(rule_field["name"])
+    suggestion["suggested_rule"] = rule_field
+    return suggestion
 
 
 def generate_merchant_context(
@@ -154,6 +226,7 @@ def generate_merchant_context(
         logger.info("No transaction data found for merchant context generation")
         return []
 
+    merchant_contexts = _collapse_truncated_store_contexts(merchant_contexts)
     merchant_clusters = _build_fuzzy_merchant_clusters(merchant_contexts)
     suggestions: list[dict[str, Any]] = []
     for context in merchant_contexts:
@@ -161,43 +234,19 @@ def generate_merchant_context(
         if not merchant:
             continue
 
-        match_pattern = _generate_match_pattern(merchant)
+        match_pattern = _generate_match_pattern(_match_source_merchant(context, merchant))
         if _should_skip_existing_rule(merchant, match_pattern, existing_patterns):
             continue
 
-        avg_amount = float(context.get("avg_amount") or 0.0)
-        suggestion: dict[str, Any] = {
-            "merchant": merchant,
-            "transaction_count": int(context.get("transaction_count") or 0),
-            "total_amount": round(float(context.get("total_amount") or 0.0), 2),
-            "avg_amount": round(avg_amount, 2),
-            "amount_stddev": round(float(context.get("amount_stddev") or 0.0), 2),
-            "active_months": sorted(_normalize_text_list(context.get("active_months"))),
-            "is_recurring": bool(context.get("is_recurring")),
-            "banksalad_category": {
-                "major": _normalize_text(context.get("major_raw")),
-                "minor": _normalize_text(context.get("minor_raw")),
-            },
-            "payment_method": _normalize_text(context.get("payment_method")) or "",
-            "time_patterns": {
-                "weekday_pct": _round_ratio(context.get("weekday_pct")),
-                "lunch_pct": _round_ratio(context.get("lunch_pct")),
-            },
-            "similar_merchants": _find_similar_merchants(
+        suggestions.append(
+            _build_merchant_suggestion(
+                context,
                 merchant,
-                avg_amount,
                 tagged_merchants,
-            ),
-            "merchant_cluster": merchant_clusters.get(merchant, _empty_merchant_cluster(merchant)),
-            "pattern": match_pattern,
-            "sample_memos": _normalize_text_list(context.get("sample_memos"))[:3],
-        }
-        suggestion.update(classify_merchant_kind(merchant))
-        suggestion["auto_apply_eligible"] = is_auto_apply_eligible(suggestion)
-        rule_field = build_suggested_rule_field(suggestion, used_names)
-        used_names.add(rule_field["name"])
-        suggestion["suggested_rule"] = rule_field
-        suggestions.append(suggestion)
+                merchant_clusters,
+                used_names,
+            )
+        )
 
         if len(suggestions) >= top_n:
             break

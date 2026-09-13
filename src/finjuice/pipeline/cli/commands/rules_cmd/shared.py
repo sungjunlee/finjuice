@@ -66,16 +66,37 @@ def _validation_issue_to_problem(issue: Any) -> dict[str, Any]:
     }
 
 
-def _serialize_validation_summary(result: Any) -> dict[str, Any]:
-    """Build a JSON-safe validation summary."""
-    return {
+def _problem_involves_rule(problem: dict[str, Any], rule_name: str) -> bool:
+    """Return True when a validation problem names ``rule_name``."""
+    return rule_name in (problem.get("rules") or [])
+
+
+def _serialize_validation_summary(
+    result: Any,
+    *,
+    focus_rule: str | None = None,
+) -> dict[str, Any]:
+    """Build a JSON-safe validation summary.
+
+    When *focus_rule* is set (rules add/remove), ``problems`` is filtered to
+    issues that name that rule. ``errors``/``warnings`` stay full-set counts,
+    and ``total_problems`` is the unfiltered issue count.
+    """
+    problems = [_validation_issue_to_problem(issue) for issue in result.issues]
+    payload: dict[str, Any] = {
         "status": "valid" if not result.issues else "issues",
         "total_rules": result.total_rules,
         "errors": len(result.errors),
         "warnings": len(result.warnings),
         "passed": result.passed,
-        "problems": [_validation_issue_to_problem(issue) for issue in result.issues],
+        "problems": problems,
     }
+    if focus_rule is not None:
+        payload["total_problems"] = len(problems)
+        payload["problems"] = [
+            problem for problem in problems if _problem_involves_rule(problem, focus_rule)
+        ]
+    return payload
 
 
 def _emit_rules_error(

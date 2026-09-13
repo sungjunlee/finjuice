@@ -65,6 +65,7 @@ def analytics_data_dir(tmp_path: Path) -> Path:
             "minor_raw": ["Cafe", "Sub", "Online"],
             "type_norm": ["expense", "expense", "expense"],
             "is_transfer": [0, 0, 0],
+            "row_hash": ["hash_starbucks", "hash_netflix", "hash_coupang"],
             "tags_final": [json.dumps(["cafe"]), json.dumps([]), json.dumps(["shopping"])],
             "category_final": ["Cafe", "Entertainment", "Shopping"],
             "account": ["Card A", "Card A", "Card B"],

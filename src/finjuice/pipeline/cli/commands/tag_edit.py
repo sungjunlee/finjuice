@@ -7,6 +7,7 @@ and human rendering for manual edits. Bulk rule tagging stays in
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -15,6 +16,7 @@ import polars as pl
 from finjuice.pipeline.cli.audit_log import append_financial_mutation_event
 from finjuice.pipeline.cli.output import info, success
 from finjuice.pipeline.cli.utils import mutation_metadata
+from finjuice.pipeline.constants import HASH_LENGTH_CHARS
 from finjuice.pipeline.storage.mutation_facade import MutationIdentity, StorageMutationFacade
 from finjuice.pipeline.storage.sqlite.mutations import ManualTransactionEdit
 from finjuice.pipeline.tagging.manual import (
@@ -35,6 +37,15 @@ TAG_EDIT_AUDIT_FIELDS = [
     "needs_review",
 ]
 MAX_MANUAL_NOTE_CHARS = 1000
+_ROW_HASH_PATTERN = re.compile(rf"^[0-9a-fA-F]{{{HASH_LENGTH_CHARS}}}$")
+
+
+def _validate_edit_row_hash(row_hash: str) -> None:
+    """Raise ValueError when ``row_hash`` is not a 16-character hex digest."""
+    if not _ROW_HASH_PATTERN.fullmatch(row_hash):
+        raise ValueError(
+            f"Invalid --edit value: expected a {HASH_LENGTH_CHARS}-character hexadecimal row_hash."
+        )
 
 
 @dataclass(frozen=True)
@@ -109,6 +120,7 @@ def _compute_tag_edit(
     from finjuice.pipeline.storage import csv_transactions
 
     row_hash = request.identifier
+    _validate_edit_row_hash(row_hash)
     requested_add_tags = _normalize_cli_tags(request.add_tags)
     requested_remove_tags = set(_normalize_cli_tags(request.remove_tags))
     classification_mutation_requested = bool(

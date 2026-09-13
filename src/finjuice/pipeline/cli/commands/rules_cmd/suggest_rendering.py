@@ -86,6 +86,7 @@ def _render_suggestion_context_table(
             suggestion["merchant"],
             (
                 f"{int(suggestion['transaction_count']):,}건\n"
+                f"{int(suggestion.get('distinct_dates') or 0):,}일\n"
                 f"평균 ₩{float(suggestion['avg_amount']):,.0f}\n"
                 f"총액 ₩{float(suggestion['total_amount']):,.0f}"
             ),
@@ -121,7 +122,8 @@ def _render_suggestion_context_table(
         console.print(f"  Samples: {', '.join(suggestion.get('sample_memos') or ['-'])}")
         console.print(f"  Similar: {_format_similar_merchants(suggestion).replace(chr(10), ', ')}")
         if suggestion.get("default_action") == "skip_rule":
-            console.print("  Action: 규칙 생성 비추천 (payment_gateway)")
+            reason = suggestion.get("ambiguous_reason") or "skip_rule"
+            console.print(f"  Action: 규칙 생성 비추천 ({reason})")
         console.print()
 
 

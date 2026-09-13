@@ -38,6 +38,7 @@ def _sample_suggestion(merchant: str = "Netflix") -> dict[str, object]:
     return {
         "merchant": merchant,
         "transaction_count": 3,
+        "distinct_dates": 1,
         "total_amount": 51000.0,
         "avg_amount": 17000.0,
         "amount_stddev": 0.0,
@@ -305,6 +306,7 @@ class TestSuggestRulesCommand:
         assert payload["suggestions"] == [
             {
                 "transaction_count": 3,
+                "distinct_dates": 1,
                 "active_month_count": 1,
                 "is_recurring": True,
                 "banksalad_category": {"major": "정기지출", "minor": "구독"},

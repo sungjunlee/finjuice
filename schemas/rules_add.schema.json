@@ -163,6 +163,9 @@
           ],
           "type": "string"
         },
+        "total_problems": {
+          "type": "integer"
+        },
         "total_rules": {
           "type": "integer"
         },
@@ -176,7 +179,8 @@
         "errors",
         "warnings",
         "passed",
-        "problems"
+        "problems",
+        "total_problems"
       ],
       "type": "object"
     }

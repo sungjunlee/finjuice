@@ -78,6 +78,8 @@ def format_suggestions_report(suggestions: list[dict[str, Any]]) -> str:
         memo_text = ", ".join(suggestion.get("sample_memos", [])) or "-"
         active_months = ", ".join(suggestion.get("active_months", [])) or "-"
         time_patterns = suggestion.get("time_patterns", {})
+        variants = suggestion.get("name_variants") or []
+        variant_text = ", ".join(variants) if len(variants) > 1 else ""
 
         lines.extend(
             [
@@ -88,6 +90,7 @@ def format_suggestions_report(suggestions: list[dict[str, Any]]) -> str:
                     f" | 평균 ₩{suggestion['avg_amount']:,.0f}"
                     f" | 표준편차 ₩{suggestion['amount_stddev']:,.0f}"
                 ),
+                *([f"   이름 변형: {variant_text}"] if variant_text else []),
                 f"   활동 월: {active_months}",
                 f"   반복 결제 후보: {'예' if suggestion.get('is_recurring') else '아니오'}",
                 f"   뱅크샐러드 분류: {category_text}",
