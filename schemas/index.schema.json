@@ -125,7 +125,7 @@
       }
     }
   ],
-  "description": "index --json output. The raw privacy profile preserves the full catalog shape and only includes paths when --include-paths is requested. Redacted and compact profiles suppress resolved workspace and collection paths; compact also drops operational command and note detail.",
+  "description": "index --json output. The raw privacy profile preserves the full catalog shape and only includes paths when --include-paths is requested. Redacted and compact profiles suppress resolved workspace and collection paths; compact also drops operational command and note detail. Canonical financial collections retain repository/count/selection provenance with no filesystem paths or mtimes. External file observations and runtime inventory remain distinct. An unavailable external observation has null exists and count; canonical logical existence remains boolean. Unknown counts are never partial totals.",
   "properties": {
     "_meta": {
       "$ref": "_meta.schema.json"
@@ -134,17 +134,37 @@
       "items": {
         "additionalProperties": true,
         "properties": {
+          "basis": {
+            "enum": [
+              "repository",
+              "filesystem_observation",
+              "runtime_inventory"
+            ]
+          },
           "count": {
             "type": [
               "integer",
               "null"
             ]
           },
+          "count_basis": {
+            "type": "string"
+          },
           "count_label": {
             "type": "string"
           },
+          "count_state": {
+            "enum": [
+              "known",
+              "absent",
+              "unavailable"
+            ]
+          },
           "exists": {
-            "type": "boolean"
+            "type": [
+              "boolean",
+              "null"
+            ]
           },
           "latest_modified": {
             "type": [
@@ -179,11 +199,29 @@
             },
             "type": "array"
           },
+          "revision_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "selection_state": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "status": {
             "type": "string"
           },
           "type": {
             "type": "string"
+          },
+          "unavailable_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [

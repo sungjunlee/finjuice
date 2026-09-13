@@ -1767,7 +1767,13 @@ index_collection_schema = object_schema(
     {
         "count": integer_or_null,
         "count_label": string,
-        "exists": boolean,
+        "exists": nullable("boolean"),
+        "basis": {"enum": ["repository", "filesystem_observation", "runtime_inventory"]},
+        "count_basis": string,
+        "count_state": {"enum": ["known", "absent", "unavailable"]},
+        "selection_state": string_or_null,
+        "revision_id": string_or_null,
+        "unavailable_reason": string_or_null,
         "latest_modified": string_or_null,
         "name": string,
         "notes": array_of(string),
@@ -1817,7 +1823,10 @@ index_schema["description"] = (
     "index --json output. The raw privacy profile preserves the full catalog shape and "
     "only includes paths when --include-paths is requested. Redacted and compact profiles "
     "suppress resolved workspace and collection paths; compact also drops operational "
-    "command and note detail."
+    "command and note detail. Canonical financial collections retain repository/count/selection "
+    "provenance with no filesystem paths or mtimes. External file observations and runtime "
+    "inventory remain distinct. An unavailable external observation has null exists and count; "
+    "canonical logical existence remains boolean. Unknown counts are never partial totals."
 )
 index_schema["allOf"] = [
     {

@@ -681,3 +681,44 @@ then oldest journals, then selected status fields. Metadata and warnings survive
 pruning. This is a content-character estimate, not a tokenizer-based hard cap;
 protected sections and envelope overhead can exceed the requested budget. Current
 source provenance is distinct from historical note metadata and runtime timestamps.
+
+
+## Canonical collection catalog
+
+`index` captures its five financial collections from one repository checkup
+snapshot. Transactions count primary/native UUID rows, retaining duplicate legacy
+aliases and native rows with unknown dates. Unmaterialized primary evidence or
+unknown scope makes the total unavailable instead of publishing a partial count.
+Assets count only primary/native asset snapshot rows, not reported balances or
+manual configuration entries. The existing portfolio scope/provenance/date checks
+are reused without converting monetary values to display floats. Opaque snapshots
+and invalid native snapshot dates make that collection's count unavailable.
+
+Rules count all validated entries, including disabled ones. Goals and scenarios
+retain the existing configured-section/list counting convention, not an inferred
+number of active goals or scenarios. Only selected valid bytes contribute counts;
+absent configurations are missing, while unselected/invalid configurations remain
+unavailable. In particular, an empty goals document is not a valid empty goal
+configuration under the existing validator. Selected valid empty rules count zero.
+No live financial CSV or YAML fallback is allowed after canonical activation.
+
+Canonical financial collections use logical repository types and never present
+CSV/config paths or filesystem mtimes as their storage location. Source revision,
+selection, count basis and unknown-state fields survive compact privacy output.
+Logical empty transaction and asset collections exist even without CSV directories.
+A missing required collection or any unavailable count makes workspace status
+incomplete and recommends diagnostics, not legacy initialization. Populated status
+is a catalog observation, not a financial health or preservation certificate.
+
+Reports and journals retain their existing filesystem inventory meanings; templates
+remain the packaged runtime inventory. Their observation interval is separate from
+the financial revision and does not claim an atomic filesystem snapshot, current
+report freshness, verified report manifests or verified historical journal content.
+An external filesystem error leaves financial counts visible and reports null
+existence/count with a static unavailable state. Optional paths remain suppressed by
+redacted/compact privacy. Shared read coordination may create its control lock, but
+catalog reads do not change financial inputs or initialize missing collections.
+
+The initial adapter reuses the existing checkup snapshot bundle, including its
+import-identity validation. It does not perform separate reads that could mix
+revisions, and it does not bypass integrity failures in that shared bundle.
