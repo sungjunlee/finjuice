@@ -1,0 +1,226 @@
+"""N:M candidate matching for purchase/order evidence vs ledger payments."""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from decimal import Decimal
+from itertools import combinations
+
+from finjuice.pipeline.reconcile.models import EvidenceItem, MatchGroup, PaymentItem
+from finjuice.pipeline.reconcile.money import money_abs
+
+_MAX_COMBO = 5
+_MAX_CANDIDATES = 16
+_MIN_PARTIAL_COVERAGE = Decimal("0.5")
+_ZERO = Decimal("0")
+
+
+def _in_window(left: EvidenceItem, right: PaymentItem, window_days: int) -> bool:
+    return (
+        left.currency == right.currency
+        and abs((left.occurred_on - right.occurred_on).days) <= window_days
+    )
+
+
+def _match_one_to_one(
+    evidence: Sequence[EvidenceItem],
+    payments: Sequence[PaymentItem],
+    window_days: int,
+    used_evidence: set[str],
+    used_payments: set[str],
+) -> list[MatchGroup]:
+    groups: list[MatchGroup] = []
+    for item in evidence:
+        if item.evidence_id in used_evidence:
+            continue
+        matches = [
+            payment
+            for payment in payments
+            if payment.payment_id not in used_payments
+            and _in_window(item, payment, window_days)
+            and money_abs(payment.amount) == money_abs(item.amount)
+        ]
+        matches.sort(key=lambda payment: (payment.occurred_on, payment.payment_id))
+        if not matches:
+            continue
+        payment = matches[0]
+        reason = "refund_or_inflow" if payment.amount > _ZERO else "exact_one_to_one"
+        groups.append(
+            MatchGroup(
+                evidence_ids=(item.evidence_id,),
+                payment_ids=(payment.payment_id,),
+                status="matched",
+                residual=_ZERO,
+                reason=reason,
+            )
+        )
+        used_evidence.add(item.evidence_id)
+        used_payments.add(payment.payment_id)
+    return groups
+
+
+def _match_one_to_many(
+    evidence: Sequence[EvidenceItem],
+    payments: Sequence[PaymentItem],
+    window_days: int,
+    used_evidence: set[str],
+    used_payments: set[str],
+) -> list[MatchGroup]:
+    groups: list[MatchGroup] = []
+    for item in evidence:
+        if item.evidence_id in used_evidence:
+            continue
+        candidates = _combo_candidates(
+            [
+                payment
+                for payment in payments
+                if payment.payment_id not in used_payments
+                and _in_window(item, payment, window_days)
+                and payment.amount <= _ZERO
+            ],
+            money_abs(item.amount),
+        )
+        combo = _combo_summing_to(candidates, money_abs(item.amount))
+        if combo is None:
+            partial = _best_partial(candidates, money_abs(item.amount))
+            if partial is None:
+                continue
+            allocated = sum((money_abs(payment.amount) for payment in partial), _ZERO)
+            groups.append(
+                MatchGroup(
+                    evidence_ids=(item.evidence_id,),
+                    payment_ids=tuple(payment.payment_id for payment in partial),
+                    status="partial",
+                    residual=money_abs(item.amount) - allocated,
+                    reason="installment_partial",
+                )
+            )
+            used_evidence.add(item.evidence_id)
+            used_payments.update(payment.payment_id for payment in partial)
+            continue
+        groups.append(
+            MatchGroup(
+                evidence_ids=(item.evidence_id,),
+                payment_ids=tuple(payment.payment_id for payment in combo),
+                status="matched",
+                residual=_ZERO,
+                reason="installment_one_to_many",
+            )
+        )
+        used_evidence.add(item.evidence_id)
+        used_payments.update(payment.payment_id for payment in combo)
+    return groups
+
+
+def _match_many_to_one(
+    evidence: Sequence[EvidenceItem],
+    payments: Sequence[PaymentItem],
+    window_days: int,
+    used_evidence: set[str],
+    used_payments: set[str],
+) -> list[MatchGroup]:
+    groups: list[MatchGroup] = []
+    pending = [item for item in evidence if item.evidence_id not in used_evidence]
+    for payment in payments:
+        if payment.payment_id in used_payments:
+            continue
+        candidates = [
+            item
+            for item in pending
+            if item.evidence_id not in used_evidence and _in_window(item, payment, window_days)
+        ]
+        combo = _evidence_summing_to(candidates, money_abs(payment.amount))
+        if combo is None:
+            continue
+        groups.append(
+            MatchGroup(
+                evidence_ids=tuple(item.evidence_id for item in combo),
+                payment_ids=(payment.payment_id,),
+                status="matched",
+                residual=_ZERO,
+                reason="orders_many_to_one",
+            )
+        )
+        used_payments.add(payment.payment_id)
+        used_evidence.update(item.evidence_id for item in combo)
+    return groups
+
+
+def _unmatched_evidence(
+    evidence: Sequence[EvidenceItem], used_evidence: set[str]
+) -> list[MatchGroup]:
+    groups = [
+        MatchGroup(
+            evidence_ids=(item.evidence_id,),
+            payment_ids=(),
+            status="unmatched",
+            residual=money_abs(item.amount),
+            reason="missing_ledger_coverage",
+        )
+        for item in evidence
+        if item.evidence_id not in used_evidence
+    ]
+    used_evidence.update(
+        item.evidence_id for item in evidence if item.evidence_id not in used_evidence
+    )
+    return groups
+
+
+def _combo_candidates(payments: Sequence[PaymentItem], target: Decimal) -> list[PaymentItem]:
+    """Keep combo search small; prefer larger in-window amounts under the target."""
+    eligible = [payment for payment in payments if money_abs(payment.amount) <= target]
+    if len(eligible) <= _MAX_CANDIDATES:
+        return eligible
+    ordered = sorted(
+        eligible,
+        key=lambda payment: (
+            -money_abs(payment.amount),
+            payment.occurred_on,
+            payment.payment_id,
+        ),
+    )
+    return ordered[:_MAX_CANDIDATES]
+
+
+def _combo_summing_to(
+    payments: Sequence[PaymentItem], target: Decimal
+) -> tuple[PaymentItem, ...] | None:
+    ordered = sorted(payments, key=lambda payment: (payment.occurred_on, payment.payment_id))
+    limit = min(len(ordered), _MAX_COMBO)
+    for size in range(2, limit + 1):
+        for combo in combinations(ordered, size):
+            total = sum((money_abs(payment.amount) for payment in combo), _ZERO)
+            if total == target:
+                return combo
+    return None
+
+
+def _evidence_summing_to(
+    items: Sequence[EvidenceItem], target: Decimal
+) -> tuple[EvidenceItem, ...] | None:
+    ordered = sorted(items, key=lambda item: (item.occurred_on, item.evidence_id))
+    limit = min(len(ordered), _MAX_COMBO)
+    for size in range(2, limit + 1):
+        for combo in combinations(ordered, size):
+            total = sum((money_abs(item.amount) for item in combo), _ZERO)
+            if total == target:
+                return combo
+    return None
+
+
+def _best_partial(
+    payments: Sequence[PaymentItem], target: Decimal
+) -> tuple[PaymentItem, ...] | None:
+    ordered = sorted(payments, key=lambda payment: (payment.occurred_on, payment.payment_id))
+    best: tuple[PaymentItem, ...] | None = None
+    best_total = _ZERO
+    limit = min(len(ordered), _MAX_COMBO)
+    for size in range(1, limit + 1):
+        for combo in combinations(ordered, size):
+            total = sum((money_abs(payment.amount) for payment in combo), _ZERO)
+            if best_total < total < target:
+                best = combo
+                best_total = total
+    if best is None or best_total < (_MIN_PARTIAL_COVERAGE * target):
+        return None
+    return best
