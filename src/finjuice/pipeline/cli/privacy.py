@@ -28,6 +28,7 @@ _FILE_PATTERN = re.compile(
 
 _SENSITIVE_COLLECTION_KEYS = {
     "failed_files",
+    "name_variants",
     "sample_files",
     "sample_memos",
     "samples",

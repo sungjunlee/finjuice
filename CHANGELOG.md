@@ -25,6 +25,8 @@ Release prep moves these bullets into `## [X.Y.Z]`. Refactor-only PRs skip this.
 - `finjuice doctor` no longer warns that `ensure_finjuice_cli.sh` is missing
   when `FINJUICE_SKILL_HELPER` points at a valid helper outside the working
   directory (#494).
+- `rules suggest` skips easy-pay brands, masked/generic ledger labels, and merges
+  statement-truncated store names (#485).
 
 ---
 
