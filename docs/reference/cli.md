@@ -851,7 +851,8 @@ finjuice --version
 
  Execute a SQL query on your transaction data.
 
- The query is executed against a 'transactions' view created from your CSV partitions.
+ The 'transactions' view reads the selected authority: legacy CSV or a verified
+ SQLite snapshot. Repository results include the generation and revision in JSON metadata.
  Only SELECT and WITH statements are allowed for safety.
  Report filters are applied by default by prepending a CTE that rebinds the
  conventional `transactions` view to filtered rows; use the root `--no-filter`

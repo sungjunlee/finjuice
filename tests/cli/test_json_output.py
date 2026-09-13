@@ -749,6 +749,7 @@ class TestJsonOutput:
         page_result = MagicMock()
         page_result.pl.return_value = result_df
         mock_analytics = MagicMock()
+        mock_analytics.repository_snapshot = None
         mock_analytics.query_readonly.side_effect = [
             count_result,
             page_result,

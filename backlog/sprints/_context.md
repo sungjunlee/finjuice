@@ -39,3 +39,9 @@
 - 최신 통합 checkpoint: `c1a3c94`는 main `309c42b`의 0.8.3 변경을 보존한다. 전체3,367 PASS·1 SKIP, coverage89.56%, 정적 검사 및 별도 설치본의 새 후보/과거 세 정책 후보 재생을 통과했다. 기존 세 policy의 schema4 고정과 정확한 reader/builder/검증/registry 경계를 구현했다. 전체3,380 PASS·1 SKIP89.57%, 실제옛후보와별도설치본재생, Opus5high의근거있는P1/P2없음을확인했다. 다음 구현은 v4내용을 보존하면서 v5reported 값 테이블·새정책과 capture참조판정을 추가하는 것이다.
 
 - 2026-09-13 후속: schema5의 다섯 legacy reported 테이블과 capture-wide 참조 판정, 새 기본 policy `legacy_preservation.overview_reports.v4`를 구현했다. 기존 v1/v2/v3는 schema4 그대로 재생한다. 최종 전체3,434 PASS·1 SKIP89.62%, 새 설치본의 실제 과거4후보 불변 재생 및 별도 v4→v5 upgrade를 확인했다. Opus 최초 리뷰의 malformed-row 전제는 실제 build regression으로 대조했고 후보 제외 경로의 JSON 해석을 줄였다. 실제 capture peak-memory/성능, #436 소비자 parity, #435 전수 보존 및 운영 전환은 남아 있다. 리뷰 최종 판단과 commit은 활성 스프린트/PR #481에 기록한다.
+
+- #436 첫 읽기 연결 진행: transaction_snapshot은 저장된 거래·수동/최종값·exact 수치와 같은 revision의 canonical rules를 고정한다. authority facade→Arrow/DuckDB→query에 연결해 활성 상태에서 CSV fallback을 금지했다. 메모만 수정할 때 보존 중복/공백 태그를 canonical parser가 거부하던 공백을 실제 migration으로 재현하고 source-backed legacy 수동 편집에 한정해 보완했다. 생산 코드 동결 후 최종 통합 검사/교차 리뷰를 수행하며 결과는 활성 스프린트에 기록한다. #436 전체 소비자·export·stale 결과와 실자료 검증은 미완료다.
+
+- #436 후속 구현 순서(읽기 조사 결과, 아직 구현 아님): template_cmd/execution.py의 DuckDB/evidence·pinned filters·metadata → show_cmd.py의 CSV 존재/glob 이전 snapshot 분기와 태그 JSON decode → explain.py의 검색/규칙을 같은 snapshot에 고정하고 UUID와 legacy alias 분리 → export/result.py·result_outputs.py·result_helpers.py·master.py의 전체/필터 frame을 한 context로 전달 → status와 overview/assets 다중 도메인 snapshot. Export의 source_df가 None이면 CSV를 재조회하는 경로, master/dry-run 독립 CSV 로딩, status의 CSV partition/schema/import-history 진단을 함께 제거해야 한다. metadata만으로 stale 검증을 주장하지 않는다.
+
+- 최종 읽기 checkpoint: 전체3,467PASS1SKIP89.66%, 최종 wheel8시나리오/9모듈SHA/과거4후보replay·upgrade, Grok P2 status수정 재검토 통과. 단 추가 설치본 probe에서 보존 중복 tags_final이 bulk recompute_tags의 strict parser에서 거부됨을 실제 재현했다. **다음은 bulk legacy 배열 경계를 먼저 보완**, 이후 위 소비자 연결 순서로 진행한다. note-only fix를 bulk 완료로 보지 않는다.

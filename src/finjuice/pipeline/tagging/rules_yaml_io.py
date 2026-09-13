@@ -31,6 +31,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from finjuice.pipeline.tagging.models import ReportFilters
 from finjuice.pipeline.tagging.rules_yaml_append import (
     append_rule,  # noqa: F401 — re-exported public YAML API
@@ -83,3 +85,14 @@ def load_report_filters(rules_path: Path) -> ReportFilters:
     """Load declarative report_filters from rules.yaml."""
     data = _load_yaml_document(rules_path, allow_missing_file=True)
     return _parse_report_filters(data, rules_path)
+
+
+def load_report_filters_bytes(content: bytes | None) -> ReportFilters:
+    """Load report filters from pinned authoritative bytes without live-file fallback."""
+    if content is None:
+        return ReportFilters()
+    try:
+        data = yaml.safe_load(content.decode("utf-8"))
+    except (UnicodeDecodeError, yaml.YAMLError) as exc:
+        raise ValueError("Invalid YAML syntax in authoritative report filters.") from exc
+    return _parse_report_filters(data, Path("authoritative rules"))

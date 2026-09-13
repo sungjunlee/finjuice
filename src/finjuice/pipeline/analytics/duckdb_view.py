@@ -24,6 +24,8 @@ from finjuice.pipeline.sql_utils import (
     quote_duckdb_path_pattern,
     quote_duckdb_string_literal,
 )
+from finjuice.pipeline.storage.authority import ActivationEvidenceProvider
+from finjuice.pipeline.storage.read_facade import read_transaction_snapshot, transaction_frame
 from finjuice.pipeline.storage.schema_registry import get_current_schema
 from finjuice.pipeline.tagging.rules import ReportFilters
 
@@ -54,6 +56,8 @@ class DuckDBTransactionsView:
         memory_limit: Optional[str] = None,
         report_filters: ReportFilters | None = None,
         require_transactions: bool = True,
+        *,
+        evidence_provider: ActivationEvidenceProvider | None = None,
     ) -> None:
         if not DUCKDB_AVAILABLE:
             raise ImportError(DUCKDB_INSTALL_HINT)
@@ -61,6 +65,8 @@ class DuckDBTransactionsView:
         self.data_dir = Path(data_dir)
         self.partitions_path = self.data_dir / "transactions"
         self.report_filters = report_filters or ReportFilters()
+
+        self.repository_snapshot = read_transaction_snapshot(self.data_dir, evidence_provider)
 
         # Create in-memory connection for speed
         self.conn = duckdb.connect(":memory:")
@@ -72,7 +78,11 @@ class DuckDBTransactionsView:
 
         # DuckDB uses all available cores by default, no need to configure
 
-        self.register_transactions_view(require_transactions=require_transactions)
+        try:
+            self.register_transactions_view(require_transactions=require_transactions)
+        except Exception:
+            self.conn.close()
+            raise
 
         logger.info(
             "DuckDB analytics layer initialized (threads: auto, memory: %s)",
@@ -89,6 +99,12 @@ class DuckDBTransactionsView:
             FileNotFoundError: If no transaction CSV files are found.
             RuntimeError: If view creation fails.
         """
+        if self.repository_snapshot is not None:
+            if require_transactions and not self.repository_snapshot.rows:
+                raise FileNotFoundError("No transaction data found in the active repository.")
+            self._register_repository_transactions()
+            return
+
         # Check if any CSV files exist
         has_files = any(self.partitions_path.glob("*/*/*.csv"))
         if not has_files:
@@ -128,6 +144,32 @@ class DuckDBTransactionsView:
         except duckdb.Error as e:
             logger.error(f"Failed to create transactions view: {e}")
             raise RuntimeError(f"Failed to create transactions view: {e}") from e
+
+    def _register_repository_transactions(self) -> None:
+        """Register a stable Arrow relation sourced only from the verified repository."""
+        assert self.repository_snapshot is not None
+        frame = transaction_frame(self.repository_snapshot)
+        self.conn.register("_repository_transaction_rows", frame.to_arrow())
+        self.conn.execute(
+            "CREATE OR REPLACE VIEW transactions_raw AS "
+            f"SELECT {self._repository_projection()} FROM _repository_transaction_rows"
+        )
+        self.conn.execute(build_transactions_source_sql(self._view_columns("transactions_raw")))
+        sql = "CREATE OR REPLACE VIEW transactions AS SELECT * FROM transactions_source"
+        filter_where = build_report_filter_duckdb_where(self.report_filters)
+        if filter_where:
+            sql += f" WHERE NOT ({filter_where})"
+        self.conn.execute(sql)
+
+    def _repository_projection(self) -> str:
+        """Keep valid legacy date columns usable with DuckDB date functions."""
+        date_is_valid = self.conn.execute(
+            "SELECT count(date) > 0 AND count(date) = count(TRY_CAST(date AS DATE)) "
+            "FROM _repository_transaction_rows"
+        ).fetchone()[0]
+        if date_is_valid:
+            return "* REPLACE (CAST(date AS DATE) AS date)"
+        return "*"
 
     def _validate_csv_schema(self, detected_columns: list[str]) -> None:
         """Validate detected CSV columns against the expected schema.

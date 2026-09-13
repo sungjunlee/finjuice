@@ -410,7 +410,8 @@ class MutationContext:
         current = self._load_manual_transaction(transaction_id)
         remove_tags = set(edit.remove_tags)
         next_manual = [tag for tag in current["tags_manual"] if tag not in remove_tags]
-        next_manual = merge_final_tags(next_manual, edit.add_tags)
+        if edit.add_tags or edit.remove_tags or edit.category_supplied:
+            next_manual = merge_final_tags(next_manual, edit.add_tags)
         next_category = edit.category if edit.category_supplied else current["category_manual"]
         next_note = edit.note if edit.note_supplied else current["notes_manual"]
         classification_requested = bool(edit.add_tags or edit.remove_tags or edit.category_supplied)
@@ -512,7 +513,7 @@ class MutationContext:
         return {
             "transaction_id": transaction_id,
             **_manual_transaction_view(current),
-            **result_state,
+            **after,
         }
 
     def _resolve_transaction_id(self, identifier: str) -> str:
@@ -563,6 +564,11 @@ class MutationContext:
         ).fetchone()
         if row is None:
             raise MutationValidationError("Transaction identifier was not found.")
+        parse_tags = (
+            _parse_preserved_string_array
+            if _has_migrated_transaction_source(self.__connection, transaction_id)
+            else _parse_string_array
+        )
         coefficient = None if row[21] is None else str(row[21])
         scale = None if row[22] is None else int(row[22])
         return {
@@ -581,12 +587,12 @@ class MutationContext:
             "category_rule": row[12],
             "category_manual": row[13],
             "category_final": row[14],
-            "tags_rule": _parse_string_array(row[15]),
-            "tags_ai": _parse_string_array(row[16]),
-            "tags_manual": _parse_string_array(row[17]),
-            "tags_final": _parse_string_array(row[18]),
-            "tags_manual_audit": None if row[17] is None else _parse_string_array(row[17]),
-            "tags_final_audit": None if row[18] is None else _parse_string_array(row[18]),
+            "tags_rule": parse_tags(row[15]),
+            "tags_ai": parse_tags(row[16]),
+            "tags_manual": parse_tags(row[17]),
+            "tags_final": parse_tags(row[18]),
+            "tags_manual_audit": None if row[17] is None else parse_tags(row[17]),
+            "tags_final_audit": None if row[18] is None else parse_tags(row[18]),
             "confidence_value_id": row[19],
             "needs_review": None if row[20] is None else bool(row[20]),
             "confidence_coefficient": coefficient,
@@ -1153,6 +1159,37 @@ def _config_audit_state(revision: ConfigRevisionRecord) -> dict[str, JSONValue]:
         "parser_version": revision.parser_version,
         "revision_id": revision.revision_id,
     }
+
+
+def _has_migrated_transaction_source(connection: sqlite3.Connection, transaction_id: str) -> bool:
+    """Recognize captured legacy rows whose tag spelling and duplicates were preserved."""
+    return (
+        connection.execute(
+            "SELECT 1 FROM transactions AS txn "
+            "JOIN migration_identities AS identity ON identity.entity_id = txn.entity_id "
+            "AND identity.record_kind = 'transaction' "
+            "JOIN legacy_payloads AS payload ON payload.provenance_id = txn.provenance_id "
+            "JOIN record_provenance AS provenance ON provenance.provenance_id = txn.provenance_id "
+            "JOIN observations AS observation ON observation.entity_id = txn.observation_id "
+            "AND observation.source_occurrence_id = provenance.source_occurrence_id "
+            "WHERE txn.entity_id = ?",
+            (transaction_id,),
+        ).fetchone()
+        is not None
+    )
+
+
+def _parse_preserved_string_array(value: Any) -> list[str]:
+    """Decode source-backed legacy arrays without silently normalizing their members."""
+    if value is None:
+        return []
+    try:
+        parsed = json.loads(str(value), parse_constant=_reject_json_constant)
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise RepositoryIntegrityError("Stored transaction tags are invalid JSON.") from exc
+    if not isinstance(parsed, list) or any(not isinstance(item, str) for item in parsed):
+        raise RepositoryIntegrityError("Stored legacy transaction tags are not a string array.")
+    return parsed
 
 
 def _parse_string_array(value: Any) -> list[str]:

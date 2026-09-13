@@ -65,6 +65,10 @@ from finjuice.pipeline.storage.sqlite.schema import (
 )
 from finjuice.pipeline.storage.sqlite.schema_v5 import LEGACY_OVERVIEW_TABLES
 from finjuice.pipeline.storage.sqlite.snapshot import inspection_snapshot
+from finjuice.pipeline.storage.sqlite.transaction_reads import (
+    TransactionReadSnapshot,
+    transaction_snapshot,
+)
 from finjuice.pipeline.storage.sqlite.writes import (
     _EXACT_SUBTYPE_INSERT_SQL as _WRITER_EXACT_SUBTYPE_INSERT_SQL,
 )
@@ -578,6 +582,7 @@ class RepositoryReader(AbstractContextManager["RepositoryReader"]):
         try:
             self._connection = _connect_snapshot(snapshot)
             repository_paths = GenerationPaths(database.expanduser().absolute().parent)
+            self._repository_paths = repository_paths
             self.info = _validate_connection(
                 self._connection,
                 object_paths=repository_paths,
@@ -614,6 +619,12 @@ class RepositoryReader(AbstractContextManager["RepositoryReader"]):
         cursor = self._connection.execute(query)
         names = [description[0] for description in cursor.description]
         return [dict(zip(names, row, strict=True)) for row in cursor.fetchall()]
+
+    def transaction_snapshot(self) -> TransactionReadSnapshot:
+        """Return exact transaction rows and rules pinned to this reader snapshot."""
+        if self._closed:
+            raise RuntimeError("Repository reader is already closed.")
+        return transaction_snapshot(self._connection, self.info, self._repository_paths)
 
     def close(self) -> None:
         """Close the scratch connection and delete its temporary snapshot."""
