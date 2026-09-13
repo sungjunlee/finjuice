@@ -1,145 +1,99 @@
-# 교차 파일 overview 참조를 capture 범위의 별도 근거로 보존
+# Legacy overview 보고값과 참조 근거를 분리해 보존
 
-**Status**: proposed
+**Status**: accepted (구현 예정)
+
 **Date**: 2026-09-13
-**Issue**: #435
 
-## Context and Problem Statement
+**Issue**: #435, 소비자 검증 #436
 
-권장안은 **B: 기존 projection FK와 분리된 capture 범위의 참조·파생 근거**다.
-이 문서는 계약 선택 제안이며 채택이나 구현 승인을 기록하지 않는다.
-기준 코드는 PR #481의 `72164af`다. 선행 PR #463은 열린 상태이며
-승인·머지를 전제하지 않는다. 기존 fixture와 리뷰를 다시 실행하지 않았다.
+## 문제와 근거
 
-[ADR-0014](0014-sqlite-authoritative-storage.md)와
-[보존 계약 §2.2–3](../../development/ssot-migration-recovery-contract.md)은
-원본 bytes, 파일별 occurrence, 행좌표, 중복 legacy ID, 정확수치와 원문을 보존하고
-첫 이전에서 병합·추론하지 않도록 정한다. 동일 bytes의 파일 두 개는 artifact를
-공유해도 occurrence는 별도다. 동결 capture의 digest와 원래 locator가 이전 ID를 정한다.
+첫 이전은 기존 보고값과 출처를 보존해야 한다. 고유한 `source_fact_id` 일치만으로
+다른 파일의 fact occurrence를 확정할 수는 없다. `ingest/overview/facts.py`의
+`_build_fact_id`는 snapshot/block/kind/label/좌표를 포함하지만 file_id, sheet,
+workbook bytes, 값은 포함하지 않는다. `metadata/import_history.py:record_import`는
+같은 경로에서 file_id를 재사용하고, `storage/csv_banksalad_overview.py`의 fact dedup도
+file_id/sheet/값을 키에 포함하지 않는다. 현행 producer의 한 호출에서 공유된 fact ID가
+과거 CSV 전체의 생산 버전·불변 원본을 증명하지는 않는다.
 
-현재 구현에는 다음 제약이 있다.
+다섯 derived CSV에는 source_fact_id와 file_id가 있지만 sheet/block/source_col은 없다.
+Cashflow에는 source_row와 currency도 없다. 보험·투자·대출의 참조는 이름 셀을
+가리킬 수 있으므로 참조 확인과 금액 계산 검증도 서로 다르다.
+위 경로는 `src/finjuice/pipeline/` 기준이며 공개 생산 코드 조사에 근거한다.
+실제 운영 capture의 연결 증거나 typed 보존 완료를 주장하지 않는다.
 
-- `migration/adapters/model.py:58–69`와 `adapters/__init__.py:35–71`은
-  파일별 occurrence와 행별 provenance를 보존한다.
-- `storage/sqlite/schema.py:375–380,869–884`는 projection의 fact FK와
-  projection/fact의 동일 occurrence를 요구한다. 같은 capture라는 사실로
-  이 조건을 대신할 수 없다. provenance를 다른 파일로 옮겨 통과시켜서도 안 된다.
-- `entity_relation_assertions`의 관계 종류는 포함·중첩·배제·불명이다
-  (`schema.py:601–628`). 중복계상 판단용 의미를 파생 관계로 재해석하지 않는다.
-  `transaction_source_links`도 거래 전용이며 overview 계약이 아니다.
-- `tests/migration/test_migration_integration.py:133–279`의 고유 ID,
-  중복 ID·행·파일, 미존재 ID 사례는 모두 derived 행의 원문과
-  `unresolved_source_fact` / `preserved_opaque`를 확인한다.
-  고유 ID 일치도 typed 연결 성공을 증명하지 않는다. 사실 행의 정확수치는 typed로,
-  미지원 derived 금액은 원문으로 보존한다. 이 차이를 해소한 것으로 보고하지 않는다.
+기존 SQLite native projection은 fact FK 및 동일 occurrence를 요구한다.
+이를 통과하려고 provenance를 옮기거나 가짜 fact를 생성하면 출처가 훼손된다.
+원문만 보존하는 현행 opaque 방식과 별도 후보 근거만 추가하는 이전 B 제안은
+보고값의 typed 보존 공백을 해결하지 못한다.
 
-위 코드 경로는 `src/finjuice/pipeline/` 기준이다. 계약은 의도이고,
-fixture는 현재 보존 동작의 증거다. capture 전체 ID 탐색은 후보를 찾을 수 있지만
-현재 스키마에서 교차 파일 projection을 만들 수 있게 하지는 않는다.
+## 결정
 
-## Considered Options
+기존 행 observation을 키로 하는 **별도 legacy reported 테이블**에 보고값을 저장하고,
+참조 요청·후보·판정은 별도 근거로 보존한다. Native projection의 FK와
+동일 occurrence 불변식은 유지한다. 새 entity kind는 추가하지 않는다.
+실행 계약의 구조 변경 권한으로 방향을 채택하며, 이 문서는 구현 완료가 아니다.
 
-| 선택안 | 보존성과 typed 의미 | 재실행 | 모호·미존재 참조 | 기존 DB·소비자 영향 |
-| --- | --- | --- | --- | --- |
-| A. 현재 opaque 보존 유지 | 모든 원문·occurrence 유지. 새 연결 의미 없음 | 현행 ID와 semantic replay 유지 | 기존 unresolved 사유·payload 유지 | 스키마 변화 없음. 구조화된 참조 조회와 typed derived 처리는 계속 미완료 |
-| B. capture 범위의 별도 참조·파생 근거 (권장) | 두 파일의 출처를 그대로 두고 관계 근거를 별도 보존. 기존 projection FK 유지 | capture·행 endpoint·버전된 정책으로 결정적 ID와 후보 정렬 | 후보 전체를 보존하고 ambiguous/missing을 명시. 없는 fact를 만들지 않음 | 새 버전의 저장·읽기·검증 계약 필요. 기존 projection 소비자는 자동으로 이 관계를 사용하지 않음 |
-| C. projection invariant에 검증된 교차 파일 예외 도입 | 출처를 유지하면서 typed projection 가능. 동일 occurrence만으로 보장하던 제약을 명시적으로 확장 | endpoint·정책·근거를 결정적으로 저장해야 함 | 미검증·모호·미존재 행은 typed projection 금지, 원문 유지 | schema/validator/reader와 모든 projection 소비 의미를 함께 변경해야 함. 잘못된 예외가 typed 금액에 직접 영향 |
+- `legacy_overview_reports`는 기존 deterministic observation을 PK/FK로 사용하고
+  kind와 원래 provenance를 가진다. Balance/cashflow/insurance/investment/loan의
+  명시적인 detail 테이블은 해당 kind마다 정확히 하나 존재해야 한다.
+- 값·텍스트·날짜·원문 payload와 원래 파일 occurrence/행좌표를 보존한다.
+  Exact value의 provenance는 report와 같아야 한다. 기존 observation/migration
+  identity를 재사용하고 immutable evidence trigger를 적용한다.
+- 수치는 기존 exact lexical 계층으로 먼저 검증한 뒤 삽입한다. 빈 금액을 0으로
+  만들지 않는다. Cashflow의 없는 통화나 다른 파일의 빈 통화를 KRW로 추정하지
+  않고 unknown currency로 보존한다. Rate는 명시적 legacy 단위와 원문을 보존하며
+  퍼센트 변환이나 금융 의미 교정은 하지 않는다.
+- Reference assessment는 원문 source_fact_id, capture digest, 고정된 판정 정책을
+  보존한다. 같은 capture에서 alias가 일치하는 모든 fact 원본 행이 후보다.
+  Typed 변환에 실패한 fact 행도 provenance를 가진 후보 근거로 남는다.
+  Nullable typed fact FK를 저장한다면 후보 provenance와 같은 행인지 검증한다.
+- 후보가 없으면 missing, 하나면 unverified, 여러 개면 ambiguous다. 이번 정책은
+  선택된 fact를 주장하지 않는다. 날짜·금액·file_id나 탐색 순서로 후보를 제거하거나
+  선택하지 않는다. 같은 bytes의 파일도 각각의 occurrence로 남긴다.
+- 분석과 build는 동일 capture 색인과 판정 함수를 사용한다. 행 생성 후 후보를
+  삽입해 파일 순서에 의존하지 않는다. 원문 미해석과 참조 미검증의 issue/disposition을
+  구분하며, 참조 미검증 자체가 보고값의 typed 보존을 막지는 않는다.
 
-A는 현재 안전한 대기 상태지만 참조의 구조화가 진전되지 않는다. C는 장기적으로
-가능한 선택이나 첫 보존 단계에서 FK 의미와 소비자 동작까지 바꾸는 범위가 크다.
-어느 선택도 파일 occurrence 병합, legacy ID 중복 제거, fact 출처 위조를 허용하지 않는다.
+## 스키마와 과거 후보 재생
 
-## Decision Outcome
+새 스키마는 v5, 새 adapter policy는 별도 버전으로 도입한다. 기존 sealed plan의
+legacy v1/config-head v2/manual-state v3는 **정확히 schema v4**로 생성·재생한다.
+일반 runtime은 최신 schema를 요구하고, 과거 v4 허용은 migration 내부 경로로 한정한다.
 
-**제안: B를 후속 구현의 계약 방향으로 채택한다.** 원본 보존과 참조 판정을
-분리할 수 있고, 현재 동일-occurrence projection 제약을 약화하지 않기 때문이다.
-B는 typed overview 구현을 완료하지 않는다. 관계가 검증돼도 기존 projection 테이블에
-그대로 삽입할 수 없으며, 소비 방식은 후속 공개 계약 검토가 필요하다.
-현재 세 fixture는 명시적 참조 locator나 producer namespace의 유효성을 증명하지
-않는다. 실제 capture에 그런 증거가 있는지도 이번 공개·합성 검토에서 확인하지 않았다.
-따라서 B의 입증 가능한 이득은 **후보집합과 판정 근거의 구조화된 보존**이다.
-세 fixture의 참조는 B에서도 미검증·모호·미존재로 남을 수 있다. 이 구조화 자체가
-새 schema/reader/복원 비용을 정당화한다는 권고이며, typed 해소를 보장하지 않는다.
+`RepositoryBuilder`, reader/validator와 `semantic_snapshot`에 정책이 요구하는 정확한
+스키마를 연결한다. 현재 `_READ_TABLE_SQL` 목록은 v4 registry로 고정하고 v5 목록을
+확장한다. 기존 digest에 빈 새 테이블을 추가하거나, version을 지우거나, 누락 테이블을
+무시해 재검증을 통과시키지 않는다. v4 validator는 v5 테이블에 접근하지 않는다.
 
-채택 시 다음 조건을 하나의 계약으로 적용한다. 아래 상태·필드는 개념 이름이며
-새 SQL 컬럼·enum·CLI JSON 명세를 이 문서에서 확정하지 않는다.
+일반 v4→v5 upgrade는 기존 snapshot→별도 candidate→source object 복사 흐름을 유지하며
+빈 새 테이블만 추가한다. 과거 opaque 자료를 임의로 재해석하지 않는다.
+Upgrade 산출물은 기존 sealed migration candidate와 같지 않다. 기존 manifest를
+복사해 같은 digest를 주장하지 않으며, 새 typed baseline은 원 capture와 새 정책으로 만든다.
 
-1. B의 범위는 별도 파일의 derived 원본 행에서 `overview_facts`로 향하는 참조다.
-   derived→derived와 그 밖의 endpoint 종류는 지원 범위 밖이라는 사유를 원문과 함께
-   남기며 missing fact로 오인하지 않는다. 동일 파일의 기존 projection은 B가 대체하지 않는다.
-   참조의 주체는 derived 원본 행의 provenance/observation이다. 동결 capture,
-   원문 `source_fact_id`, 파일·행 locator를 보존한다. 상대는 같은 capture에서 찾은
-   실제 fact entity와 그 원래 provenance다. 동일 ID 후보가 여러 개여도 합치지 않는다.
-2. 고유 alias는 후보가 하나라는 뜻일 뿐이다. 참조 해소에는 원본의 명시적 locator,
-   생산자의 버전된 ID namespace/참조 규칙 등 하나의 occurrence를 특정하는 증거가
-   필요하다. 단순 값·날짜 일치나 파일 탐색 순서로 선택하지 않는다. 증거가 없으면
-   고유 후보도 미검증으로 남긴다. 증거가 있는 중복 후보의 선택은 다른 후보의 삭제가 아니다.
-3. 참조 대상 확인과 파생 계산 검증을 구분한다. 파생 검증에는 원본 producer/parser의
-   버전된 변환 규칙, 필요한 입력과 정확수치·단위·반올림 정책이 있어야 한다.
-   금액 동일성만으로 파생을 추정하지 않는다. 검증되지 않은 식이나 통화는 원문과
-   사유로 남긴다. 관계의 검증은 금융 값 재계산·재분류를 승인하지 않는다.
-4. 미존재 참조에는 대상 FK를 꾸며 넣지 않는다. 참조 요청 자체와 빈 후보집합을
-   보존한다. 참조 요청과 후보 edge를 개념적으로 분리한다. 요청은 항상 실제 derived
-   행과 capture를 가리키며, 후보 edge가 존재할 때만 실제 fact FK·endpoint 타입과
-   동일 capture membership을 검사한다. missing은 edge 0개인 유효한 미해결 상태다.
-   고유·미검증은 edge 1개지만 선택된 대상은 없는 상태다. ambiguous는 여러 유효 후보
-   edge를 갖되 선택된 대상은 없는 상태다. 검증됨은 증거로 선택한 대상이 하나인 상태이며,
-   여러 후보 중 하나를 검증했어도 나머지 후보는 삭제하지 않는다. 검증된 대상은
-   유효 후보 중 하나와 조건 2의 증거가 있어야 하며, 없거나 다른 capture인 endpoint를
-   허용하는 예외는 두지 않는다. 모호한 참조는 후보 전체·각 occurrence와 판정 근거를 남긴다.
-   현행 opaque payload와 issue는 삭제하거나 의미를 바꾸지 않는다.
-5. 동일 capture와 동일 판정 정책의 재실행은 같은 관계 ID·후보집합·판정을 만든다.
-   참조 요청 ID는 capture digest + 버전된 record kind + canonical locator를 사용한다.
-   locator에는 derived 원래 root/path/행좌표와 참조 필드의 이름·열 ordinal,
-   필드 내 여러 참조가 있을 경우 원문 token ordinal을 포함한다. 요청 ID는 원본 참조
-   지점을 가리키므로 판정 정책이 바뀌어도 유지한다. 판정 ID는 별도 버전된 kind와
-   요청 ID·정책 버전으로 정하며, 후보 edge는 판정 ID와 fact ID로 구분한다.
-   따라서 한 행의 서로 다른 참조 지점도 별도 ID를 갖는다. 후보 edge의 locator는
-   판정 식별자와 fact entity 식별자를 함께 포함한다. attempt 시각·output hash·
-   단독 alias는 ID 입력이 아니다. 후보는 안정된 fact entity ID 순으로 정렬한다. 정책이 바뀌면 별도 버전의 판정으로
-   이전 근거를 보존하며, 기존 관계를 몰래 다시 해석하지 않는다.
-   원문 payload와 기존 issue는 최초 보존 당시의 불변 증거이고, 구조화 판정은 특정
-   정책 버전의 결과다. 둘이 다르게 보이더라도 원문을 덮어쓰거나 issue를 소급 해소하지
-   않는다. 소비자는 명시적으로 선택된 정책 버전의 판정과 최초 증거를 구별해야 한다.
-   선택된 판정 버전이 없으면 현재 해소 상태를 추정하지 않는다. 두 층 모두 복원·replay한다.
-6. 관계와 필요한 근거는 DB·불변 source의 백업 그래프에 포함되어야 한다.
-   향후 테이블은 reader의 authoritative table 목록과 semantic replay, FK·capture
-   membership·endpoint 타입 검증에 포함한다. 일반 관계의 `unknown`이나 자유 JSON에
-   성공 관계를 숨겨 기존 검증을 우회하지 않는다.
+## 구현 순서와 검증
 
-### 기존 DB 호환과 확인 조건
+1. 버전별 registry/reader/builder/validator와 정책별 schema 계약을 먼저 구현한다.
+   실제 과거 코드로 만든 세 정책의 후보 bytes/hash 불변 검증과 새 build의 schema4를
+   확인한다. 일반 v4→v5 upgrade의 원본 불변도 확인한다.
+2. 보고값 테이블·정확수치 계약·행 adapter를 구현한다. 다섯 종류 전체 필드, unknown
+   통화, 빈 값, 잘못된 수치와 부분 typed 삽입 금지를 검증한다.
+3. Capture 색인과 별도 참조 판정을 구현한다. 유일/중복/미존재/invalid fact,
+   동일 bytes 다중 occurrence, 파일 순서 독립성과 capture 밖 후보 거부를 검증한다.
+4. 새 정책 후보의 결정성, 새 테이블/후보/단위 변조 거부와 기존 native FK를 확인한다.
+   #436에서 reported 값과 참조 상태의 소비 및 기존 결과 parity를 검증한다.
 
-현재 reader는 지원 버전과 다른 DB를 거부한다(`schema.py:1311–1320`).
-따라서 테이블 추가도 구 reader와 자동 호환되지 않는다. 후속 구현은 명시적 schema
-버전과 복제 candidate 업그레이드, 새 reader, 구 reader의 명확한 거부, 백업·복원과
-semantic replay 범위를 함께 검증해야 한다. 이미 보존된 payload에서 재구성하되
-기존 entity ID·원문·occurrence를 보존하고 원래 candidate를 직접 덮어쓰지 않는다.
-기존 DB에 관계 행이 없다는 이유로 참조가 없거나 검증됐다고 판단해서는 안 된다.
-동일 동결 capture와 동일 정책에 대해 신규 build와 기존 DB의 격리 업그레이드는
-동일 요청 ID·후보 edge·판정·근거를 산출해야 한다. 업그레이드의 보존 payload만으로
-원본 참조 지점이나 근거를 복구할 수 없으면 해당 입력의 자동 업그레이드를 거부하고,
-검증된 원본 capture에서 새 candidate를 재구축한다. 추정한 locator로 parity를 만들지 않는다.
+스키마 추가만으로 #435 전체 AC를 체크하지 않는다. 실제 동결 자료의 전수 보존 검증,
+소비자 parity, 운영 전환과 복원 증거는 실행 계약에 따라 별도로 완료한다.
 
-후속 구현의 확인 대상은 현재 세 보존 사례에 더해, 명시적 참조 증거 유무,
-다른 capture의 동일 alias 거부, 정책 변경 시 기존 근거 유지, 정확수치·단위와
-변환 규칙 검증, 관계가 포함된 복원·재실행, 이전 schema의 격리 업그레이드다.
-이는 향후 조건이며 이번에 새 테스트를 작성하거나 실행한 결과가 아니다.
+## 고려한 대안
 
-## 채택 전에 필요한 결정 하나
+| 대안 | 판단 |
+|---|---|
+| Opaque 유지 | 원문 보존은 되지만 보고값 typed 공백이 남음 |
+| 별도 참조 근거만 추가(이전 B 제안) | 후보 구조화만으로 보고값을 소비할 수 없음 |
+| 기존 projection FK에 교차 파일 예외 추가 | 현재 CSV에 occurrence를 확정할 증거가 부족함 |
+| 별도 reported 값 + 독립 참조 판정 | 기존 native 불변식과 원본 의미를 함께 유지하므로 채택 |
 
-**기존 same-occurrence projection FK를 유지하고, 교차 파일 참조·파생 근거를
-위 조건의 독립된 capture 범위 관계로 보존하는 B를 후속 구현 방향으로 채택할 것인가?**
-
-결정 전에는 A의 현행 동작을 유지한다. 이번 변경은 문서뿐이며 schema·공개 CLI·JSON,
-R1/R3 의미, 실자료 migration·activation, 선행 PR 머지를 변경하거나 승인하지 않는다.
-#435의 수용 조건과 `cutover_ready=false`도 그대로다.
-
-## 검토 기록
-
-Native 읽기 전용 검토로 현행 코드와 fixture 근거를 확인했다. Cursor/Grok 4.6는
-workspace trust 단계에서 차단되어 검토 결과가 없으며 우회하지 않았다.
-Opus 5 high의 단일 문서 검토는 참조 지점별 ID, 미해결 endpoint 검증,
-업그레이드/build 판정 동등성, B의 증거·효용 범위를 지적했다. 작성자가 위 조건에
-반영했다. 이후 사용자가 현재 작업 폴더의 Cursor 신뢰를 승인하여 Grok 4.6 high 읽기 전용
-검토를 완료했다. 상태 분류, 요청/판정 ID 분리, 최초 증거와 버전된 판정의 역할,
-지원 endpoint 범위를 보완했다. 수정 후 재검토 승인을 주장하지 않는다.
+관련 계약: [ADR-0014](0014-sqlite-authoritative-storage.md),
+[보존·복구 계약](../../development/ssot-migration-recovery-contract.md).

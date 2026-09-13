@@ -5,7 +5,7 @@
 - 로드맵: https://github.com/sungjunlee/finjuice/issues/425
 - 실행 계약/시작 프롬프트: `goals/finjuice-ssot.md`.
 - 활성 실행 계획: `backlog/sprints/2026-09-ssot-m2-storage.md`. #433 완료, #434는 ready PR #463에서 진행 중이다. 2026-09-12 다른 세션의 main PR #473~#476을 통합해 대상 파일 import·legacy 처리 이력, 증빙 대사 첫 부분과 0.8.0 버전을 보존했다. 최신 head의 로컬/설치본/CI 검증 근거는 PR #463과 Issue #434에서 확인한다. GitHub 필수 approving review 1건 후 머지한다. 2026-09-12 추가 위임으로 #435 합성 준비를 #463 head 4fcf0b7 기반 별도 stacked branch `codex/ssot-m2-migrate`에서 진행한다. #434 머지나 #435 전체 완료를 뜻하지 않는다. #436 정본 export가 없어 active import/refresh는 앞선 변경 영수증을 보존하고 export에서 실패한다. 이번 통합에서 운영 데이터 이전이나 SQLite 활성화는 수행하지 않았다. 실행 작업 공간은 `git worktree list`로 확인한다.
-- 2026-09-13 현재 #435 작업은 PR #481 / `codex/ssot-m2-migrate`다. main 0.8.2를 `5297c05`로 통합했고 전체 3,303 PASS·1 SKIP를 확인했다. canonical rules/goals head 선택은 `09c8247`에 구현했다. 이어 새 v3 계획은 기존 CSV 해석기의 공백·중복 marker 선택 의미를 재현하면서 원문/visible 순서·중복/저장된 최종 분류를 보존한다. 기존 v1/v2 후보는 원래 정책으로 재생하며 v3도 canonical 설정 선택을 유지한다. 이어 실패 단계 journal과 검증된 부모 계보를 구현한다. 새 lifecycle manifest v2는 portable 계보를 필수로 보존하고 기존 manifest v1 재생을 유지한다. 교차 파일 ADR-0015와 consumer parity 및 실운영 검증은 후속 수용 조건이다. #463의 필수 GitHub 승인을 대체하지 않는다.
+- 2026-09-13 현재 #435 작업은 PR #481 / `codex/ssot-m2-migrate`다. main 0.8.2를 `5297c05`로 통합했고 전체 3,303 PASS·1 SKIP를 확인했다. canonical rules/goals head 선택은 `09c8247`에 구현했다. 이어 새 v3 계획은 기존 CSV 해석기의 공백·중복 marker 선택 의미를 재현하면서 원문/visible 순서·중복/저장된 최종 분류를 보존한다. 기존 v1/v2 후보는 원래 정책으로 재생하며 v3도 canonical 설정 선택을 유지한다. 이어 실패 단계 journal과 검증된 부모 계보를 구현한다. 새 lifecycle manifest v2는 portable 계보를 필수로 보존하고 기존 manifest v1 재생을 유지한다. 교차 파일 ADR-0015는 별도 legacy reported 값과 독립 참조 판정, 기존 v1/v2/v3 계획의 schema4 재생을 유지하는 새 schema5 방향으로 채택했다(구현 예정). Consumer parity 및 실운영 검증은 후속 수용 조건이다. #463의 필수 GitHub 승인을 대체하지 않는다.
 - 완료 실행 기록: `backlog/sprints/2026-09-ssot-m1-recovery.md`. #430은 #449·#450, 백업 구현은 #451, 실제 운영 검증과 스프린트 마감은 #452로 머지됐다. M1의 실제 캡처·Linux 격리 복원·장비 밖 독립 복원·최종 교차 검토와 복구 절차 보존을 통과했고 #431·#432·#426 및 milestone 2를 완료했다.
 - 전체 순서: M1 복구 계약 → M2 정본/보존 이전 → M3 실제 운영 전환 → M4 가족 재산 → M5 증빙/마감/추가 출처.
 - 에픽: M1 #426, M2 #427, M3 #428, M4 #429, M5 #355. 실행 이슈 #430~#448. 첫 작업 #430.
@@ -35,3 +35,5 @@
 ## 기록 경계
 
 공개 가능한 issue/PR·worktree·검사 요약·다음 행동은 활성 스프린트에 남긴다. 실제 금융 데이터·비밀·상세 운영 경로·검증 원본은 repo 밖 비공개 기록에 둔다. 각 스프린트를 마친 뒤 그 실행 기록을 보존하고 다음 마일스톤 스프린트로 이어간다.
+
+- 최신 통합 checkpoint: `c1a3c94`는 main `309c42b`의 0.8.3 변경을 보존한다. 전체3,367 PASS·1 SKIP, coverage89.56%, 정적 검사 및 별도 설치본의 새 후보/과거 세 정책 후보 재생을 통과했다. 다음 구현은 ADR-0015 순서에 따라 schema별 정확한 registry와 migration 전용 legacy replay 경계를 먼저 고정하고 reported 값·참조 판정을 추가하는 것이다.
