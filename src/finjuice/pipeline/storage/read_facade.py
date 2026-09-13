@@ -17,6 +17,7 @@ from finjuice.pipeline.storage.authority import (
 )
 from finjuice.pipeline.storage.csv_schema import CSV_COLUMNS, POLARS_SCHEMA
 from finjuice.pipeline.storage.sqlite.errors import RepositoryIntegrityError
+from finjuice.pipeline.storage.sqlite.portfolio_reads import PortfolioReadSnapshot
 from finjuice.pipeline.storage.sqlite.repository import RepositoryReader
 from finjuice.pipeline.storage.sqlite.status_reads import StatusReadSnapshot
 from finjuice.pipeline.storage.sqlite.transaction_reads import TransactionReadSnapshot
@@ -44,6 +45,13 @@ def read_status_snapshot(
 ) -> StatusReadSnapshot | None:
     """Read status from one revision, with the same fail-closed authority checks."""
     return _read_snapshot(data_dir, evidence_provider, RepositoryReader.status_snapshot)
+
+
+def read_portfolio_snapshot(
+    data_dir: Path, evidence_provider: ActivationEvidenceProvider | None = None
+) -> PortfolioReadSnapshot | None:
+    """Read detached portfolio evidence with fail-closed activation validation."""
+    return _read_snapshot(data_dir, evidence_provider, RepositoryReader.portfolio_snapshot)
 
 
 def _read_snapshot(

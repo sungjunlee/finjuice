@@ -201,3 +201,15 @@ scope: ["**"]
 - 사용자 재개 요청에 따라 원격 main과 최근PR을 재확인했다. main309c42b(v0.8.3,#496–499 포함)는 현재HEAD의 조상이며 추가통합할main변경은 없다. PR463은 OPEN/REVIEW_REQUIRED 및 DIRTY다. 읽기전용 merge-tree 확인에서 rules mutations/tag/tag_edit/rules-add 테스트의 충돌4개를 확인했다. 보호규칙을 우회하지 않으며 별도 기반통합 작업이 필요하다.
 
 - v5 교차리뷰: Claude Opus5 high exit0/491.82s, 근거있는P1/P2없음. 리뷰어는migration179개·관련CLI/schema/status/query187개 및정적검사를통과하고v4후보위v5build가명시적으로거부돼원본불변인합성probe를확인했다. 전체회귀/옛설치본대조는root별도증거를사용한다. 비차단테스트스타일/issue집합고정관찰은있으나실제실패시나리오없음. 로그는repo외부 /tmp/finjuice-portfolio-review에보존.
+
+
+
+### 2026-09-13 기반 통합과 자산 조회 저장계층
+
+v5 선택 정책은 `921d76f`로 push했다. 기반 PR463의 main 0.8.3 충돌4파일은 별도 worktree에서 해결해 `2070d97`로 push했다. 기반 전체3197 PASS·1 SKIP(89.31%), 설치본85 PASS·389개 module origin·22개 production SHA·57개 schema SHA를 검증했다. Cursor/Grok4.6high 리뷰는 exit0/640.36s, 근거 있는 P1/P2 없음이다. 새 head CI는10 SUCCESS·2 SKIPPED이며 MERGEABLE이다. 필수 비작성자 승인만 남았다. 저장소가 auto-merge를 허용하지 않아 예약은 거부됐으며 보호 규칙을 우회하지 않았다. 현재 branch는 `e9df2e4`로 기반을 통합했다. 추가된 파일은 실행 기록1개뿐이며 생산 코드와 테스트의 추가 diff는0이다.
+
+Portfolio 저장계층은 한 RepositoryReader에서 자산, native 현황, legacy5보고 도메인, exact 수치와 cell provenance, UUID와 별칭, 원본·소유 assertion/share·직접 관계 증거를 읽는다. 설정은 selected/unselected/absent로 구분한다. Primary와 보조 root, 빈 파일·opaque 파일의 scope를 유지하고 거래 전용 payload는 제외한다. Schema4는 preserved_observations_only를 명시한다. Schema5의 typed는 테이블 지원만 뜻하며 보고 변환 완료를 보장하지 않는다. 실제 v3→schema5 upgrade에서 보고 테이블이 비어도 원본 증거를 유지하는 회귀를 추가했다.
+
+검증은 전체3594 PASS·1 SKIP, coverage90.02%, 539.47s다. 이 결과는 최종 비동작 comment와 upgrade 테스트 추가 전이다. 이후 최종 portfolio12개가5.21s에 통과했다. 최초 추가 테스트는 import 누락으로 실패했고 즉시 수정해 재검증했다. 최종 wheel의 설치본38개가8.39s에 통과했으며436개 module origin과 변경 production3개의 SHA를 검증했다. 실제 옛 설치본의 v1–v4 후보4개도 새 설치본에서 읽어 원본 inventory 불변을 확인했다. Ruff/format828, mypy458, complexity118 및 적용 훅이 통과했다.
+
+Claude Opus5high 교차 리뷰는 exit0/577.7s, 근거 있는 P1/P2 없음이다. 리뷰어는11개 테스트와4개 한정 probe로 exact value/provenance 누락0 및 빈 파일·root scope를 확인했다. 이후 root가 테이블 지원과 변환 완료의 차이를 comment와 upgrade 회귀에 명시했으며 생산 동작 변경은 없다. 비차단 관찰로 배치별 결정적 정렬이 전역 정렬은 아니라는 점, party legacy alias와 격리 issue/disposition은 현재 DTO에 없다는 점을 기록한다. 소비자는 정렬과 미변환·격리 관측의 표시를 명시하고 기존 이름별 집계를 소유권 판정으로 해석하지 않아야 한다. CLI·계산 연결과 실자료 parity는 미완료다.

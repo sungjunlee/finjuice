@@ -31,6 +31,10 @@ from finjuice.pipeline.storage.sqlite.legacy_overview import (
 )
 from finjuice.pipeline.storage.sqlite.objects import SourceArtifact, SourceObjectStore
 from finjuice.pipeline.storage.sqlite.paths import GenerationPaths
+from finjuice.pipeline.storage.sqlite.portfolio_reads import (
+    PortfolioReadSnapshot,
+    portfolio_snapshot,
+)
 from finjuice.pipeline.storage.sqlite.records import (
     AccountRecord,
     AssetSnapshotRecord,
@@ -626,6 +630,12 @@ class RepositoryReader(AbstractContextManager["RepositoryReader"]):
         if self._closed:
             raise RuntimeError("Repository reader is already closed.")
         return transaction_snapshot(self._connection, self.info, self._repository_paths)
+
+    def portfolio_snapshot(self) -> PortfolioReadSnapshot:
+        """Return portfolio values and evidence pinned to this reader."""
+        if self._closed:
+            raise RuntimeError("Repository reader is already closed.")
+        return portfolio_snapshot(self._connection, self.info, self._repository_paths)
 
     def status_snapshot(self) -> StatusReadSnapshot:
         """Return status evidence from the same validated transaction snapshot."""

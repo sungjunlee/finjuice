@@ -209,3 +209,44 @@ original import.
 
 This connects status only. Doctor, checkup/networth, overview/assets consumers and
 full private-corpus parity remain separate acceptance work.
+
+
+## Portfolio snapshot evidence
+
+`RepositoryReader.portfolio_snapshot()` and `read_portfolio_snapshot()` detach
+portfolio tables from one validated generation/revision. The facade uses the
+same independent activation evidence and shared lease as transaction/status
+reads; only legacy authority returns `None`. Closed readers fail explicitly.
+
+Asset observations, native overview facts/reports and the five legacy reported
+overview domains remain separate source tables. Exact coefficient/scale/lexical
+values, quantity/money/rate types, provenance and original aliases remain linked
+by their stored IDs. A legacy alias never replaces a UUID. Reference candidates
+and missing/unverified/ambiguous assessments are evidence, not verified fact
+links. Ownership assertions/shares and directly related entity assertions are
+preserved without applying a new ownership or aggregation policy. Unrelated
+relation endpoints can remain ID-only as documented by the DTO.
+
+Evidence includes portfolio file scopes, including empty/opaque partition
+sources and extra capture roots; transaction-only payloads are excluded.
+Selection or aggregation across roots belongs to the future consumer policy.
+Native exact values retain their separate cell provenance. Source-backed raw
+payloads and account/resource records remain available to later display adapters.
+
+Assets/goals/scenarios configuration has an explicit `selected`, `unselected`
+or `absent` state. Selected bytes are object-hash verified and retain parse
+status. Missing selection is never treated as an empty financial configuration
+and never triggers live YAML fallback. A consumer must validate financial
+configuration semantics before calculating. Frozen older migration policies
+are not rewritten to fill their missing heads.
+
+Schema4 reports expose `preserved_observations_only` with preserved observation
+and payload evidence; schema5 exposes typed reported tables. Unsupported typed
+reports are distinguishable from a supported empty table. The support field
+asserts schema capability only, not materialization completeness: upgrading an
+older candidate adds empty schema5 tables without converting preserved report
+observations. Consumers must inspect unmatched preserved observation evidence
+before treating empty typed tables as no report data. This storage
+checkpoint does not yet connect assets/networth/history/forecast/checkup CLI
+consumers or claim their baseline parity. Combined status/portfolio calculations
+will need a single reader bundle rather than two independent facade reads.

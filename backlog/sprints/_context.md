@@ -59,3 +59,6 @@
 - status checkpoint검증완료: full3575PASS1SKIP89.99%(최종goals경고표시수정전), 수정후관련64PASS+설치본39PASS/446모듈/12SHA검증. Cursor최초P2를수정하고후속실제2테스트+재리뷰해소확인. commit/push와최신PR481근거는활성스프린트/원격head에서확인. 다음은assets/scenarios canonicalhead선택정책을먼저해결한뒤portfolio조회연결.
 
 - portfolio 선행 선택정책 구현: 새 기본 `legacy_preservation.portfolio_configs.v5`는 primary `assets.yaml`/`scenarios.yaml` head를 invalid 상태까지 선택하며 다른경로fallback은 없다. v4 manual/overview 의미와 기존v1–v4계획의불변재생유지. 전체3583PASS1SKIP89.99%, 새설치본30PASS 및 옛설치본실제4후보의새런타임/설치본재생통과. 검토/commit의최종근거는활성스프린트를따른다. 다음은portfolio snapshot 및소비자연결이며oldpolicy의missinghead를빈수동자산으로간주하지않는다. 최신main은이미통합됐지만기반PR463충돌4파일과필수승인은아직남아있다.
+
+- 최신 기반은 PR463의 main0.8.3 통합 `2070d97`이다. 전체3197/설치85 및 CI10성공·2skip을 확인했고 MERGEABLE이며 필수 비작성자 승인만 남았다. Auto-merge 기능은 비활성이다. Migrate는 `e9df2e4`로 기반을 통합했다(생산/test 추가 diff0).
+- Portfolio 저장 DTO와 authority facade는 전체3594 PASS·1 SKIP(90.02%), 후속12개 및 최종 설치38개를 검증했고 Claude 교차 리뷰에 P1/P2가 없다. 설정 미선택·구schema 지원 차이, 원본/provenance, exact 수치와 소유·관계 증거를 보존한다. 최종 commit은 스프린트/원격 head를 확인한다. 다음은 DTO에서 기존 표시 frame과 월/as-of 선택을 구성해 assets/networth/history/forecast/checkup에 연결하는 것이다. Schema5 테이블 지원을 보고 변환 완료로 간주하지 않으며 미변환·격리 증거를 없던 자료로 취급하지 않는다. 상세 지도는 `/tmp/finjuice-overview-assets-read-map.md`다.
