@@ -312,7 +312,7 @@ def create_backup(database: Path, destination_root: Path) -> BackupResult:
         _cleanup_staging(staged)
         raise
     connection.close()
-    _prune_unlisted_payload(backup_root, entries)
+    _prune_unlisted_payload(backup_root, entries, warnings)
     database_entry = _publish_staged_database(staged, destination_paths, warnings)
     manifest = _write_manifest(backup_root, info, (database_entry, *entries), warnings)
     return BackupResult(
@@ -581,7 +581,11 @@ def _write_manifest(
     return manifest
 
 
-def _prune_unlisted_payload(backup_root: Path, entries: tuple[BackupFileEntry, ...]) -> None:
+def _prune_unlisted_payload(
+    backup_root: Path,
+    entries: tuple[BackupFileEntry, ...],
+    warnings: list[str],
+) -> None:
     """Remove destination payload files the new manifest does not list.
 
     Orphans left behind by an earlier failed backup would otherwise poison
@@ -590,6 +594,10 @@ def _prune_unlisted_payload(backup_root: Path, entries: tuple[BackupFileEntry, .
     complete manifest describes the exact payload set. The fixed snapshot
     path is always preserved so the previous database survives until it is
     atomically replaced moments before the manifest swap.
+
+    Every pruned orphan is recorded as a warning: the previous complete
+    manifest in this destination (if any) becomes stale for those paths, so
+    a crash before the new manifest swap is detectable rather than silent.
     """
     listed = {entry.path for entry in entries} | {DATABASE_BASENAME, MANIFEST_FILENAME}
     for path in _inventoried_payload(backup_root):
@@ -602,6 +610,7 @@ def _prune_unlisted_payload(backup_root: Path, entries: tuple[BackupFileEntry, .
             path.unlink()
         except OSError as exc:
             raise BackupTransferError("Unlisted backup payload could not be pruned.") from exc
+        warnings.append(f"pruned_orphan:{relative}")
 
 
 def _payload_defect_reason(root: Path, manifest: BackupManifest) -> str | None:
