@@ -153,7 +153,7 @@ def test_five_report_roles_preserve_values_without_claiming_fact_resolution(tmp_
     plan_migration(capture, output=plan, active_data_dir=source)
     assert (
         json.loads(plan.read_text())["migration_policy"]
-        == "legacy_preservation.overview_reports.v4"
+        == "legacy_preservation.portfolio_configs.v5"
     )
     build_migration(plan, candidate, active_data_dir=source)
     assert verify_migration(candidate).to_dict()["cutover_ready"] is False

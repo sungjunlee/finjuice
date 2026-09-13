@@ -45,7 +45,7 @@ not require an active-data boundary.
   retained as evidence with explicit issues before financial typed insertion.
   Analysis and build use the same checks without reclassifying invalid values.
 - Transaction rows preserve persisted final category, notes, transfer flags and
-  group identifiers. New v4 plans retain v3 manual-category selection using the frozen
+  group identifiers. New v5 plans retain v3 manual-category selection using the frozen
   legacy normalization and duplicate-marker semantics described below; visible
   tags retain their original spelling, order, and duplicates. Original marker
   arrays remain in row evidence. No accounts or owners are inferred.
@@ -83,7 +83,7 @@ Existing adapter policies v1/v2/v3 explicitly select SQLite schema v4 for buildi
 validation and semantic comparison. The reader selects the exact v4 table registry;
 a later runtime default cannot silently add tables to old digests. Unsupported
 requested versions and mismatched database headers fail closed. Runtime defaults
-require schema v5. New `legacy_preservation.overview_reports.v4` plans build v5;
+require schema v5. `legacy_preservation.overview_reports.v4` and current portfolio-config v5 plans build schema v5;
 v4 schema contents and table enumeration remain available to the old policies.
 A separate v4-to-v5 upgrade adds empty report tables without reinterpreting opaque
 rows or changing the original candidate. It does not copy the old migration manifest
@@ -102,13 +102,13 @@ and after directory publication.
 
 ## Remaining gates
 
-- Canonical five-role overview reports now have typed values under the new v4 policy,
+- Canonical five-role overview reports have typed values under v4 and v5 policies,
   but source-fact relationships remain explicitly unverified, ambiguous or missing.
   A unique alias is not occurrence proof. Old policies retain their opaque derived
   representation. Noncanonical paths, incomplete report schemas and invalid values
   still retain original evidence with issues. Full private-capture coverage and
   #436 consumer parity remain acceptance gates; typed storage alone is insufficient.
-- New plans select canonical rules/goals heads from the frozen primary data root
+- New plans select canonical rules/goals/assets/scenarios heads from the frozen primary data root
   as described below. Other configuration copies remain preserved revisions;
   missing or invalid canonical documents are not replaced with alternative copies.
   Older policy plans retain their original unselected-head behavior.
@@ -228,7 +228,7 @@ cannot be verified. This recovery path does not modify the original source.
 
 ## Reported overview policy
 
-New v4 plans recognize the canonical `banksalad/<role>/YYYY/MM/<role>.csv` paths for
+V4 and v5 plans recognize the canonical `banksalad/<role>/YYYY/MM/<role>.csv` paths for
 balance, cashflow, insurance, investments and loans. They store report details on
 existing deterministic row observations, with original provenance and raw payloads.
 The native overview projection tables and their same-occurrence fact FKs stay unchanged.
@@ -273,3 +273,32 @@ payloads. It still materializes the capture's migration source-row metadata and 
 strings. Peak memory and duration on the actual frozen private corpus remain a
 pre-cutover acceptance gate; synthetic correctness tests do not establish production
 capacity.
+
+
+## Portfolio configuration selection (v5)
+
+New plans use `legacy_preservation.portfolio_configs.v5`, still on SQLite schema5.
+They inherit the complete v4 reported-overview and v3 manual-state behavior. The
+additional baseline heads are the captured primary data-root `assets.yaml` and
+`scenarios.yaml`, matching the existing portfolio/forecast configuration paths.
+Rules/goals selection stays unchanged. All nested, external-root, `.yml` and
+`.json` alternatives remain separate preserved revisions; parse success or equal
+bytes never selects an alternative. Invalid canonical bytes remain the selected
+invalid head. Missing primary files leave missing heads, not empty configuration.
+
+The timestamp is capture completion and `updated_changeset_id` is null: selecting
+baseline configuration does not fabricate an edit or ownership assertion. Source
+bytes, exact decimal lexemes, source IDs, manual arrays/classifications and all
+reported values remain unchanged. Config parser status is conservative syntax
+status; portfolio consumers must still validate the appropriate document schema.
+
+V1–v4 plans and already built candidates retain their original head choices,
+analysis, schema and replay semantics. They are not implicitly upgraded by a newer
+runtime. Policy-scoped generation IDs distinguish v5 from v4 for the same capture.
+Existing v1–v3 select schema4; v4 and v5 select schema5. An old candidate without
+portfolio heads does not satisfy the new consumer prerequisite: explicitly build
+a v5 candidate before activation, or later use a separately authorized, verified
+selection changeset. No live-file fallback or silent reinterpretation is provided.
+
+This completes the baseline selection prerequisite only. Portfolio reads and
+operational activation remain separate acceptance work.

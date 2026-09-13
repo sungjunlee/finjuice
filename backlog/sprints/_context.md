@@ -57,3 +57,5 @@
 - 다음 portfolio 전제:현migration configs.py는rules/goals만head선택하며assets/scenarios는revision만보존한다. 읽기연결전에명시선택정책/구버전immutable replay를해결해야하며,head없음을수동자산없음으로해석하거나live YAML fallback금지.
 
 - status checkpoint검증완료: full3575PASS1SKIP89.99%(최종goals경고표시수정전), 수정후관련64PASS+설치본39PASS/446모듈/12SHA검증. Cursor최초P2를수정하고후속실제2테스트+재리뷰해소확인. commit/push와최신PR481근거는활성스프린트/원격head에서확인. 다음은assets/scenarios canonicalhead선택정책을먼저해결한뒤portfolio조회연결.
+
+- portfolio 선행 선택정책 구현: 새 기본 `legacy_preservation.portfolio_configs.v5`는 primary `assets.yaml`/`scenarios.yaml` head를 invalid 상태까지 선택하며 다른경로fallback은 없다. v4 manual/overview 의미와 기존v1–v4계획의불변재생유지. 전체3583PASS1SKIP89.99%, 새설치본30PASS 및 옛설치본실제4후보의새런타임/설치본재생통과. 검토/commit의최종근거는활성스프린트를따른다. 다음은portfolio snapshot 및소비자연결이며oldpolicy의missinghead를빈수동자산으로간주하지않는다. 최신main은이미통합됐지만기반PR463충돌4파일과필수승인은아직남아있다.

@@ -7,7 +7,7 @@ import hashlib
 import io
 from pathlib import Path, PurePosixPath
 
-from finjuice.pipeline.migration.policy import OVERVIEW_REPORT_POLICY
+from finjuice.pipeline.migration.policy import OVERVIEW_REPORT_POLICY, PORTFOLIO_CONFIG_POLICY
 from finjuice.pipeline.storage.sqlite.legacy_overview import LegacyOverviewCandidateRecord
 from finjuice.pipeline.storage.sqlite.records import (
     MigrationIdentityRecord,
@@ -122,7 +122,8 @@ def _csv(
                     "preserved_opaque",
                     "typed_report_with_unverified_reference_or_extra_evidence"
                     if success
-                    and emitter.context.migration_policy == OVERVIEW_REPORT_POLICY
+                    and emitter.context.migration_policy
+                    in (OVERVIEW_REPORT_POLICY, PORTFOLIO_CONFIG_POLICY)
                     and report_role(emitter.context.relative_path) is not None
                     else "row_contains_explicit_untyped_evidence",
                 )
@@ -150,7 +151,10 @@ def _row(
     if "transactions" in parts:
         return transaction(emitter, row, observation)
     role = report_role(emitter.context.relative_path)
-    if emitter.context.migration_policy == OVERVIEW_REPORT_POLICY and role is not None:
+    if (
+        emitter.context.migration_policy in (OVERVIEW_REPORT_POLICY, PORTFOLIO_CONFIG_POLICY)
+        and role is not None
+    ):
         return report(emitter, row, observation, role, pending)
     if "fact_id" in row and "fact_kind" in row:
         return fact(emitter, row, observation)

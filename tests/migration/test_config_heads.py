@@ -12,7 +12,7 @@ from finjuice.pipeline.backup import ConsistencyEvidence, CreateRequest, SourceR
 from finjuice.pipeline.migration import build_migration, plan_migration, verify_migration
 from finjuice.pipeline.migration.common import MigrationError, canonical, seal, tree_inventory
 from finjuice.pipeline.migration.plan import analyze_capture
-from finjuice.pipeline.migration.policy import OVERVIEW_REPORT_POLICY
+from finjuice.pipeline.migration.policy import PORTFOLIO_CONFIG_POLICY
 from finjuice.pipeline.migration.verify import semantic_snapshot
 from finjuice.pipeline.storage.sqlite import GenerationPaths, RepositoryReader
 
@@ -65,7 +65,7 @@ def test_canonical_heads_preserve_every_revision_and_replay(
     plan_path = tmp_path / "plan.json"
     result = plan_migration(capture, output=plan_path, active_data_dir=source).to_dict()
     plan = result["plan"]
-    assert plan["migration_policy"] == OVERVIEW_REPORT_POLICY
+    assert plan["migration_policy"] == PORTFOLIO_CONFIG_POLICY
     planned_heads = sum(
         item.get("analysis", {}).get("record_counts", {}).get("config_head", 0)
         for item in plan["inputs"]

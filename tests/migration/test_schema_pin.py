@@ -19,6 +19,7 @@ from finjuice.pipeline.migration.policy import (
     LEGACY_POLICY,
     MANUAL_STATE_POLICY,
     OVERVIEW_REPORT_POLICY,
+    PORTFOLIO_CONFIG_POLICY,
     migration_schema_version,
 )
 from finjuice.pipeline.migration.verify import semantic_snapshot
@@ -121,3 +122,4 @@ def test_unknown_migration_policy_has_no_schema_fallback() -> None:
 
 def test_new_overview_policy_requires_v5() -> None:
     assert migration_schema_version(OVERVIEW_REPORT_POLICY) == 5
+    assert migration_schema_version(PORTFOLIO_CONFIG_POLICY) == 5

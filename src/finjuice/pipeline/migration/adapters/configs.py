@@ -9,6 +9,7 @@ from typing import Any
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
+from finjuice.pipeline.migration.policy import PORTFOLIO_CONFIG_POLICY
 from finjuice.pipeline.storage.sqlite.records import ConfigRevisionRecord
 from finjuice.pipeline.yaml_exact import ExactFloatLexeme, configure_exact_floats
 
@@ -55,7 +56,10 @@ def config(emitter: Emitter, data: bytes, artifact: str, kind: Any) -> bool:
             identifier, kind, artifact, emitter.occurrence, status, PARSER, parsed
         ),
     )
-    if kind in {"rules", "goals"}:
+    if kind in {"rules", "goals"} or (
+        emitter.context.migration_policy == PORTFOLIO_CONFIG_POLICY
+        and kind in {"assets", "scenarios"}
+    ):
         timestamp = emitter.context.config_head_timestamp
         if timestamp is not None:
             emitter.call("set_config_head", kind, identifier, updated_at=timestamp)

@@ -5,7 +5,11 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from finjuice.pipeline.migration.policy import MANUAL_STATE_POLICY, OVERVIEW_REPORT_POLICY
+from finjuice.pipeline.migration.policy import (
+    MANUAL_STATE_POLICY,
+    OVERVIEW_REPORT_POLICY,
+    PORTFOLIO_CONFIG_POLICY,
+)
 from finjuice.pipeline.storage.csv_schema import CSV_COLUMNS
 from finjuice.pipeline.storage.sqlite.records import AccountRecord, TransactionRecord
 
@@ -17,7 +21,7 @@ MARKER = "__finjuice_category_override__:"
 
 def _manual_state(manual: list[str], policy: str) -> tuple[list[str], str | None]:
     """Freeze override selection while retaining original visible tag occurrences."""
-    if policy not in (MANUAL_STATE_POLICY, OVERVIEW_REPORT_POLICY):
+    if policy not in (MANUAL_STATE_POLICY, OVERVIEW_REPORT_POLICY, PORTFOLIO_CONFIG_POLICY):
         visible = [tag for tag in manual if not tag.startswith(MARKER)]
         markers = [tag[len(MARKER) :] for tag in manual if tag.startswith(MARKER)]
         return visible, next((value for value in reversed(markers) if value), None)

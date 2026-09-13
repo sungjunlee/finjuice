@@ -34,6 +34,7 @@ from finjuice.pipeline.migration.policy import (
     LEGACY_POLICY,
     MANUAL_STATE_POLICY,
     OVERVIEW_REPORT_POLICY,
+    PORTFOLIO_CONFIG_POLICY,
 )
 
 
@@ -50,21 +51,33 @@ def file_context(
         entry["root"],
         entry["path"],
         None if version is None else str(version),
-        capture["capture"]["completed_at"]
-        if policy in (CONFIG_HEAD_POLICY, MANUAL_STATE_POLICY, OVERVIEW_REPORT_POLICY)
-        and entry["root"] == DATA_ROOT_NAME
-        and entry["path"] in {"rules.yaml", "goals.yaml"}
-        else None,
+        _config_head_timestamp(capture, entry, policy),
         policy,
         fact_index,
     )
+
+
+def _config_head_timestamp(
+    capture: dict[str, Any], entry: dict[str, Any], policy: str
+) -> str | None:
+    if entry["root"] != DATA_ROOT_NAME or policy not in (
+        CONFIG_HEAD_POLICY,
+        MANUAL_STATE_POLICY,
+        OVERVIEW_REPORT_POLICY,
+        PORTFOLIO_CONFIG_POLICY,
+    ):
+        return None
+    paths = {"rules.yaml", "goals.yaml"}
+    if policy == PORTFOLIO_CONFIG_POLICY:
+        paths.update({"assets.yaml", "scenarios.yaml"})
+    return capture["capture"]["completed_at"] if entry["path"] in paths else None
 
 
 def capture_fact_index(
     root: Path, capture: dict[str, Any], *, policy: str
 ) -> tuple[tuple[str, str, str], ...]:
     """Index original mapped fact rows, including those with invalid typed values."""
-    if policy != OVERVIEW_REPORT_POLICY:
+    if policy not in (OVERVIEW_REPORT_POLICY, PORTFOLIO_CONFIG_POLICY):
         return ()
     result = []
     for entry in capture["entries"]:
@@ -150,12 +163,12 @@ def plan_migration(
     plan = seal(
         {
             "schema_version": PLAN_VERSION,
-            "migration_policy": OVERVIEW_REPORT_POLICY,
+            "migration_policy": PORTFOLIO_CONFIG_POLICY,
             "completion_marker": "planned",
             "capture_locator": Path(os.path.relpath(root, base)).as_posix(),
             "capture": capture,
             "source_inventory": before,
-            "inputs": analyze_capture(root, capture, policy=OVERVIEW_REPORT_POLICY),
+            "inputs": analyze_capture(root, capture, policy=PORTFOLIO_CONFIG_POLICY),
         }
     )
     verify_backup(location)
