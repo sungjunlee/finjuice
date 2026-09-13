@@ -567,8 +567,6 @@ def test_queries_and_snapshots_live_in_helper_modules() -> None:
 
 def test_query_as_of_without_active_share_surfaces_unknown_owner() -> None:
     """Ended shares must not keep a global asserted flag on that date."""
-    from finjuice.pipeline.accounts.errors import AccountsError
-
     registry = _seed_identities(AccountRegistry())
     registry.mark_baseline()
     registry.apply_changeset(
