@@ -269,8 +269,6 @@ def _compute_remove_rule(
             command=command,
         )
 
-    validation_result = validate_rules(existing_rules)
-
     try:
         remove_rule_roundtrip(name, config.rules_file)
     except KeyError:
@@ -307,6 +305,10 @@ def _compute_remove_rule(
         rule_name=name,
         change_summary="rule removed",
     )
+    # Validate the post-removal rule set so the reported state reflects what
+    # is actually on disk after the mutation.
+    remaining_rules = load_rules(config.rules_file)
+    validation_result = validate_rules(remaining_rules)
     return {
         "action": "removed",
         "rule_name": name,
