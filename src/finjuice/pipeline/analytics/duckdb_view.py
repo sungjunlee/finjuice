@@ -18,6 +18,7 @@ from finjuice.pipeline.analytics.duckdb_layer_helpers import (
     detect_analytics_dependencies,
 )
 from finjuice.pipeline.analytics.query_builder import build_report_filter_duckdb_where
+from finjuice.pipeline.analytics.transaction_frame_registration import register_transaction_frame
 from finjuice.pipeline.analytics.transactions_view_sql import build_transactions_source_sql
 from finjuice.pipeline.sql_utils import (
     quote_duckdb_identifier,
@@ -153,27 +154,7 @@ class DuckDBTransactionsView:
         """Register a stable Arrow relation sourced only from the verified repository."""
         assert self.repository_snapshot is not None
         frame = transaction_frame(self.repository_snapshot)
-        self.conn.register("_repository_transaction_rows", frame.to_arrow())
-        self.conn.execute(
-            "CREATE OR REPLACE VIEW transactions_raw AS "
-            f"SELECT {self._repository_projection()} FROM _repository_transaction_rows"
-        )
-        self.conn.execute(build_transactions_source_sql(self._view_columns("transactions_raw")))
-        sql = "CREATE OR REPLACE VIEW transactions AS SELECT * FROM transactions_source"
-        filter_where = build_report_filter_duckdb_where(self.report_filters)
-        if filter_where:
-            sql += f" WHERE NOT ({filter_where})"
-        self.conn.execute(sql)
-
-    def _repository_projection(self) -> str:
-        """Keep valid legacy date columns usable with DuckDB date functions."""
-        date_is_valid = self.conn.execute(
-            "SELECT count(date) > 0 AND count(date) = count(TRY_CAST(date AS DATE)) "
-            "FROM _repository_transaction_rows"
-        ).fetchone()[0]
-        if date_is_valid:
-            return "* REPLACE (CAST(date AS DATE) AS date)"
-        return "*"
+        register_transaction_frame(self.conn, frame, self.report_filters)
 
     def _validate_csv_schema(self, detected_columns: list[str]) -> None:
         """Validate detected CSV columns against the expected schema.

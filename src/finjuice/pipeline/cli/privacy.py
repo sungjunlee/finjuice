@@ -200,11 +200,9 @@ def _is_sensitive_key(key: str, *, path: tuple[str, ...]) -> bool:
         return True
     if "amount" in normalized:
         return True
-    if normalized in {"key", "name", "rule_name"} and any(
+    if normalized in {"key", "name", "rule_name", "notes"} and any(
         part in {"merchant_cluster", "rule", "rule_notes", "suggested_rule", "would_apply"}
         for part in path
     ):
-        return True
-    if normalized == "notes" and "rule_notes" in path:
         return True
     return False

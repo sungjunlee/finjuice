@@ -1249,7 +1249,7 @@ rules_suggest_schema = command_schema(
         "coverage_before_pct": number,
         "dry_run": boolean,
         "message": string,
-        "rules_file": string,
+        "rules_file": {"type": ["string", "null"]},
         "rules_file_modified": boolean,
         "skipped": integer,
         "suggestable_coverage_before_pct": number,

@@ -5609,7 +5609,7 @@ rules suggest --json output
 | `coverage_before_pct` | `number` | no |
 | `dry_run` | `boolean` | no |
 | `message` | `string` | no |
-| `rules_file` | `string` | no |
+| `rules_file` | `string` \| `null` | no |
 | `rules_file_modified` | `boolean` | no |
 | `skipped` | `integer` | no |
 | `suggestable_coverage_before_pct` | `number` | no |
@@ -5677,7 +5677,10 @@ rules suggest --json output
       "type": "string"
     },
     "rules_file": {
-      "type": "string"
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "rules_file_modified": {
       "type": "boolean"

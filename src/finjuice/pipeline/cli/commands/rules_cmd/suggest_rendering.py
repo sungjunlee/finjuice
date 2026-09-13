@@ -127,7 +127,7 @@ def _render_suggestion_context_table(
         console.print()
 
 
-def _render_apply_dry_run(suggestions: list[dict[str, Any]], rules_file: Path) -> None:
+def _render_apply_dry_run(suggestions: list[dict[str, Any]], rules_file: Path | None) -> None:
     """Show what would be added to rules.yaml without persisting changes."""
     import yaml
 
@@ -137,7 +137,10 @@ def _render_apply_dry_run(suggestions: list[dict[str, Any]], rules_file: Path) -
     )
 
     console.print()
-    console.print(f"[bold cyan]🔍 Dry Run[/bold cyan] [dim]Would update {rules_file}[/dim]")
+    destination = (
+        f"Would update {rules_file}" if rules_file is not None else "Canonical rule candidates"
+    )
+    console.print(f"[bold cyan]🔍 Dry Run[/bold cyan] [dim]{destination}[/dim]")
 
     if suggestions:
         _render_suggestion_context_table(suggestions, title="Dry-Run Merchant Context")
