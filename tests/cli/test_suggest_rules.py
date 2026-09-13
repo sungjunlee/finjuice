@@ -427,9 +427,41 @@ class TestSuggestRulesCommand:
         assert result.exit_code == 0
         assert mock_generate.call_args.kwargs["min_count"] == 5
 
-    @patch("finjuice.pipeline.cli.commands.rules.sys.stdin.isatty", return_value=False)
+    @patch("finjuice.pipeline.tagging.pipeline.run_tagging")
+    @patch("finjuice.pipeline.tagging.suggestions.apply_suggestion_to_rules")
     @patch("finjuice.pipeline.tagging.suggestions.get_suggestion_coverage_stats")
     @patch("finjuice.pipeline.tagging.suggestions.generate_merchant_context")
+    def test_apply_yes_screen_shows_visit_frequency(
+        self,
+        mock_generate,
+        mock_stats,
+        _mock_apply_rule,
+        _mock_run_tagging,
+        tmp_path: Path,
+    ) -> None:
+        """The --apply --yes screen shows distinct dates and avg rows per date."""
+        (tmp_path / "transactions").mkdir(parents=True)
+        mock_stats.return_value = {
+            "untagged_count": 2,
+            "total_count": 4,
+            "coverage_before_pct": 50.0,
+        }
+        suggestion = _sample_suggestion()
+        suggestion["distinct_dates"] = 1
+        suggestion["avg_rows_per_date"] = 5.0
+        mock_generate.return_value = [suggestion]
+        _mock_run_tagging.return_value = {"coverage_pct": 99.8}
+
+        result = runner.invoke(
+            app,
+            ["--data-dir", str(tmp_path), "rules", "suggest", "--apply", "--yes"],
+        )
+
+        clean_output = strip_ansi(result.output)
+        assert result.exit_code == 0
+        assert "고유일 1일" in clean_output
+        assert "일평균 5.0건" in clean_output
+
     def test_apply_requires_interactive_tty(
         self,
         mock_generate,

@@ -53,9 +53,11 @@ def _interactive_apply_suggestions(
         # Display suggestion
         typer.echo(f"[{i}/{len(suggestions)}] {suggestion['merchant']}")
         distinct_dates = int(suggestion.get("distinct_dates") or 0)
+        avg_rows = suggestion.get("avg_rows_per_date")
+        avg_display = f", 일평균 {float(avg_rows):.1f}건" if avg_rows is not None else ""
         typer.echo(
             f"     거래: {int(suggestion['transaction_count'])}건, "
-            f"고유일 {distinct_dates}일, "
+            f"고유일 {distinct_dates}일{avg_display}, "
             f"₩{float(suggestion['total_amount']):,.0f}"
         )
         typer.echo(f'     패턴: "{suggestion["pattern"]}"')

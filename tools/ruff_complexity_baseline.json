@@ -610,11 +610,11 @@
       "code": "PLR0915",
       "column": 5,
       "limit": 50,
-      "message": "`_interactive_apply_suggestions` has too many statements (88 > 50)",
+      "message": "`_interactive_apply_suggestions` has too many statements (90 > 50)",
       "path": "src/finjuice/pipeline/cli/commands/rules_cmd/suggest_apply.py",
       "row": 18,
       "symbol": "_interactive_apply_suggestions",
-      "value": 88
+      "value": 90
     },
     {
       "code": "PLR0913",

@@ -496,6 +496,8 @@ class TestJsonOutput:
                 "similar_merchants": [],
                 "pattern": "스타벅스|STARBUCKS",
                 "sample_memos": ["Latte"],
+                "distinct_dates": 4,
+                "avg_rows_per_date": 3.0,
             },
             {
                 "merchant": "Netflix",
@@ -529,6 +531,8 @@ class TestJsonOutput:
         )
 
         assert result.exit_code == 0
+        # --json suppresses the interactive screen; visit-frequency context
+        # lives in the suggestion payload itself.
         payload = json.loads(result.output)
         assert payload["applied"] == 2
         assert payload["skipped"] == 0
