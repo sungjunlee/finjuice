@@ -735,7 +735,8 @@ rules:
 """,
         )
 
-        # Act
+        # Act — update the match to overlap an existing rule so the
+        # filter must keep the problem involving unique_widget.
         result = runner.invoke(
             app,
             [
@@ -746,7 +747,7 @@ rules:
                 "--name",
                 "unique_widget",
                 "--match",
-                "UniqueWidgetXYZ",
+                "Starbucks Reserve",
                 "--tags",
                 "misc,tools",
                 "--json",
@@ -758,14 +759,17 @@ rules:
         payload = json.loads(result.output)
         assert payload["action"] == "updated"
         validation = payload["validation"]
-        assert validation["problems"] == []
-        assert validation["total_problems"] >= 1
+        # The updated rule overlaps coffee_specific/coffee_general, so its
+        # problems stay while unrelated pairs are filtered out.
+        assert len(validation["problems"]) >= 1
+        assert all("unique_widget" in problem["rules"] for problem in validation["problems"])
+        assert validation["total_problems"] > len(validation["problems"])
         assert validation["status"] == "issues"
-        for problem in validation["problems"]:
-            assert "unique_widget" in problem["rules"]
 
     def test_remove_rule_json_filters_unrelated_overlap_warnings(self, tmp_path: Path) -> None:
-        """rules remove --json should not flood problems with unrelated overlaps."""
+        """rules remove --json: the removed rule can never appear in remaining
+        problems, so problems is always empty and only total_problems carries
+        the full count. This pins that structural contract."""
         # Arrange
         data_dir = tmp_path / "data"
         _write_rules(
