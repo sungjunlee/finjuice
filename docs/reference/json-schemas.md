@@ -80,6 +80,9 @@ command/code/exit-code combinations against this schema.
 | `schemas/rules_test.schema.json` | rules test --json output | `rule_name`, `scope`, `match_count`, `sample`, `monthly_distribution`, `cross_tags_top` |
 | `schemas/rules_validate.schema.json` | rules validate --json output | `status`, `total_rules`, `errors`, `warnings`, `passed`, `problems` |
 | `schemas/show.schema.json` | show --json output | `rows`, `row_count`, `total_matches`, `pagination` |
+| `schemas/ssot_backup_create.schema.json` | ssot backup create --json output | `backup_id`, `backup_kind`, `database_digest`, `manifest_digest`, `source_generation`, `byte_count`, `dataset_revision`, `file_count`, `manifest_schema_version`, `complete`, `status`, `warnings` |
+| `schemas/ssot_backup_restore.schema.json` | ssot backup restore --json output | `restore_id`, `descriptor_digest`, `dataset_generation`, `initial_database_digest`, `source_manifest_digest`, `initial_dataset_revision`, `sqlite_schema_version` |
+| `schemas/ssot_backup_status.schema.json` | ssot backup status --json output | `byte_count`, `file_count`, `complete`, `reason`, `manifest_digest`, `source_generation` |
 | `schemas/ssot_migrate_build.schema.json` | ssot migrate build --json output | `status`, `phase`, `manifest_digest`, `input_count`, `cutover_ready`, `limitations`, `generation_status`, `attempt_id`, `origin_kind`, `dataset_revision`, `checks` |
 | `schemas/ssot_migrate_plan.schema.json` | ssot migrate plan --json output | `status`, `phase`, `manifest_digest`, `input_count`, `cutover_ready`, `limitations` |
 | `schemas/ssot_migrate_verify.schema.json` | ssot migrate verify --json output | `status`, `phase`, `manifest_digest`, `input_count`, `cutover_ready`, `limitations`, `generation_status`, `attempt_id`, `origin_kind`, `dataset_revision`, `checks` |
@@ -6374,6 +6377,226 @@ show --json output
     "pagination"
   ],
   "title": "show --json output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_backup_create.schema.json`
+
+ssot backup create --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `backup_id` | `string` | yes |
+| `backup_kind` | `string` | yes |
+| `byte_count` | `integer` | yes |
+| `complete` | `any` | yes |
+| `database_digest` | `string` | yes |
+| `dataset_revision` | `integer` | yes |
+| `file_count` | `integer` | yes |
+| `manifest_digest` | `string` | yes |
+| `manifest_schema_version` | `integer` | yes |
+| `source_generation` | `string` | yes |
+| `status` | `any` | yes |
+| `warnings` | `array`[`string`] | yes |
+
+```json
+{
+  "$id": "ssot_backup_create.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "backup_id": {
+      "type": "string"
+    },
+    "backup_kind": {
+      "type": "string"
+    },
+    "byte_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "complete": {
+      "const": true
+    },
+    "database_digest": {
+      "type": "string"
+    },
+    "dataset_revision": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "file_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "manifest_digest": {
+      "type": "string"
+    },
+    "manifest_schema_version": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "source_generation": {
+      "type": "string"
+    },
+    "status": {
+      "const": "complete"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "backup_id",
+    "backup_kind",
+    "database_digest",
+    "manifest_digest",
+    "source_generation",
+    "byte_count",
+    "dataset_revision",
+    "file_count",
+    "manifest_schema_version",
+    "complete",
+    "status",
+    "warnings"
+  ],
+  "title": "ssot backup create --json output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_backup_restore.schema.json`
+
+ssot backup restore --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `dataset_generation` | `string` | yes |
+| `descriptor_digest` | `string` | yes |
+| `initial_database_digest` | `string` | yes |
+| `initial_dataset_revision` | `integer` | yes |
+| `restore_id` | `string` | yes |
+| `source_manifest_digest` | `string` | yes |
+| `sqlite_schema_version` | `integer` | yes |
+
+```json
+{
+  "$id": "ssot_backup_restore.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "dataset_generation": {
+      "type": "string"
+    },
+    "descriptor_digest": {
+      "type": "string"
+    },
+    "initial_database_digest": {
+      "type": "string"
+    },
+    "initial_dataset_revision": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "restore_id": {
+      "type": "string"
+    },
+    "source_manifest_digest": {
+      "type": "string"
+    },
+    "sqlite_schema_version": {
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "_meta",
+    "restore_id",
+    "descriptor_digest",
+    "dataset_generation",
+    "initial_database_digest",
+    "source_manifest_digest",
+    "initial_dataset_revision",
+    "sqlite_schema_version"
+  ],
+  "title": "ssot backup restore --json output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_backup_status.schema.json`
+
+ssot backup status --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `byte_count` | `integer` | yes |
+| `complete` | `boolean` | yes |
+| `file_count` | `integer` | yes |
+| `manifest_digest` | `string` \| `null` | yes |
+| `reason` | `string` | yes |
+| `source_generation` | `string` \| `null` | yes |
+
+```json
+{
+  "$id": "ssot_backup_status.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "byte_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "complete": {
+      "type": "boolean"
+    },
+    "file_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "manifest_digest": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "reason": {
+      "type": "string"
+    },
+    "source_generation": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "_meta",
+    "byte_count",
+    "file_count",
+    "complete",
+    "reason",
+    "manifest_digest",
+    "source_generation"
+  ],
+  "title": "ssot backup status --json output",
   "type": "object"
 }
 ```

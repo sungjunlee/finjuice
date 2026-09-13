@@ -178,6 +178,7 @@ def generate_cli_docs() -> None:
         "init",
         "query",
         "template",
+        "ssot",
     ]
     group_subcommands: dict[str, list[str]] = {
         "automation": ["run"],
@@ -186,6 +187,7 @@ def generate_cli_docs() -> None:
         "assets": ["status", "show"],
         "networth": ["breakdown", "history", "forecast", "validate"],
         "template": ["run"],
+        "ssot": ["backup", "backup create", "backup restore", "backup status"],
     }
 
     output_path = ROOT / "docs/reference/cli.md"
@@ -228,7 +230,8 @@ finjuice --version
 
         for sub in group_subcommands.get(cmd, []):
             md += f"### `finjuice {cmd} {sub}`\n\n"
-            md += f"{_capture(runner, app, [cmd, sub, '--help'], label=f'{cmd} {sub}')}\n\n"
+            captured = _capture(runner, app, [cmd, *sub.split(), "--help"], label=f"{cmd} {sub}")
+            md += f"{captured}\n\n"
 
         if cmd == "template":
             md += _render_template_registry_reference()

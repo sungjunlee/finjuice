@@ -48,6 +48,7 @@ from finjuice.pipeline.cli.commands.reconcile_cmd import reconcile_command
 from finjuice.pipeline.cli.commands.refresh_cmd import refresh_command
 from finjuice.pipeline.cli.commands.review import review_command
 from finjuice.pipeline.cli.commands.rules import rules_app
+from finjuice.pipeline.cli.commands.sqlite_backup import ssot_backup_app
 from finjuice.pipeline.cli.commands.ssot_migrate import ssot_app
 from finjuice.pipeline.cli.commands.tag import tag_command
 from finjuice.pipeline.cli.commands.template_cmd import template_app
@@ -86,7 +87,9 @@ class FinjuiceGroup(TyperGroup):
     def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
         ctx.ensure_object(dict)
         ctx.obj["_raw_args"] = list(args)
-        return super().parse_args(ctx, args)
+        remaining = super().parse_args(ctx, args)
+        ctx.obj["_root_subcommand_args"] = list(remaining)
+        return remaining
 
 
 # Create Typer app
@@ -199,6 +202,7 @@ app.add_typer(networth_app, name="networth", rich_help_panel="Analysis")
 app.add_typer(budget_app, name="budget", rich_help_panel="Analysis")
 app.add_typer(journal_app, name="journal", rich_help_panel="Commands")
 app.add_typer(backup_app, name="backup", rich_help_panel="Admin")
+ssot_app.add_typer(ssot_backup_app, name="backup")
 app.add_typer(ssot_app, name="ssot", rich_help_panel="Admin")
 
 
@@ -292,7 +296,13 @@ def main(
     # Also check for resilient_parsing (used during completion/help)
     if help_requested or utility_without_data_dir_requested or ctx.resilient_parsing:
         ctx.obj["config"] = None
-        ctx.obj["active_data_dir"] = _resolve_active_data_dir(data_dir)
+        # SQLite backup commands resolve restore configuration inside their safe error boundary.
+        sqlite_backup_requested = ctx.invoked_subcommand == "ssot" and ctx.obj.get(
+            "_root_subcommand_args", []
+        )[:1] == ["backup"]
+        ctx.obj["active_data_dir"] = (
+            None if sqlite_backup_requested else _resolve_active_data_dir(data_dir)
+        )
         return
 
     # Create Config instance with specified data directory

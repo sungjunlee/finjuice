@@ -949,6 +949,99 @@ finjuice --version
 
 ---
 
+## `finjuice ssot`
+
+```
+
+ Usage: finjuice ssot [OPTIONS] COMMAND [ARGS]...
+
+ Manage inactive SQLite migration candidates.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ migrate   Plan, build, and verify preservation migrations.                                                           │
+│ backup    Create, restore, and inspect a SQLite generation backup.                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup`
+
+```
+
+ Usage: finjuice ssot backup [OPTIONS] COMMAND [ARGS]...
+
+ Create, restore, and inspect a SQLite generation backup.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ create    Capture one SQLite generation snapshot and its referenced artifacts.                                       │
+│ restore   Restore a verified SQLite backup into an inactive isolated directory.                                      │
+│ status    Report whether one SQLite backup directory is an intact local snapshot.                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup create`
+
+```
+
+ Usage: finjuice ssot backup create [OPTIONS]
+
+ Capture one SQLite generation snapshot and its referenced artifacts.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --source        PATH  Published generation root or database. [required]                                           │
+│ *  --output        PATH  Backup directory to publish. [required]                                                     │
+│    --json                Output as JSON                                                                              │
+│    --help                Show this message and exit.                                                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup restore`
+
+```
+
+ Usage: finjuice ssot backup restore [OPTIONS] BACKUP
+
+ Restore a verified SQLite backup into an inactive isolated directory.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    backup      PATH  Backup directory or current attempt. [required]                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --target        PATH  Fresh isolated workspace directory; parent must exist. [required]                           │
+│    --json                Output as JSON                                                                              │
+│    --help                Show this message and exit.                                                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup status`
+
+```
+
+ Usage: finjuice ssot backup status [OPTIONS] BACKUP
+
+ Report whether one SQLite backup directory is an intact local snapshot.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    backup      PATH  Backup directory to inspect. [required]                                                       │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json          Output as JSON                                                                                       │
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+---
+
 ## Quick Start (Status-First CLI)
 
 **For new users** - Start with the default status view, then run direct commands:

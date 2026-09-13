@@ -21,6 +21,9 @@ SCHEMAS_DIR = REPO_ROOT / "schemas"
 runner = CliRunner()
 
 CATALOGUED_COMMANDS = [
+    ("ssot backup create", [], "ssot_backup_create.schema.json"),
+    ("ssot backup restore", [], "ssot_backup_restore.schema.json"),
+    ("ssot backup status", [], "ssot_backup_status.schema.json"),
     ("ssot migrate plan", [], "ssot_migrate_plan.schema.json"),
     ("ssot migrate build", [], "ssot_migrate_build.schema.json"),
     ("ssot migrate verify", [], "ssot_migrate_verify.schema.json"),
@@ -482,6 +485,38 @@ def _materialize_migration_catalog_args(schema_data_dir: Path, label: str) -> li
     return ["ssot", "migrate", "verify", "--candidate", str(candidate), "--json"]
 
 
+def _materialize_sqlite_backup_catalog_args(schema_data_dir: Path, label: str) -> list[str]:
+    """Prepare an actual snapshot for the SQLite backup command catalog."""
+    from finjuice.pipeline.storage.sqlite.backup import create_backup
+    from tests.pipeline.test_sqlite_backup import _build_generation
+
+    source = _build_generation(schema_data_dir.parent / "schema-generation")
+    backup = schema_data_dir.parent / "sqlite-backup"
+    if label == "ssot backup create":
+        return [
+            "ssot",
+            "backup",
+            "create",
+            "--source",
+            str(source.database),
+            "--output",
+            str(backup),
+            "--json",
+        ]
+    create_backup(source.database, backup)
+    if label == "ssot backup status":
+        return ["ssot", "backup", "status", str(backup), "--json"]
+    return [
+        "ssot",
+        "backup",
+        "restore",
+        str(backup),
+        "--target",
+        str(schema_data_dir.parent / "sqlite-restored"),
+        "--json",
+    ]
+
+
 @pytest.mark.parametrize(("label", "cmd_args", "schema_file"), CATALOGUED_COMMANDS)
 def test_command_output_validates_against_schema(
     schema_data_dir: Path,
@@ -492,6 +527,8 @@ def test_command_output_validates_against_schema(
     """Actual Typer CLI --json output should validate against its artifact."""
     if label.startswith("backup "):
         cmd_args = _materialize_backup_catalog_args(schema_data_dir, label)
+    if label.startswith("ssot backup "):
+        cmd_args = _materialize_sqlite_backup_catalog_args(schema_data_dir, label)
     if label.startswith("ssot migrate "):
         cmd_args = _materialize_migration_catalog_args(schema_data_dir, label)
     if label == "export-verify":
