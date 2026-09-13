@@ -86,6 +86,19 @@ def test_gaps_human_output_report_matches_legacy(tmp_path):
     assert displayed.exit_code == 0, displayed.output
     assert report in displayed.output
     assert "Repository revision 0" in new.output
+    assert "finjuice rules add --help" in new.output
+    assert "suggest --apply" not in new.output
+    assert "suggest --apply" in old.output
+
+
+def test_gaps_refuses_to_overwrite_active_inputs(tmp_path):
+    root = _activate(_gaps_source(tmp_path), tmp_path)
+    target = root.root / "rules.yaml"
+    target.write_bytes(b"PRIVATE_ORIGINAL")
+    result = _invoke(root, "--output", str(target), human=True)
+    assert result.exit_code != 0
+    assert "PRIVATE_ORIGINAL" not in result.output
+    assert target.read_bytes() == b"PRIVATE_ORIGINAL"
 
 
 @pytest.mark.parametrize("human", [True, False])

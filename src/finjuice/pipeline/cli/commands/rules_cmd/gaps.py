@@ -20,6 +20,8 @@ from finjuice.pipeline.analysis_source import (
 )
 from finjuice.pipeline.cli.output import ErrorCode, emit, emit_error, info
 from finjuice.pipeline.cli.utils import get_activation_evidence_provider, get_config
+from finjuice.pipeline.config import Config
+from finjuice.pipeline.export.canonical_output import write_canonical_output
 
 from .gaps_json import (
     _assemble_rules_gaps_json,
@@ -159,8 +161,10 @@ def analyze_gaps_command(
 
         report = _with_canonical_header(report, metadata)
 
-        _save_or_display_report(report, output)
-        _render_gap_next_steps(total_critical, total_mismatch, top_n)
+        _save_or_display_report(report, output, config=config if snapshot is not None else None)
+        _render_gap_next_steps(
+            total_critical, total_mismatch, top_n, canonical=snapshot is not None
+        )
 
     except typer.Exit:
         raise
@@ -203,13 +207,24 @@ def _canonical_gap_results(
     return gaps, simulations, analysis_metadata(snapshot, "legacy_rules_gaps.v1")
 
 
-def _save_or_display_report(report: str, output: Path | None) -> None:
+def _save_or_display_report(
+    report: str, output: Path | None, *, config: Config | None = None
+) -> None:
     """Preserve the existing report destination and write-error behavior."""
     if output:
         try:
-            output.parent.mkdir(parents=True, exist_ok=True)
-            output.write_text(report, encoding="utf-8")
+            if config is not None:
+                write_canonical_output(config, output, report.encode("utf-8"))
+            else:
+                output.parent.mkdir(parents=True, exist_ok=True)
+                output.write_text(report, encoding="utf-8")
             typer.echo(f"✅ {output}에 저장되었습니다.")
+        except ValueError:
+            emit_error(
+                "Canonical gap report could not be saved safely.",
+                error_code=ErrorCode.FILE_ACCESS_ERROR,
+                command="rules gaps",
+            )
         except OSError as e:
             typer.echo(f"❌ 파일 저장 실패: {e}", err=True)
             raise typer.Exit(code=1)
@@ -218,13 +233,18 @@ def _save_or_display_report(report: str, output: Path | None) -> None:
         typer.echo(report)
 
 
-def _render_gap_next_steps(total_critical: int, total_mismatch: int, top_n: int) -> None:
+def _render_gap_next_steps(
+    total_critical: int, total_mismatch: int, top_n: int, *, canonical: bool = False
+) -> None:
     """Render the existing priority-based follow-up hints."""
     # Summary and next steps
     typer.echo("")
     typer.echo("─" * 40)
     if total_critical > 0:
-        typer.echo(f"💡 다음 단계: finjuice rules suggest --apply --top {min(top_n, 10)}")
+        if canonical:
+            typer.echo("💡 다음 단계: finjuice rules add --help 로 규칙 추가 방법을 확인하세요")
+        else:
+            typer.echo(f"💡 다음 단계: finjuice rules suggest --apply --top {min(top_n, 10)}")
     elif total_mismatch > 0:
         typer.echo("💡 다음 단계: 뱅크샐러드 앱에서 카테고리를 조정하세요")
         typer.echo("   finjuice rules export --format banksalad 로 가이드 확인")

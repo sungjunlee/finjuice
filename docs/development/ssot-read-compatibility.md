@@ -468,3 +468,32 @@ Canonical output breaks equal-count merchant ties by name; the legacy file wrapp
 its existing order. Saved canonical reports include generation, revision and policy. This
 stable ordering makes repeat reports from one revision deterministic without changing the
 classification or arithmetic. Failed incomplete reads do not publish a report.
+
+### Canonical rules list and export
+
+`rules list` and `rules export` select rules and their original bytes from one
+repository snapshot. They do not require a complete transaction projection or
+evaluate rules. The existing six-field JSON/list projection and guide formatters
+remain unchanged; a selected configuration must be marked parsed and satisfy the
+rule schema. Execution-specific regex validation remains in `rules validate`.
+
+The `legacy_rules_export.v1` metadata identifies the dataset generation, revision,
+and rules revision. Human output also identifies the repository revision. YAML
+files preserve the captured bytes, including comments, scalar spelling and line
+endings. They do not receive an embedded metadata header. A standalone copied
+file has no receipt-based freshness proof; JSON/human provenance is not a claim
+that standalone artifact verification is complete.
+
+Existing empty-rule and JSON option behavior remains: human empty exports do not
+write a file, and JSON ignores the human format/output options. Active nonempty
+human exports and gap reports use atomic output replacement. Destinations in the
+configured control/generation, imports, transactions, metadata, assets and
+Banksalad input directories, or the four configuration files, are rejected,
+including resolved symlink aliases and relocated authority/generation roots.
+Reserved-path comparison ignores case and Unicode normalization differences on
+all filesystems, including case-sensitive ones. A hardlinked output is replaced without
+editing its original inode. Normal external paths and the exports directory
+remain available. Legacy file-authority behavior is unchanged.
+
+Canonical gap guidance points to `rules add --help`; it no longer recommends the
+active-fenced `rules suggest --apply` command.
