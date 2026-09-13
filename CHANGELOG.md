@@ -12,6 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 User-facing PRs add a bullet here (`Added` / `Changed` / `Fixed` / `Removed`).
 Release prep moves these bullets into `## [X.Y.Z]`. Refactor-only PRs skip this.
 
+### Changed
+- `rules suggest`가 easy-pay 브랜드(네이버페이·카카오페이·토스페이 등)를
+  `skip_rule`로 분류하고, 마스킹(`*****`)·일반 원장 라벨(송금 내역 등)을
+  규칙 후보에서 제외한다. 브랜드명 뒤 가맹점 상세가 이어지는 형태는
+  계속 규칙 후보로 남는다.
+
+### Added
+- 카드 명세서 잘림으로 갈라진 상호명을 `truncated_merchant_prefix`
+  클러스터로 병합하고, 제안에 병합 사유를 표시한다.
+
 ---
 
 ## [0.8.2] - 2026-09-13

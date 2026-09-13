@@ -72,4 +72,31 @@ def test_classify_keeps_ordinary_merchants_as_create_rule() -> None:
     assert classify_merchant_kind("롯데마트") == expected
     assert classify_merchant_kind("KCPARK CAFE") == expected
     assert classify_merchant_kind("Netflix") == expected
+    # Easy-pay brand names embedded in a real merchant label must NOT
+    # trigger the payment-gateway skip (regression guard for the
+    # prefix-boundary fix).
+    assert classify_merchant_kind("카카오페이지") == expected
+    assert classify_merchant_kind("네이버페이지") == expected
+    assert classify_merchant_kind("네이버페이지 웹툰") == expected
+    assert classify_merchant_kind("KAKAOPAYMENT") == expected
     assert is_auto_apply_eligible(expected) is True
+
+
+def test_classify_easy_pay_brand_with_store_detail_is_skipped() -> None:
+    """A bare easy-pay brand, or brand + store detail, is still skipped."""
+    skipped = {
+        "merchant_kind": "payment_gateway",
+        "default_action": "skip_rule",
+    }
+
+    for merchant in (
+        "네이버페이",
+        "카카오페이",
+        "네이버페이 파리바게뜨",
+        "카카오페이 교통",
+        "스마일페이 지마켓",
+    ):
+        result = classify_merchant_kind(merchant)
+        assert result["merchant_kind"] == skipped["merchant_kind"], merchant
+        assert result["default_action"] == skipped["default_action"], merchant
+        assert is_auto_apply_eligible(result) is False
