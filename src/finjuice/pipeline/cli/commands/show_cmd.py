@@ -62,6 +62,49 @@ def _load_all_partitions(csv_base_dir: Path) -> tuple[Optional[pl.DataFrame], in
     return get_all_transactions(csv_base_dir), len(partitions)
 
 
+def _load_sqlite_month(database: Path, year: int, month: int) -> Optional[pl.DataFrame]:
+    """Load one month from the SQLite repository read adapter.
+
+    Returns ``None`` when the repository holds no rows for that month, which
+    matches the CSV behavior for a missing partition. (A CSV partition that
+    exists but is empty still renders an empty table; the repository has no
+    empty-month equivalent.)
+    """
+    from finjuice.pipeline.storage.sqlite.read_compat import read_month_frame
+
+    df = read_month_frame(database, year, month)
+    return None if df.is_empty() else df
+
+
+def _load_sqlite_all(database: Path) -> tuple[Optional[pl.DataFrame], int]:
+    """Load every transaction from the SQLite repository read adapter."""
+    from finjuice.pipeline.storage.sqlite.read_compat import (
+        distinct_month_count,
+        read_transactions_frame,
+    )
+
+    df = read_transactions_frame(database)
+    if df.is_empty():
+        return None, 0
+    return df, distinct_month_count(df)
+
+
+def _load_sqlite_latest_month(database: Path) -> tuple[Optional[pl.DataFrame], Optional[str]]:
+    """Load the newest month from the SQLite repository read adapter."""
+    from finjuice.pipeline.storage.sqlite.read_compat import (
+        filter_month_frame,
+        latest_month_label,
+        read_transactions_frame,
+    )
+
+    df = read_transactions_frame(database)
+    month_label = latest_month_label(df)
+    if month_label is None:
+        return None, None
+    year_int, mon_int = (int(part) for part in month_label.split("-"))
+    return filter_month_frame(df, year_int, mon_int), month_label
+
+
 def show_command(
     ctx: typer.Context,
     month: Optional[str] = typer.Option(None, "--month", help="Filter by month (YYYY-MM)"),
@@ -131,7 +174,12 @@ def show_command(
     )
 
     try:
-        # Load data
+        # Load data. When FINJUICE_SQLITE_GENERATION configures a published
+        # repository, reads go through the SQLite read adapter (#436); the
+        # frame contract is identical to the CSV partition read path.
+        from finjuice.pipeline.storage.sqlite.read_compat import resolve_generation_database
+
+        sqlite_database = resolve_generation_database()
         df: Optional[pl.DataFrame]
         filters_applied = 0
         scope_hint = ""
@@ -140,8 +188,17 @@ def show_command(
             # Specific month
             year_str, mon_str = month.split("-")
             year_int, mon_int = int(year_str), int(mon_str)
-            csv_path = config.csv_base_dir / year_str / mon_str / "transactions.csv"
-            if not csv_path.exists():
+            if sqlite_database is not None:
+                df = _load_sqlite_month(sqlite_database, year_int, mon_int)
+            else:
+                csv_path = config.csv_base_dir / year_str / mon_str / "transactions.csv"
+                if not csv_path.exists():
+                    df = None
+                else:
+                    from finjuice.pipeline.storage.csv_transactions import read_month
+
+                    df = read_month(config.csv_base_dir, year_int, mon_int)
+            if df is None:
                 emit_error(
                     f"No data for {month}",
                     error_code=ErrorCode.NO_DATA,
@@ -149,14 +206,14 @@ def show_command(
                     json_output=json_output,
                     command="show",
                 )
-            from finjuice.pipeline.storage.csv_transactions import read_month
-
-            df = read_month(config.csv_base_dir, year_int, mon_int)
             table_title = f"Transactions ({month})"
         else:
             search_all_partitions = untagged or tag is not None or merchant is not None
             if search_all_partitions:
-                df, partition_count = _load_all_partitions(config.csv_base_dir)
+                if sqlite_database is not None:
+                    df, partition_count = _load_sqlite_all(sqlite_database)
+                else:
+                    df, partition_count = _load_all_partitions(config.csv_base_dir)
                 if df is None:
                     emit_error(
                         "No transaction data found",
@@ -169,7 +226,10 @@ def show_command(
                 scope_hint = f" across {partition_count} {partition_word}"
             else:
                 # Latest month
-                df, month_label = _load_latest_month(config.csv_base_dir)
+                if sqlite_database is not None:
+                    df, month_label = _load_sqlite_latest_month(sqlite_database)
+                else:
+                    df, month_label = _load_latest_month(config.csv_base_dir)
                 if df is None:
                     emit_error(
                         "No transaction data found",

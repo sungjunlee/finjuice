@@ -31,12 +31,14 @@ from finjuice.pipeline.tagging.rules_yaml_io import load_report_filters
 
 from .compute_metrics import (
     _collect_transaction_metrics,
+    _metrics_from_frames,
     _TransactionMetrics,  # noqa: F401 — re-exported for existing compute imports
 )
 from .compute_partitions import (
     _transaction_partitions_or_raise,
     _validated_partitions,  # noqa: F401 — re-exported for existing compute imports
 )
+from .compute_sqlite import load_sqlite_status_inputs
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +112,10 @@ class StatusCommandError(Exception):
 
 def collect_status_facts(options: StatusOptions) -> StatusFacts:
     """Collect status facts without deciding severity or rendering output."""
+    database = _resolve_sqlite_database_or_raise()
+    if database is not None:
+        return _collect_sqlite_status_facts(options, database)
+
     data_dir = options.config.data_dir
     partitions = _transaction_partitions_or_raise(data_dir)
     schema_summary = summarize_partition_schema_versions(
@@ -124,6 +130,93 @@ def collect_status_facts(options: StatusOptions) -> StatusFacts:
         report_filter_expr,
         top_n=options.top_n,
     )
+    return _assemble_status_facts(
+        options,
+        metrics=metrics,
+        report_filters=report_filters,
+        schema_summary=schema_summary,
+        partition_count=len(partitions),
+    )
+
+
+def _resolve_sqlite_database_or_raise() -> Path | None:
+    """Return the configured SQLite read source as a consistent status error."""
+    from finjuice.pipeline.storage.sqlite.read_compat import (
+        SqliteReadSourceError,
+        resolve_generation_database,
+    )
+
+    try:
+        return resolve_generation_database()
+    except SqliteReadSourceError as exc:
+        raise StatusCommandError(
+            str(exc),
+            error_code=ErrorCode.GENERAL_ERROR,
+            exit_code=ExitCode.GENERAL_ERROR,
+            suggestion=None,
+        ) from exc
+
+
+def _collect_sqlite_status_facts(options: StatusOptions, database: Path) -> StatusFacts:
+    """Collect status facts from the authoritative SQLite repository (#436).
+
+    Mirrors the CSV partition flow: same no-data errors, same report-filter
+    semantics, and the same fact assembly, so human and JSON output contracts
+    are unchanged for the same data.
+    """
+    from finjuice.pipeline.storage.sqlite.errors import SQLiteStorageError
+
+    data_dir = options.config.data_dir
+    if not data_dir.exists():
+        raise StatusCommandError(
+            "Data directory not initialized. Run 'finjuice init' first.",
+            error_code=ErrorCode.DATA_DIR_NOT_INITIALIZED,
+            exit_code=ExitCode.USAGE_ERROR,
+            suggestion="finjuice init",
+        )
+    try:
+        inputs = load_sqlite_status_inputs(database, metadata_dir=data_dir / "metadata")
+    except (SQLiteStorageError, OSError) as exc:
+        raise StatusCommandError(
+            f"Failed to read the SQLite repository: {exc}",
+            error_code=ErrorCode.GENERAL_ERROR,
+            exit_code=ExitCode.GENERAL_ERROR,
+            suggestion=None,
+        ) from exc
+    if inputs.frame.is_empty():
+        raise StatusCommandError(
+            "No transactions found in the SQLite repository. Run 'finjuice ingest' first.",
+            error_code=ErrorCode.NO_DATA,
+            exit_code=ExitCode.NO_DATA,
+            suggestion="finjuice ingest",
+        )
+    report_filters = _load_status_report_filters(options)
+    report_filter_expr = build_report_filter_polars_expr(report_filters)
+    metrics = _metrics_from_frames(
+        [inputs.frame],
+        report_filters,
+        report_filter_expr,
+        top_n=options.top_n,
+    )
+    return _assemble_status_facts(
+        options,
+        metrics=metrics,
+        report_filters=report_filters,
+        schema_summary=inputs.schema_summary,
+        partition_count=inputs.partition_count,
+    )
+
+
+def _assemble_status_facts(
+    options: StatusOptions,
+    *,
+    metrics: _TransactionMetrics,
+    report_filters: ReportFilters,
+    schema_summary: PartitionSchemaSummary,
+    partition_count: int,
+) -> StatusFacts:
+    """Assemble status facts shared by the CSV and SQLite read paths."""
+    data_dir = options.config.data_dir
     last_import_date, last_import_file = _read_last_import(data_dir)
     rules_path = options.config.rules_file
     rules_exists = rules_path.exists()
@@ -147,6 +240,8 @@ def collect_status_facts(options: StatusOptions) -> StatusFacts:
     detailed_stats: dict[str, Any] | None = None
     detailed_stats_warning = None
     if options.detailed:
+        # TODO(#436 follow-up): the detailed insights snapshot still reads CSV
+        # partitions; wiring it to SQLite reads is a later slice.
         snapshot_result = collect_status_snapshot(
             options.config,
             top_n=options.top_n,
@@ -163,7 +258,7 @@ def collect_status_facts(options: StatusOptions) -> StatusFacts:
         total_rows=metrics.total_rows,
         min_date=metrics.min_date,
         max_date=metrics.max_date,
-        partition_count=len(partitions),
+        partition_count=partition_count,
         schema_summary=schema_summary,
         last_import_date=last_import_date,
         last_import_file=last_import_file,
