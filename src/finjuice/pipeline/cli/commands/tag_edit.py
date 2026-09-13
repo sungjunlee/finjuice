@@ -40,8 +40,7 @@ def _validate_edit_row_hash(row_hash: str) -> None:
     """Raise ValueError when ``row_hash`` is not a 16-character hex digest."""
     if not _ROW_HASH_PATTERN.fullmatch(row_hash):
         raise ValueError(
-            f"Invalid --edit value: expected a {HASH_LENGTH_CHARS}-character "
-            "hexadecimal row_hash."
+            f"Invalid --edit value: expected a {HASH_LENGTH_CHARS}-character hexadecimal row_hash."
         )
 
 
