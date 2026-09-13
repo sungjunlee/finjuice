@@ -28,12 +28,13 @@ Per-rule schema validation lives in
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from finjuice.pipeline.tagging.models import ReportFilters
+from finjuice.pipeline.tagging.models import ReportFilters, TagRule
 from finjuice.pipeline.tagging.rules_yaml_append import (
     append_rule,  # noqa: F401 — re-exported public YAML API
 )
@@ -61,8 +62,16 @@ def summarize_rule_notes(rules_path: Path, *, limit: int = 10) -> list[dict[str,
     if limit <= 0:
         return []
 
+    return rule_notes_from_rules(load_rules(rules_path), limit=limit)
+
+
+def rule_notes_from_rules(rules: Iterable[TagRule], *, limit: int = 10) -> list[dict[str, Any]]:
+    """Project enabled nonempty notes in the supplied rules' existing order."""
+    if limit <= 0:
+        return []
+
     summaries: list[dict[str, Any]] = []
-    for rule in load_rules(rules_path):
+    for rule in rules:
         notes = rule.notes.strip()
         if not rule.enabled or not notes:
             continue

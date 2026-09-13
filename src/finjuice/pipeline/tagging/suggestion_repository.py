@@ -8,7 +8,6 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-import duckdb
 import polars as pl
 
 from finjuice.pipeline.analysis_source import (
@@ -81,6 +80,8 @@ def suggestions_from_frame(
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Reuse existing SQL/scoring on trusted detached inputs for composition callers."""
     patterns, names = existing_rule_context(rules)
+    import duckdb
+
     with duckdb.connect(":memory:") as connection:
         register_transaction_frame(connection, frame, ReportFilters())
         stats = _augment_suggestion_stats(

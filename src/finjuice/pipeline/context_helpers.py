@@ -9,8 +9,10 @@ existing callers.
 from __future__ import annotations
 
 import logging
+import math
+from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
@@ -23,6 +25,9 @@ from finjuice.pipeline.goals import (
 )
 from finjuice.pipeline.journal import load_journal_entries
 from finjuice.pipeline.tagging.rules_yaml_io import load_report_filters, summarize_rule_notes
+
+if TYPE_CHECKING:
+    from duckdb import DuckDBPyConnection
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +53,7 @@ def _serialize_journal_entry(path: Path) -> dict[str, Any]:
     created = front_matter.get("created")
     data_range = front_matter.get("data_range")
 
-    return {
+    entry = {
         "path": str(path.resolve()),
         "filename": path.name,
         "topic": str(front_matter.get("topic") or path.stem),
@@ -57,6 +62,41 @@ def _serialize_journal_entry(path: Path) -> dict[str, Any]:
         "snapshot": snapshot,
         "summary_200": summary,
     }
+    metadata = _historical_snapshot_metadata(front_matter.get("snapshot_metadata"))
+    if metadata:
+        entry["snapshot_metadata"] = metadata
+        entry["snapshot_metadata_basis"] = "historical_journal_observation"
+    return entry
+
+
+def _historical_snapshot_metadata(value: Any) -> dict[str, Any]:
+    """Retain known historical provenance fields without asserting current authority."""
+    if not isinstance(value, dict):
+        return {}
+    result: dict[str, Any] = {}
+    for key in (
+        "authority",
+        "dataset_generation",
+        "calculation_policy",
+        "calculation_as_of",
+        "calculation_month",
+        "calculation_basis",
+        "data_range_basis",
+        "numeric_policy",
+        "rules_revision_id",
+        "goals_revision_id",
+        "goals_state",
+        "active_goals_state",
+    ):
+        if key in value and (value[key] is None or isinstance(value[key], str)):
+            result[key] = value[key]
+    for key in ("dataset_revision", "sqlite_schema_version"):
+        if key in value and (value[key] is None or (type(value[key]) is int and value[key] >= 0)):
+            result[key] = value[key]
+    fields = value.get("unavailable_fields")
+    if isinstance(fields, list) and all(isinstance(field, str) for field in fields):
+        result["unavailable_fields"] = list(fields)
+    return result
 
 
 def _split_front_matter(raw_text: str) -> tuple[dict[str, Any], str]:
@@ -86,6 +126,11 @@ def _load_goals_context(data_dir: Path) -> dict[str, Any]:
         logger.warning("Skipping goals.yaml due to parse error: %s", exc)
         return {"active_goals": [], "financial_metadata": {}}
 
+    return goals_context_from_payload(payload)
+
+
+def goals_context_from_payload(payload: Any) -> dict[str, Any]:
+    """Project already parsed goals using the existing compact display semantics."""
     return {
         "active_goals": summarize_active_goals_payload(payload),
         "financial_metadata": summarize_financial_metadata_payload(payload),
@@ -105,9 +150,7 @@ def _load_top_patterns(config: Config) -> list[dict[str, Any]]:
     duckdb_logger.setLevel(logging.WARNING)
     try:
         with DuckDBAnalytics(config.data_dir, report_filters=report_filters) as analytics:
-            rows = analytics.conn.execute(
-                build_recent_spend_movers_query(top_n=DEFAULT_TOP_PATTERN_LIMIT)
-            ).fetchall()
+            rows = _query_top_pattern_rows(analytics.conn, limit=DEFAULT_TOP_PATTERN_LIMIT)
     except ImportError as exc:
         if str(exc) != DUCKDB_INSTALL_HINT:
             logger.warning("Context top_patterns unavailable: %s", exc)
@@ -120,6 +163,27 @@ def _load_top_patterns(config: Config) -> list[dict[str, Any]]:
     finally:
         duckdb_logger.setLevel(previous_duckdb_level)
 
+    return _top_patterns_from_rows(rows)
+
+
+def top_patterns_from_connection(
+    conn: DuckDBPyConnection, *, limit: int = DEFAULT_TOP_PATTERN_LIMIT
+) -> list[dict[str, Any]]:
+    """Query a caller-owned registered view without reading or closing its source.
+
+    The caller supplies the scoped, filtered transactions view and owns connection
+    cleanup. Query and numeric failures propagate; an empty result means no rows.
+    """
+    rows = _query_top_pattern_rows(conn, limit=limit)
+    require_finite_context_values(rows)
+    return _top_patterns_from_rows(rows)
+
+
+def _query_top_pattern_rows(conn: DuckDBPyConnection, *, limit: int) -> list[tuple[Any, ...]]:
+    return conn.execute(build_recent_spend_movers_query(top_n=limit)).fetchall()
+
+
+def _top_patterns_from_rows(rows: list[tuple[Any, ...]]) -> list[dict[str, Any]]:
     patterns: list[dict[str, Any]] = []
     for label, delta_krw, direction in rows:
         patterns.append(
@@ -139,3 +203,17 @@ def _load_rule_notes(rules_file: Path) -> list[dict[str, Any]]:
     except (OSError, ValueError) as exc:
         logger.warning("Skipping context rule_notes due to rules error: %s", exc)
         return []
+
+
+def require_finite_context_values(value: Any) -> None:
+    """Reject nonfinite context values without importing optional analytics engines."""
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError("Context calculations must be finite.")
+    if isinstance(value, Decimal) and not value.is_finite():
+        raise ValueError("Context calculations must be finite.")
+    if isinstance(value, dict):
+        for item in value.values():
+            require_finite_context_values(item)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            require_finite_context_values(item)

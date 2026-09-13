@@ -2245,12 +2245,12 @@ context --json output
 | Field | Type | Required |
 |-------|------|----------|
 | `_meta` | `$ref` _meta.schema.json | yes |
-| `active_goals` | `array`[`any`] | yes |
-| `financial_metadata` | `object` | yes |
+| `active_goals` | `array` \| `null` | yes |
+| `financial_metadata` | `object` \| `null` | yes |
 | `journals` | `array`[`object`] | yes |
 | `rule_notes` | `array`[`object`] | yes |
 | `status_snapshot` | `object` | yes |
-| `top_patterns` | `array`[`object`] | yes |
+| `top_patterns` | `array` \| `null` | yes |
 
 ```json
 {
@@ -2263,11 +2263,17 @@ context --json output
     },
     "active_goals": {
       "items": {},
-      "type": "array"
+      "type": [
+        "array",
+        "null"
+      ]
     },
     "financial_metadata": {
       "additionalProperties": true,
-      "type": "object"
+      "type": [
+        "object",
+        "null"
+      ]
     },
     "journals": {
       "items": {
@@ -2294,6 +2300,15 @@ context --json output
           "snapshot": {
             "additionalProperties": true,
             "type": "object"
+          },
+          "snapshot_metadata": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "snapshot_metadata_basis": {
+            "enum": [
+              "historical_journal_observation"
+            ]
           },
           "summary_200": {
             "type": "string"
@@ -2369,7 +2384,10 @@ context --json output
         ],
         "type": "object"
       },
-      "type": "array"
+      "type": [
+        "array",
+        "null"
+      ]
     }
   },
   "required": [

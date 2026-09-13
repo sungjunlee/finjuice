@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-import duckdb
 import polars as pl
 
 from finjuice.pipeline.analysis_source import analysis_frame, analysis_metadata
@@ -142,6 +141,8 @@ def _large_transactions(
 ) -> LargeTransactionSignal:
     if options.large_transaction_threshold == 0:
         return LargeTransactionSignal("clear", 0, 0, [])
+    import duckdb
+
     with duckdb.connect(":memory:") as connection:
         register_transaction_frame(connection, frame, ReportFilters())
         return large_transactions_from_connection(

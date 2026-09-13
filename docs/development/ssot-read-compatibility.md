@@ -642,3 +642,42 @@ distinguished from an unactivated root by this consumer; operational mode/bindin
 protection remains a cutover acceptance concern, not a claim of this adapter. Shared
 read coordination may create its control lock; financial and evidence files stay
 unchanged.
+
+## Context bundles
+
+`context` composes current financial sections from one detached analysis revision
+and one projected frame under `legacy_context_snapshot.v1`. Status summaries,
+actual active-goal labels, compact financial metadata, rule notes and category
+spend movers use the selected canonical inputs. Live CSV/YAML files do not replace
+missing or invalid canonical evidence. Incomplete primary transaction materialization
+or invalid selected rules/filters fails the financial read with a static error.
+
+Valid goals retain the existing summaries. Proven absent goals yield empty summaries;
+invalid or unselected goals yield null top-level and nested goal/financial metadata
+and six dependent savings fields, with static warnings. Ordinary income/expense
+summaries remain available. Human output distinguishes unavailable sections from
+verified empty sections and identifies the repository revision.
+
+Spend movers use the existing category-level recent/prior 30-day SQL over the same
+frame, applying report filters and transfer exclusion. Their date basis is the latest
+included expense date, not the wall clock or the status section's full date range.
+Missing optional DuckDB makes only `top_patterns` unavailable (null). Query errors,
+nonfinite values and failures after import fail the canonical calculation instead
+of being reported as an empty pattern list. Connections close on success or failure.
+Automation and rule suggestions defer their DuckDB imports until calculation, so
+a fresh CLI process can also reach context when the optional engine is unavailable.
+Those consumers retain their existing explicit failure when DuckDB is required.
+These are legacy floating-point display calculations, not exact ledger aggregates.
+
+`_meta.repository` identifies current financial inputs. Journals remain external
+historical observations. Where a saved note includes `snapshot_metadata`, context
+retains a typed allowlist of its original revision and calculation fields and marks
+it `historical_journal_observation`; it does not rewrite that revision to the current
+one or claim that the historical note was independently verified. Older notes without
+that metadata keep their existing projection. Original note bytes are unchanged.
+
+The existing soft token estimate and pruning order remain: remove spend patterns,
+then oldest journals, then selected status fields. Metadata and warnings survive
+pruning. This is a content-character estimate, not a tokenizer-based hard cap;
+protected sections and envelope overhead can exceed the requested budget. Current
+source provenance is distinct from historical note metadata and runtime timestamps.

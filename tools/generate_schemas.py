@@ -384,8 +384,8 @@ context_schema = command_schema(
     "context.schema.json",
     "context --json output",
     {
-        "active_goals": array_of(any_value),
-        "financial_metadata": object_any,
+        "active_goals": {**array_of(any_value), **nullable("array")},
+        "financial_metadata": {**object_any, **nullable("object")},
         "journals": array_of(
             object_schema(
                 {
@@ -394,6 +394,8 @@ context_schema = command_schema(
                     "filename": string,
                     "path": string,
                     "snapshot": object_any,
+                    "snapshot_metadata": object_any,
+                    "snapshot_metadata_basis": {"enum": ["historical_journal_observation"]},
                     "summary_200": string,
                     "topic": string,
                 },
@@ -420,16 +422,17 @@ context_schema = command_schema(
             )
         ),
         "status_snapshot": object_any,
-        "top_patterns": array_of(
-            object_schema(
+        "top_patterns": {
+            **nullable("array"),
+            "items": object_schema(
                 {
                     "delta_krw": integer,
                     "direction": string,
                     "label": string,
                 },
                 required=["label", "delta_krw", "direction"],
-            )
-        ),
+            ),
+        },
     },
     [
         "journals",

@@ -17,9 +17,6 @@ from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
 from finjuice.pipeline.constants import DEFAULT_RULE_CONFIDENCE, DEFAULT_RULE_PRIORITY
-from finjuice.pipeline.storage.atomic_files import replace_with_owned_temp
-from finjuice.pipeline.storage.authority import legacy_write_lease
-from finjuice.pipeline.storage.sqlite.objects import _assert_no_symlink_ancestors
 from finjuice.pipeline.yaml_exact import configure_exact_floats
 
 _SERIALIZED_RULE_FIELDS = {
@@ -177,6 +174,8 @@ def _dump_document_bytes(yaml: YAML, data: CommentedMap) -> bytes:
 
 def _write_document(yaml: YAML, data: CommentedMap, rules_path: Path) -> None:
     """Persist a round-trip YAML document."""
+    from finjuice.pipeline.storage.atomic_files import replace_with_owned_temp
+
     content = _dump_document_bytes(yaml, data)
     rules_path.parent.mkdir(parents=True, exist_ok=True)
     replace_with_owned_temp(rules_path, content)
@@ -193,6 +192,8 @@ def _find_rule_indices(rules: CommentedSeq, rule_name: str) -> list[int]:
 
 def _authoritative_rules_path(rules_path: Path, authority_data_dir: Path) -> tuple[Path, Path]:
     """Bind one rules writer to the canonical file beneath its explicit data root."""
+    from finjuice.pipeline.storage.sqlite.objects import _assert_no_symlink_ancestors
+
     data_dir = authority_data_dir.expanduser().absolute()
     expected_path = data_dir / "rules.yaml"
     if rules_path.expanduser().absolute() != expected_path:
@@ -217,6 +218,9 @@ def add_rule_roundtrip(
     authority_data_dir: Path,
 ) -> None:
     """Append a rule while preserving existing comments and formatting."""
+    from finjuice.pipeline.storage.authority import legacy_write_lease
+    from finjuice.pipeline.storage.sqlite.objects import _assert_no_symlink_ancestors
+
     data_dir, expected_path = _authoritative_rules_path(rules_path, authority_data_dir)
     with legacy_write_lease(data_dir):
         _assert_no_symlink_ancestors(expected_path, allow_missing=True)
@@ -262,6 +266,9 @@ def update_rule_roundtrip(
     explicit_fields: set[str] | frozenset[str] | None = None,
 ) -> None:
     """Replace an existing rule by name while preserving surrounding comments."""
+    from finjuice.pipeline.storage.authority import legacy_write_lease
+    from finjuice.pipeline.storage.sqlite.objects import _assert_no_symlink_ancestors
+
     data_dir, expected_path = _authoritative_rules_path(rules_path, authority_data_dir)
     with legacy_write_lease(data_dir):
         _assert_no_symlink_ancestors(expected_path)
@@ -300,6 +307,9 @@ def remove_rule_roundtrip(
     authority_data_dir: Path,
 ) -> None:
     """Remove a rule by name while preserving surrounding comments."""
+    from finjuice.pipeline.storage.authority import legacy_write_lease
+    from finjuice.pipeline.storage.sqlite.objects import _assert_no_symlink_ancestors
+
     data_dir, expected_path = _authoritative_rules_path(rules_path, authority_data_dir)
     with legacy_write_lease(data_dir):
         _assert_no_symlink_ancestors(expected_path)
