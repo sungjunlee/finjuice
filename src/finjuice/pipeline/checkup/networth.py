@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 
-from finjuice.pipeline.asset_config import validate_assets_config_file
+from finjuice.pipeline.asset_config import AssetsConfigValidationResult, validate_assets_config_file
 from finjuice.pipeline.checkup.models import NetWorthPostureSummary
 from finjuice.pipeline.config import Config
 from finjuice.pipeline.goals import load_goals_file
 from finjuice.pipeline.networth import (
+    NetWorthPosition,
     build_networth_position,
     discover_snapshot_months,
 )
@@ -19,6 +21,22 @@ def collect_networth_posture(config: Config) -> NetWorthPostureSummary:
     snapshots_dir = config.data_dir / "assets" / "snapshots"
     snapshot_months = discover_snapshot_months(snapshots_dir)
     assets_validation = validate_assets_config_file(config.assets_file, allow_missing_file=True)
+    position = (
+        build_networth_position(snapshots_dir, config.assets_file)
+        if assets_validation.is_valid
+        else None
+    )
+    target = _load_networth_target(config.goals_file)
+    return build_networth_posture(snapshot_months, assets_validation, position, target)
+
+
+def build_networth_posture(
+    snapshot_months: Sequence[str],
+    assets_validation: AssetsConfigValidationResult,
+    position: NetWorthPosition | None,
+    target: int | None,
+) -> NetWorthPostureSummary:
+    """Summarize an already loaded net worth position without reading files."""
     assets_warning: str | None = None
 
     if not assets_validation.is_valid:
@@ -37,13 +55,13 @@ def collect_networth_posture(config: Config) -> NetWorthPostureSummary:
             total_assets=0.0,
             total_liabilities=0.0,
             net_worth=0.0,
-            target=_load_networth_target(config.goals_file),
+            target=target,
             gap_to_target=None,
             warning=assets_warning,
         )
 
-    position = build_networth_position(snapshots_dir, config.assets_file)
-    target = _load_networth_target(config.goals_file)
+    if position is None:
+        raise ValueError("A validated net worth posture requires a position.")
     gap_to_target = float(target - position.net_worth) if target is not None else None
 
     warning: str | None = None

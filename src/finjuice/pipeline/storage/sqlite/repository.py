@@ -6,11 +6,17 @@ import json
 import uuid
 from collections.abc import Mapping, Sequence
 from contextlib import AbstractContextManager, contextmanager
+from copy import deepcopy
 from functools import wraps
 from pathlib import Path
 from types import TracebackType
 from typing import Any, BinaryIO, Callable, Final, Iterator, TypeVar, cast
 
+from finjuice.pipeline.storage.sqlite.checkup_reads import (
+    CheckupReadSnapshot,
+    import_preview_snapshot,
+    rules_config_snapshot,
+)
 from finjuice.pipeline.storage.sqlite.errors import RepositoryPathError
 from finjuice.pipeline.storage.sqlite.exact import ExactValue
 from finjuice.pipeline.storage.sqlite.ids import (
@@ -630,6 +636,20 @@ class RepositoryReader(AbstractContextManager["RepositoryReader"]):
         if self._closed:
             raise RuntimeError("Repository reader is already closed.")
         return transaction_snapshot(self._connection, self.info, self._repository_paths)
+
+    def checkup_snapshot(self, digests: tuple[str, ...] = ()) -> CheckupReadSnapshot:
+        """Read all checkup domains and requested import evidence from this revision."""
+        if self._closed:
+            raise RuntimeError("Repository reader is already closed.")
+        return deepcopy(
+            CheckupReadSnapshot(
+                self.info,
+                self.status_snapshot(),
+                self.portfolio_snapshot(),
+                import_preview_snapshot(self._connection, self.info, digests),
+                rules_config_snapshot(self._connection, self._repository_paths),
+            )
+        )
 
     def portfolio_snapshot(self) -> PortfolioReadSnapshot:
         """Return portfolio values and evidence pinned to this reader."""

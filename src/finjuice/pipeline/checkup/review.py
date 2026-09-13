@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -22,25 +23,31 @@ def collect_review_pressure(
 ) -> ReviewPressureSummary:
     """Summarize latest-month transactions that need human attention."""
     latest_month = latest_partition_month(config.csv_base_dir)
-    if latest_month is None:
-        return ReviewPressureSummary(
-            status="empty",
-            actionable=False,
-            month=None,
-            total_candidates=0,
-            needs_review_count=0,
-            untagged_count=0,
-            unclassified_count=0,
-            low_confidence_count=0,
-            samples=[],
-        )
+    df = (
+        read_month_partition(config.csv_base_dir, latest_month)
+        if latest_month is not None
+        else None
+    )
+    summary = build_review_pressure(df, month=latest_month, sample_limit=sample_limit)
+    if summary.total_candidates > 0:
+        summary = replace(summary, rule_notes=_load_checkup_rule_notes(config.rules_file))
+    return summary
 
-    df = read_month_partition(config.csv_base_dir, latest_month)
+
+def build_review_pressure(
+    frame: pl.DataFrame | None,
+    *,
+    month: str | None,
+    sample_limit: int,
+    rule_notes: list[dict[str, Any]] | None = None,
+) -> ReviewPressureSummary:
+    """Summarize an already selected review frame without reading files."""
+    df = frame
     if df is None or df.is_empty():
         return ReviewPressureSummary(
             status="empty",
             actionable=False,
-            month=latest_month,
+            month=month,
             total_candidates=0,
             needs_review_count=0,
             untagged_count=0,
@@ -66,7 +73,7 @@ def collect_review_pressure(
     return ReviewPressureSummary(
         status="needs_attention" if matching_review_df.height > 0 else "healthy",
         actionable=matching_review_df.height > 0,
-        month=latest_month,
+        month=month,
         total_candidates=int(matching_review_df.height),
         needs_review_count=needs_review_count,
         untagged_count=untagged_count,
@@ -81,9 +88,7 @@ def collect_review_pressure(
             )
             for row in review_df.to_dicts()
         ],
-        rule_notes=(
-            _load_checkup_rule_notes(config.rules_file) if matching_review_df.height > 0 else []
-        ),
+        rule_notes=(list(rule_notes or []) if matching_review_df.height > 0 else []),
     )
 
 

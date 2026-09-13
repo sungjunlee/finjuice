@@ -200,6 +200,11 @@ class CheckupBundle:
         default_factory=empty_obligation_confirmation_summary
     )
 
+    repository: dict[str, Any] | None = None
+
     def to_dict(self) -> dict[str, Any]:
-        """Serialize the bundle for downstream JSON rendering."""
-        return asdict(self)
+        """Serialize the bundle, retaining the legacy shape when unactivated."""
+        result = asdict(self)
+        if self.repository is None:
+            result.pop("repository")
+        return result

@@ -16,6 +16,7 @@ from finjuice.pipeline.storage.authority import (
     shared_write_lease,
 )
 from finjuice.pipeline.storage.csv_schema import CSV_COLUMNS, POLARS_SCHEMA
+from finjuice.pipeline.storage.sqlite.checkup_reads import CheckupReadSnapshot
 from finjuice.pipeline.storage.sqlite.errors import RepositoryIntegrityError
 from finjuice.pipeline.storage.sqlite.portfolio_reads import PortfolioReadSnapshot
 from finjuice.pipeline.storage.sqlite.repository import RepositoryReader
@@ -52,6 +53,18 @@ def read_portfolio_snapshot(
 ) -> PortfolioReadSnapshot | None:
     """Read detached portfolio evidence with fail-closed activation validation."""
     return _read_snapshot(data_dir, evidence_provider, RepositoryReader.portfolio_snapshot)
+
+
+def read_checkup_snapshot(
+    data_dir: Path,
+    evidence_provider: ActivationEvidenceProvider | None = None,
+    *,
+    digests: tuple[str, ...] = (),
+) -> CheckupReadSnapshot | None:
+    """Read all checkup domains with one authority selection and reader snapshot."""
+    return _read_snapshot(
+        data_dir, evidence_provider, lambda reader: reader.checkup_snapshot(digests)
+    )
 
 
 def _read_snapshot(

@@ -33,15 +33,17 @@ from finjuice.pipeline.checkup.next_actions import (
 )
 from finjuice.pipeline.checkup.warnings import _collect_warnings
 from finjuice.pipeline.config import Config
+from finjuice.pipeline.storage.authority import ActivationEvidenceProvider
 
 
-def collect_checkup_bundle(
+def collect_checkup_bundle(  # noqa: PLR0913 - preserve public options plus authority evidence.
     config: Config,
     *,
     today: date | None = None,
     stale_after_days: int = 35,
     review_sample_limit: int = 3,
     fast: bool = False,
+    evidence_provider: ActivationEvidenceProvider | None = None,
 ) -> CheckupBundle:
     """Collect a unified read-only bundle across the main orchestration domains.
 
@@ -52,6 +54,23 @@ def collect_checkup_bundle(
         raise ValueError("stale_after_days must be >= 0")
 
     resolved_today = today or date.today()
+    from finjuice.pipeline.checkup.repository import (
+        RepositoryCheckupOptions,
+        collect_repository_checkup,
+    )
+
+    repository = collect_repository_checkup(
+        RepositoryCheckupOptions(
+            config=config,
+            today=resolved_today,
+            stale_after_days=stale_after_days,
+            sample_limit=review_sample_limit,
+            fast=fast,
+        ),
+        evidence_provider=evidence_provider,
+    )
+    if repository is not None:
+        return repository
 
     pipeline = run_named_collector(
         "pipeline",

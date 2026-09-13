@@ -160,8 +160,9 @@ validated repository snapshot. `stale` describes the data identity comparison;
 artifacts or trust compatibility CSV. A local receipt is not authenticated: coordinated
 edits to both receipt and files cannot be detected as tampering by its own hashes.
 
-Status, overview/assets and the remaining runtime read consumers, private corpus
-parity/performance and operational cutover remain separate #436/operational gates.
+Later sections record status, portfolio and checkup integration. Remaining runtime
+consumers, private corpus parity/performance and operational cutover retain their
+separate #436/operational gates.
 
 The verified CLI runtime uses the project's locked Typer/Click versions. An
 unconstrained installation of Typer 0.27.2 changes its command class hierarchy and
@@ -207,8 +208,8 @@ clocks. Native occurrence UUIDs remain separate from legacy file IDs; history
 rows expose their provenance instead of claiming the capture occurrence was the
 original import.
 
-This connects status only. Doctor, checkup/networth, overview/assets consumers and
-full private-corpus parity remain separate acceptance work.
+This status checkpoint preceded the portfolio and checkup integrations below.
+Doctor and full private-corpus parity remain separate acceptance work.
 
 
 ## Portfolio snapshot evidence
@@ -247,9 +248,9 @@ asserts schema capability only, not materialization completeness: upgrading an
 older candidate adds empty schema5 tables without converting preserved report
 observations. Consumers must inspect unmatched preserved observation evidence
 before treating empty typed tables as no report data. This storage
-checkpoint does not yet connect assets/networth/history/forecast/checkup CLI
-consumers or claim their baseline parity. Combined status/portfolio calculations
-will need a single reader bundle rather than two independent facade reads.
+checkpoint alone does not establish CLI parity; subsequent consumer sections
+record that work. Combined status/portfolio calculations require a single reader
+bundle rather than two independent facade reads.
 
 
 ### Portfolio display and current net worth consumers
@@ -283,8 +284,8 @@ The parity fixture uses the producer's complete nine-column report schema; a
 separate regression verifies the incomplete-header rejection. Private-corpus
 compatibility for such inputs remains an open preservation/consumer gate.
 
-Checkup and combined status/portfolio calculations are still pending; a combined
-calculation must obtain all inputs from one reader bundle.
+The combined checkup integration below obtains status and portfolio inputs from
+one reader bundle.
 No private operational migration or activation is established by these tests.
 
 
@@ -314,3 +315,34 @@ also records configuration selection policies. If a config changes after the
 read, the existing result stays pinned and a new read observes the later revision.
 Missing start dates still require source observations or an explicit forecast date.
 Active configuration/calculation failures use static errors without parser content.
+
+
+### Combined checkup revision and staged observations
+
+Activated `checkup` obtains transactions, scope, status, portfolio, configuration
+selection inventories, exact-import identities and requested verified completion
+lookups through one reader. Every canonical domain uses that detached revision;
+Python bundles expose `repository` metadata and CLI output places it in `_meta`.
+Legacy bundles retain their original shape. `legacy_checkup.v1` preserves the
+latest partition month for review and budget, including an empty latest month,
+and computes net worth from snapshots and current manual assets without balances.
+Unknown-month included rows contribute to all-row metrics without inventing a
+partition; auxiliary source rows remain excluded.
+
+Invalid or unselected goals explicitly make budget invalid, the net worth target
+unknown and obligation confirmation unavailable. Invalid assets retain an invalid
+net worth diagnosis. Rules must supply valid selected filters and notes; unusable
+canonical evidence fails with a static error instead of falling back to live files.
+Explicitly absent configurations remain distinguishable from preserved unselected
+revisions. Fast mode explicitly skips the full review and obligation detectors.
+
+Staged XLSX bytes are captured before the reader opens and are separate filesystem
+observations, with observation times and aggregate metadata. A missing imports
+directory is an observed absence; other inventory failures fail closed. Each file
+is previewed independently against the same baseline (`independent_baseline.v1`),
+not against simulated prior files. Only verified exact-import completion is a noop;
+legacy filename/history evidence and unverified overlap do not establish completion.
+New evidence-only or empty workbooks still count as pending. Per-file capture and
+mapping failures are counted; invalid canonical completion evidence fails the whole
+checkup. Preview never writes objects, transactions or revisions. Fast mode counts
+staged names as unexamined pending files and does not open workbook contents.
