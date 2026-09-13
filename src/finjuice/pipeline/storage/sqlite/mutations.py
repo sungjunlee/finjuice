@@ -34,6 +34,10 @@ from finjuice.pipeline.storage.sqlite.exact_import.lookup import (
     load_completed_exact_imports,
     load_transaction_identity_snapshot,
 )
+from finjuice.pipeline.storage.sqlite.generation_binding import (
+    GenerationBinding,
+    as_generation_binding,
+)
 from finjuice.pipeline.storage.sqlite.ids import new_entity_id, validate_entity_id
 from finjuice.pipeline.storage.sqlite.objects import (
     SourceArtifact,
@@ -199,7 +203,7 @@ class _AttemptState:
 
 @dataclass(frozen=True)
 class _TransactionInputs:
-    authority: RepositoryAuthority
+    authority: RepositoryAuthority | GenerationBinding
     request: MutationRequest
     request_digest: str
     current_revision: int
@@ -212,7 +216,7 @@ class MutationContext:
     def __init__(
         self,
         connection: sqlite3.Connection,
-        authority: RepositoryAuthority,
+        authority: RepositoryAuthority | GenerationBinding,
         changeset_id: str,
     ) -> None:
         self.__connection = connection
@@ -1632,9 +1636,9 @@ class MutationService:
             )
             connection = _connect_reader(authority.paths.database, self._busy_timeout_ms)
             try:
-                _validate_locked_repository(connection, authority)
-                request_digest = _digest(_canonical_request(request))
-                return _lookup_idempotency(connection, request, request_digest)
+                return find_generation_replay(
+                    connection, authority, request, revalidate=lambda: None
+                )
             finally:
                 connection.close()
 
@@ -1665,80 +1669,108 @@ class MutationService:
         request: MutationRequest,
         handler: MutationHandler,
     ) -> MutationReceipt:
-        attempt = _AttemptState()
-        _begin_writer_transaction(connection)
-        try:
-            return self._run_started_transaction(
-                connection,
-                authority,
-                request,
-                handler,
-                attempt,
-            )
-        except BaseException as exc:
-            if connection.in_transaction:
-                connection.execute("ROLLBACK")
-            retained = _attempt_retained_artifacts(attempt)
-            if retained:
-                raise MutationAbortedError(
-                    "Mutation rolled back; immutable source objects were retained.",
-                    retained,
-                ) from exc
-            raise
+        def revalidate() -> None:
+            if (
+                read_activation(self._authority_paths, self._activation_evidence)
+                != authority.activation
+            ):
+                raise RepositoryIntegrityError(
+                    "Activation changed before the repository write lock."
+                )
 
-    def _run_started_transaction(
-        self,
-        connection: sqlite3.Connection,
-        authority: RepositoryAuthority,
-        request: MutationRequest,
-        handler: MutationHandler,
-        attempt: _AttemptState,
-    ) -> MutationReceipt:
-        if (
-            read_activation(self._authority_paths, self._activation_evidence)
-            != authority.activation
-        ):
-            raise RepositoryIntegrityError("Activation changed before the repository write lock.")
-        current_revision = _validate_locked_repository(connection, authority)
+        return execute_generation_mutation(
+            connection, authority, request, handler, revalidate=revalidate
+        )
+
+
+def execute_generation_mutation(
+    connection: sqlite3.Connection,
+    binding: RepositoryAuthority | GenerationBinding,
+    request: MutationRequest,
+    handler: MutationHandler,
+    *,
+    revalidate: Callable[[], None],
+) -> MutationReceipt:
+    """Execute the single typed engine after caller admission/lease, rechecking under BEGIN.
+
+    The caller owns and closes the idle connection and holds its generation lease
+    throughout this call. Revalidation must reject a revoked or replaced binding.
+    """
+    attempt = _AttemptState()
+    _begin_writer_transaction(connection)
+    try:
+        revalidate()
+        current_revision = _validate_locked_repository(connection, binding)
         request_digest = _digest(_canonical_request(request))
         replay = _lookup_idempotency(connection, request, request_digest)
         if replay is not None:
             connection.execute("ROLLBACK")
             return replay
-        _validate_new_request(request, authority, current_revision)
+        _validate_new_request(request, binding, current_revision)
         return _execute_new_request(
             connection,
-            _TransactionInputs(
-                authority=authority,
-                request=request,
-                request_digest=request_digest,
-                current_revision=current_revision,
-                handler=handler,
-            ),
+            _TransactionInputs(binding, request, request_digest, current_revision, handler),
             attempt,
         )
+    except BaseException as exc:
+        if connection.in_transaction:
+            connection.execute("ROLLBACK")
+        retained = _attempt_retained_artifacts(attempt)
+        if retained:
+            raise MutationAbortedError(
+                "Mutation rolled back; immutable source objects were retained.", retained
+            ) from exc
+        raise
 
 
-def _preview_locked(
+def find_generation_replay(
     connection: sqlite3.Connection,
-    authority: RepositoryAuthority,
+    binding: RepositoryAuthority | GenerationBinding,
+    request: MutationRequest,
+    *,
+    revalidate: Callable[[], None],
+) -> MutationReceipt | None:
+    """Look up an exact receipt using a caller-admitted and leased generation."""
+    revalidate()
+    _validate_locked_repository(connection, binding)
+    return _lookup_idempotency(connection, request, _digest(_canonical_request(request)))
+
+
+def preview_generation_mutation(
+    connection: sqlite3.Connection,
+    binding: RepositoryAuthority | GenerationBinding,
     request: MutationRequest,
     handler: MutationHandler,
+    *,
+    revalidate: Callable[[], None],
 ) -> Mapping[str, JSONValue]:
+    """Preview using the same typed context after revalidation in a read transaction."""
     _validate_request_shape(request)
     connection.execute("BEGIN")
     try:
-        current_revision = _validate_locked_repository(connection, authority)
-        _validate_new_request(request, authority, current_revision)
-        return _run_preview_handler(connection, authority, handler)
+        revalidate()
+        current_revision = _validate_locked_repository(connection, binding)
+        _validate_new_request(request, binding, current_revision)
+        return _run_preview_handler(connection, binding, handler)
     finally:
         if connection.in_transaction:
             connection.execute("ROLLBACK")
 
 
+def _preview_locked(
+    connection: sqlite3.Connection,
+    authority: RepositoryAuthority | GenerationBinding,
+    request: MutationRequest,
+    handler: MutationHandler,
+) -> Mapping[str, JSONValue]:
+    return preview_generation_mutation(
+        connection, authority, request, handler, revalidate=lambda: None
+    )
+
+
 def _run_preview_handler(
     connection: sqlite3.Connection,
-    authority: RepositoryAuthority,
+    authority: RepositoryAuthority | GenerationBinding,
     handler: MutationHandler,
 ) -> Mapping[str, JSONValue]:
     context = MutationContext(connection, authority, _PREVIEW_CHANGESET_ID)
@@ -1875,8 +1907,9 @@ def _connect_reader(database: Path, busy_timeout_ms: int) -> sqlite3.Connection:
 
 def _validate_locked_repository(
     connection: sqlite3.Connection,
-    authority: RepositoryAuthority,
+    authority: RepositoryAuthority | GenerationBinding,
 ) -> int:
+    binding = as_generation_binding(authority)
     application_id = int(connection.execute("PRAGMA application_id").fetchone()[0])
     schema_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
     row = connection.execute(
@@ -1885,15 +1918,20 @@ def _validate_locked_repository(
     ).fetchone()
     if row is None or application_id != SQLITE_APPLICATION_ID:
         raise RepositoryIntegrityError("Repository identity is invalid under the writer lock.")
-    if schema_version != SQLITE_SCHEMA_VERSION or tuple(row[:2]) != (
-        application_id,
-        schema_version,
+    if (
+        schema_version != binding.sqlite_schema_version
+        or schema_version != SQLITE_SCHEMA_VERSION
+        or tuple(row[:2])
+        != (
+            application_id,
+            schema_version,
+        )
     ):
         raise RepositoryIntegrityError("Repository schema is invalid under the writer lock.")
-    if str(row[2]) != authority.activation.dataset_generation:
+    if str(row[2]) != binding.dataset_generation:
         raise RepositoryIntegrityError("Active generation changed before the mutation.")
     revision = int(row[3])
-    if revision < authority.activation.dataset_revision:
+    if revision < binding.baseline_revision:
         raise RepositoryIntegrityError("Repository revision precedes activation baseline.")
     return revision
 
@@ -1936,10 +1974,10 @@ def _validate_request_shape(request: MutationRequest) -> None:
 
 def _validate_new_request(
     request: MutationRequest,
-    authority: RepositoryAuthority,
+    authority: RepositoryAuthority | GenerationBinding,
     current_revision: int,
 ) -> None:
-    if request.expected_generation != authority.activation.dataset_generation:
+    if request.expected_generation != as_generation_binding(authority).dataset_generation:
         raise MutationConflictError("Expected dataset generation is stale.")
     if request.expected_revision != current_revision:
         raise MutationConflictError("Expected dataset revision is stale.")

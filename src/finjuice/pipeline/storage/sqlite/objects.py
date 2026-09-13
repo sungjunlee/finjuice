@@ -144,30 +144,23 @@ class SourceObjectStore:
         digest_hex: str,
         byte_length: int,
     ) -> bool:
+        reused = False
         try:
             os.link(temp_path, target, follow_symlinks=False)
         except FileExistsError:
-            temp_path.unlink(missing_ok=True)
             self.verify(f"sha256:{digest_hex}", byte_length)
-            return True
+            reused = True
         except OSError as exc:
-            temp_path.unlink(missing_ok=True)
             raise ObjectStoreError("Source object could not be published atomically.") from exc
         try:
+            # A visible object may belong to a publisher whose directory fsync failed.
+            # Reuse must establish durability too, and failure must retain the object.
             _fsync_directory(target.parent)
-        except OSError as exc:
-            try:
-                target.unlink(missing_ok=True)
-                _fsync_directory(target.parent)
-            except OSError:
-                pass
-            raise ObjectStoreError("Source object could not be published durably.") from exc
-        try:
             temp_path.unlink()
-            _fsync_directory(target.parent)
+            _fsync_directory(temp_path.parent)
         except OSError as exc:
             raise ObjectStoreError("Source object could not be published durably.") from exc
-        return False
+        return reused
 
 
 def _parse_artifact_id(artifact_id: str) -> str:

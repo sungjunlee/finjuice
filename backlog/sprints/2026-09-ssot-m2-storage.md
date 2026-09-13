@@ -22,15 +22,15 @@ scope: ["**"]
 
 ### Batch 3 — 보존 이전
 
-- [ ] #435 feat(migrate): 동결 자료에서 별도 DB로 보존 이전
+- [~] #435 feat(migrate): 동결 자료에서 별도 DB로 보존 이전
 
 ### Batch 4 — 조회 호환
 
-- [ ] #436 feat(query): SQLite 읽기와 기존 CLI·DuckDB 호환
+- [~] #436 feat(query): SQLite 읽기와 기존 CLI·DuckDB 호환
 
 ### Batch 5 — SQLite 복구
 
-- [ ] #437 feat(backup): SQLite snapshot과 원본 참조의 일관된 복원
+- [~] #437 feat(backup): SQLite snapshot과 원본 참조의 일관된 복원
 
 ### Batch 6 — 실제 보존 수용 검증
 
@@ -460,3 +460,17 @@ Claude Opus5high 교차 리뷰는 exit0/577.7s, 근거 있는 P1/P2 없음이다
 - Read-only next-gate audit found canonical config raw bytes and revision history already preserved in snapshot config_revisions plus all referenced source_artifacts. Do not reread live YAML to construct a conflicting backup state. External activation/release/dependency binding, participating reference-retention protocol and explicit isolated mutation context remain necessary. Existing immutable DB triggers and absence of a GC API do not prove a backup pin; an inactive restore must not fake host activation to use mutation handlers.
 - This is #437 local-publication progress, not whole-issue acceptance. Operating CLI, release bundle, retention, restored manual mutation/read/rebackup, private preservation/performance, required PR463 approval, operating cutover/first use/off-device recovery and M3–M5 remain open. No private production data read, mutated or activated.
 - Final quota Sep14 06:19:25KST CodexPro oauth/exact weekly75%used25%remaining,resetSep20 09:12:31,paceETA7h3m before reset;5h/monthlyunknown,credits0. CursorUltra web/confidenceunknown06:19:24 monthlyprimary40.476857%used59.523143%remaining,secondary30.553333%used69.446667%remaining,tertiary100%used0%remaining;resetSep17 00:44:24,primary/secondarypace lastsreset,USD20.54used/USD20limit. Cursor5h/weeklyunknown. Sanitized snapshots retained outside repo. Cross-family review elapsed793.54s exit0.
+
+
+## 2026-09-14 inactive restore and source-object durability checkpoint
+
+- Previous turn was concrete progress: f47c234 committed/pushed the safe publication batch with full4288/installed137/Cursor noP1P2. Fresh fetch still main56d6692, fully included. PR463 remains5083f34 OPEN/REVIEW_REQUIRED; no protected-gate bypass. Original25 audit still found25 and20incomplete. In-flight435/436/437 plan markers now reflect the existing stacked implementation; no AC closure.
+- Root followed the object deletion suspicion to the real error boundary: _fsync_directory wraps OS errors in ObjectStoreError, so the old except-OSError unlink branch was not executed by ordinary disk errors. Do not claim an independently reproduced real deletion race. Actual low-level os.fsync injection reproduced the retained-object retry returning success without directory synchronization. Reuse now flushes the target parent, both paths retain published objects on failure, and temporary unlink flushes its actual parent. Initial regression failed as expected; corrected object15tests pass.
+- Canonical config closure4tests use actual migration and typed A→B→post-snapshot-C updates. Backups/restore/rebackup preserve captured heads, all config revisions/source artifacts and exact bytes, including invalid/unselected states; historical-object tamper fails status/restore. Live YAML poison cannot replace captured configuration. These tests are not source GC pin proof.
+- GenerationBinding exposes paths/generation/schema/revision floor without an ActivationTuple. Active MutationService keeps its original authority object, lease/revalidation/hash/replay behavior while sharing the typed execute/preview/replay engine. Existing active mutation55tests pass; no second SQL writer was added.
+- New restore_workspace creates exclusive private generation/ and restore-control/descriptor.json and returns independently retained receipt evidence. InactiveRestoreSession explicitly uses that receipt, validates exact descriptor and source manifest, current DB integrity/object closure/identity/revision floor, physical path/single-link DB and sidecars, and holds its own exclusive coordination lease. BEGIN revalidation, idempotency, audit/receipt rollback, detached reads, backup, retirement and close are implemented. No source/host activation is written or fabricated. Initial manifest stays historical after a committed edit; the next backup has the changed revision.
+- Root integration tests perform manual correction→read→replay→rebackup→second restore, source/activation/first-backup byte+inode preservation, stale rejection, descriptor duplicate/tamper/receipt mismatch, hardlink/symlink/root replacement, handler/receipt failure rollback, actual second-handle retirement afterBEGIN, and two-handle revision conflict serialization. Initial confidence assertion was corrected to1 because manual category selection intentionally sets confidence1; this was a fixture expectation error, not a runtime change. Actual restored manifest B is used if the source pointer advances after preflightA. Root reproduced and fixed a dangling final destination symlink being followed; lexists is checked before resolution.
+- Frozen9files: focused226PASS10.71s plus final concurrency1PASS0.45s; fresh installed227PASS22.79s,462loadedmoduleorigins verified,5production source/wheel/installed hashes match. Ruff/format950/mypy512/complexity110, Bandit28/pip-audit0/PII/docs115/agent-asset and wheel/sdist package-content gates pass. Final whole-suite4309PASS1SKIP90.91%,562.69s. Cursor Grok4.6high completed559.68s exit0 with no groundedP1/P2,42focusedPASS. All9frozenhashes remained unchanged after full/installed/review. Evidence outside repository: /tmp/finjuice-backup-closure-review/.
+- Next evidence plan /tmp/finjuice-recovery-bundle-implementation-plan.md proposes an immutable recovery wrapper around unchanged strict v1 snapshot, independent provider-backed activation binding, copied exact release/lock/migration/precutover evidence and shared authority coordination through publication. Wheel↔lock provenance needs an independently recorded release-build/source-commit digest relation; cryptographic signing is not an added mandatory AC. No live-YAML recopy, fake GC API, or assumption that a shared lock protects uncooperative deletion. Actual GC participant/pin contract remains open.
+- Inactive API does not detect arbitrary external activation. Future promotion must retire the same epoch under the same lease before enabling active writers. Caller-retained local receipts are not authentication against rewriting both receipt and workspace. Complete release/dependency binding, operating CLI, real reference retention, private preservation/performance, required PR463 approval/merge, operating cutover/first use/off-device/key/RPO/RTO and M3–M5 remain open. No private production data accessed or modified.
+- Final quota Sep14 06:48:45KST CodexPro oauth/exact weekly77%used23%remaining,resetSep20 09:12:31,paceETA6h28m before reset;5h/monthlyunknown,credits0. CursorUltra web/confidenceunknown06:48:51 monthlyprimary40.724857%used59.275143%remaining,secondary30.842667%used69.157333%remaining,tertiary100%used0%remaining;resetSep17 00:44:24,primary/secondarypace lastsreset,USD20.54used/USD20limit;5h/weeklyunknown. Sanitized final snapshots are retained with the checkpoint evidence.
