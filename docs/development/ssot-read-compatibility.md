@@ -497,3 +497,29 @@ remain available. Legacy file-authority behavior is unchanged.
 
 Canonical gap guidance points to `rules add --help`; it no longer recommends the
 active-fenced `rules suggest --apply` command.
+
+
+### Canonical rules suggestions and merged read helpers
+
+`rules suggest` uses one detached canonical analysis revision for primary/native
+transactions and selected rules. Auxiliary captured rows are outside this scope;
+incomplete primary projections fail closed. Selected rules must parse; genuinely
+absent empty rule inventory means no existing rules. Coverage, merchant context
+and tagged-neighbor queries share one in-memory connection. Existing scoring,
+transfer exclusions and ambiguous merchant cluster behavior are reused without
+report filters. Nonfinite aggregates are rejected rather than replaced with zero.
+
+Metadata uses `legacy_rules_suggest.v1` and includes the selected rule revision.
+Canonical `--apply --dry-run` is read-only with `rules_file: null`; actual suggestion
+application remains fenced. Human next steps point to supported rule creation.
+Saved human reports include provenance and use the protected atomic output helper.
+JSON keeps ignoring the human output path. Redacted JSON masks nested rule notes
+because generated notes may contain merchant names; raw and compact behavior is
+unchanged. This applies to CSV suggestions as well.
+
+PR500's explicit-path compatibility helpers remain available for their bounded
+projection tests. `FINJUICE_SQLITE_GENERATION` does not select CLI authority:
+`show` and `status` retain activation-evidence verification and pinned snapshots.
+An unrelated generation cannot replace either canonical or legacy selected data.
+The helpers' row-date month projection is not the canonical source-partition
+scope policy. Full #436 consumer and operational acceptance remains open.

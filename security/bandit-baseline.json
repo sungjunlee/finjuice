@@ -3,11 +3,7 @@
   "tool": "bandit",
   "generated_at": "2026-05-12T15:36:26Z",
   "severity_threshold": "MEDIUM",
-  "identity_fields": [
-    "test_id",
-    "filename",
-    "function"
-  ],
+  "identity_fields": ["test_id", "filename", "function"],
   "findings": [
     {
       "test_id": "B608",
@@ -183,11 +179,11 @@
     {
       "test_id": "B608",
       "filename": "src/finjuice/pipeline/tagging/suggestion_queries.py",
-      "function": "get_suggestion_coverage_stats",
+      "function": "coverage_stats_from_connection",
       "issue_severity": "MEDIUM",
       "issue_confidence": "LOW",
       "test_name": "hardcoded_sql_expressions",
-      "rationale": "DuckDB coverage query assembles only static SQL fragments and internal transfer predicates; no user input is concatenated; see src/finjuice/pipeline/tagging/suggestions.py:get_suggestion_coverage_stats."
+      "rationale": "Unchanged coverage SQL moved to a caller-owned connection helper on 2026-09-14. Only static SQL and internal transfer predicates are assembled; file_id remains a parameter placeholder. Re-review if SQL input boundaries change."
     },
     {
       "test_id": "B608",
@@ -200,12 +196,12 @@
     },
     {
       "test_id": "B608",
-      "filename": "src/finjuice/pipeline/analytics/duckdb_view.py",
-      "function": "DuckDBTransactionsView._register_repository_transactions",
+      "filename": "src/finjuice/pipeline/analytics/transaction_frame_registration.py",
+      "function": "register_transaction_frame",
       "issue_severity": "MEDIUM",
       "issue_confidence": "MEDIUM",
       "test_name": "hardcoded_sql_expressions",
-      "rationale": "Projection is exactly * or * REPLACE (CAST(date AS DATE) AS date), chosen by an internal date-compatibility boolean; the Arrow relation name is fixed. Reviewed 2026-09-13. Re-review if these identifier/value boundaries change; remove this entry when the dynamic expression or finding is removed."
+      "rationale": "Unchanged projection moved to detached-frame registration on 2026-09-14: exactly * or * REPLACE (CAST(date AS DATE) AS date), selected by an internal boolean. Arrow relation name is fixed. Re-review if identifier/value boundaries change."
     },
     {
       "test_id": "B608",
