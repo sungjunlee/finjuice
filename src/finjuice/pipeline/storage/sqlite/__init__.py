@@ -1,10 +1,14 @@
 """Authoritative SQLite storage foundation with immutable source objects."""
 
 from finjuice.pipeline.storage.sqlite.errors import (
+    BackupIncompleteError,
+    BackupTransferError,
+    BackupVerificationError,
     ExactValueError,
     IdentifierError,
     ObjectCorruptionError,
     ObjectStoreError,
+    RepositoryBackupError,
     RepositoryIntegrityError,
     RepositoryPathError,
     RepositorySnapshotError,
@@ -51,6 +55,9 @@ __all__ = [
     "SQLITE_SCHEMA_VERSION",
     "AccountRecord",
     "AssetSnapshotRecord",
+    "BackupIncompleteError",
+    "BackupTransferError",
+    "BackupVerificationError",
     "ConfigRevisionRecord",
     "CurrencyState",
     "ExactValue",
@@ -71,6 +78,7 @@ __all__ = [
     "PartyRecord",
     "PreservationIssueRecord",
     "ProvenanceRecord",
+    "RepositoryBackupError",
     "RepositoryBuilder",
     "RepositoryInfo",
     "RepositoryIntegrityError",

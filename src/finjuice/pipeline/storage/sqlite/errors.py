@@ -35,5 +35,34 @@ class ObjectStoreError(SQLiteStorageError):
     """An immutable source object could not be published or verified."""
 
 
+class RepositoryBackupError(SQLiteStorageError):
+    """A generation backup could not be created, completed, or verified.
+
+    Every subclass carries a stable machine-readable :attr:`reason` so callers
+    can distinguish a transfer failure from an incomplete or unverified backup
+    without parsing messages.
+    """
+
+    reason: str = "backup_failed"
+
+
+class BackupTransferError(RepositoryBackupError):
+    """Backup bytes could not be transferred, so no backup was committed."""
+
+    reason = "transfer_failed"
+
+
+class BackupIncompleteError(RepositoryBackupError):
+    """A backup directory has no complete manifest and must not be trusted."""
+
+    reason = "incomplete_backup"
+
+
+class BackupVerificationError(RepositoryBackupError):
+    """A backup or restored copy failed a digest, integrity, or foreign-key check."""
+
+    reason = "verification_failed"
+
+
 class ObjectCorruptionError(ObjectStoreError):
     """An existing content-addressed object does not match its identity."""
