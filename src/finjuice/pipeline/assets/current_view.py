@@ -24,13 +24,9 @@ def select_current(
     evidence and never replace a complete observation. Flow measures are all
     kept as current events rather than a single winner.
     """
-    evidence = tuple(
-        item for item in observations if item.time.as_of <= as_of
-    )
+    evidence = tuple(item for item in observations if item.time.as_of <= as_of)
     rejected = {
-        item.observation_id
-        for item in evidence
-        if item.lifecycle.confirmation_state == "rejected"
+        item.observation_id for item in evidence if item.lifecycle.confirmation_state == "rejected"
     }
     superseded = _confirmed_superseded(evidence)
     eligible = [

@@ -61,9 +61,7 @@ SNAPSHOT_MEASURES: frozenset[MeasureKind] = frozenset(
     {"balance", "holding_quantity", "valuation", "right_obligation"}
 )
 FLOW_MEASURES: frozenset[MeasureKind] = frozenset({"cash_movement", "expected_inflow"})
-NET_WORTH_MEASURES: frozenset[MeasureKind] = frozenset(
-    {"balance", "valuation", "right_obligation"}
-)
+NET_WORTH_MEASURES: frozenset[MeasureKind] = frozenset({"balance", "valuation", "right_obligation"})
 CASH_MEASURES: frozenset[MeasureKind] = frozenset({"cash_movement"})
 INSTITUTION_SOURCES: frozenset[SourceKind] = frozenset(
     {"institution_export", "workbook_summary", "workbook_holdings"}

@@ -284,9 +284,7 @@ def test_unresolved_summary_holdings_overlap_is_excluded_with_reason() -> None:
 
 
 def test_manual_and_institution_balances_are_not_double_counted() -> None:
-    bank = _obs(
-        _Spec("b1", "acct-bank", "balance", "400000", "2026-09-01", "2026-09-01T00:00:00")
-    )
+    bank = _obs(_Spec("b1", "acct-bank", "balance", "400000", "2026-09-01", "2026-09-01T00:00:00"))
     manual = _obs(
         _Spec(
             "m1",
@@ -310,9 +308,7 @@ def test_manual_and_institution_balances_are_not_double_counted() -> None:
 
 
 def test_rejected_overlap_counts_both_independent_balances() -> None:
-    bank = _obs(
-        _Spec("b1", "acct-bank", "balance", "100000", "2026-09-01", "2026-09-01T00:00:00")
-    )
+    bank = _obs(_Spec("b1", "acct-bank", "balance", "100000", "2026-09-01", "2026-09-01T00:00:00"))
     cash = _obs(
         _Spec(
             "m1",
@@ -418,9 +414,7 @@ def test_expected_inflow_and_quantity_are_not_net_worth_or_cash() -> None:
 
 
 def test_conflicts_gaps_and_stale_observations_are_reported() -> None:
-    first = _obs(
-        _Spec("c1", "acct-bank", "balance", "100000", "2026-09-01", "2026-09-01T09:00:00")
-    )
+    first = _obs(_Spec("c1", "acct-bank", "balance", "100000", "2026-09-01", "2026-09-01T09:00:00"))
     second = _obs(
         _Spec("c2", "acct-bank", "balance", "180000", "2026-09-01", "2026-09-01T10:00:00")
     )

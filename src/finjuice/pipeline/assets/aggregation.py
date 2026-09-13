@@ -26,9 +26,7 @@ def build_lines(
     conflict_ids: frozenset[str],
 ) -> tuple[AggregationLine, ...]:
     """Explain each current observation's contribution at this revision."""
-    lines = [
-        _line_for(item, exclusions, query, conflict_ids) for item in current
-    ]
+    lines = [_line_for(item, exclusions, query, conflict_ids) for item in current]
     lines.sort(key=lambda item: item.observation_id)
     return tuple(lines)
 

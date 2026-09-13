@@ -91,9 +91,7 @@ def _gaps(
     query: EvaluationQuery,
 ) -> list[ObservationIssue]:
     covered = {
-        item.subject.account_id
-        for item in current
-        if item.lifecycle.scope_state == "complete"
+        item.subject.account_id for item in current if item.lifecycle.scope_state == "complete"
     }
     issues: list[ObservationIssue] = []
     for target in bundle.known_targets:
@@ -127,10 +125,7 @@ def _stale_and_partial(
         winner = current_by_group.get(group_key(item))
         if winner is None:
             continue
-        if (
-            item.lifecycle.scope_state == "partial"
-            and winner.lifecycle.scope_state == "complete"
-        ):
+        if item.lifecycle.scope_state == "partial" and winner.lifecycle.scope_state == "complete":
             issues.append(
                 ObservationIssue(
                     kind="partial_does_not_supersede",
