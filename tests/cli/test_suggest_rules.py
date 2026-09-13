@@ -462,6 +462,9 @@ class TestSuggestRulesCommand:
         assert "고유일 1일" in clean_output
         assert "일평균 5.0건" in clean_output
 
+    @patch("finjuice.pipeline.cli.commands.rules.sys.stdin.isatty", return_value=False)
+    @patch("finjuice.pipeline.tagging.suggestions.get_suggestion_coverage_stats")
+    @patch("finjuice.pipeline.tagging.suggestions.generate_merchant_context")
     def test_apply_requires_interactive_tty(
         self,
         mock_generate,
