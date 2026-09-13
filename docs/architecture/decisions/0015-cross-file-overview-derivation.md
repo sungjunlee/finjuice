@@ -64,7 +64,10 @@ B는 typed overview 구현을 완료하지 않는다. 관계가 검증돼도 기
 채택 시 다음 조건을 하나의 계약으로 적용한다. 아래 상태·필드는 개념 이름이며
 새 SQL 컬럼·enum·CLI JSON 명세를 이 문서에서 확정하지 않는다.
 
-1. 참조의 주체는 derived 원본 행의 provenance/observation이다. 동결 capture,
+1. B의 범위는 별도 파일의 derived 원본 행에서 `overview_facts`로 향하는 참조다.
+   derived→derived와 그 밖의 endpoint 종류는 지원 범위 밖이라는 사유를 원문과 함께
+   남기며 missing fact로 오인하지 않는다. 동일 파일의 기존 projection은 B가 대체하지 않는다.
+   참조의 주체는 derived 원본 행의 provenance/observation이다. 동결 capture,
    원문 `source_fact_id`, 파일·행 locator를 보존한다. 상대는 같은 capture에서 찾은
    실제 fact entity와 그 원래 provenance다. 동일 ID 후보가 여러 개여도 합치지 않는다.
 2. 고유 alias는 후보가 하나라는 뜻일 뿐이다. 참조 해소에는 원본의 명시적 locator,
@@ -79,18 +82,26 @@ B는 typed overview 구현을 완료하지 않는다. 관계가 검증돼도 기
    보존한다. 참조 요청과 후보 edge를 개념적으로 분리한다. 요청은 항상 실제 derived
    행과 capture를 가리키며, 후보 edge가 존재할 때만 실제 fact FK·endpoint 타입과
    동일 capture membership을 검사한다. missing은 edge 0개인 유효한 미해결 상태다.
-   ambiguous는 여러 유효 후보 edge를 갖되 선택된 대상은 없는 상태다. 검증된 대상은
+   고유·미검증은 edge 1개지만 선택된 대상은 없는 상태다. ambiguous는 여러 유효 후보
+   edge를 갖되 선택된 대상은 없는 상태다. 검증됨은 증거로 선택한 대상이 하나인 상태이며,
+   여러 후보 중 하나를 검증했어도 나머지 후보는 삭제하지 않는다. 검증된 대상은
    유효 후보 중 하나와 조건 2의 증거가 있어야 하며, 없거나 다른 capture인 endpoint를
    허용하는 예외는 두지 않는다. 모호한 참조는 후보 전체·각 occurrence와 판정 근거를 남긴다.
    현행 opaque payload와 issue는 삭제하거나 의미를 바꾸지 않는다.
 5. 동일 capture와 동일 판정 정책의 재실행은 같은 관계 ID·후보집합·판정을 만든다.
    참조 요청 ID는 capture digest + 버전된 record kind + canonical locator를 사용한다.
    locator에는 derived 원래 root/path/행좌표와 참조 필드의 이름·열 ordinal,
-   필드 내 여러 참조가 있을 경우 원문 token ordinal, 판정 정책 버전을 포함한다.
+   필드 내 여러 참조가 있을 경우 원문 token ordinal을 포함한다. 요청 ID는 원본 참조
+   지점을 가리키므로 판정 정책이 바뀌어도 유지한다. 판정 ID는 별도 버전된 kind와
+   요청 ID·정책 버전으로 정하며, 후보 edge는 판정 ID와 fact ID로 구분한다.
    따라서 한 행의 서로 다른 참조 지점도 별도 ID를 갖는다. 후보 edge의 locator는
-   요청 식별자와 fact entity 식별자를 함께 포함한다. attempt 시각·output hash·
+   판정 식별자와 fact entity 식별자를 함께 포함한다. attempt 시각·output hash·
    단독 alias는 ID 입력이 아니다. 후보는 안정된 fact entity ID 순으로 정렬한다. 정책이 바뀌면 별도 버전의 판정으로
    이전 근거를 보존하며, 기존 관계를 몰래 다시 해석하지 않는다.
+   원문 payload와 기존 issue는 최초 보존 당시의 불변 증거이고, 구조화 판정은 특정
+   정책 버전의 결과다. 둘이 다르게 보이더라도 원문을 덮어쓰거나 issue를 소급 해소하지
+   않는다. 소비자는 명시적으로 선택된 정책 버전의 판정과 최초 증거를 구별해야 한다.
+   선택된 판정 버전이 없으면 현재 해소 상태를 추정하지 않는다. 두 층 모두 복원·replay한다.
 6. 관계와 필요한 근거는 DB·불변 source의 백업 그래프에 포함되어야 한다.
    향후 테이블은 reader의 authoritative table 목록과 semantic replay, FK·capture
    membership·endpoint 타입 검증에 포함한다. 일반 관계의 `unknown`이나 자유 JSON에
@@ -129,4 +140,6 @@ Native 읽기 전용 검토로 현행 코드와 fixture 근거를 확인했다. 
 workspace trust 단계에서 차단되어 검토 결과가 없으며 우회하지 않았다.
 Opus 5 high의 단일 문서 검토는 참조 지점별 ID, 미해결 endpoint 검증,
 업그레이드/build 판정 동등성, B의 증거·효용 범위를 지적했다. 작성자가 위 조건에
-반영했다. 수정 후 추가 외부 리뷰는 하지 않았으므로 최종 문서의 재승인을 주장하지 않는다.
+반영했다. 이후 사용자가 현재 작업 폴더의 Cursor 신뢰를 승인하여 Grok 4.6 high 읽기 전용
+검토를 완료했다. 상태 분류, 요청/판정 ID 분리, 최초 증거와 버전된 판정의 역할,
+지원 endpoint 범위를 보완했다. 수정 후 재검토 승인을 주장하지 않는다.

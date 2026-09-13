@@ -91,6 +91,7 @@ def _sample_suggestion(
     result: dict[str, object] = {
         "merchant": "Netflix",
         "transaction_count": 3,
+        "distinct_dates": 1,
         "total_amount": 51000.0,
         "avg_amount": 17000.0,
         "amount_stddev": 0.0,
@@ -191,6 +192,7 @@ class TestGenerateMerchantContext:
         suggestion = suggestions[0]
         assert suggestion["merchant"] == "Netflix"
         assert suggestion["transaction_count"] == 2
+        assert suggestion["distinct_dates"] == 2
         assert suggestion["total_amount"] == 34000.0
         assert suggestion["avg_amount"] == 17000.0
         assert suggestion["amount_stddev"] == 0.0
@@ -217,6 +219,33 @@ class TestGenerateMerchantContext:
         assert rule["tags"] == ["구독", "정기지출"]
         # recurring merchant gets priority boost
         assert rule["priority"] == 85
+
+    def test_same_day_rows_report_distinct_dates(self, tmp_path: Path) -> None:
+        """Five same-merchant same-day rows are one visit, not five."""
+        data_dir = tmp_path / "data"
+        create_test_transactions(
+            data_dir,
+            [
+                _transaction(
+                    f"same_day_{index}",
+                    "2024-10-01",
+                    "CafeSameDay",
+                    -5000.0,
+                    tags_final=[],
+                    time=f"1{index}:00:00",
+                    source_row=index,
+                )
+                for index in range(1, 6)
+            ],
+        )
+
+        suggestions = generate_merchant_context(data_dir, top_n=5, min_count=2)
+
+        assert len(suggestions) == 1
+        suggestion = suggestions[0]
+        assert suggestion["merchant"] == "CafeSameDay"
+        assert suggestion["transaction_count"] == 5
+        assert suggestion["distinct_dates"] == 1
 
     def test_respects_top_n_and_min_count(self, tmp_path: Path) -> None:
         """Applies min-count filtering and top-N limiting."""

@@ -6,7 +6,7 @@ Split from pipeline.py as part of Issue #269.
 
 import logging
 from contextlib import nullcontext
-from typing import Any
+from typing import Any, NoReturn
 
 import typer
 
@@ -31,7 +31,6 @@ from finjuice.pipeline.cli.output import (
     warning,
 )
 from finjuice.pipeline.cli.utils import (
-    get_config,
     get_mutation_facade,
     mutation_identity,
     warn_on_schema_mismatch,
@@ -60,6 +59,44 @@ BULK_TAG_AUDIT_FIELDS = [
 def _count_transaction_partitions(csv_base_dir: Any) -> int:
     """Count transaction CSV partitions without reading private row contents."""
     return sum(1 for _ in csv_base_dir.glob("*/*/transactions.csv"))
+
+
+def _exit_with_tag_usage(ctx: typer.Context | None) -> NoReturn:
+    """Print tag command usage and exit without a traceback."""
+    if ctx is not None:
+        typer.echo(ctx.get_help())
+    raise typer.Exit(0)
+
+
+def _exit_with_missing_tag_config() -> NoReturn:
+    """Exit non-zero when tag ran without initialized CLI configuration."""
+    emit_error(
+        "Tag command is missing CLI configuration. Re-run with a valid --data-dir.",
+        error_code=ErrorCode.UNEXPECTED_ERROR,
+        exit_code=ExitCode.GENERAL_ERROR,
+        suggestion="finjuice tag --help",
+        command="tag",
+    )
+
+
+# Typer's normal --help flow cannot be relied on here: `--edit` takes a value,
+# so `finjuice tag --edit --help` swallows `--help` as the edit argument instead
+# of showing command help. Exit 0 with usage only for that swallow case.
+def _require_tag_config(ctx: typer.Context | None, edit: str | None) -> Any:
+    """Return CLI config, or fail when configuration was never initialized.
+
+    ``finjuice tag --edit --help`` treats ``--help`` as the ``--edit`` value,
+    so the root callback skips config setup. Exit 0 with usage only for that
+    swallow case; other missing-config paths fail with a readable error.
+    """
+    if edit in {"--help", "-h"}:
+        _exit_with_tag_usage(ctx)
+    if ctx is None or not isinstance(getattr(ctx, "obj", None), dict):
+        _exit_with_missing_tag_config()
+    config = ctx.obj.get("config")
+    if config is None:
+        _exit_with_missing_tag_config()
+    return config
 
 
 def _compute_tag(config: Any, dry_run: bool, json_output: bool) -> dict[str, Any]:
@@ -231,7 +268,7 @@ def tag_command(
 
     Use --dry-run to preview changes before applying them.
     """
-    config = get_config(ctx)
+    config = _require_tag_config(ctx, edit)
 
     try:
         warn_on_schema_mismatch(config.data_dir)

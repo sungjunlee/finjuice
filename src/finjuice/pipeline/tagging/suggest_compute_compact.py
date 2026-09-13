@@ -28,6 +28,7 @@ def _compact_rule_suggestion(suggestion: dict[str, Any]) -> dict[str, Any]:
     active_months = suggestion.get("active_months") or []
     return {
         "transaction_count": int(suggestion.get("transaction_count") or 0),
+        "distinct_dates": int(suggestion.get("distinct_dates") or 0),
         "active_month_count": len(active_months),
         "is_recurring": bool(suggestion.get("is_recurring")),
         "banksalad_category": suggestion.get("banksalad_category"),

@@ -41,6 +41,7 @@ def _merchant_context_query(file_id: str | None = None) -> str:
         SELECT
             merchant_raw AS merchant,
             COUNT(*) AS transaction_count,
+            COUNT(DISTINCT CAST(date AS DATE)) AS distinct_dates,
             SUM(ABS(amount)) AS total_amount,
             AVG(ABS(amount)) AS avg_amount,
             COALESCE(STDDEV_SAMP(ABS(amount)), 0.0) AS amount_stddev,

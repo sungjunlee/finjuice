@@ -86,6 +86,7 @@ def _render_suggestion_context_table(
             suggestion["merchant"],
             (
                 f"{int(suggestion['transaction_count']):,}건\n"
+                f"{int(suggestion.get('distinct_dates') or 0):,}일\n"
                 f"평균 ₩{float(suggestion['avg_amount']):,.0f}\n"
                 f"총액 ₩{float(suggestion['total_amount']):,.0f}"
             ),

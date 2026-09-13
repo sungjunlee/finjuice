@@ -121,6 +121,7 @@ but still describes the current 0.7.1 runtime until the operational cutover:
 12. **Agent Package Layout** - Keep the current skill suite canonical; defer named bundles
 13. **Banksalad Overview Workbook Ingest** - Capture `뱅샐현황` facts and derive typed projections
 14. **SQLite Authority** - Immutable sources, atomic SQLite authority, and derived CSV after cutover
+15. **Cross-file Overview Reference Evidence** - Proposed; adoption pending
 
 ## Superseded ADRs
 

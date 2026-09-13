@@ -74,7 +74,7 @@ command/code/exit-code combinations against this schema.
 | `schemas/rules_export.schema.json` | rules export --json output | `rule_count`, `rules` |
 | `schemas/rules_gaps.schema.json` | rules gaps --json output | `summary`, `critical_gaps`, `mismatches`, `simulations` |
 | `schemas/rules_list.schema.json` | rules list --json output | `rule_count`, `rules` |
-| `schemas/rules_remove.schema.json` | rules remove --json output | `action`, `rule_name` |
+| `schemas/rules_remove.schema.json` | rules remove --json output | `action`, `rule_name`, `validation` |
 | `schemas/rules_suggest.schema.json` | rules suggest --json output | - |
 | `schemas/rules_test.schema.json` | rules test --json output | `rule_name`, `scope`, `match_count`, `sample`, `monthly_distribution`, `cross_tags_top` |
 | `schemas/rules_validate.schema.json` | rules validate --json output | `status`, `total_rules`, `errors`, `warnings`, `passed`, `problems` |
@@ -4863,6 +4863,9 @@ rules add --json output
           ],
           "type": "string"
         },
+        "total_problems": {
+          "type": "integer"
+        },
         "total_rules": {
           "type": "integer"
         },
@@ -4876,7 +4879,8 @@ rules add --json output
         "errors",
         "warnings",
         "passed",
-        "problems"
+        "problems",
+        "total_problems"
       ],
       "type": "object"
     }
@@ -5266,6 +5270,7 @@ rules remove --json output
 | `_meta` | `$ref` _meta.schema.json | yes |
 | `action` | enum(`removed`) | yes |
 | `rule_name` | `string` | yes |
+| `validation` | `object` | yes |
 
 ```json
 {
@@ -5284,12 +5289,87 @@ rules remove --json output
     },
     "rule_name": {
       "type": "string"
+    },
+    "validation": {
+      "additionalProperties": true,
+      "properties": {
+        "errors": {
+          "type": "integer"
+        },
+        "passed": {
+          "type": "integer"
+        },
+        "problems": {
+          "items": {
+            "additionalProperties": true,
+            "properties": {
+              "message": {
+                "type": "string"
+              },
+              "rules": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "severity": {
+                "type": "string"
+              },
+              "suggestion": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "severity",
+              "type",
+              "message",
+              "rules",
+              "suggestion"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "status": {
+          "enum": [
+            "valid",
+            "issues"
+          ],
+          "type": "string"
+        },
+        "total_problems": {
+          "type": "integer"
+        },
+        "total_rules": {
+          "type": "integer"
+        },
+        "warnings": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "status",
+        "total_rules",
+        "errors",
+        "warnings",
+        "passed",
+        "problems",
+        "total_problems"
+      ],
+      "type": "object"
     }
   },
   "required": [
     "_meta",
     "action",
-    "rule_name"
+    "rule_name",
+    "validation"
   ],
   "title": "rules remove --json output",
   "type": "object"
@@ -5396,6 +5476,11 @@ rules suggest --json output
     "suggestions": {
       "items": {
         "additionalProperties": true,
+        "properties": {
+          "distinct_dates": {
+            "type": "integer"
+          }
+        },
         "type": "object"
       },
       "type": "array"

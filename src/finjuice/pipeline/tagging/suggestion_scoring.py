@@ -169,6 +169,7 @@ def generate_merchant_context(
         suggestion: dict[str, Any] = {
             "merchant": merchant,
             "transaction_count": int(context.get("transaction_count") or 0),
+            "distinct_dates": int(context.get("distinct_dates") or 0),
             "total_amount": round(float(context.get("total_amount") or 0.0), 2),
             "avg_amount": round(avg_amount, 2),
             "amount_stddev": round(float(context.get("amount_stddev") or 0.0), 2),

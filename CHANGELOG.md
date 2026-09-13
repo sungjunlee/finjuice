@@ -9,6 +9,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+User-facing PRs add a bullet here (`Added` / `Changed` / `Fixed` / `Removed`).
+Release prep moves these bullets into `## [X.Y.Z]`. Refactor-only PRs skip this.
+
+---
+
+## [0.8.2] - 2026-09-13
+
+### Fixed
+
+- `finjuice tag --edit --help` no longer crashes with a traceback; malformed
+  `--edit` values fail with a readable message (#482).
+- `finjuice rules add` and `rules remove` JSON output no longer flood
+  pre-existing overlap warnings; the full count stays in `total_problems`
+  (#483).
+- `finjuice rules add --match` help text now describes the actual
+  case-insensitive substring matching instead of regex (#484).
+
+### Added
+
+- `finjuice rules suggest` rows include `distinct_dates` so repeated
+  same-day approval rows are not mistaken for separate store visits (#486).
+
+---
+
+## [0.8.1] - 2026-09-12
+
+### Changed
+
+- Release rules live in `docs/development/release.md`. `just bump-version` now
+  refreshes `uv.lock`, and `just version-check` fails when package version,
+  lock, skills, and CHANGELOG disagree.
+
+### Fixed
+
+- `finjuice reconcile` no longer greedy-partials unrelated in-window spend onto
+  a much larger evidence amount, and installment combination search is capped
+  so a busy ledger month stays unmatched instead of hanging (#478).
+
 ---
 
 ## [0.8.0] - 2026-09-12
@@ -16,8 +54,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Highlights
 
 Feature release for agent ingest UX and a first evidence-reconcile slice.
-GitHub now tags this line as `v0.8.0` (0.7.3 existed only as an untagged
-`main` install).
+GitHub now tags this line as `v0.8.0`. Package versions `0.7.2` and `0.7.3`
+existed only as untagged `main` installs and must not be reused.
 
 ### Added
 
@@ -534,12 +572,12 @@ pip install finjuice
 - **Schema**: v2 with 24 columns (see templates/schema.yaml)
 - **Platforms**: macOS, Linux, Windows (via WSL)
 
-## Release Links
-
-- [v0.4.0](https://github.com/sungjunlee/finjuice/releases/tag/v0.4.0) - Interactive import, multi-format export, AI enhancements
-- [v0.3.0](https://github.com/sungjunlee/finjuice/releases/tag/v0.3.0) - Zero-config first-run experience
-- [v0.2.0](https://github.com/sungjunlee/finjuice/releases/tag/v0.2.0) - Rebrand to finjuice
-- [v0.1.0](https://github.com/sungjunlee/finjuice/releases/tag/v0.1.0) - Initial release
+[Unreleased]: https://github.com/sungjunlee/finjuice/compare/v0.8.2...HEAD
+[0.8.2]: https://github.com/sungjunlee/finjuice/compare/v0.8.1...v0.8.2
+[0.8.1]: https://github.com/sungjunlee/finjuice/compare/v0.8.0...v0.8.1
+[0.8.0]: https://github.com/sungjunlee/finjuice/compare/v0.7.1...v0.8.0
+[0.7.1]: https://github.com/sungjunlee/finjuice/compare/v0.7.0...v0.7.1
+[0.7.0]: https://github.com/sungjunlee/finjuice/releases/tag/v0.7.0
 
 ---
 
