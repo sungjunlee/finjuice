@@ -19,6 +19,7 @@ from finjuice.pipeline.storage.csv_schema import CSV_COLUMNS, POLARS_SCHEMA
 from finjuice.pipeline.storage.sqlite.analysis_reads import AnalysisReadSnapshot
 from finjuice.pipeline.storage.sqlite.checkup_reads import CheckupReadSnapshot
 from finjuice.pipeline.storage.sqlite.errors import RepositoryIntegrityError
+from finjuice.pipeline.storage.sqlite.history_reads import HistoryReadSnapshot
 from finjuice.pipeline.storage.sqlite.portfolio_reads import PortfolioReadSnapshot
 from finjuice.pipeline.storage.sqlite.repository import RepositoryReader
 from finjuice.pipeline.storage.sqlite.status_reads import StatusReadSnapshot
@@ -40,6 +41,13 @@ def read_transaction_snapshot(
     A shared lease prevents cutover while the selected generation is copied.
     """
     return _read_snapshot(data_dir, evidence_provider, RepositoryReader.transaction_snapshot)
+
+
+def read_history_snapshot(
+    data_dir: Path, evidence_provider: ActivationEvidenceProvider | None = None
+) -> HistoryReadSnapshot | None:
+    """Read complete history evidence with the shared fail-closed authority seam."""
+    return _read_snapshot(data_dir, evidence_provider, RepositoryReader.history_snapshot)
 
 
 def read_status_snapshot(

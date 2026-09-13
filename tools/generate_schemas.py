@@ -477,16 +477,35 @@ history_schema = command_schema(
     "history --json output",
     {
         "count": integer,
+        "summary": object_schema(
+            {
+                "known_source_rows": integer,
+                "unknown_source_rows_records": integer,
+                "archived_files": integer,
+                "unknown_archive_records": integer,
+            }
+        ),
         "records": array_of(
             object_schema(
                 {
                     "archived": {"type": ["boolean", "string", "null"]},
                     "archived_path": string_or_null,
-                    "file_id": string,
-                    "imported_at": string,
+                    "file_id": string_or_null,
+                    "imported_at": string_or_null,
                     "imported_from": string_or_null,
                     "original_filename": string_or_null,
                     "source_rows": integer_or_null,
+                    "origin": string,
+                    "occurrence_id": string,
+                    "artifact_id": string,
+                    "provenance_id": string,
+                    "source_row": integer,
+                    "source_fields": object_any,
+                    "source_cells": array_of(object_any),
+                    "field_issues": array_of(string),
+                    "legacy_file_ids": array_of(string),
+                    "import_counts": object_any,
+                    "source_artifact_preserved": boolean,
                 },
                 required=["file_id", "imported_at"],
             )

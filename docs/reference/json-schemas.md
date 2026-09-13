@@ -2899,6 +2899,7 @@ history --json output
 | `_meta` | `$ref` _meta.schema.json | yes |
 | `count` | `integer` | yes |
 | `records` | `array`[`object`] | yes |
+| `summary` | `object` | no |
 
 ```json
 {
@@ -2929,11 +2930,30 @@ history --json output
               "null"
             ]
           },
-          "file_id": {
+          "artifact_id": {
             "type": "string"
           },
+          "field_issues": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "file_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "import_counts": {
+            "additionalProperties": true,
+            "type": "object"
+          },
           "imported_at": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "imported_from": {
             "type": [
@@ -2941,11 +2961,43 @@ history --json output
               "null"
             ]
           },
+          "legacy_file_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "occurrence_id": {
+            "type": "string"
+          },
+          "origin": {
+            "type": "string"
+          },
           "original_filename": {
             "type": [
               "string",
               "null"
             ]
+          },
+          "provenance_id": {
+            "type": "string"
+          },
+          "source_artifact_preserved": {
+            "type": "boolean"
+          },
+          "source_cells": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "source_fields": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "source_row": {
+            "type": "integer"
           },
           "source_rows": {
             "type": [
@@ -2961,6 +3013,24 @@ history --json output
         "type": "object"
       },
       "type": "array"
+    },
+    "summary": {
+      "additionalProperties": true,
+      "properties": {
+        "archived_files": {
+          "type": "integer"
+        },
+        "known_source_rows": {
+          "type": "integer"
+        },
+        "unknown_archive_records": {
+          "type": "integer"
+        },
+        "unknown_source_rows_records": {
+          "type": "integer"
+        }
+      },
+      "type": "object"
     }
   },
   "required": [

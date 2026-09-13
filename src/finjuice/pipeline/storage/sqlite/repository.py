@@ -23,6 +23,7 @@ from finjuice.pipeline.storage.sqlite.checkup_reads import (
 )
 from finjuice.pipeline.storage.sqlite.errors import RepositoryPathError
 from finjuice.pipeline.storage.sqlite.exact import ExactValue
+from finjuice.pipeline.storage.sqlite.history_reads import HistoryReadSnapshot, history_snapshot
 from finjuice.pipeline.storage.sqlite.ids import (
     canonical_locator,
     migration_entity_id,
@@ -667,6 +668,12 @@ class RepositoryReader(AbstractContextManager["RepositoryReader"]):
         if self._closed:
             raise RuntimeError("Repository reader is already closed.")
         return portfolio_snapshot(self._connection, self.info, self._repository_paths)
+
+    def history_snapshot(self) -> HistoryReadSnapshot:
+        """Return complete legacy/native history evidence from this pinned revision."""
+        if self._closed:
+            raise RuntimeError("Repository reader is already closed.")
+        return history_snapshot(self._connection, self._repository_paths, self.info)
 
     def status_snapshot(self) -> StatusReadSnapshot:
         """Return status evidence from the same validated transaction snapshot."""
