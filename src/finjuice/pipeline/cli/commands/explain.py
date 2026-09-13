@@ -28,6 +28,9 @@ from finjuice.pipeline.tagging.rules import apply_tagging_rules_v3, load_rules
 
 logger = logging.getLogger(__name__)
 
+_MAX_LISTED_CANDIDATES = 5
+_MAX_SEARCH_CANDIDATES = 10
+
 
 def _search_transactions(
     config: Any,
@@ -52,7 +55,7 @@ def _search_transactions(
             FROM transactions
             WHERE {where_sql}
             ORDER BY date DESC
-            LIMIT 10
+            LIMIT {_MAX_SEARCH_CANDIDATES}
         """
         result: pl.DataFrame = analytics.conn.execute(sql, params).pl()
         return result
@@ -65,8 +68,12 @@ def _row_at(df: pl.DataFrame, index_1based: int) -> dict[str, Any]:
 
 def _validate_pick(pick: int, match_count: int) -> None:
     """Raise ValueError when ``--pick`` is outside the listed candidate range."""
-    if pick < 1 or pick > match_count:
-        raise ValueError(f"Invalid --pick {pick}: choose a number from 1 to {match_count}.")
+    listed = min(match_count, _MAX_LISTED_CANDIDATES)
+    if pick < 1 or pick > listed:
+        raise ValueError(
+            f"Invalid --pick {pick}: choose a number from 1 to {listed} "
+            f"({match_count} matches found, top {listed} listed)."
+        )
 
 
 def _prompt_transaction_choice(df: pl.DataFrame) -> tuple[dict[str, Any], int] | None:
@@ -239,7 +246,6 @@ def explain_command(
         None,
         "--pick",
         help="Select the nth listed match (1-based) without prompting",
-        min=1,
     ),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
@@ -295,8 +301,11 @@ def explain_command(
         return
 
     # 3. Select transaction if multiple found
+    # Candidates are capped to the listed top rows so --pick indexes and the
+    # interactive prompt operate on the same list.
     candidates = [
-        {"index": idx, **row} for idx, row in enumerate(df.iter_rows(named=True), start=1)
+        {"index": idx, **row}
+        for idx, row in enumerate(df.head(_MAX_LISTED_CANDIDATES).iter_rows(named=True), start=1)
     ]
     selected = _selected_row_or_error(df, json_output, pick)
     if not selected:

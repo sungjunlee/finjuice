@@ -285,3 +285,26 @@ def test_explain_prompts_when_multiple_match_without_flags(multi_explain_data_di
     assert "Select transaction number" in text
     assert "Starbucks Jamsil" in text
     assert "Americano" in text
+
+
+def test_explain_pick_zero_raises_value_error():
+    from finjuice.pipeline.cli.commands.explain import _validate_pick
+
+    with pytest.raises(ValueError, match="Invalid --pick 0"):
+        _validate_pick(0, 4)
+
+
+def test_explain_pick_beyond_listed_top5_is_rejected():
+    import pytest
+
+    from finjuice.pipeline.cli.commands.explain import _validate_pick
+
+    # 10 matches exist (search LIMIT 10) but only 5 are listed
+    with pytest.raises(ValueError, match="top 5 listed"):
+        _validate_pick(7, 10)
+
+
+def test_explain_pick_within_listed_top5_accepted():
+    from finjuice.pipeline.cli.commands.explain import _validate_pick
+
+    _validate_pick(5, 10)  # should not raise
