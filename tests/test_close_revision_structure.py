@@ -179,12 +179,8 @@ def test_reopen_reclose_retry_and_restore_keep_history(tmp_path: Path) -> None:
     operations = importlib.import_module(OPERATIONS_MODULE)
     report = importlib.import_module(REPORT_MODULE)
     live = CloseStore(tmp_path / "live")
-    first = operations.close_month(
-        live, _snapshot(), occurred_at="2026-02-02T00:00:00+00:00"
-    )
-    operations.retry_close(
-        live, _snapshot(), occurred_at="2026-02-02T01:00:00+00:00"
-    )
+    first = operations.close_month(live, _snapshot(), occurred_at="2026-02-02T00:00:00+00:00")
+    operations.retry_close(live, _snapshot(), occurred_at="2026-02-02T01:00:00+00:00")
     operations.reopen_month(
         live, "2026-01", occurred_at="2026-02-03T00:00:00+00:00", reason="late_source"
     )
@@ -200,9 +196,7 @@ def test_reopen_reclose_retry_and_restore_keep_history(tmp_path: Path) -> None:
         ),
         unconfirmed_item_ids=("xfer-1",),
     )
-    second = operations.close_month(
-        live, second_input, occurred_at="2026-02-11T00:00:00+00:00"
-    )
+    second = operations.close_month(live, second_input, occurred_at="2026-02-11T00:00:00+00:00")
 
     assert first.close_revision == 1
     assert second.close_revision == 2

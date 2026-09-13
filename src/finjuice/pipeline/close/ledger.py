@@ -138,9 +138,7 @@ class CloseStore:
         for period, revisions in sorted(self._periods.items()):
             periods[period] = {
                 "current_revision": self._current.get(period),
-                "revisions": [
-                    revisions[key].to_dict() for key in sorted(revisions)
-                ],
+                "revisions": [revisions[key].to_dict() for key in sorted(revisions)],
             }
         payload = {
             "schema_version": LEDGER_SCHEMA_VERSION,
