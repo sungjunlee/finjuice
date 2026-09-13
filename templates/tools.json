@@ -1580,7 +1580,7 @@
           },
           "match": {
             "type": "string",
-            "description": "Pipe-separated regex patterns"
+            "description": "Pipe-separated case-insensitive substring patterns"
           },
           "tags": {
             "type": "string",

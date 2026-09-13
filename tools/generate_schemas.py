@@ -1130,6 +1130,22 @@ rules_validation_summary_schema = object_schema(
     required=["status", "total_rules", "errors", "warnings", "passed", "problems"],
 )
 
+rules_mutation_validation_schema = object_schema(
+    {
+        **dict(rules_validation_summary_schema["properties"]),
+        "total_problems": integer,
+    },
+    required=[
+        "status",
+        "total_rules",
+        "errors",
+        "warnings",
+        "passed",
+        "problems",
+        "total_problems",
+    ],
+)
+
 rules_validate_schema = command_schema(
     "rules_validate.schema.json",
     "rules validate --json output",
@@ -1149,7 +1165,7 @@ rules_add_schema = command_schema(
         "preview_action": {"enum": ["would_add", "would_update"], "type": "string"},
         "rule": rule_detail_schema,
         "rules_file_modified": boolean,
-        "validation": rules_validation_summary_schema,
+        "validation": rules_mutation_validation_schema,
     },
     ["action", "rule", "validation"],
 )
@@ -1157,8 +1173,12 @@ rules_add_schema = command_schema(
 rules_remove_schema = command_schema(
     "rules_remove.schema.json",
     "rules remove --json output",
-    {"action": {"enum": ["removed"], "type": "string"}, "rule_name": string},
-    ["action", "rule_name"],
+    {
+        "action": {"enum": ["removed"], "type": "string"},
+        "rule_name": string,
+        "validation": rules_mutation_validation_schema,
+    },
+    ["action", "rule_name", "validation"],
 )
 
 rules_test_schema = command_schema(
@@ -1180,6 +1200,12 @@ rules_test_schema = command_schema(
     ["rule_name", "scope", "match_count", "sample", "monthly_distribution", "cross_tags_top"],
 )
 
+rules_suggest_suggestion_schema = object_schema(
+    {
+        "distinct_dates": integer,
+    },
+)
+
 rules_suggest_schema = command_schema(
     "rules_suggest.schema.json",
     "rules suggest --json output",
@@ -1195,7 +1221,7 @@ rules_suggest_schema = command_schema(
         "suggestable_coverage_before_pct": number,
         "suggestable_total_count": integer,
         "suggestable_untagged_count": integer,
-        "suggestions": array_of(object_any),
+        "suggestions": array_of(rules_suggest_suggestion_schema),
         "total_count": integer,
         "transfer_exclusions": object_schema(
             {

@@ -5,7 +5,7 @@ Split from pipeline.py as part of Issue #269.
 """
 
 import logging
-from typing import Any
+from typing import Any, NoReturn
 
 import typer
 
@@ -13,6 +13,7 @@ from finjuice.pipeline.cli.audit_log import append_financial_mutation_event
 from finjuice.pipeline.cli.commands.tag_edit import (
     _compute_tag_edit,
     _render_tag_edit,
+    _validate_edit_row_hash,
 )
 from finjuice.pipeline.cli.output import (
     ErrorCode,
@@ -23,7 +24,7 @@ from finjuice.pipeline.cli.output import (
     success,
     warning,
 )
-from finjuice.pipeline.cli.utils import get_config, warn_on_schema_mismatch
+from finjuice.pipeline.cli.utils import warn_on_schema_mismatch
 from finjuice.pipeline.constants import SCHEMA_VERSION
 from finjuice.pipeline.metadata import write_schema_version
 
@@ -42,6 +43,44 @@ BULK_TAG_AUDIT_FIELDS = [
 def _count_transaction_partitions(csv_base_dir: Any) -> int:
     """Count transaction CSV partitions without reading private row contents."""
     return sum(1 for _ in csv_base_dir.glob("*/*/transactions.csv"))
+
+
+def _exit_with_tag_usage(ctx: typer.Context | None) -> NoReturn:
+    """Print tag command usage and exit without a traceback."""
+    if ctx is not None:
+        typer.echo(ctx.get_help())
+    raise typer.Exit(0)
+
+
+def _exit_with_missing_tag_config() -> NoReturn:
+    """Exit non-zero when tag ran without initialized CLI configuration."""
+    emit_error(
+        "Tag command is missing CLI configuration. Re-run with a valid --data-dir.",
+        error_code=ErrorCode.UNEXPECTED_ERROR,
+        exit_code=ExitCode.GENERAL_ERROR,
+        suggestion="finjuice tag --help",
+        command="tag",
+    )
+
+
+# Typer's normal --help flow cannot be relied on here: `--edit` takes a value,
+# so `finjuice tag --edit --help` swallows `--help` as the edit argument instead
+# of showing command help. Exit 0 with usage only for that swallow case.
+def _require_tag_config(ctx: typer.Context | None, edit: str | None) -> Any:
+    """Return CLI config, or fail when configuration was never initialized.
+
+    ``finjuice tag --edit --help`` treats ``--help`` as the ``--edit`` value,
+    so the root callback skips config setup. Exit 0 with usage only for that
+    swallow case; other missing-config paths fail with a readable error.
+    """
+    if edit in {"--help", "-h"}:
+        _exit_with_tag_usage(ctx)
+    if ctx is None or not isinstance(getattr(ctx, "obj", None), dict):
+        _exit_with_missing_tag_config()
+    config = ctx.obj.get("config")
+    if config is None:
+        _exit_with_missing_tag_config()
+    return config
 
 
 def _compute_tag(config: Any, dry_run: bool, json_output: bool) -> dict[str, Any]:
@@ -137,7 +176,7 @@ def tag_command(
 
     Use --dry-run to preview changes before applying them.
     """
-    config = get_config(ctx)
+    config = _require_tag_config(ctx, edit)
 
     try:
         warn_on_schema_mismatch(config.data_dir)
@@ -154,6 +193,7 @@ def tag_command(
             )
 
         if edit is not None:
+            _validate_edit_row_hash(edit)
             result = _compute_tag_edit(
                 config,
                 edit,

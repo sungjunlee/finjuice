@@ -2,11 +2,14 @@
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import polars as pl
 import pytest
+import typer
 from typer.testing import CliRunner
 
+from finjuice.pipeline.cli.commands.tag import _require_tag_config
 from finjuice.pipeline.cli.main import app
 from finjuice.pipeline.storage.csv_partition import read_month, write_month
 from finjuice.pipeline.tagging.manual import MANUAL_CATEGORY_PREFIX
@@ -306,7 +309,7 @@ def test_tag_edit_no_op_does_not_append_audit_event(review_data_dir: Path) -> No
     assert _read_audit_events(review_data_dir) == []
 
 
-def test_tag_edit_invalid_row_hash_returns_error(tag_edit_data_dir: Path) -> None:
+def test_tag_edit_unknown_row_hash_returns_error(tag_edit_data_dir: Path) -> None:
     """Unknown row_hash should exit with a machine-readable NO_DATA error."""
     result = runner.invoke(
         app,
@@ -315,7 +318,7 @@ def test_tag_edit_invalid_row_hash_returns_error(tag_edit_data_dir: Path) -> Non
             str(tag_edit_data_dir),
             "tag",
             "--edit",
-            "missinghash",
+            "ffffffffffffffff",
             "--add-tag",
             "검진",
             "--json",
@@ -607,3 +610,42 @@ def test_tag_edit_json_includes_needs_review(review_data_dir: Path) -> None:
     txn = payload["transaction"]
     assert txn["needs_review"] == 0
     assert txn["confidence"] == 1.0
+
+
+def test_tag_edit_help_after_edit_flag_exits_without_traceback() -> None:
+    """`tag --edit --help` should show usage instead of crashing on missing config."""
+    result = runner.invoke(app, ["tag", "--edit", "--help"])
+
+    assert result.exit_code == 0, result.output
+    assert "Traceback" not in result.output
+    assert "AttributeError" not in result.output
+    output = result.output
+    assert "Usage" in output or "--edit" in output
+
+
+def test_require_tag_config_missing_context_exits_nonzero() -> None:
+    """Missing config outside the `--edit --help` swallow case must fail."""
+    with pytest.raises(typer.Exit) as exc_info:
+        _require_tag_config(None, None)
+
+    assert exc_info.value.exit_code != 0
+
+    ctx = SimpleNamespace(obj={"config": None})
+    with pytest.raises(typer.Exit) as exc_info:
+        _require_tag_config(ctx, STARBUCKS_HASH)  # type: ignore[arg-type]
+
+    assert exc_info.value.exit_code != 0
+
+
+def test_tag_edit_malformed_hash_exits_with_readable_error(tag_edit_data_dir: Path) -> None:
+    """`--edit` with a non-hash value should fail fast with a readable error."""
+    result = runner.invoke(
+        app,
+        ["--data-dir", str(tag_edit_data_dir), "tag", "--edit", "not-a-hash"],
+    )
+
+    assert result.exit_code != 0
+    assert "Traceback" not in result.output
+    output = result.output.lower()
+    assert "row_hash" in output or "hexadecimal" in output
+    assert "16" in result.output

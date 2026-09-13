@@ -105,7 +105,10 @@ def _compute_add_rule(
     result: dict[str, Any] = {
         "action": action,
         "rule": _serialize_rule_payload(candidate_rule),
-        "validation": _serialize_validation_summary(validation_result),
+        "validation": _serialize_validation_summary(
+            validation_result,
+            focus_rule=candidate_rule.name,
+        ),
     }
 
     if dry_run:
@@ -186,7 +189,11 @@ def _compute_add_rule(
 def add_rule_command(
     ctx: typer.Context,
     name: str = typer.Option(..., "--name", help="Rule name (letters, numbers, underscores)"),
-    match_pattern: str = typer.Option(..., "--match", help="Pipe-separated regex patterns"),
+    match_pattern: str = typer.Option(
+        ...,
+        "--match",
+        help="Pipe-separated case-insensitive substring patterns",
+    ),
     tags: str = typer.Option(..., "--tags", help="Comma-separated tags"),
     category: Optional[str] = typer.Option(None, "--category", help="Optional category"),
     priority: int = typer.Option(
@@ -226,6 +233,7 @@ def _compute_remove_rule(
 ) -> dict[str, Any]:
     """Compute the result payload for `finjuice rules remove`."""
     from finjuice.pipeline.tagging.rules_yaml_io import load_rules, remove_rule_roundtrip
+    from finjuice.pipeline.tagging.validator import validate_rules
 
     command = "rules remove"
 
@@ -297,7 +305,18 @@ def _compute_remove_rule(
         rule_name=name,
         change_summary="rule removed",
     )
-    return {"action": "removed", "rule_name": name}
+    # Validate the post-removal rule set so the reported state reflects what
+    # is actually on disk after the mutation.
+    remaining_rules = load_rules(config.rules_file)
+    validation_result = validate_rules(remaining_rules)
+    return {
+        "action": "removed",
+        "rule_name": name,
+        "validation": _serialize_validation_summary(
+            validation_result,
+            focus_rule=name,
+        ),
+    }
 
 
 def remove_rule_command(
