@@ -4,7 +4,8 @@
 
 - 로드맵: https://github.com/sungjunlee/finjuice/issues/425
 - 실행 계약/시작 프롬프트: `goals/finjuice-ssot.md`.
-- 활성 실행 계획: `backlog/sprints/2026-09-ssot-m2-storage.md`. #433 완료, #434는 ready PR #463에서 진행 중이다. 2026-09-12 다른 세션의 main PR #473~#476을 통합해 대상 파일 import·legacy 처리 이력, 증빙 대사 첫 부분과 0.8.0 버전을 보존했다. 최신 head의 로컬/설치본/CI 검증 근거는 PR #463과 Issue #434에서 확인한다. GitHub 필수 approving review 1건 후 머지하며, #434 완료 후 #435로 넘어간다. #436 정본 export가 없어 active import/refresh는 앞선 변경 영수증을 보존하고 export에서 실패한다. 이번 통합에서 운영 데이터 이전이나 SQLite 활성화는 수행하지 않았다. 실행 작업 공간은 `git worktree list`로 확인한다.
+- 활성 실행 계획: `backlog/sprints/2026-09-ssot-m2-storage.md`. #433 완료, #434는 ready PR #463에서 진행 중이다. 2026-09-12 다른 세션의 main PR #473~#476을 통합해 대상 파일 import·legacy 처리 이력, 증빙 대사 첫 부분과 0.8.0 버전을 보존했다. 최신 head의 로컬/설치본/CI 검증 근거는 PR #463과 Issue #434에서 확인한다. GitHub 필수 approving review 1건 후 머지한다. 2026-09-12 추가 위임으로 #435 합성 준비를 #463 head 4fcf0b7 기반 별도 stacked branch `codex/ssot-m2-migrate`에서 진행한다. #434 머지나 #435 전체 완료를 뜻하지 않는다. #436 정본 export가 없어 active import/refresh는 앞선 변경 영수증을 보존하고 export에서 실패한다. 이번 통합에서 운영 데이터 이전이나 SQLite 활성화는 수행하지 않았다. 실행 작업 공간은 `git worktree list`로 확인한다.
+- 2026-09-13 현재 #435 작업은 PR #481 / `codex/ssot-m2-migrate`다. main 0.8.2를 `5297c05`로 통합했고 전체 3,303 PASS·1 SKIP를 확인했다. canonical rules/goals head 선택은 `09c8247`에 구현했다. 이어 새 v3 계획은 기존 CSV 해석기의 공백·중복 marker 선택 의미를 재현하면서 원문/visible 순서·중복/저장된 최종 분류를 보존한다. 기존 v1/v2 후보는 원래 정책으로 재생하며 v3도 canonical 설정 선택을 유지한다. 이어 실패 단계 journal과 검증된 부모 계보를 구현한다. 새 lifecycle manifest v2는 portable 계보를 필수로 보존하고 기존 manifest v1 재생을 유지한다. 교차 파일 ADR-0015는 별도 legacy reported 값과 독립 참조 판정, 기존 v1/v2/v3 계획의 schema4 재생을 유지하는 새 schema5 방향으로 채택하고 저장·adapter를 구현했다(소비자·실운영 검증 미완료). Consumer parity 및 실운영 검증은 후속 수용 조건이다. #463의 필수 GitHub 승인을 대체하지 않는다.
 - 완료 실행 기록: `backlog/sprints/2026-09-ssot-m1-recovery.md`. #430은 #449·#450, 백업 구현은 #451, 실제 운영 검증과 스프린트 마감은 #452로 머지됐다. M1의 실제 캡처·Linux 격리 복원·장비 밖 독립 복원·최종 교차 검토와 복구 절차 보존을 통과했고 #431·#432·#426 및 milestone 2를 완료했다.
 - 전체 순서: M1 복구 계약 → M2 정본/보존 이전 → M3 실제 운영 전환 → M4 가족 재산 → M5 증빙/마감/추가 출처.
 - 에픽: M1 #426, M2 #427, M3 #428, M4 #429, M5 #355. 실행 이슈 #430~#448. 첫 작업 #430.
@@ -34,3 +35,27 @@
 ## 기록 경계
 
 공개 가능한 issue/PR·worktree·검사 요약·다음 행동은 활성 스프린트에 남긴다. 실제 금융 데이터·비밀·상세 운영 경로·검증 원본은 repo 밖 비공개 기록에 둔다. 각 스프린트를 마친 뒤 그 실행 기록을 보존하고 다음 마일스톤 스프린트로 이어간다.
+
+- 최신 통합 checkpoint: `c1a3c94`는 main `309c42b`의 0.8.3 변경을 보존한다. 전체3,367 PASS·1 SKIP, coverage89.56%, 정적 검사 및 별도 설치본의 새 후보/과거 세 정책 후보 재생을 통과했다. 기존 세 policy의 schema4 고정과 정확한 reader/builder/검증/registry 경계를 구현했다. 전체3,380 PASS·1 SKIP89.57%, 실제옛후보와별도설치본재생, Opus5high의근거있는P1/P2없음을확인했다. 다음 구현은 v4내용을 보존하면서 v5reported 값 테이블·새정책과 capture참조판정을 추가하는 것이다.
+
+- 2026-09-13 후속: schema5의 다섯 legacy reported 테이블과 capture-wide 참조 판정, 새 기본 policy `legacy_preservation.overview_reports.v4`를 구현했다. 기존 v1/v2/v3는 schema4 그대로 재생한다. 최종 전체3,434 PASS·1 SKIP89.62%, 새 설치본의 실제 과거4후보 불변 재생 및 별도 v4→v5 upgrade를 확인했다. Opus 최초 리뷰의 malformed-row 전제는 실제 build regression으로 대조했고 후보 제외 경로의 JSON 해석을 줄였다. 실제 capture peak-memory/성능, #436 소비자 parity, #435 전수 보존 및 운영 전환은 남아 있다. 리뷰 최종 판단과 commit은 활성 스프린트/PR #481에 기록한다.
+
+- #436 첫 읽기 연결 진행: transaction_snapshot은 저장된 거래·수동/최종값·exact 수치와 같은 revision의 canonical rules를 고정한다. authority facade→Arrow/DuckDB→query에 연결해 활성 상태에서 CSV fallback을 금지했다. 메모만 수정할 때 보존 중복/공백 태그를 canonical parser가 거부하던 공백을 실제 migration으로 재현하고 source-backed legacy 수동 편집에 한정해 보완했다. 생산 코드 동결 후 최종 통합 검사/교차 리뷰를 수행하며 결과는 활성 스프린트에 기록한다. #436 전체 소비자·export·stale 결과와 실자료 검증은 미완료다.
+
+- #436 후속 구현 순서(읽기 조사 결과, 아직 구현 아님): template_cmd/execution.py의 DuckDB/evidence·pinned filters·metadata → show_cmd.py의 CSV 존재/glob 이전 snapshot 분기와 태그 JSON decode → explain.py의 검색/규칙을 같은 snapshot에 고정하고 UUID와 legacy alias 분리 → export/result.py·result_outputs.py·result_helpers.py·master.py의 전체/필터 frame을 한 context로 전달 → status와 overview/assets 다중 도메인 snapshot. Export의 source_df가 None이면 CSV를 재조회하는 경로, master/dry-run 독립 CSV 로딩, status의 CSV partition/schema/import-history 진단을 함께 제거해야 한다. metadata만으로 stale 검증을 주장하지 않는다.
+
+- 최종 읽기 checkpoint: 전체3,467PASS1SKIP89.66%, 최종 wheel8시나리오/9모듈SHA/과거4후보replay·upgrade, Grok P2 status수정 재검토 통과. 단 추가 설치본 probe에서 보존 중복 tags_final이 bulk recompute_tags의 strict parser에서 거부됨을 실제 재현했다. **다음은 bulk legacy 배열 경계를 먼저 보완**, 이후 위 소비자 연결 순서로 진행한다. note-only fix를 bulk 완료로 보지 않는다.
+
+- bulk/template 후속: source-backed legacy bulk input·stored-derived·stale-before 경계에서 중복/blank 배열을 보존하고 새 after 값 검증은 유지했다. 실제 migration의 tag/transfer preview/apply/audit/no-op/replay를 검증했다. template run 일반 SQL/pivot도 동일 transaction snapshot의 canonical rules/status·revision metadata를 사용한다. 전체3,478PASS1SKIP89.68%, 별도 설치본 신규11시나리오 및405개모듈 설치경로 검증을 통과했다. 교차 리뷰/commit 결과는 활성 스프린트를 따른다.
+- 다음 show 연결 조사: 거래 scope는 row_hash가 아닌 transaction_id와 transaction provenance의 source_coordinate_json(root/path/row)로 결정한다. 기존 data-root transactions/YYYY/MM/transactions.csv의 월은 date_raw와 달라도 보존한다. 빈 partition도 latest/count에 영향을 주므로 file-level provenance inventory가 필요하다. Native exact import에는 CSV scope가 없어 effective_at 기반 가상 월/unknown 전체조회 및 보조 capture root 포함 규칙을 명시한 read policy가 필요하다. snapshot 내부 sidecar로 선택 후 frame을 만들며 원문 date를 고치지 않는다. 아직 구현하지 않았다.
+
+- show 구현 후속: 같은 snapshot의 scopes/partition_months로 primary 원래 path월과 빈월을 보존한다. Native effective_at 유효ISO달은 시간대변환없이사용하고unknown은all-scope검색포함. 원래CSV row ordinal을source_row로보존해 equal-datetime pagination에서 monthly/all의기존정렬단계를재현한다. 디스크CSV/rules는활성조회에영향없음. 최종검사/커밋은활성스프린트기록확인.
+- 다음 explain 조사: 실행당 analytics하나를열어 snapshot rules/status와검색을고정. 기존 explain은report filters를적용하지않으므로queryfilterhelper를그대로사용하지않고 --no-filter도invalid tagging rules우회를허용하지않는다. #497의최대10검색/5후보/--pick표시범위/JSON첫행/human선택취소를유지한다. Native row_hash=None과별도transaction_id, matcher용전체필드+exact금액, 저장된수동/final과규칙simulation구분이필요. no-rules/no-match/success metadata를모두같은revision에연결한다. _search_transactions는기존wrapper유지+열린analyticshelper분리, _load_explain_rules는same-snapshot bytes로연결하는최소구조가유력하다.
+
+- 최신 #436 진행: explain은45460db로push했다. 이어 export의single-snapshot full/report분리,재생성transactions.csv, 실행별artifactmanifest/digest/stale검증과export-verify명령을구현중이다. 위초기기록의activeexport불가상태는현재branch에서해소했지만운영cutover는아직없다. 최종검증·review·commit근거는활성스프린트와PR481을따른다. 다음은status의정본facts와legacyCSV진단분리,이후overview/assets소비자연결이다.
+- export는4badf09커밋/push완료. 이어status기본/detailed single-reader연결을작업중이며저장snapshot·기존import_history증거·nativeidentity·diagnostic/rendering·goalsbytes순수계산을구현했다. 현재검증/리뷰상태는활성스프린트최신기록을따른다. 운영전환/전체#436완료아님.
+- 다음 portfolio 전제:현migration configs.py는rules/goals만head선택하며assets/scenarios는revision만보존한다. 읽기연결전에명시선택정책/구버전immutable replay를해결해야하며,head없음을수동자산없음으로해석하거나live YAML fallback금지.
+
+- status checkpoint검증완료: full3575PASS1SKIP89.99%(최종goals경고표시수정전), 수정후관련64PASS+설치본39PASS/446모듈/12SHA검증. Cursor최초P2를수정하고후속실제2테스트+재리뷰해소확인. commit/push와최신PR481근거는활성스프린트/원격head에서확인. 다음은assets/scenarios canonicalhead선택정책을먼저해결한뒤portfolio조회연결.
+
+- portfolio 선행 선택정책 구현: 새 기본 `legacy_preservation.portfolio_configs.v5`는 primary `assets.yaml`/`scenarios.yaml` head를 invalid 상태까지 선택하며 다른경로fallback은 없다. v4 manual/overview 의미와 기존v1–v4계획의불변재생유지. 전체3583PASS1SKIP89.99%, 새설치본30PASS 및 옛설치본실제4후보의새런타임/설치본재생통과. 검토/commit의최종근거는활성스프린트를따른다. 다음은portfolio snapshot 및소비자연결이며oldpolicy의missinghead를빈수동자산으로간주하지않는다. 최신main은이미통합됐지만기반PR463충돌4파일과필수승인은아직남아있다.

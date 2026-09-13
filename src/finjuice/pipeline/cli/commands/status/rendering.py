@@ -79,12 +79,15 @@ class StatusResult:
 
 def build_status_result(facts: StatusFacts, diagnoses: StatusDiagnoses) -> StatusResult:
     """Assemble the public status payload from facts and diagnoses."""
-    schema_payload = facts.schema_summary.to_dict()
-    if facts.schema_summary.state is not SchemaCompatibilityState.ACTIVE:
-        schema_payload["migration"] = get_schema_migration_guidance(
-            facts.schema_summary,
-            metadata_dir=facts.data_dir / "metadata",
-        )
+    schema_payload: dict[str, Any] = {}
+    if facts.repository is None:
+        assert facts.schema_summary is not None
+        schema_payload = facts.schema_summary.to_dict()
+        if facts.schema_summary.state is not SchemaCompatibilityState.ACTIVE:
+            schema_payload["migration"] = get_schema_migration_guidance(
+                facts.schema_summary,
+                metadata_dir=facts.data_dir / "metadata",
+            )
 
     payload: dict[str, Any] = {
         "data_directory": {
@@ -138,11 +141,31 @@ def build_status_result(facts: StatusFacts, diagnoses: StatusDiagnoses) -> Statu
             "modified_at": facts.rules_modified,
         },
     }
+    if facts.repository is not None:
+        repository = facts.repository
+        payload["repository"] = repository
+        payload["schema"] = {
+            "authority": "repository",
+            "state": "active",
+            "current_version": repository["schema_version"],
+            "sqlite_schema_version": repository["schema_version"],
+        }
+        payload["last_import"] = repository["last_import"]
+        payload["transactions"]["source_counts"] = repository["source_counts"]
+        payload["rules_file"] = {
+            "path": None,
+            "authority": "repository",
+            "exists": repository["rules_head"]["parsed_status"] != "missing",
+            "modified_at": repository["rules_head"]["updated_at"],
+            **repository["rules_head"],
+        }
     payload["health"] = diagnoses.health
     payload["actionable"] = diagnoses.actionable
     payload["signals"] = diagnoses.signals
     payload["next_steps"] = diagnoses.next_steps
-    if facts.detailed_stats is not None:
+    if facts.detailed_stats is not None or (
+        facts.repository is not None and facts.detailed_stats_warning is not None
+    ):
         payload["detailed_stats"] = facts.detailed_stats
         payload["detailed_stats_warning"] = facts.detailed_stats_warning
 
@@ -163,7 +186,10 @@ def emit_status_result(result: StatusResult, *, json_output: bool) -> None:
             json_output=True,
             render_fn=lambda _: None,
             command="status",
-            meta_extras={"filters_applied": result.render_context.filters_applied},
+            meta_extras={
+                "filters_applied": result.render_context.filters_applied,
+                **result.payload.get("repository", {}).get("metadata", {}),
+            },
         )
         return
 
@@ -178,10 +204,16 @@ def render_status(status_result: StatusResult) -> None:
     _render_status_footnotes(status_result.render_context.filters_applied)
 
     detailed_stats = result.get("detailed_stats")
+    detailed_warning = result.get("detailed_stats_warning")
+    if "repository" in result and detailed_warning:
+        # Canonical goals warnings describe partial configuration availability;
+        # transaction analytics remain usable and must be shown alongside them.
+        console.print(f"[yellow]{detailed_warning}[/yellow]")
+        detailed_warning = None
     if detailed_stats:
         _render_detailed_stats(
             detailed_stats,
-            result.get("detailed_stats_warning"),
+            detailed_warning,
             status_result.render_context.top_n,
         )
 
@@ -190,4 +222,5 @@ def render_status(status_result: StatusResult) -> None:
         suggestable_untagged_count=result["tagging"]["suggestable_untagged_count"],
         transfer_excluded_untagged_count=result["tagging"]["transfer_excluded_untagged_count"],
         schema_migration=result["schema"].get("migration"),
+        repository_steps=result["next_steps"] if "repository" in result else None,
     )

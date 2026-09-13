@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
   "name": "finjuice",
-  "version": "0.8.0",
-  "generated_at": "2026-09-12T08:58:05+00:00",
+  "version": "0.8.3",
+  "generated_at": "2026-09-13T11:00:17+00:00",
   "tools": [
     {
       "name": "assets.balance",
@@ -717,6 +717,14 @@
             "description": "Filter by date (YYYY-MM-DD)",
             "default": null
           },
+          "pick": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Select the nth listed match (1-based) without prompting",
+            "default": null
+          },
           "json": {
             "type": "boolean",
             "description": "Output as JSON",
@@ -812,6 +820,45 @@
           "summary",
           "transaction_count",
           "year"
+        ]
+      }
+    },
+    {
+      "name": "export-verify",
+      "description": "Check export revision freshness and modified or missing artifacts without writing.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "manifest_path": {
+            "type": "string",
+            "format": "path",
+            "description": "Manifest inside this dataset's export runs"
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "manifest_path"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "export-verify --json output",
+        "top_level_keys": [
+          "_meta",
+          "command",
+          "current",
+          "files",
+          "integrity",
+          "manifest_path",
+          "manifest_sha256",
+          "source",
+          "stale",
+          "verification_policy"
         ]
       }
     },
@@ -1730,7 +1777,7 @@
           },
           "match": {
             "type": "string",
-            "description": "Pipe-separated regex patterns"
+            "description": "Pipe-separated case-insensitive substring patterns"
           },
           "tags": {
             "type": "string",
@@ -1986,7 +2033,8 @@
         "top_level_keys": [
           "_meta",
           "action",
-          "rule_name"
+          "rule_name",
+          "validation"
         ]
       }
     },
@@ -2238,6 +2286,147 @@
           "row_count",
           "rows",
           "total_matches"
+        ]
+      }
+    },
+    {
+      "name": "ssot.migrate.build",
+      "description": "Build a preservation candidate without activating it.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "plan": {
+            "type": "string",
+            "format": "path",
+            "description": "Private preservation plan file."
+          },
+          "staging": {
+            "type": "string",
+            "format": "path",
+            "description": "New or empty inactive candidate directory."
+          },
+          "parent_attempt_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Failed/interrupted attempt ID retained in this staging parent; use a new target.",
+            "default": null
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output a privacy-safe JSON summary.",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "plan",
+          "staging"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "ssot migrate build --json output",
+        "top_level_keys": [
+          "_meta",
+          "attempt_id",
+          "checks",
+          "cutover_ready",
+          "dataset_revision",
+          "generation_status",
+          "input_count",
+          "limitations",
+          "manifest_digest",
+          "origin_kind",
+          "phase",
+          "status"
+        ]
+      }
+    },
+    {
+      "name": "ssot.migrate.plan",
+      "description": "Inspect a verified capture and optionally write an immutable preservation plan.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "manifest": {
+            "type": "string",
+            "format": "path",
+            "description": "Verified frozen capture manifest."
+          },
+          "output": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "path",
+            "description": "New private plan file. Omit for a read-only summary.",
+            "default": null
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output a privacy-safe JSON summary.",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "manifest"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "ssot migrate plan --json output",
+        "top_level_keys": [
+          "_meta",
+          "cutover_ready",
+          "input_count",
+          "limitations",
+          "manifest_digest",
+          "phase",
+          "status"
+        ]
+      }
+    },
+    {
+      "name": "ssot.migrate.verify",
+      "description": "Verify preservation evidence and integrity of an inactive candidate.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "candidate": {
+            "type": "string",
+            "format": "path",
+            "description": "Candidate migration manifest."
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output a privacy-safe JSON summary.",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "candidate"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "ssot migrate verify --json output",
+        "top_level_keys": [
+          "_meta",
+          "attempt_id",
+          "checks",
+          "cutover_ready",
+          "dataset_revision",
+          "generation_status",
+          "input_count",
+          "limitations",
+          "manifest_digest",
+          "origin_kind",
+          "phase",
+          "status"
         ]
       }
     },

@@ -469,6 +469,71 @@ class TestDoctorSkillRuntimeChecks:
         assert "ensure_finjuice_cli.sh not found" in result.output
         assert "ensure_finjuice_cli.sh --update --json" in result.output
 
+    def test_skill_runtime_helper_ok_when_env_points_at_external_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """FINJUICE_SKILL_HELPER should report ok when it resolves outside cwd."""
+        # Arrange
+        import finjuice.pipeline.doctor.skill_runtime as doctor
+
+        isolated_cwd = tmp_path / "cwd"
+        isolated_home = tmp_path / "home"
+        isolated_cwd.mkdir()
+        isolated_home.mkdir()
+        helper = tmp_path / "outside" / "ensure_finjuice_cli.sh"
+        helper.parent.mkdir()
+        helper.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+
+        monkeypatch.chdir(isolated_cwd)
+        monkeypatch.setenv("HOME", str(isolated_home))
+        monkeypatch.setenv(doctor.SKILL_RUNTIME_HELPER_ENV, str(helper))
+        monkeypatch.setattr(doctor, "get_version", lambda: doctor.SKILL_RUNTIME_REQUIRED_VERSION)
+        monkeypatch.setattr(
+            doctor,
+            "_known_skill_capability_checks",
+            lambda: {"tag.edit": True},
+        )
+
+        # Act
+        results = doctor._check_skill_runtime()
+
+        # Assert
+        helper_result = next(result for result in results if result.name == "skill_runtime_helper")
+        assert helper_result.status == "ok"
+        assert str(helper) in helper_result.message
+        assert doctor._discover_skill_runtime_helper() == helper
+
+    def test_skill_runtime_helper_warns_when_unset_and_missing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Unset helper discovery should keep the existing not-found warning."""
+        # Arrange
+        import finjuice.pipeline.doctor.skill_runtime as doctor
+
+        isolated_cwd = tmp_path / "cwd"
+        isolated_home = tmp_path / "home"
+        isolated_cwd.mkdir()
+        isolated_home.mkdir()
+
+        monkeypatch.chdir(isolated_cwd)
+        monkeypatch.setenv("HOME", str(isolated_home))
+        monkeypatch.delenv(doctor.SKILL_RUNTIME_HELPER_ENV, raising=False)
+        monkeypatch.setattr(doctor, "get_version", lambda: doctor.SKILL_RUNTIME_REQUIRED_VERSION)
+        monkeypatch.setattr(
+            doctor,
+            "_known_skill_capability_checks",
+            lambda: {"tag.edit": True},
+        )
+
+        # Act
+        results = doctor._check_skill_runtime()
+
+        # Assert
+        helper_result = next(result for result in results if result.name == "skill_runtime_helper")
+        assert helper_result.status == "warning"
+        assert helper_result.message == "ensure_finjuice_cli.sh not found"
+        assert doctor._discover_skill_runtime_helper() is None
+
 
 class TestDoctorDependencyChecks:
     """Tests for dependency check functions."""

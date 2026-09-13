@@ -185,6 +185,8 @@ def test_rules_suggest_preview_json_includes_rich_context(tmp_path: Path) -> Non
     assert payload["_meta"]["command"] == "rules suggest"
     suggestion = payload["suggestions"][0]
     assert suggestion["merchant"] == "Netflix"
+    assert suggestion["transaction_count"] == 2
+    assert suggestion["distinct_dates"] == 2
     assert suggestion["avg_amount"] == 17000.0
     assert suggestion["amount_stddev"] == 0.0
     assert suggestion["active_months"] == ["2024-10"]

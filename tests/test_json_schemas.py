@@ -21,6 +21,9 @@ SCHEMAS_DIR = REPO_ROOT / "schemas"
 runner = CliRunner()
 
 CATALOGUED_COMMANDS = [
+    ("ssot migrate plan", [], "ssot_migrate_plan.schema.json"),
+    ("ssot migrate build", [], "ssot_migrate_build.schema.json"),
+    ("ssot migrate verify", [], "ssot_migrate_verify.schema.json"),
     ("assets show", ["assets", "show", "--json"], "assets_show.schema.json"),
     ("assets status", ["assets", "status", "--json"], "assets_status.schema.json"),
     ("assets balance", ["assets", "balance", "--json"], "assets_balance.schema.json"),
@@ -93,6 +96,7 @@ CATALOGUED_COMMANDS = [
     ("template show", ["template", "show", "monthly_spend", "--json"], "template_show.schema.json"),
     ("journal list", ["journal", "list", "--json"], "journal_list.schema.json"),
     ("export", ["export", "--dry-run", "--json"], "export.schema.json"),
+    ("export-verify", [], "export_verify.schema.json"),
     ("networth", ["networth", "--json"], "networth.schema.json"),
     (
         "networth breakdown",
@@ -452,6 +456,32 @@ def _materialize_backup_catalog_args(schema_data_dir: Path, label: str) -> list[
     ]
 
 
+def _materialize_migration_catalog_args(schema_data_dir: Path, label: str) -> list[str]:
+    """Prepare real frozen synthetic evidence for each migration command schema."""
+    from finjuice.pipeline.migration import build_migration, plan_migration
+
+    _materialize_backup_catalog_args(schema_data_dir, "backup verify")
+    capture = schema_data_dir.parent / "schema-backup"
+    plan = schema_data_dir.parent / "migration-plan.json"
+    candidate = schema_data_dir.parent / "migration-candidate"
+    if label == "ssot migrate plan":
+        return ["ssot", "migrate", "plan", "--manifest", str(capture), "--json"]
+    plan_migration(capture, output=plan, active_data_dir=schema_data_dir)
+    if label == "ssot migrate build":
+        return [
+            "ssot",
+            "migrate",
+            "build",
+            "--plan",
+            str(plan),
+            "--staging",
+            str(candidate),
+            "--json",
+        ]
+    build_migration(plan, candidate, active_data_dir=schema_data_dir)
+    return ["ssot", "migrate", "verify", "--candidate", str(candidate), "--json"]
+
+
 @pytest.mark.parametrize(("label", "cmd_args", "schema_file"), CATALOGUED_COMMANDS)
 def test_command_output_validates_against_schema(
     schema_data_dir: Path,
@@ -462,7 +492,17 @@ def test_command_output_validates_against_schema(
     """Actual Typer CLI --json output should validate against its artifact."""
     if label.startswith("backup "):
         cmd_args = _materialize_backup_catalog_args(schema_data_dir, label)
-    result = runner.invoke(app, ["--data-dir", str(schema_data_dir), *cmd_args])
+    if label.startswith("ssot migrate "):
+        cmd_args = _materialize_migration_catalog_args(schema_data_dir, label)
+    if label == "export-verify":
+        from tests.cli.commands.test_repository_export import _export, _payload, _verify
+        from tests.cli.commands.test_repository_query import query_root
+
+        root = query_root.__wrapped__(schema_data_dir / "export-verification")
+        generated = _payload(_export(root))
+        result = _verify(root, Path(generated["manifest_path"]))
+    else:
+        result = runner.invoke(app, ["--data-dir", str(schema_data_dir), *cmd_args])
 
     assert result.exit_code == 0, f"{label} failed: {result.output[:500]}"
     payload = json.loads(result.output)

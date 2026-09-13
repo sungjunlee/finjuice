@@ -270,7 +270,7 @@ def run_template(
         )
     except Exception as e:  # intended catch-all for CLI robustness
         _log_template_failure(options, audit_state, error_type=type(e).__name__)
-        logger.error(f"Template execution failed: {e}", exc_info=True)
+        logger.error("Template execution failed (%s)", type(e).__name__)
         cli_output.emit_error(
             f"Template execution failed: {e}",
             error_code=ErrorCode.QUERY_ERROR,

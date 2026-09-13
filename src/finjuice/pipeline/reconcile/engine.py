@@ -18,6 +18,8 @@ from finjuice.pipeline.reconcile.money import money_abs
 
 DEFAULT_WINDOW_DAYS = 14
 _MAX_COMBO = 5
+_MAX_CANDIDATES = 16
+_MIN_PARTIAL_COVERAGE = Decimal("0.5")
 _ZERO = Decimal("0")
 
 
@@ -134,13 +136,16 @@ def _match_one_to_many(
     for item in evidence:
         if item.evidence_id in used_evidence:
             continue
-        candidates = [
-            payment
-            for payment in payments
-            if payment.payment_id not in used_payments
-            and _in_window(item, payment, window_days)
-            and payment.amount <= _ZERO
-        ]
+        candidates = _combo_candidates(
+            [
+                payment
+                for payment in payments
+                if payment.payment_id not in used_payments
+                and _in_window(item, payment, window_days)
+                and payment.amount <= _ZERO
+            ],
+            money_abs(item.amount),
+        )
         combo = _combo_summing_to(candidates, money_abs(item.amount))
         if combo is None:
             partial = _best_partial(candidates, money_abs(item.amount))
@@ -227,6 +232,22 @@ def _unmatched_evidence(
     return groups
 
 
+def _combo_candidates(payments: Sequence[PaymentItem], target: Decimal) -> list[PaymentItem]:
+    """Keep combo search small; prefer larger in-window amounts under the target."""
+    eligible = [payment for payment in payments if money_abs(payment.amount) <= target]
+    if len(eligible) <= _MAX_CANDIDATES:
+        return eligible
+    ordered = sorted(
+        eligible,
+        key=lambda payment: (
+            -money_abs(payment.amount),
+            payment.occurred_on,
+            payment.payment_id,
+        ),
+    )
+    return ordered[:_MAX_CANDIDATES]
+
+
 def _combo_summing_to(
     payments: Sequence[PaymentItem], target: Decimal
 ) -> tuple[PaymentItem, ...] | None:
@@ -266,6 +287,8 @@ def _best_partial(
             if best_total < total < target:
                 best = combo
                 best_total = total
+    if best is None or best_total < (_MIN_PARTIAL_COVERAGE * target):
+        return None
     return best
 
 

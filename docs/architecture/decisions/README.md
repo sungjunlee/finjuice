@@ -28,6 +28,7 @@ For new ADRs, please use [template.md](template.md) as basis.
 | [0012](0012-agent-package-layout-for-finjuice-workflows.md) | Agent Package Layout for Finjuice Workflows | ✅ accepted | 2026-05-24 | #779 |
 | [0013](0013-banksalad-overview-workbook-ingest.md) | Banksalad Overview Workbook Ingest | ✅ accepted | 2026-06-15 | N/A |
 | [0014](0014-sqlite-authoritative-storage.md) | SQLite Authoritative Storage with Immutable Sources and Derived CSV | ✅ accepted | 2026-09-08 | #430 |
+| [0015](0015-cross-file-overview-derivation.md) | Capture-scoped cross-file overview reference evidence | proposed | 2026-09-13 | #435 |
 
 ## Index by Category
 
@@ -47,6 +48,7 @@ For new ADRs, please use [template.md](template.md) as basis.
   - Keep `skills/finjuice*` canonical; defer named packages until public-preview evidence.
 
 ### Data Storage & Schema
+- [ADR-0015: Cross-file Overview Reference Evidence](0015-cross-file-overview-derivation.md) — proposed; adoption pending.
 - [ADR-0002: CSV Partition Storage](0002-csv-partition-storage.md) ⏭️ superseded
   - Remains the current 0.7.1 runtime until the operational cutover.
 - [ADR-0008: Financial Metadata Notes Path](0008-financial-metadata-notes-path.md) ✅
@@ -101,7 +103,7 @@ ADR-0014 (SQLite Authority)
 
 ## Active ADRs
 
-All 14 current ADRs are listed here. Thirteen are **accepted and active**.
+All 15 current ADRs are listed here. Thirteen are **accepted and active**; ADR-0015 is proposed.
 ADR-0002 is superseded by ADR-0014,
 but still describes the current 0.7.1 runtime until the operational cutover:
 
@@ -119,6 +121,7 @@ but still describes the current 0.7.1 runtime until the operational cutover:
 12. **Agent Package Layout** - Keep the current skill suite canonical; defer named bundles
 13. **Banksalad Overview Workbook Ingest** - Capture `뱅샐현황` facts and derive typed projections
 14. **SQLite Authority** - Immutable sources, atomic SQLite authority, and derived CSV after cutover
+15. **Cross-file Overview Reference Evidence** - Proposed; adoption pending
 
 ## Superseded ADRs
 
@@ -205,6 +208,6 @@ proposed → accepted → [deprecated | superseded]
 
 ---
 
-**Last Updated**: 2026-09-08
+**Last Updated**: 2026-09-13
 **Related Issues**: #110 (ADR Introduction), #430 (SSOT Contract), #602 (AI Enrichment Proposal Log)
 **Format**: MADR 3.0.0

@@ -26,6 +26,7 @@ from .generate_schemas_helpers import (
     schema_from_structured_model,  # noqa: F401 — re-exported for existing generate_schemas imports
     schema_from_typed_dict_type,  # noqa: F401 — re-exported for existing generate_schemas imports
 )
+from .migration_schemas import migration_schemas
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = ROOT / "src"
@@ -196,7 +197,7 @@ status_schema = command_schema(
         ),
         "next_steps": array_of(next_step_schema),
         "rules_file": object_schema(
-            {"exists": boolean, "modified_at": string_or_null, "path": string},
+            {"exists": boolean, "modified_at": string_or_null, "path": string_or_null},
             required=["path", "exists", "modified_at"],
         ),
         "terminology": tagging_terminology_schema,
@@ -781,7 +782,7 @@ budget_row_schema = object_schema(
         "name": string,
         "progress_pct": number_or_null,
         "remaining": integer,
-        "status": {"enum": ["under", "on-track", "over"], "type": "string"},
+        "status": {"enum": ["under", "on-track", "over", "untracked"], "type": "string"},
         "target": integer,
     },
     required=["name", "target", "actual", "remaining", "progress_pct", "status"],
@@ -1130,6 +1131,22 @@ rules_validation_summary_schema = object_schema(
     required=["status", "total_rules", "errors", "warnings", "passed", "problems"],
 )
 
+rules_mutation_validation_schema = object_schema(
+    {
+        **dict(rules_validation_summary_schema["properties"]),
+        "total_problems": integer,
+    },
+    required=[
+        "status",
+        "total_rules",
+        "errors",
+        "warnings",
+        "passed",
+        "problems",
+        "total_problems",
+    ],
+)
+
 rules_validate_schema = command_schema(
     "rules_validate.schema.json",
     "rules validate --json output",
@@ -1149,7 +1166,7 @@ rules_add_schema = command_schema(
         "preview_action": {"enum": ["would_add", "would_update"], "type": "string"},
         "rule": rule_detail_schema,
         "rules_file_modified": boolean,
-        "validation": rules_validation_summary_schema,
+        "validation": rules_mutation_validation_schema,
     },
     ["action", "rule", "validation"],
 )
@@ -1157,8 +1174,12 @@ rules_add_schema = command_schema(
 rules_remove_schema = command_schema(
     "rules_remove.schema.json",
     "rules remove --json output",
-    {"action": {"enum": ["removed"], "type": "string"}, "rule_name": string},
-    ["action", "rule_name"],
+    {
+        "action": {"enum": ["removed"], "type": "string"},
+        "rule_name": string,
+        "validation": rules_mutation_validation_schema,
+    },
+    ["action", "rule_name", "validation"],
 )
 
 rules_test_schema = command_schema(
@@ -1180,6 +1201,17 @@ rules_test_schema = command_schema(
     ["rule_name", "scope", "match_count", "sample", "monthly_distribution", "cross_tags_top"],
 )
 
+rules_suggest_suggestion_schema = object_schema(
+    {
+        "ambiguous_reason": string_or_null,
+        "auto_apply_eligible": boolean,
+        "default_action": string,
+        "distinct_dates": integer,
+        "merchant_kind": string,
+        "name_variants": array_of(string),
+    },
+)
+
 rules_suggest_schema = command_schema(
     "rules_suggest.schema.json",
     "rules suggest --json output",
@@ -1195,7 +1227,7 @@ rules_suggest_schema = command_schema(
         "suggestable_coverage_before_pct": number,
         "suggestable_total_count": integer,
         "suggestable_untagged_count": integer,
-        "suggestions": array_of(object_any),
+        "suggestions": array_of(rules_suggest_suggestion_schema),
         "total_count": integer,
         "transfer_exclusions": object_schema(
             {
@@ -1489,6 +1521,33 @@ export_schema = command_schema(
     [],
 )
 
+export_verify_schema = command_schema(
+    "export_verify.schema.json",
+    "export-verify --json output",
+    {
+        "command": {"const": "export-verify"},
+        "manifest_path": string,
+        "manifest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "source": object_any,
+        "current": object_any,
+        "stale": boolean,
+        "integrity": {"enum": ["intact", "mismatch"]},
+        "files": array_of(
+            object_schema(
+                {
+                    "path": string,
+                    "status": {"enum": ["intact", "modified", "missing"]},
+                },
+                required=["path", "status"],
+            )
+        ),
+        "verification_policy": {"const": "local_export_receipt.v1"},
+    },
+    ["command", "manifest_path", "source", "current", "stale", "integrity", "files"],
+)
+
+export_verify_schema["x-command"] = "export-verify"
+
 review_schema = command_schema(
     "review.schema.json",
     "review --json output",
@@ -1598,7 +1657,21 @@ explain_schema = command_schema(
     "explain.schema.json",
     "explain --json output",
     {
-        "candidates": array_of(object_any),
+        "candidates": array_of(
+            object_schema(
+                {
+                    "amount": number_or_null,
+                    "category_final": string_or_null,
+                    "date": string_or_null,
+                    "index": integer,
+                    "major_raw": string_or_null,
+                    "memo_raw": string_or_null,
+                    "merchant_raw": string_or_null,
+                    "minor_raw": string_or_null,
+                    "row_hash": string_or_null,
+                }
+            )
+        ),
         "classification": {"type": ["object", "null"]},
         "date_filter": string_or_null,
         "match_count": integer,
@@ -1902,6 +1975,7 @@ backup_restore_schema = command_schema(
 )
 
 SCHEMAS: dict[str, JsonSchema] = {
+    **migration_schemas(),
     "_error.schema.json": error_schema,
     "_meta.schema.json": meta_schema,
     "_pagination.schema.json": pagination_schema,
@@ -1924,6 +1998,7 @@ SCHEMAS: dict[str, JsonSchema] = {
     "doctor.schema.json": doctor_schema,
     "explain.schema.json": explain_schema,
     "export.schema.json": export_schema,
+    "export_verify.schema.json": export_verify_schema,
     "history.schema.json": history_schema,
     "import.schema.json": import_schema,
     "inspect_xlsx.schema.json": inspect_xlsx_schema,

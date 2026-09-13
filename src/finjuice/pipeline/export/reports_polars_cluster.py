@@ -88,7 +88,7 @@ def _aggregate_by_tag(df: pl.DataFrame) -> pl.DataFrame | None:
         df_exploded.group_by("tags_final")
         .agg(pl.col("amount").sum().round(0).alias("total"))
         .rename({"tags_final": "tag"})
-        .sort("total", descending=False)
+        .sort(["total", "tag"], descending=False)
     )
 
 
@@ -126,7 +126,7 @@ def _aggregate_by_category(df: pl.DataFrame) -> pl.DataFrame | None:
             ]
         )
         .rename({"category_final": "category"})
-        .sort("total", descending=False)
+        .sort(["total", "category"], descending=False)
     )
 
 
@@ -137,7 +137,7 @@ def _aggregate_by_account(df: pl.DataFrame) -> pl.DataFrame:
     return (
         df_non_transfer.group_by("account")
         .agg(pl.col("amount").sum().round(0).alias("net_total"))
-        .sort("net_total", descending=False)
+        .sort(["net_total", "account"], descending=False)
     )
 
 
@@ -172,4 +172,4 @@ def _aggregate_transfers(df: pl.DataFrame) -> pl.DataFrame | None:
     if df_transfers.is_empty():
         logger.info("No paired transfers to export")
         return None
-    return df_transfers.sort("datetime", descending=True)
+    return df_transfers.sort("datetime", descending=True, maintain_order=True)

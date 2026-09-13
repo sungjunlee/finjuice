@@ -23,7 +23,7 @@ from finjuice.pipeline.cli.repository_import import (
     ingest_import_directory,
     present_ingest_step,
 )
-from finjuice.pipeline.cli.utils import get_mutation_facade
+from finjuice.pipeline.cli.utils import get_activation_evidence_provider, get_mutation_facade
 from finjuice.pipeline.storage.authority import RepositoryAuthority
 from finjuice.pipeline.storage.mutation_facade import MutationIdentity, StorageMutationFacade
 
@@ -50,10 +50,6 @@ class FullPipelineOptions:
     ingest_result: dict[str, Any] | None = None
     on_step_start: StepStartCallback | None = None
     on_step_complete: StepCompleteCallback | None = None
-
-
-class CanonicalExportUnavailableError(RuntimeError):
-    """Active canonical export/projection is not wired yet (#436)."""
 
 
 def compute_full_pipeline_ingest(
@@ -202,8 +198,17 @@ def compute_full_pipeline_export(
     """Run the export step and normalize its result."""
     selected = facade or get_mutation_facade(ctx, config)
     if isinstance(selected.dispatch().authority, RepositoryAuthority):
-        raise CanonicalExportUnavailableError(
-            "Canonical export/projection is unavailable until issue #436."
+        from finjuice.pipeline.export import result as export_result
+
+        return export_result._compute_export_result(
+            ctx,
+            config,
+            format_lower="xlsx",
+            period=None,
+            auto_open=False,
+            dry_run=False,
+            emit_text=emit_text,
+            evidence_provider=get_activation_evidence_provider(ctx),
         )
     return _legacy_export_step(ctx, config, emit_text=emit_text)
 

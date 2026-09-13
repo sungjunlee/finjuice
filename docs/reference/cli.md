@@ -38,6 +38,7 @@ finjuice --version
 │ import          Import XLSX files and run full pipeline.                                                             │
 │ tag             Apply tagging rules to all transactions in the active storage.                                       │
 │ export          Generate master XLSX, HTML, and/or Markdown reports.                                                 │
+│ export-verify   Check export revision freshness and modified or missing artifacts without writing.                   │
 │ refresh         Re-process all existing data                                                                         │
 │ validate        Validate CSV partition files against the schema.                                                     │
 │ index           Emit workspace catalog                                                                               │
@@ -70,6 +71,7 @@ finjuice --version
 │ version         Show finjuice CLI version and data schema version.                                                   │
 │ workspace       Manage workspace directories (symlink-based)                                                         │
 │ backup          Create, verify, and restore a complete legacy data-tree backup.                                      │
+│ ssot            Manage inactive SQLite migration candidates.                                                         │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Advanced ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ ingest          Import XLSX files from imports/ into the selected storage authority.                                 │
@@ -850,7 +852,8 @@ finjuice --version
 
  Execute a SQL query on your transaction data.
 
- The query is executed against a 'transactions' view created from your CSV partitions.
+ The 'transactions' view reads the selected authority: legacy CSV or a verified
+ SQLite snapshot. Repository results include the generation and revision in JSON metadata.
  Only SELECT and WITH statements are allowed for safety.
  Report filters are applied by default by prepending a CTE that rebinds the
  conventional `transactions` view to filtered rows; use the root `--no-filter`

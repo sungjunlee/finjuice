@@ -96,4 +96,6 @@ finjuice treats CLI JSON output and data schemas as public contracts.
    unrelated changes.
 3. Run the relevant verification commands and record the results in the PR.
 4. Explain privacy impact and whether CLI JSON/schema contracts changed.
-5. Link the issue with `Closes #...` when the PR fully resolves it.
+5. User-facing CLI/JSON changes add a `CHANGELOG.md` Unreleased bullet. Version
+   bumps follow [docs/development/release.md](docs/development/release.md).
+6. Link the issue with `Closes #...` when the PR fully resolves it.

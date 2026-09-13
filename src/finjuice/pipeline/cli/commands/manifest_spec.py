@@ -40,6 +40,8 @@ MUTATING_COMMANDS = {
     "rules gaps",
     "rules remove",
     "rules suggest",
+    "ssot migrate plan",
+    "ssot migrate build",
     "tag",
     "template run",
     "transfer",
@@ -66,6 +68,9 @@ RUNTIME_METADATA_COMMANDS = {
 }
 
 ARTIFACT_COMMANDS = {
+    "ssot migrate plan",
+    "ssot migrate build",
+    "ssot migrate verify",
     "backup create",
     "backup restore",
     "backup verify",
@@ -167,7 +172,7 @@ def _output_schema_ref(path: str, command: click.Command) -> str | None:
     """Return the conventional sibling JSON Schema artifact path for a command."""
     if not has_json_flag(command):
         return None
-    return f"schemas/{path.replace(' ', '_')}.schema.json"
+    return f"schemas/{path.replace(' ', '_').replace('-', '_')}.schema.json"
 
 
 def _command_safety_metadata(path: str) -> dict[str, Any]:

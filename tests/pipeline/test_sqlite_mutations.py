@@ -11,6 +11,7 @@ import threading
 from pathlib import Path
 from typing import Any, Literal
 
+import jsonschema
 import pytest
 
 from finjuice.pipeline.cli.commands.budget import _budget_edit_transform
@@ -977,14 +978,17 @@ def test_config_facade_receipt_failure_rolls_back_but_retains_exact_object(
     )
 
 
+@pytest.mark.parametrize("use_uuid", [False, True], ids=["legacy-alias", "uuid"])
 def test_active_tag_edit_preview_commit_and_explicit_retry_use_repository(
     tmp_path: Path,
+    use_uuid: bool,
 ) -> None:
     row_hash = "synthetic-row-hash"
-    paths, evidence, generation, _, _ = _active_repository_with_transactions(
+    paths, evidence, generation, transaction_ids, _ = _active_repository_with_transactions(
         tmp_path,
         row_hashes=(row_hash,),
     )
+    identifier = transaction_ids[0] if use_uuid else row_hash
     facade = _facade(paths, evidence, tmp_path)
     identity = MutationIdentity(
         idempotency_key="stable-manual-edit",
@@ -994,19 +998,19 @@ def test_active_tag_edit_preview_commit_and_explicit_retry_use_repository(
 
     preview = _compute_tag_edit(
         object(),
-        TagEditRequest(row_hash, ["manual"], None, "Custom", "private note", True),
+        TagEditRequest(identifier, ["manual"], None, "Custom", "private note", True),
         facade=facade,
         identity=identity,
     )
     committed = _compute_tag_edit(
         object(),
-        TagEditRequest(row_hash, ["manual"], None, "Custom", "private note", False),
+        TagEditRequest(identifier, ["manual"], None, "Custom", "private note", False),
         facade=facade,
         identity=identity,
     )
     replay = _compute_tag_edit(
         object(),
-        TagEditRequest(row_hash, ["manual"], None, "Custom", "private note", False),
+        TagEditRequest(identifier, ["manual"], None, "Custom", "private note", False),
         facade=facade,
         identity=identity,
     )
@@ -1025,7 +1029,13 @@ def test_active_tag_edit_preview_commit_and_explicit_retry_use_repository(
 def test_active_rules_add_update_remove_preserves_exact_config_history(tmp_path: Path) -> None:
     paths, evidence, generation, _, _, _ = _active_repository(tmp_path)
     facade = _facade(paths, evidence, tmp_path)
-    initial = b"# keep rules comment\nversion: 1\nrules: []\n"
+    initial = (
+        b"# keep rules comment\nversion: 1\nrules:\n"
+        b"  - name: coffee_general\n    match: Star\n    fields: [merchant_raw]\n"
+        b"    tags: [cafe]\n    priority: 90\n"
+        b"  - name: coffee_specific\n    match: Starbucks\n    fields: [merchant_raw]\n"
+        b"    tags: [coffee]\n    priority: 80\n"
+    )
     seeded = facade.replace_config(
         ConfigDocument.from_validated_yaml("rules", initial, parser_version="finjuice.rules.v1")
     )
@@ -1099,6 +1109,36 @@ def test_active_rules_add_update_remove_preserves_exact_config_history(tmp_path:
     assert removed["committed_revision"] == 4
     assert removed_replay["replayed"] is True
     assert removed_replay["action"] == "removed"
+    assert facade.read_config_bytes("rules") == initial
+    schema_dir = Path(__file__).resolve().parents[2] / "schemas"
+    for payload, schema_name in (
+        (added, "rules_add"),
+        (added_replay, "rules_add"),
+        (updated, "rules_add"),
+        (removed, "rules_remove"),
+        (removed_replay, "rules_remove"),
+    ):
+        schema = json.loads((schema_dir / f"{schema_name}.schema.json").read_text())
+        jsonschema.validate(payload["validation"], schema["properties"]["validation"])
+        assert payload["validation"]["total_problems"] > 0
+        assert payload["validation"]["problems"] == []
+    assert added_replay["validation"] == added["validation"]
+    assert removed_replay["validation"] == removed["validation"]
+    late_replay = _compute_add_rule(
+        config,
+        RuleAddRequest(
+            "subscription", "Netflix", "streaming", None, 50, "merchant_raw", False, True
+        ),
+        facade=facade,
+        identity=MutationIdentity(
+            idempotency_key="rules-add",
+            expected_generation=generation,
+            expected_revision=seeded.committed_revision,
+        ),
+    )
+    assert late_replay["replayed"] is True
+    assert late_replay["validation"] == added["validation"]
+    assert late_replay["rule"] == added["rule"]
     assert facade.read_config_bytes("rules") == initial
 
 

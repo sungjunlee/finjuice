@@ -231,7 +231,7 @@ def _compute_legacy_rule_add(
     result: dict[str, Any] = {
         "action": action,
         "rule": _serialize_rule_payload(merged_rule),
-        "validation": _serialize_validation_summary(validation_result),
+        "validation": _serialize_validation_summary(validation_result, focus_rule=merged_rule.name),
     }
 
     if request.dry_run:
@@ -444,7 +444,9 @@ def _upsert_rule_transform(
             result={
                 "action": action,
                 "rule": _serialize_rule_payload(merged_rule),
-                "validation": _serialize_validation_summary(validation_result),
+                "validation": _serialize_validation_summary(
+                    validation_result, focus_rule=merged_rule.name
+                ),
             },
         )
 
@@ -464,7 +466,11 @@ def _explicit_rule_optional_fields(ctx: typer.Context) -> frozenset[str]:
 def add_rule_command(
     ctx: typer.Context,
     name: str = typer.Option(..., "--name", help="Rule name (letters, numbers, underscores)"),
-    match_pattern: str = typer.Option(..., "--match", help="Pipe-separated regex patterns"),
+    match_pattern: str = typer.Option(
+        ...,
+        "--match",
+        help="Pipe-separated case-insensitive substring patterns",
+    ),
     tags: str = typer.Option(..., "--tags", help="Comma-separated tags"),
     category: Optional[str] = typer.Option(None, "--category", help="Optional category"),
     priority: int = typer.Option(
@@ -530,6 +536,7 @@ def _compute_remove_rule(
 ) -> dict[str, Any]:
     """Compute the result payload for `finjuice rules remove`."""
     from finjuice.pipeline.tagging.rules_yaml_io import load_rules, remove_rule_roundtrip
+    from finjuice.pipeline.tagging.validator import validate_rules
 
     command = "rules remove"
 
@@ -638,13 +645,25 @@ def _compute_remove_rule(
         rule_name=name,
         change_summary="rule removed",
     )
-    return {"action": "removed", "rule_name": name}
+    # Validate the post-removal rule set so the reported state reflects what
+    # is actually on disk after the mutation.
+    remaining_rules = load_rules(config.rules_file)
+    validation_result = validate_rules(remaining_rules)
+    return {
+        "action": "removed",
+        "rule_name": name,
+        "validation": _serialize_validation_summary(
+            validation_result,
+            focus_rule=name,
+        ),
+    }
 
 
 def _remove_rule_transform(name: str) -> Callable[[bytes | None], ConfigTransformResult]:
     """Build a lock-scoped rules removal from stable CLI intent."""
     from finjuice.pipeline.tagging.rules_yaml_io import load_rules_bytes
     from finjuice.pipeline.tagging.rules_yaml_roundtrip import remove_rule_roundtrip_bytes
+    from finjuice.pipeline.tagging.validator import validate_rules
 
     def transform(content: bytes | None) -> ConfigTransformResult:
         if content is None:
@@ -662,7 +681,13 @@ def _remove_rule_transform(name: str) -> Callable[[bytes | None], ConfigTransfor
             document=ConfigDocument.from_validated_yaml(
                 "rules", updated_content, parser_version="finjuice.rules.v1"
             ),
-            result={"action": "removed", "rule_name": name},
+            result={
+                "action": "removed",
+                "rule_name": name,
+                "validation": _serialize_validation_summary(
+                    validate_rules(load_rules_bytes(updated_content)), focus_rule=name
+                ),
+            },
         )
 
     return transform

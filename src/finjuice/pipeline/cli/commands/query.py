@@ -19,8 +19,14 @@ from finjuice.pipeline.cli.output import ErrorCode, ExitCode, console
 from finjuice.pipeline.cli.report_filters import (
     count_matched_report_filters,
     load_cli_report_filters,
+    no_filter_requested,
 )
-from finjuice.pipeline.cli.utils import get_config
+from finjuice.pipeline.cli.utils import get_activation_evidence_provider, get_config
+from finjuice.pipeline.config import Config
+from finjuice.pipeline.storage.read_facade import snapshot_metadata
+from finjuice.pipeline.storage.sqlite.transaction_reads import TransactionReadSnapshot
+from finjuice.pipeline.tagging.rules import ReportFilters
+from finjuice.pipeline.tagging.rules_yaml_io import load_report_filters_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +34,44 @@ logger = logging.getLogger(__name__)
 def _strip_trailing_sql_terminator(sql: str) -> str:
     """Remove a single optional trailing semicolon before wrapping a SELECT."""
     return sql.strip().removesuffix(";").strip()
+
+
+def _read_context(
+    ctx: typer.Context,
+    config: Config,
+    snapshot: TransactionReadSnapshot | None,
+    structured_output: bool,
+) -> tuple[ReportFilters, dict[str, object]]:
+    if snapshot is None:
+        filters = load_cli_report_filters(
+            ctx, config, command="query", json_output=structured_output
+        )
+        return filters, {}
+    if no_filter_requested(ctx):
+        filters = ReportFilters()
+    else:
+        if snapshot.rules_content is not None and snapshot.rules_parsed_status != "parsed":
+            raise ValueError(
+                "Canonical rules head is not parsed; report filters cannot be applied."
+            )
+        filters = load_report_filters_bytes(snapshot.rules_content)
+    return filters, snapshot_metadata(snapshot)
+
+
+def _filter_prefix(analytics: DuckDBAnalytics, filters: ReportFilters) -> tuple[str, int]:
+    if filters.is_empty():
+        return "WITH ", 0
+    source = analytics.query_readonly(
+        "SELECT date, merchant_raw, category_final FROM transactions_source"
+    ).pl()
+    count = count_matched_report_filters(source, filters)
+    where = build_report_filter_duckdb_where(filters)
+    if where is None:
+        return "WITH ", count
+    return (
+        f"WITH transactions AS (SELECT * FROM transactions_source WHERE NOT ({where})),\n",
+        count,
+    )
 
 
 def query_command(
@@ -52,7 +96,8 @@ def query_command(
     """
     Execute a SQL query on your transaction data.
 
-    The query is executed against a 'transactions' view created from your CSV partitions.
+    The 'transactions' view reads the selected authority: legacy CSV or a verified
+    SQLite snapshot. Repository results include the generation and revision in JSON metadata.
     Only SELECT and WITH statements are allowed for safety.
     Report filters are applied by default by prepending a CTE that rebinds the
     conventional `transactions` view to filtered rows; use the root `--no-filter`
@@ -87,12 +132,6 @@ def query_command(
         json_output=structured_output,
         command="query",
     )
-    report_filters = load_cli_report_filters(
-        ctx,
-        config,
-        command="query",
-        json_output=structured_output,
-    )
     filters_applied = 0
 
     try:
@@ -108,7 +147,14 @@ def query_command(
 
     # Initialize analytics layer
     try:
-        with DuckDBAnalytics(config.data_dir, require_transactions=False) as analytics:
+        with DuckDBAnalytics(
+            config.data_dir,
+            require_transactions=False,
+            evidence_provider=get_activation_evidence_provider(ctx),
+        ) as analytics:
+            report_filters, meta_extras = _read_context(
+                ctx, config, analytics.repository_snapshot, structured_output
+            )
             # View 'transactions' is automatically registered in __init__
             # (See src/finjuice/pipeline/analytics/duckdb_layer.py)
 
@@ -119,22 +165,7 @@ def query_command(
 
             # Build CTE-prefixed query to preserve DuckDB alias resolution in GROUP BY
             # (CTE body is parsed as top-level statement; subquery wrapping breaks aliases)
-            cte_prefix = "WITH "
-            if not report_filters.is_empty():
-                source_df = analytics.query_readonly(
-                    "SELECT date, merchant_raw, category_final FROM transactions_source"
-                ).pl()
-                filters_applied = count_matched_report_filters(source_df, report_filters)
-                filter_where = build_report_filter_duckdb_where(report_filters)
-                if filter_where is not None:
-                    cte_prefix = (
-                        "WITH\n"
-                        "transactions AS (\n"
-                        "    SELECT *\n"
-                        "    FROM transactions_source\n"
-                        f"    WHERE NOT ({filter_where})\n"
-                        "),\n"
-                    )
+            cte_prefix, filters_applied = _filter_prefix(analytics, report_filters)
 
             # User SQL is wrapped only after validate_readonly_sql rejects unsafe forms.
             wrapped_prefix = f"{cte_prefix}_finjuice_query AS (\n{execution_sql}\n)\n"  # nosec B608
@@ -161,6 +192,7 @@ def query_command(
                 fetched_count=len(result_df),
             )
 
+            meta_extras["filters_applied"] = filters_applied
             if output == "csv":
                 typer.echo(result_df.write_csv())
             elif output == "json":
@@ -172,14 +204,14 @@ def query_command(
                     pagination=pagination,
                     max_bytes=max_bytes,
                     command="query",
-                    meta_extras={"filters_applied": filters_applied},
+                    meta_extras=meta_extras,
                 )
                 cli_output.emit(
                     payload,
                     True,
                     lambda _: None,
                     command="query",
-                    meta_extras={"filters_applied": filters_applied},
+                    meta_extras=meta_extras,
                 )
             elif output == "markdown":
                 typer.echo(cli_output.render_markdown_dataframe(result_df))
@@ -205,8 +237,10 @@ def query_command(
             json_output=structured_output,
             command="query",
         )
+    except typer.Exit:
+        raise
     except Exception as e:  # intended catch-all for CLI robustness
-        logger.error(f"Query execution failed: {e}", exc_info=True)
+        logger.error("Query execution failed (%s)", type(e).__name__)
         cli_output.emit_error(
             f"Query execution failed: {e}",
             error_code=ErrorCode.QUERY_ERROR,

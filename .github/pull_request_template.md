@@ -20,5 +20,6 @@
 
 - [ ] Public CLI behavior is unchanged, or the compatibility impact is explained.
 - [ ] CLI JSON/schema contracts are unchanged, or tests and docs were updated.
+- [ ] User-facing change has a `CHANGELOG.md` Unreleased bullet, or this is N/A.
 
 Closes #

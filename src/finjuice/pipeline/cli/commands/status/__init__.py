@@ -9,6 +9,7 @@ import typer
 
 from finjuice.pipeline.cli.output import emit_error
 from finjuice.pipeline.cli.report_filters import no_filter_requested
+from finjuice.pipeline.cli.utils import get_activation_evidence_provider
 from finjuice.pipeline.config import Config
 
 from .compute import (
@@ -93,6 +94,7 @@ def _build_status_options(
         top_n=top_n,
         no_filter=no_filter_requested(ctx),
         report_filters=None,
+        evidence_provider=get_activation_evidence_provider(ctx),
     )
 
 

@@ -13,8 +13,9 @@ from finjuice.pipeline.cli.commands.export_helpers import (
 )
 from finjuice.pipeline.cli.export_runtime import configure_cli_export_result_runtime
 from finjuice.pipeline.cli.output import ErrorCode, ExitCode, _build_meta, emit, emit_error
-from finjuice.pipeline.cli.utils import get_config
+from finjuice.pipeline.cli.utils import get_activation_evidence_provider, get_config
 from finjuice.pipeline.export import result as export_result
+from finjuice.pipeline.export.source import RepositoryExportError
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,11 @@ def _render_export_result(result: dict[str, Any]) -> None:
     tx = result.get("transaction_count", 0)
     if tx:
         output.info(f"  Transactions: {tx}")
+    metadata = result.get("_repository_meta")
+    if metadata:
+        output.info(f"  Dataset revision: {metadata['dataset_revision']}")
+    if result.get("manifest_path"):
+        output.info(f"  Manifest: {result['manifest_path']}")
     for item in result.get("output_files", []):
         output.info(f"  → {item['path']}")
 
@@ -92,7 +98,6 @@ def export_command(
     """
     config = get_config(ctx)
     configure_cli_export_result_runtime()
-
     # Validate inputs
     format_lower = validate_format(format, json_output)
     validate_period(period, json_output)
@@ -107,6 +112,7 @@ def export_command(
             dry_run,
             emit_text=not json_output,
             online=online,
+            evidence_provider=get_activation_evidence_provider(ctx),
         )
         json_result = result
         if json_output:
@@ -114,6 +120,7 @@ def export_command(
             json_result["_meta"] = {
                 **_build_meta("export"),
                 "filters_applied": result.get("_filters_applied", 0),
+                **result.get("_repository_meta", {}),
             }
         emit(
             json_result,
@@ -123,6 +130,13 @@ def export_command(
         )
         return result
 
+    except RepositoryExportError:
+        emit_error(
+            "Repository export could not generate validated artifacts.",
+            error_code=ErrorCode.EXPORT_FAILED,
+            json_output=json_output,
+            command="export",
+        )
     except typer.Exit:
         raise  # Re-raise typer.Exit without modification
     except (FileNotFoundError, PermissionError) as e:

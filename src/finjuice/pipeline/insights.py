@@ -39,8 +39,9 @@ from finjuice.pipeline.insights_helpers import (
     _calculate_top_categories,
     _exclude_transfer_rows,
 )
+from finjuice.pipeline.insights_repository import RepositoryStatusSnapshotOptions
 from finjuice.pipeline.insights_structural import (
-    RecurringSavingsSummary,  # noqa: F401 — re-exported for existing insights imports
+    RecurringSavingsSummary,
     StructuralSavingsSource,
     TransactionStructuralSavingsSummary,  # noqa: F401 — re-exported for existing insights imports
     _calculate_transaction_structural_savings,
@@ -161,6 +162,17 @@ def collect_status_snapshot(
     finally:
         duckdb_logger.setLevel(previous_duckdb_level)
 
+    return _collect_frame_snapshot(df, base_snapshot, recurring_summary, configured_filters, top_n)
+
+
+def _collect_frame_snapshot(
+    df: pl.DataFrame,
+    base_snapshot: StatusSnapshot,
+    recurring_summary: RecurringSavingsSummary,
+    configured_filters: ReportFilters,
+    top_n: int,
+) -> StatusSnapshotResult:
+    """Compute detailed insights only from caller-provided data and parsed configuration."""
     if df.is_empty():
         return StatusSnapshotResult(snapshot=base_snapshot)
 
@@ -268,3 +280,12 @@ def _format_date_range(date_start: Optional[str], date_end: Optional[str]) -> Op
     if not date_start or not date_end:
         return None
     return f"{date_start} ~ {date_end}"
+
+
+def collect_repository_status_snapshot(
+    frame: pl.DataFrame, options: RepositoryStatusSnapshotOptions
+) -> StatusSnapshotResult:
+    """Compute detailed status from one repository snapshot without filesystem fallback."""
+    from finjuice.pipeline.insights_repository import collect_repository_snapshot
+
+    return collect_repository_snapshot(frame, options)

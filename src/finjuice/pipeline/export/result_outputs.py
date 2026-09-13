@@ -27,29 +27,47 @@ def _generate_xlsx_outputs(run: ExportRunContext) -> tuple[int, list[dict[str, A
     from finjuice.pipeline.export.reports import generate_all_reports
     from finjuice.pipeline.export.result import _emit_info
 
+    _require_repository_frames(run)
     master_path = run.paths.export_dir / f"master_{run.paths.today}.xlsx"
     logger.info(f"Exporting master file to: {master_path}")
 
     _emit_info(f"Exporting master file: {master_path}", emit_text=run.emit_text)
-    row_count = export_master_xlsx(run.config.csv_base_dir, master_path)
-    generated_artifacts = [
-        build_output_entry(
-            master_path,
-            "master_xlsx",
-            estimated_size_bytes=master_path.stat().st_size if master_path.exists() else None,
-            row_count=row_count,
-        )
-    ]
+    repository = run.repository_metadata is not None
+    master_existed = master_path.exists()
+    kwargs: dict[str, Any] = (
+        {"source_df": run.full_source_df, "deterministic": True} if repository else {}
+    )
+    row_count = export_master_xlsx(run.config.csv_base_dir, master_path, **kwargs)
+    generated_artifacts = (
+        [
+            build_output_entry(
+                master_path,
+                "master_xlsx",
+                estimated_size_bytes=master_path.stat().st_size if master_path.exists() else None,
+                row_count=row_count,
+            )
+        ]
+        if not repository or (master_path.is_file() and not master_existed and row_count > 0)
+        else []
+    )
 
+    if repository:
+        generated_artifacts.append(_generate_transactions_csv(run))
+
+    previous_reports = (
+        {path for path in run.paths.reports_dir.glob("*.csv")} if repository else set()
+    )
     _emit_info(f"Generating {REPORTS_COUNT} CSV reports...", emit_text=run.emit_text)
     report_summary = generate_all_reports(
         run.config.csv_base_dir,
         run.paths.reports_dir,
         source_df=run.report_source_df,
     )
+    if repository and report_summary.get("reports") != REPORTS_COUNT:
+        raise RuntimeError("Repository export requires all CSV report computations to succeed.")
     for filename, kind in _REPORT_OUTPUTS:
         report_path = run.paths.reports_dir / filename
-        if report_path.exists():
+        if report_path.exists() and report_path not in previous_reports:
             generated_artifacts.append(
                 build_output_entry(
                     report_path,
@@ -73,21 +91,17 @@ def _generate_html_outputs(
 
     generated_artifacts: list[dict[str, Any]] = []
     skipped_outputs: list[dict[str, Any]] = []
+    _require_repository_frames(run)
     html_path = run.paths.reports_dir / f"report_{run.period or run.paths.today}.html"
     try:
+        _require_new_report(run, html_path)
         from finjuice.pipeline.export.html_report import generate_html_report
 
         logger.info(f"Generating HTML report: {html_path} (online=%s)", run.online)
 
         _emit_info(f"Generating HTML report: {html_path}", emit_text=run.emit_text)
-        generate_html_report(
-            csv_base_dir=run.config.csv_base_dir,
-            output_path=html_path,
-            period=run.period,
-            include_charts=True,
-            source_df=run.report_source_df,
-            offline=not run.online,
-        )
+        _render_html(run, html_path, generate_html_report)
+        _require_generated_file(run, html_path)
         generated_artifacts.append(
             build_output_entry(
                 html_path,
@@ -104,6 +118,8 @@ def _generate_html_outputs(
                 _emit_info(f"   📂 Open manually: {html_path}", emit_text=run.emit_text)
 
     except ImportError as e:
+        if run.repository_metadata is not None and str(e) != DUCKDB_INSTALL_HINT:
+            e = ImportError(type(e).__name__)
         skipped_outputs.append(
             build_output_entry(
                 html_path,
@@ -136,8 +152,10 @@ def _generate_markdown_outputs(
 
     generated_artifacts: list[dict[str, Any]] = []
     skipped_outputs: list[dict[str, Any]] = []
+    _require_repository_frames(run)
     md_path = run.paths.reports_dir / f"report_{run.period or run.paths.today}.md"
     try:
+        _require_new_report(run, md_path)
         from finjuice.pipeline.export.markdown_report import generate_markdown_report
 
         logger.info(f"Generating Markdown report: {md_path}")
@@ -148,7 +166,9 @@ def _generate_markdown_outputs(
             output_path=md_path,
             period=run.period,
             source_df=run.report_source_df,
+            **_render_options(run),
         )
+        _require_generated_file(run, md_path)
         generated_artifacts.append(
             build_output_entry(
                 md_path,
@@ -158,6 +178,8 @@ def _generate_markdown_outputs(
         )
 
     except ImportError as e:
+        if run.repository_metadata is not None and str(e) != DUCKDB_INSTALL_HINT:
+            e = ImportError(type(e).__name__)
         skipped_outputs.append(
             build_output_entry(
                 md_path,
@@ -180,3 +202,68 @@ def _generate_markdown_outputs(
         )
 
     return generated_artifacts, skipped_outputs
+
+
+def _render_options(run: ExportRunContext, *, html: bool = False) -> dict[str, Any]:
+    if run.repository_metadata is None:
+        return {}
+    options = {
+        "generated_at": run.repository_metadata.get("calculation_as_of") or "Undated dataset"
+    }
+    if html:
+        options["deterministic"] = True
+    return options
+
+
+def _require_generated_file(run: ExportRunContext, path: Any) -> None:
+    if run.repository_metadata is not None and not path.is_file():
+        raise RuntimeError("Repository report generator did not create an artifact.")
+
+
+def _render_html(run: ExportRunContext, path: Any, legacy_renderer: Any) -> None:
+    if run.repository_metadata is not None:
+        from finjuice.pipeline.export.html_report import HTMLReportOptions, render_html_report
+
+        render_html_report(
+            HTMLReportOptions(
+                run.config.csv_base_dir,
+                path,
+                run.period,
+                source_df=run.report_source_df,
+                offline=not run.online,
+                **_render_options(run, html=True),
+            )
+        )
+    else:
+        legacy_renderer(
+            csv_base_dir=run.config.csv_base_dir,
+            output_path=path,
+            period=run.period,
+            include_charts=True,
+            source_df=run.report_source_df,
+            offline=not run.online,
+        )
+
+
+def _require_new_report(run: ExportRunContext, path: Any) -> None:
+    if run.repository_metadata is not None and path.exists():
+        raise RuntimeError("Repository report destination must be new.")
+
+
+def _require_repository_frames(run: ExportRunContext) -> None:
+    if run.repository_metadata is not None and (
+        run.full_source_df is None or run.report_source_df is None
+    ):
+        raise RuntimeError("Repository export requires explicit pinned source frames.")
+
+
+def _generate_transactions_csv(run: ExportRunContext) -> dict[str, Any]:
+    from finjuice.pipeline.export.transactions_csv import export_transactions_csv
+
+    assert run.full_source_df is not None
+    path = run.paths.export_dir / "transactions.csv"
+    _require_new_report(run, path)
+    count = export_transactions_csv(run.full_source_df, path)
+    return build_output_entry(
+        path, "transactions_csv", estimated_size_bytes=path.stat().st_size, row_count=count
+    )
