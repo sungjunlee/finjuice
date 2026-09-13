@@ -1161,19 +1161,22 @@ def _config_audit_state(revision: ConfigRevisionRecord) -> dict[str, JSONValue]:
     }
 
 
+_MIGRATED_TRANSACTION_SOURCE_SQL = (
+    "SELECT txn.entity_id FROM transactions AS txn "
+    "JOIN migration_identities AS identity ON identity.entity_id = txn.entity_id "
+    "AND identity.record_kind = 'transaction' "
+    "JOIN legacy_payloads AS payload ON payload.provenance_id = txn.provenance_id "
+    "JOIN record_provenance AS provenance ON provenance.provenance_id = txn.provenance_id "
+    "JOIN observations AS observation ON observation.entity_id = txn.observation_id "
+    "AND observation.source_occurrence_id = provenance.source_occurrence_id "
+)
+
+
 def _has_migrated_transaction_source(connection: sqlite3.Connection, transaction_id: str) -> bool:
     """Recognize captured legacy rows whose tag spelling and duplicates were preserved."""
     return (
         connection.execute(
-            "SELECT 1 FROM transactions AS txn "
-            "JOIN migration_identities AS identity ON identity.entity_id = txn.entity_id "
-            "AND identity.record_kind = 'transaction' "
-            "JOIN legacy_payloads AS payload ON payload.provenance_id = txn.provenance_id "
-            "JOIN record_provenance AS provenance ON provenance.provenance_id = txn.provenance_id "
-            "JOIN observations AS observation ON observation.entity_id = txn.observation_id "
-            "AND observation.source_occurrence_id = provenance.source_occurrence_id "
-            "WHERE txn.entity_id = ?",
-            (transaction_id,),
+            _MIGRATED_TRANSACTION_SOURCE_SQL + "WHERE txn.entity_id = ?", (transaction_id,)
         ).fetchone()
         is not None
     )
@@ -1318,7 +1321,8 @@ def _load_bulk_transaction_rows(
     rows = connection.execute(sql, parameters).fetchall()
     if transaction_ids is not None and len(rows) != len(set(transaction_ids)):
         raise MutationValidationError("Transaction identifier was not found.")
-    return tuple(_bulk_transaction_mapping(row) for row in rows)
+    migrated = {row[0] for row in connection.execute(_MIGRATED_TRANSACTION_SOURCE_SQL)}
+    return tuple(_bulk_transaction_mapping(row, preserved=row[0] in migrated) for row in rows)
 
 
 def _bulk_transaction_query(
@@ -1340,12 +1344,12 @@ def _bulk_transaction_query(
     return sql, identifiers
 
 
-def _bulk_transaction_mapping(row: Sequence[Any]) -> dict[str, Any]:
+def _bulk_transaction_mapping(row: Sequence[Any], *, preserved: bool = False) -> dict[str, Any]:
     coefficient = None if row[37] is None else str(row[37])
     scale = None if row[38] is None else int(row[38])
     amount_coefficient = str(row[30])
     amount_scale = int(row[31])
-    mapping = _bulk_transaction_core(row)
+    mapping = _bulk_transaction_core(row, preserved=preserved)
     mapping.update(_bulk_transaction_amount(row, amount_coefficient, amount_scale))
     mapping.update(
         {
@@ -1361,9 +1365,9 @@ def _bulk_transaction_mapping(row: Sequence[Any]) -> dict[str, Any]:
     return mapping
 
 
-def _bulk_transaction_core(row: Sequence[Any]) -> dict[str, Any]:
+def _bulk_transaction_core(row: Sequence[Any], *, preserved: bool = False) -> dict[str, Any]:
     mapping = _bulk_transaction_identity(row)
-    mapping.update(_bulk_transaction_classification(row))
+    mapping.update(_bulk_transaction_classification(row, preserved=preserved))
     return mapping
 
 
@@ -1384,7 +1388,10 @@ def _bulk_transaction_identity(row: Sequence[Any]) -> dict[str, Any]:
     }
 
 
-def _bulk_transaction_classification(row: Sequence[Any]) -> dict[str, Any]:
+def _bulk_transaction_classification(
+    row: Sequence[Any], *, preserved: bool = False
+) -> dict[str, Any]:
+    parse_tags = _parse_preserved_string_array if preserved else _parse_string_array
     return {
         "category_final": row[16],
         "category_manual": row[15],
@@ -1398,10 +1405,10 @@ def _bulk_transaction_classification(row: Sequence[Any]) -> dict[str, Any]:
         "minor_raw": row[8],
         "needs_review": None if row[22] is None else bool(row[22]),
         "notes_manual": row[11],
-        "tags_ai": _parse_string_array(row[18]),
-        "tags_final": _parse_string_array(row[20]),
-        "tags_manual": _parse_string_array(row[19]),
-        "tags_rule": _parse_string_array(row[17]),
+        "tags_ai": parse_tags(row[18]),
+        "tags_final": parse_tags(row[20]),
+        "tags_manual": parse_tags(row[19]),
+        "tags_rule": parse_tags(row[17]),
         "transfer_group_id": row[25],
     }
 
@@ -1437,10 +1444,13 @@ def _load_stored_derived_state(
     ).fetchone()
     if row is None:
         raise MutationValidationError("Transaction identifier was not found.")
-    return _stored_derived_mapping(row)
+    return _stored_derived_mapping(
+        row, preserved=_has_migrated_transaction_source(connection, transaction_id)
+    )
 
 
-def _stored_derived_mapping(row: Sequence[Any]) -> dict[str, JSONValue]:
+def _stored_derived_mapping(row: Sequence[Any], *, preserved: bool = False) -> dict[str, JSONValue]:
+    parse_tags = _parse_preserved_string_array if preserved else _parse_string_array
     return {
         "category_final": row[0],
         "category_rule": row[1],
@@ -1448,8 +1458,8 @@ def _stored_derived_mapping(row: Sequence[Any]) -> dict[str, JSONValue]:
         "is_transfer": None if row[6] is None else bool(row[6]),
         "is_transfer_candidate": None if row[7] is None else bool(row[7]),
         "needs_review": None if row[3] is None else bool(row[3]),
-        "tags_final": _parse_string_array(row[4]),
-        "tags_rule": _parse_string_array(row[5]),
+        "tags_final": parse_tags(row[4]),
+        "tags_rule": parse_tags(row[5]),
         "transfer_group_id": row[8],
     }
 
@@ -1478,7 +1488,10 @@ def _reject_mismatched_derived_field(
 ) -> None:
     if key not in _DERIVED_COLUMNS:
         raise MutationValidationError("Unsupported derived field.")
-    _derived_sql_value(key, claimed)
+    # Before-state is evidence, not a proposed canonical write. The stored tags
+    # have already passed the native or source-backed preservation parser.
+    if key not in _JSON_DERIVED_KEYS:
+        _derived_sql_value(key, claimed)
     actual = _derived_audit_value(key, stored[key])
     if _derived_audit_value(key, claimed) != actual:
         raise MutationValidationError("Derived before-state does not match stored state.")

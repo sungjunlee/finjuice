@@ -1,7 +1,8 @@
 # SQLite read compatibility
 
 Issue #436 remains open. This checkpoint connects transaction reads and the `query`
-command; it does not establish parity for every consumer, export, or arbitrary SQL.
+and `template run` commands; it does not establish parity for every consumer, export,
+or arbitrary SQL.
 
 `RepositoryReader.transaction_snapshot()` materializes current transaction columns,
 exact amount/confidence text, provenance-bound original aliases, and canonical rules
@@ -26,9 +27,11 @@ finite display range fail explicitly. Valid date columns support DuckDB DATE fun
 invalid/raw date text is retained as text. This does not promise identical inferred SQL
 types for every historical CSV input.
 
-`query` reads report filters from the pinned canonical rules bytes. Local `rules.yaml`
-or compatibility CSV edits cannot alter an activated query. A head marked invalid/opaque fails even when its bytes are valid YAML; malformed
-filter syntax also fails. Neither case falls back to another copy. `--no-filter` keeps its explicit bypass.
+`query` and `template run` read report filters from the pinned canonical rules bytes.
+Local `rules.yaml` or compatibility CSV edits cannot alter an activated query. A head
+marked invalid/opaque fails even when its bytes are valid YAML; malformed filter
+syntax also fails. Neither case falls back to another copy. `--no-filter` keeps its
+explicit bypass.
 Repository JSON metadata includes authority, generation, revision, schema and
 `legacy_transaction_display.v1`; ordinary legacy output is unchanged.
 
@@ -38,10 +41,16 @@ payload/provenance/observation occurrence; native writes keep the canonical pars
 Note-only no-ops and replay receipts report the stored state. Explicit tag/category
 requests retain the existing normalization and derived-classification behavior.
 
-A separate installed probe still reproduces rejection of migrated duplicate tag arrays
-in bulk tagging. Bulk tagging/transfer representation, preview and replay must be
-verified and completed before operational activation. The note-only correction does
-not establish bulk support.
+Bulk tagging and transfer reads use the same source-backed preservation boundary.
+The stored before-state is compared as evidence; proposed derived writes still use
+the canonical validator. Explicit retagging recomputes derived fields while retaining
+manual/AI/source fields. Transfer recomputation changes only transfer fields and
+preserves unrelated classifications and tag arrays. Actual migration regressions
+cover preview, apply, audit, no-op and replay, including duplicate and blank members.
+
+Template execution resolves filters after opening its transaction snapshot. Ordinary
+SQL and dynamic pivot discovery/aggregation use that same pinned authority and rules;
+JSON metadata carries its revision alongside existing template metadata.
 
 Current limitations: other CLI/analysis consumers still need evidence injection and
 repository reads; overview/asset read projections, generated exports with revision
