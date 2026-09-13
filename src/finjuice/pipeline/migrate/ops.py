@@ -336,7 +336,9 @@ def build_migration(
         raise_io(exc)
         raise
     revalidate_capture(capture)
-    dispositions = Counter(item[1] for item in state.dispositions)
+    disposition_counts: dict[str, int] = {}
+    for _, disposition, _reason in state.dispositions:
+        disposition_counts[disposition] = disposition_counts.get(disposition, 0) + 1
     unexplained = _count_unexplained(resolved_plan, len(state.dispositions))
     result = MigrationResult(
         status="ok",
@@ -344,7 +346,7 @@ def build_migration(
         capture_digest=capture.canonical_digest,
         candidate_digest=_candidate_digest(paths.database),
         input_count=len(state.dispositions),
-        dispositions=dict(dispositions),
+        dispositions=disposition_counts,
         unexplained_loss_count=unexplained,
         issue_count=state.issues,
         origin_kind=ORIGIN_KIND,

@@ -198,9 +198,7 @@ def map_transaction_row(work: RowWork) -> None:
             ("preserved_opaque", amount_issue or "unparseable_amount"),
         )
         return
-    type_norm, review, candidate, is_transfer = _transaction_flags(
-        state, provenance_id, row
-    )
+    type_norm, review, candidate, is_transfer = _transaction_flags(state, provenance_id, row)
     tags_rule, _rule_issue = parse_tag_sequence(row.get("tags_rule"))
     tags_ai, _ai_issue = parse_tag_sequence(row.get("tags_ai"))
     tags_final, _final_issue = parse_tag_sequence(row.get("tags_final"))

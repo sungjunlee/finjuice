@@ -318,8 +318,9 @@ def test_source_change_missing_file_disk_full_and_interrupt(
     with pytest.raises(MigrationError, match="changed"):
         migrate.build_migration(plan_path, tmp_path / "changed", active_data_dir=source)
     changed.write_bytes(before["transactions/2024/01/transactions.csv"][1] or b"")
-    assert _tree_state(source)["transactions/2024/01/transactions.csv"][1] == (
-        before["transactions/2024/01/transactions.csv"][1]
+    assert (
+        _tree_state(source)["transactions/2024/01/transactions.csv"][1]
+        == (before["transactions/2024/01/transactions.csv"][1])
     )
 
     missing = source / "imports" / "2024-01.xlsx"

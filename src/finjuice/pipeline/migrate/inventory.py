@@ -26,6 +26,7 @@ from finjuice.pipeline.migrate.types import (
     SCHEMA_VERSION,
     CaptureEntry,
     CaptureManifest,
+    Disposition,
     PlannedInput,
 )
 
@@ -376,9 +377,7 @@ def expand_planned_inputs(manifest: CaptureManifest) -> list[PlannedInput]:
             headers, rows = read_csv_rows(resolve_entry_path(manifest, entry))
             del headers
             if not rows:
-                inputs.append(
-                    _file_input(entry, expected="intentionally_absent")
-                )
+                inputs.append(_file_input(entry, expected="intentionally_absent"))
                 continue
             for ordinal, _row in enumerate(rows):
                 inputs.append(
@@ -392,21 +391,20 @@ def expand_planned_inputs(manifest: CaptureManifest) -> list[PlannedInput]:
                     )
                 )
             continue
-        expected = "preserved_opaque"
+        expected: Disposition = "preserved_opaque"
         if entry.logical_role in {"rules", "goals", "overlay"}:
             expected = "migrated"
         inputs.append(_file_input(entry, expected=expected))
     return inputs
 
 
-def _file_input(entry: CaptureEntry, *, expected: str) -> PlannedInput:
-    disposition = expected  # type: ignore[assignment]
+def _file_input(entry: CaptureEntry, *, expected: Disposition) -> PlannedInput:
     return PlannedInput(
         logical_role=entry.logical_role,
         relative_path=entry.relative_path,
         record_kind=record_kind_for_role(entry.logical_role),
         ordinal=None,
-        expected_disposition=disposition,
+        expected_disposition=expected,
         sha256=entry.sha256,
     )
 
@@ -423,7 +421,5 @@ def iter_role_entries(
     """Return present entries for the given roles, in role then path order."""
     wanted = tuple(roles)
     selected = [entry for entry in manifest.present_files() if entry.logical_role in wanted]
-    selected.sort(
-        key=lambda entry: (wanted.index(entry.logical_role), entry.relative_path or "")
-    )
+    selected.sort(key=lambda entry: (wanted.index(entry.logical_role), entry.relative_path or ""))
     return selected
