@@ -87,3 +87,35 @@ classification, date, or tag array is rewritten. A future native correction that
 reuses a migrated source occurrence must define its scope contract explicitly; the
 current importer always creates a new native occurrence, and mixed migration proof
 never authorizes a guessed native-month fallback.
+
+## Explain stored state and rule simulation
+
+Activated `explain` searches transactions and loads canonical tagging rules from one
+validated snapshot. It retains the non-interactive JSON and `--pick` selection
+contract, identifies native rows by transaction UUID, and never applies report
+filters to its search. Invalid/opaque canonical rules cannot be bypassed with
+`--no-filter`; an unavailable or invalid activated repository never falls back
+to CSV.
+
+JSON separately reports `stored_classification` (manual/rule/final categories,
+rule/AI/manual/final tags and manual notes) and the current rule simulation.
+`classification_basis=current_rules_simulation` and the metadata policy
+`current_rules_simulation.v1` identify that calculation. Human output labels both
+sections. The simulation uses the complete raw row, including exact amounts reconstructed from canonical coefficient/scale
+values, while the selected transaction retains the legacy Float64 display contract.
+It does not mutate stored classifications or normalize preserved tag arrays.
+Internal manual-category marker tags are omitted from the displayed manual tags.
+
+Enabled condition rules participate in both matching and the trace. Invalid enabled
+regex fails without exposing its pattern; disabled regex rules remain ignored.
+Unknown rule-field warnings report only their count, not rule labels or field names.
+Empty rules and no-match results retain the same revision and calculation metadata.
+
+Compatibility boundaries: the existing `classification.category` fallback may show
+the stored final category when no rule supplies a category; `category_rule` identifies
+a simulated rule category. Same-date candidates use stable UUID order, not captured
+CSV row order. Date filters use `date_raw`, not a guessed observation calendar date.
+Explanation matching exposes more row fields than the current bulk-tagging adapter;
+these paths do not yet promise identical results for every arbitrary field condition.
+Text operations on amounts see the canonical exact representation, not necessarily
+the original lexical spelling.

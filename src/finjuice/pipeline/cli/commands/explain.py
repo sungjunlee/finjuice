@@ -265,6 +265,10 @@ def explain_command(
         finjuice explain "쿠팡" -d 2024-10-25
     """
     config = get_config(ctx)
+    from finjuice.pipeline.cli.commands.explain_reads import ExplainRequest, repository_explain
+
+    if repository_explain(ctx, config, ExplainRequest(query, date, pick, json_output)):
+        return
 
     # 1. Load rules
     rules = _load_explain_rules(config.rules_file, json_output)

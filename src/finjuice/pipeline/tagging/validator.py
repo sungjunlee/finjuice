@@ -104,9 +104,7 @@ def _validate_rule(rule_dict: Dict[str, Any], rule_index: int) -> Dict[str, Any]
     # Warn about unknown fields (but don't fail - allows for extensions)
     unknown_fields = set(rule_dict.keys()) - VALID_RULE_FIELDS
     if unknown_fields:
-        logger.warning(
-            f"{rule_label} has unknown fields: {sorted(unknown_fields)}. These will be ignored."
-        )
+        logger.warning("Rule has %s unknown fields; they will be ignored.", len(unknown_fields))
 
     tags = _validate_string_list(rule_dict["tags"], rule_label, "tags")
     match, fields = _validate_match_fields(rule_dict, rule_label)
