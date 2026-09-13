@@ -1,6 +1,6 @@
 # Legacy overview 보고값과 참조 근거를 분리해 보존
 
-**Status**: accepted (구현 예정)
+**Status**: accepted (저장·adapter 구현, 소비자·운영 검증 미완료)
 
 **Date**: 2026-09-13
 
@@ -32,7 +32,8 @@ Cashflow에는 source_row와 currency도 없다. 보험·투자·대출의 참�
 기존 행 observation을 키로 하는 **별도 legacy reported 테이블**에 보고값을 저장하고,
 참조 요청·후보·판정은 별도 근거로 보존한다. Native projection의 FK와
 동일 occurrence 불변식은 유지한다. 새 entity kind는 추가하지 않는다.
-실행 계약의 구조 변경 권한으로 방향을 채택하며, 이 문서는 구현 완료가 아니다.
+실행 계약의 구조 변경 권한으로 방향을 채택했다. 저장·이전 adapter는 구현했으며,
+이 문서는 전체 #435·#436 또는 운영 완료를 뜻하지 않는다.
 
 - `legacy_overview_reports`는 기존 deterministic observation을 PK/FK로 사용하고
   kind와 원래 provenance를 가진다. Balance/cashflow/insurance/investment/loan의
@@ -57,12 +58,12 @@ Cashflow에는 source_row와 currency도 없다. 보험·투자·대출의 참�
 
 ## 스키마와 과거 후보 재생
 
-새 스키마는 v5, 새 adapter policy는 별도 버전으로 도입한다. 기존 sealed plan의
+새 스키마는 v5, 새 adapter policy는 `legacy_preservation.overview_reports.v4`다. 기존 sealed plan의
 legacy v1/config-head v2/manual-state v3는 **정확히 schema v4**로 생성·재생한다.
 일반 runtime은 최신 schema를 요구하고, 과거 v4 허용은 migration 내부 경로로 한정한다.
 
 `RepositoryBuilder`, reader/validator와 `semantic_snapshot`에 정책이 요구하는 정확한
-스키마를 연결한다. 현재 `_READ_TABLE_SQL` 목록은 v4 registry로 고정하고 v5 목록을
+스키마를 연결한다. 기존 목록은 `_READ_TABLE_SQL_V4` registry로 고정하고 v5 목록을
 확장한다. 기존 digest에 빈 새 테이블을 추가하거나, version을 지우거나, 누락 테이블을
 무시해 재검증을 통과시키지 않는다. v4 validator는 v5 테이블에 접근하지 않는다.
 

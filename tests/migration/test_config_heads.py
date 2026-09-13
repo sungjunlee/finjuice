@@ -12,7 +12,7 @@ from finjuice.pipeline.backup import ConsistencyEvidence, CreateRequest, SourceR
 from finjuice.pipeline.migration import build_migration, plan_migration, verify_migration
 from finjuice.pipeline.migration.common import MigrationError, canonical, seal, tree_inventory
 from finjuice.pipeline.migration.plan import analyze_capture
-from finjuice.pipeline.migration.policy import MANUAL_STATE_POLICY
+from finjuice.pipeline.migration.policy import OVERVIEW_REPORT_POLICY
 from finjuice.pipeline.migration.verify import semantic_snapshot
 from finjuice.pipeline.storage.sqlite import GenerationPaths, RepositoryReader
 
@@ -65,7 +65,7 @@ def test_canonical_heads_preserve_every_revision_and_replay(
     plan_path = tmp_path / "plan.json"
     result = plan_migration(capture, output=plan_path, active_data_dir=source).to_dict()
     plan = result["plan"]
-    assert plan["migration_policy"] == MANUAL_STATE_POLICY
+    assert plan["migration_policy"] == OVERVIEW_REPORT_POLICY
     planned_heads = sum(
         item.get("analysis", {}).get("record_counts", {}).get("config_head", 0)
         for item in plan["inputs"]
@@ -156,7 +156,7 @@ def test_legacy_plan_keeps_absent_heads_and_unknown_policy_is_rejected(tmp_path:
     path.write_text(canonical(seal(plan)))
     candidate = tmp_path / "candidate"
     build_migration(path, candidate, active_data_dir=source)
-    with RepositoryReader(GenerationPaths(candidate).database) as reader:
+    with RepositoryReader(GenerationPaths(candidate).database, expected_schema_version=4) as reader:
         assert reader.rows("config_heads") == []
         with RepositoryReader(GenerationPaths(modern).database) as current:
             assert reader.rows("repository_meta") != current.rows("repository_meta")

@@ -16,6 +16,8 @@ from finjuice.pipeline.migration.policy import (
     CONFIG_HEAD_POLICY,
     LEGACY_POLICY,
     MANUAL_STATE_POLICY,
+    OVERVIEW_REPORT_POLICY,
+    migration_schema_version,
 )
 from finjuice.pipeline.migration.verify import semantic_snapshot
 from finjuice.pipeline.storage.sqlite import GenerationPaths, RepositoryReader
@@ -90,10 +92,12 @@ def _assert_rows(reader: RepositoryReader, policy: str, originals: list[dict[str
         index = provenance[provenance_id]["row"] - 1
         _manual, modern, legacy, visible_modern, visible_legacy = CASES[index]
         assert transaction["category_manual"] == (
-            modern if policy == MANUAL_STATE_POLICY else legacy
+            modern if policy in (MANUAL_STATE_POLICY, OVERVIEW_REPORT_POLICY) else legacy
         )
         assert json.loads(transaction["tags_manual_json"]) == (
-            visible_modern if policy == MANUAL_STATE_POLICY else visible_legacy
+            visible_modern
+            if policy in (MANUAL_STATE_POLICY, OVERVIEW_REPORT_POLICY)
+            else visible_legacy
         )
         assert transaction["category_final"] == "persisted-category"
         assert transaction["notes_manual"] == "original\nnotes"
@@ -113,7 +117,9 @@ def _assert_rows(reader: RepositoryReader, policy: str, originals: list[dict[str
     )
 
 
-@pytest.mark.parametrize("policy", [LEGACY_POLICY, CONFIG_HEAD_POLICY, MANUAL_STATE_POLICY])
+@pytest.mark.parametrize(
+    "policy", [LEGACY_POLICY, CONFIG_HEAD_POLICY, MANUAL_STATE_POLICY, OVERVIEW_REPORT_POLICY]
+)
 def test_manual_policy_replays_frozen_selection_without_changing_persisted_results(
     tmp_path: Path, policy: str
 ) -> None:
@@ -121,14 +127,17 @@ def test_manual_policy_replays_frozen_selection_without_changing_persisted_resul
     before = tree_inventory(source), tree_inventory(capture)
     path = tmp_path / "plan.json"
     plan = plan_migration(capture, output=path, active_data_dir=source).to_dict()["plan"]
-    assert plan["migration_policy"] == MANUAL_STATE_POLICY
+    assert plan["migration_policy"] == OVERVIEW_REPORT_POLICY
     plan.pop("canonical_digest")
     plan["migration_policy"] = policy
     plan["inputs"] = analyze_capture(capture, plan["capture"], policy=policy)
     path.write_text(canonical(seal(plan)))
     candidate = tmp_path / "candidate"
     build_migration(path, candidate, active_data_dir=source)
-    with RepositoryReader(GenerationPaths(candidate).database) as reader:
+    with RepositoryReader(
+        GenerationPaths(candidate).database,
+        expected_schema_version=migration_schema_version(policy),
+    ) as reader:
         _assert_rows(reader, policy, originals)
     assert verify_migration(candidate).to_dict()["status"] == "ok"
     candidate_before = tree_inventory(candidate)
@@ -139,7 +148,10 @@ def test_manual_policy_replays_frozen_selection_without_changing_persisted_resul
     assert tree_inventory(candidate) == candidate_before
     replay = tmp_path / "replay"
     build_migration(path, replay, active_data_dir=source)
-    assert semantic_snapshot(GenerationPaths(candidate).database) == semantic_snapshot(
-        GenerationPaths(replay).database
+    assert semantic_snapshot(
+        GenerationPaths(candidate).database,
+        expected_schema_version=migration_schema_version(policy),
+    ) == semantic_snapshot(
+        GenerationPaths(replay).database, expected_schema_version=migration_schema_version(policy)
     )
     assert before == (tree_inventory(source), tree_inventory(capture))

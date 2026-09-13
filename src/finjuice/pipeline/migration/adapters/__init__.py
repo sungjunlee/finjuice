@@ -7,6 +7,8 @@ import hashlib
 import io
 from pathlib import Path, PurePosixPath
 
+from finjuice.pipeline.migration.policy import OVERVIEW_REPORT_POLICY
+from finjuice.pipeline.storage.sqlite.legacy_overview import LegacyOverviewCandidateRecord
 from finjuice.pipeline.storage.sqlite.records import (
     MigrationIdentityRecord,
     ObservationRecord,
@@ -18,6 +20,7 @@ from .configs import config, config_kind
 from .csv_rows import rows
 from .model import PARSER, Emitter, FileAnalysis, FileContext
 from .observations import asset, fact
+from .overview_reports import report, report_role
 from .transactions import transaction
 
 __all__ = ["FileContext", "FileAnalysis", "analyze_file", "preserve_file"]
@@ -28,12 +31,23 @@ def analyze_file(source: Path, context: FileContext) -> FileAnalysis:
     return _process(source, context, None)
 
 
-def preserve_file(builder: RepositoryBuilder, source: Path, context: FileContext) -> FileAnalysis:
+def preserve_file(
+    builder: RepositoryBuilder,
+    source: Path,
+    context: FileContext,
+    *,
+    pending: list[LegacyOverviewCandidateRecord] | None = None,
+) -> FileAnalysis:
     """Preserve source bytes and baseline rows inside the caller's builder lifecycle."""
-    return _process(source, context, builder)
+    return _process(source, context, builder, pending)
 
 
-def _process(source: Path, context: FileContext, builder: RepositoryBuilder | None) -> FileAnalysis:
+def _process(
+    source: Path,
+    context: FileContext,
+    builder: RepositoryBuilder | None,
+    pending: list[LegacyOverviewCandidateRecord] | None = None,
+) -> FileAnalysis:
     data = source.read_bytes()
     artifact = "sha256:" + hashlib.sha256(data).hexdigest()
     emitter = Emitter(context, builder)
@@ -74,14 +88,18 @@ def _process(source: Path, context: FileContext, builder: RepositoryBuilder | No
         success = config(emitter, data, artifact, kind)
         emitter.disposition("migrated" if success else "preserved_opaque", "configuration_source")
     elif context.relative_path.lower().endswith(".csv"):
-        _csv(emitter, data)
+        _csv(emitter, data, pending)
     else:
         emitter.issue("opaque_file_format")
         emitter.disposition("preserved_opaque", "original_source_bytes_retained")
     return emitter.finish()
 
 
-def _csv(emitter: Emitter, data: bytes) -> None:
+def _csv(
+    emitter: Emitter,
+    data: bytes,
+    pending: list[LegacyOverviewCandidateRecord] | None,
+) -> None:
     failed = False
     try:
         for ordinal, payload, row in rows(data):
@@ -98,9 +116,16 @@ def _csv(emitter: Emitter, data: bytes) -> None:
                 ObservationRecord(observation, emitter.occurrence, None, None, None, "unknown"),
             )
             before = sum(emitter.issues.values())
-            success = _row(emitter, row, observation)
+            success = _row(emitter, row, observation, pending)
             if not success or sum(emitter.issues.values()) > before:
-                emitter.disposition("preserved_opaque", "row_contains_explicit_untyped_evidence")
+                emitter.disposition(
+                    "preserved_opaque",
+                    "typed_report_with_unverified_reference_or_extra_evidence"
+                    if success
+                    and emitter.context.migration_policy == OVERVIEW_REPORT_POLICY
+                    and report_role(emitter.context.relative_path) is not None
+                    else "row_contains_explicit_untyped_evidence",
+                )
             else:
                 emitter.disposition("migrated", "persisted_row_meaning_preserved")
     except (UnicodeError, csv.Error):
@@ -115,10 +140,18 @@ def _csv(emitter: Emitter, data: bytes) -> None:
     )
 
 
-def _row(emitter: Emitter, row: dict[str, str | None], observation: str) -> bool:
+def _row(
+    emitter: Emitter,
+    row: dict[str, str | None],
+    observation: str,
+    pending: list[LegacyOverviewCandidateRecord] | None,
+) -> bool:
     parts = PurePosixPath(emitter.context.relative_path).parts
     if "transactions" in parts:
         return transaction(emitter, row, observation)
+    role = report_role(emitter.context.relative_path)
+    if emitter.context.migration_policy == OVERVIEW_REPORT_POLICY and role is not None:
+        return report(emitter, row, observation, role, pending)
     if "fact_id" in row and "fact_kind" in row:
         return fact(emitter, row, observation)
     if "instrument_id" in row and "snapshot_date" in row:

@@ -45,7 +45,7 @@ not require an active-data boundary.
   retained as evidence with explicit issues before financial typed insertion.
   Analysis and build use the same checks without reclassifying invalid values.
 - Transaction rows preserve persisted final category, notes, transfer flags and
-  group identifiers. New v3 plans select the manual category using the frozen
+  group identifiers. New v4 plans retain v3 manual-category selection using the frozen
   legacy normalization and duplicate-marker semantics described below; visible
   tags retain their original spelling, order, and duplicates. Original marker
   arrays remain in row evidence. No accounts or owners are inferred.
@@ -83,9 +83,11 @@ Existing adapter policies v1/v2/v3 explicitly select SQLite schema v4 for buildi
 validation and semantic comparison. The reader selects the exact v4 table registry;
 a later runtime default cannot silently add tables to old digests. Unsupported
 requested versions and mismatched database headers fail closed. Runtime defaults
-still require the current schema, which remains v4. This pins the replay boundary;
-it does not implement v5. A future v5 change must preserve the v4 DDL, helper and
-registry contents and add its own initialization and validation route.
+require schema v5. New `legacy_preservation.overview_reports.v4` plans build v5;
+v4 schema contents and table enumeration remain available to the old policies.
+A separate v4-to-v5 upgrade adds empty report tables without reinterpreting opaque
+rows or changing the original candidate. It does not copy the old migration manifest
+and cannot claim the old candidate's sealed digest.
 
 Adapter replay detects corruption and inconsistency; it is not an independent
 parser oracle. Separate synthetic assertions check expected transaction meaning,
@@ -100,16 +102,12 @@ and after directory publication.
 
 ## Remaining gates
 
-- Derived balance/cashflow/insurance/investment/loan rows retain opaque evidence
-  with `unresolved_source_fact`. A capture-wide lookup alone cannot link separate
-  files: each file has its own source occurrence, while the current repository
-  invariant requires a projection and its fact to share one occurrence. The
-  accepted direction is to preserve reported values independently of reference
-  assessment, using existing row observations and distinct file occurrences.
-  Even a unique legacy ID match is not a completed link.
-  [ADR-0015](../architecture/decisions/0015-cross-file-overview-derivation.md)
-  defines the reported-value and reference contract. Schema v5, those tables and
-  their adapters remain unimplemented; the schema-v4 replay boundary is pinned.
+- Canonical five-role overview reports now have typed values under the new v4 policy,
+  but source-fact relationships remain explicitly unverified, ambiguous or missing.
+  A unique alias is not occurrence proof. Old policies retain their opaque derived
+  representation. Noncanonical paths, incomplete report schemas and invalid values
+  still retain original evidence with issues. Full private-capture coverage and
+  #436 consumer parity remain acceptance gates; typed storage alone is insufficient.
 - New plans select canonical rules/goals heads from the frozen primary data root
   as described below. Other configuration copies remain preserved revisions;
   missing or invalid canonical documents are not replaced with alternative copies.
@@ -129,8 +127,8 @@ The governing acceptance contract remains
 
 The existing runtime reads exactly `rules.yaml` and `goals.yaml` at the primary
 legacy data root (`Config.rules_file` and `Config.goals_file`). Sealed private
-plans using `legacy_preservation.config_heads.v2` or the newer manual-state v3
-policy select those captured revisions as baseline heads. Nested files, external roots, `.yml`
+plans using `legacy_preservation.config_heads.v2`, manual-state v3, or overview-report
+v4 select those captured revisions as baseline heads. Nested files, external roots, `.yml`
 and `.json` copies remain distinct evidence; neither filename similarity, byte
 identity, parse success nor modification time grants them canonical status.
 The retained `config_head_requires_explicit_selection` issue on an alternative
@@ -150,17 +148,17 @@ publication or successful verification. The policy is sealed into the plan and
 bound by the candidate's existing plan-evidence digest. Plan analysis and source
 replay use the same policy. V2 generation IDs include the policy so a v1 candidate
 without heads cannot share a generation/revision identity with the v2 baseline.
-Source occurrence and config revision identities remain unchanged. No public CLI
-flags or SQLite schema version change.
+Source occurrence and config revision identities remain unchanged. The v2 config-head
+policy itself did not change CLI flags or SQLite schema; v4 overview policy separately selects v5.
 This preserves old candidates without treating their missing heads as completion
 of the new canonical-config requirement. Runtime activation and consumer parity
 remain separate acceptance gates.
 
 ## Manual category policy
 
-New sealed plans use `legacy_preservation.manual_state.v3`, which retains v2
-canonical config-head selection and freezes the existing legacy manual-category
-interpretation. It strips full tag strings, ignores empty strings, deduplicates
+The `legacy_preservation.manual_state.v3` policy retains v2 canonical config-head
+selection and freezes the existing legacy manual-category interpretation. New
+`legacy_preservation.overview_reports.v4` plans retain the same interpretation. It strips full tag strings, ignores empty strings, deduplicates
 those normalized strings in first-seen order, and chooses the last marker with
 a nonempty stripped suffix. The implementation is local to the frozen adapter:
 future changes to the runtime helper cannot silently reinterpret a sealed plan.
@@ -227,3 +225,51 @@ Preserve the damaged journal and workspaces for diagnosis; an independent fresh
 plan/build can use a new isolated staging parent. Do not delete or edit evidence
 to bypass the check, and do not claim a linked retry if the parent evidence
 cannot be verified. This recovery path does not modify the original source.
+
+## Reported overview policy
+
+New v4 plans recognize the canonical `banksalad/<role>/YYYY/MM/<role>.csv` paths for
+balance, cashflow, insurance, investments and loans. They store report details on
+existing deterministic row observations, with original provenance and raw payloads.
+The native overview projection tables and their same-occurrence fact FKs stay unchanged.
+No fake fact, owner, account, derived calculation or selected reference is generated.
+
+All report numbers are parsed before typed insertion. Invalid numbers or blank dates
+retain the whole original row with issues instead of leaving partial typed values.
+Optional missing amounts remain absent, not zero. Money keeps exact lexical values;
+missing currency remains unknown. Cashflow has no currency in the frozen source schema:
+an extra currency column remains unknown-field evidence and cannot supply currency
+semantics. Nullable-value reports still preserve their original currency text.
+Rates keep the original lexical value and explicit legacy units without percent conversion.
+
+The capture-wide index includes all mapped original fact rows, including invalid typed
+facts. Known report and transaction roles take priority over incidental fact-like extra
+columns. Identical files still have different occurrences. All rows are emitted before
+candidate edges, so file order does not decide references. No alias candidate means
+`missing`, one means `unverified`, and more than one means `ambiguous`; none is selected.
+The storage validator independently checks the complete same-capture candidate set,
+original locators and aliases, report-kind/path binding, value/provenance/unit bindings,
+matching detail and assessment rows. Immutable guards reject replacement inserts,
+updates and deletes.
+
+A supported report with an unresolved reference retains `preserved_opaque` with reason
+`typed_report_with_unverified_reference_or_extra_evidence` and a reference-status issue.
+Read that reason alongside typed counts; it does not mean the report amount is absent.
+All new tables participate in schema-v5 semantic replay. Original v1/v2/v3 candidates
+continue to replay exactly schema v4. See [ADR-0015](../architecture/decisions/0015-cross-file-overview-derivation.md).
+
+Canonical report paths are relative to each captured root. A second root with the same
+relative path keeps a separate occurrence and report; this is not the primary-root
+authority rule used for config heads. Capture-wide references may therefore remain
+ambiguous across roots. No owner or preferred source is inferred.
+
+Duplicate-header and ragged CSV rows retain source bytes and ambiguity issues but do
+not create mapped observations. They cannot enter the observation-based reference
+validator. Typed report rows, assessment status, and specific extra-field issues must
+be read together; the disposition reason is only a summary.
+
+The validator skips known transaction/report paths before decoding fact-candidate
+payloads. It still materializes the capture's migration source-row metadata and payload
+strings. Peak memory and duration on the actual frozen private corpus remain a
+pre-cutover acceptance gate; synthetic correctness tests do not establish production
+capacity.

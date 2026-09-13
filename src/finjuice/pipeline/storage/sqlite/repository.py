@@ -18,6 +18,17 @@ from finjuice.pipeline.storage.sqlite.ids import (
     migration_entity_id,
     validate_entity_id,
 )
+from finjuice.pipeline.storage.sqlite.legacy_overview import (
+    LegacyOverviewBalanceRecord,
+    LegacyOverviewCandidateRecord,
+    LegacyOverviewCashflowRecord,
+    LegacyOverviewInsuranceRecord,
+    LegacyOverviewInvestmentRecord,
+    LegacyOverviewLoanRecord,
+    LegacyOverviewReferenceRecord,
+    LegacyOverviewReportRecord,
+    LegacyOverviewWriter,
+)
 from finjuice.pipeline.storage.sqlite.objects import SourceArtifact, SourceObjectStore
 from finjuice.pipeline.storage.sqlite.paths import GenerationPaths
 from finjuice.pipeline.storage.sqlite.records import (
@@ -52,6 +63,7 @@ from finjuice.pipeline.storage.sqlite.schema import (
     _resolve_schema_version,
     _validate_connection,
 )
+from finjuice.pipeline.storage.sqlite.schema_v5 import LEGACY_OVERVIEW_TABLES
 from finjuice.pipeline.storage.sqlite.snapshot import inspection_snapshot
 from finjuice.pipeline.storage.sqlite.writes import (
     _EXACT_SUBTYPE_INSERT_SQL as _WRITER_EXACT_SUBTYPE_INSERT_SQL,
@@ -107,10 +119,16 @@ _READ_TABLE_SQL_V4: Final = {
 }
 
 
+_READ_TABLE_SQL_V5: Final = {
+    **_READ_TABLE_SQL_V4,
+    **{table: f"SELECT * FROM {table}" for table in LEGACY_OVERVIEW_TABLES},
+}
+
+
 def _read_table_sql(schema_version: int) -> Mapping[str, str]:
     """Return exactly the authoritative table surface of the selected schema."""
     _resolve_schema_version(schema_version)
-    return {4: _READ_TABLE_SQL_V4}[schema_version]
+    return {4: _READ_TABLE_SQL_V4, 5: _READ_TABLE_SQL_V5}[schema_version]
 
 
 # Shared with TypedRowWriter so builder exact-value SQL has exactly one definition.
@@ -255,6 +273,46 @@ class RepositoryBuilder:
     ) -> None:
         """Add a canonical exact value and its required semantic subtype."""
         self._writer.add_exact_value(value_id, value, provenance_id=provenance_id)
+
+    @_atomic_add
+    def add_legacy_overview_report(self, record: LegacyOverviewReportRecord) -> None:
+        """Preserve legacy report evidence in schema v5."""
+        LegacyOverviewWriter(self._connection).add_report(record)
+
+    @_atomic_add
+    def add_legacy_overview_balance(self, record: LegacyOverviewBalanceRecord) -> None:
+        """Preserve legacy balance evidence in schema v5."""
+        LegacyOverviewWriter(self._connection).add_balance(record)
+
+    @_atomic_add
+    def add_legacy_overview_cashflow(self, record: LegacyOverviewCashflowRecord) -> None:
+        """Preserve legacy cashflow evidence in schema v5."""
+        LegacyOverviewWriter(self._connection).add_cashflow(record)
+
+    @_atomic_add
+    def add_legacy_overview_insurance(self, record: LegacyOverviewInsuranceRecord) -> None:
+        """Preserve legacy insurance evidence in schema v5."""
+        LegacyOverviewWriter(self._connection).add_insurance(record)
+
+    @_atomic_add
+    def add_legacy_overview_investment(self, record: LegacyOverviewInvestmentRecord) -> None:
+        """Preserve legacy investment evidence in schema v5."""
+        LegacyOverviewWriter(self._connection).add_investment(record)
+
+    @_atomic_add
+    def add_legacy_overview_loan(self, record: LegacyOverviewLoanRecord) -> None:
+        """Preserve legacy loan evidence in schema v5."""
+        LegacyOverviewWriter(self._connection).add_loan(record)
+
+    @_atomic_add
+    def add_legacy_overview_reference(self, record: LegacyOverviewReferenceRecord) -> None:
+        """Preserve legacy reference evidence in schema v5."""
+        LegacyOverviewWriter(self._connection).add_reference(record)
+
+    @_atomic_add
+    def add_legacy_overview_candidate(self, record: LegacyOverviewCandidateRecord) -> None:
+        """Preserve legacy candidate evidence in schema v5."""
+        LegacyOverviewWriter(self._connection).add_candidate(record)
 
     @_atomic_add
     def add_party(self, record: PartyRecord) -> None:

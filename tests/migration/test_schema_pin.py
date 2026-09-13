@@ -18,6 +18,7 @@ from finjuice.pipeline.migration.policy import (
     CONFIG_HEAD_POLICY,
     LEGACY_POLICY,
     MANUAL_STATE_POLICY,
+    OVERVIEW_REPORT_POLICY,
     migration_schema_version,
 )
 from finjuice.pipeline.migration.verify import semantic_snapshot
@@ -30,7 +31,7 @@ from finjuice.pipeline.storage.sqlite import (
 from finjuice.pipeline.storage.sqlite.errors import RepositoryVersionError
 
 
-@pytest.mark.parametrize("version", [True, False, "4", 4.0, 0, 3, 5])
+@pytest.mark.parametrize("version", [True, False, "4", 4.0, 0, 3, 6])
 def test_unsupported_schema_request_rejects_before_filesystem_access(
     tmp_path: Path, version: Any
 ) -> None:
@@ -78,11 +79,13 @@ def test_migration_build_verify_and_retry_remain_v4_when_runtime_current_changes
     candidate = tmp_path / "candidate"
     build_migration(plan_path, candidate, active_data_dir=source)
     before = tree_inventory(candidate)
-    original_digest = semantic_snapshot(GenerationPaths(candidate).database)
+    original_digest = semantic_snapshot(
+        GenerationPaths(candidate).database, expected_schema_version=4
+    )
 
     # A future current-version bump must not change existing adapter policy semantics.
-    # No schema v5 implementation or database is invented by this test.
-    monkeypatch.setattr(schema, "SQLITE_SCHEMA_VERSION", 5)
+    # Simulate an unsupported future runtime version.
+    monkeypatch.setattr(schema, "SQLITE_SCHEMA_VERSION", 6)
     assert migration_schema_version(policy) == 4
     with pytest.raises(RepositoryVersionError):
         RepositoryReader(GenerationPaths(candidate).database)
@@ -114,3 +117,7 @@ def test_migration_build_verify_and_retry_remain_v4_when_runtime_current_changes
 def test_unknown_migration_policy_has_no_schema_fallback() -> None:
     with pytest.raises(MigrationError, match="Unsupported migration adapter policy"):
         migration_schema_version("legacy_preservation.unknown")
+
+
+def test_new_overview_policy_requires_v5() -> None:
+    assert migration_schema_version(OVERVIEW_REPORT_POLICY) == 5

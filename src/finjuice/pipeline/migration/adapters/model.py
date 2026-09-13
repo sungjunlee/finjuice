@@ -30,6 +30,7 @@ class FileContext:
     source_schema_version: str | None = None
     config_head_timestamp: str | None = None
     migration_policy: str = LEGACY_POLICY
+    fact_index: tuple[tuple[str, str, str], ...] = ()
 
 
 @dataclass(frozen=True)

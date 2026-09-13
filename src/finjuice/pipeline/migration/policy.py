@@ -9,12 +9,14 @@ from finjuice.pipeline.migration.common import MigrationError
 LEGACY_POLICY = "legacy_preservation.v1"
 CONFIG_HEAD_POLICY = "legacy_preservation.config_heads.v2"
 MANUAL_STATE_POLICY = "legacy_preservation.manual_state.v3"
+OVERVIEW_REPORT_POLICY = "legacy_preservation.overview_reports.v4"
 
 
 _POLICY_SCHEMA_VERSIONS = {
     LEGACY_POLICY: 4,
     CONFIG_HEAD_POLICY: 4,
     MANUAL_STATE_POLICY: 4,
+    OVERVIEW_REPORT_POLICY: 5,
 }
 
 

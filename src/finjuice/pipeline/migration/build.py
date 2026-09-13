@@ -40,7 +40,7 @@ from finjuice.pipeline.migration.common import (
     seal,
     tree_inventory,
 )
-from finjuice.pipeline.migration.plan import file_context
+from finjuice.pipeline.migration.plan import capture_fact_index, file_context
 from finjuice.pipeline.migration.policy import (
     LEGACY_POLICY,
     migration_policy,
@@ -54,6 +54,7 @@ from finjuice.pipeline.storage.sqlite import (
     SourceOccurrenceRecord,
     migration_entity_id,
 )
+from finjuice.pipeline.storage.sqlite.legacy_overview import LegacyOverviewCandidateRecord
 
 
 def baseline_origin(capture: dict[str, Any]) -> dict[str, Any]:
@@ -116,10 +117,19 @@ def populate_repository(
                 {"baseline": True},
             )
         )
+        fact_index = capture_fact_index(root, capture, policy=policy)
+        pending: list[LegacyOverviewCandidateRecord] = []
         for entry in capture["entries"]:
             if entry["type"] == "file":
                 source = root / payload_relative(entry["root"], entry["path"])
-                preserve_file(builder, source, file_context(capture, entry, policy=policy))
+                preserve_file(
+                    builder,
+                    source,
+                    file_context(capture, entry, policy=policy, fact_index=fact_index),
+                    pending=pending,
+                )
+        for candidate in pending:
+            builder.add_legacy_overview_candidate(candidate)
         builder.finalize()
 
 
