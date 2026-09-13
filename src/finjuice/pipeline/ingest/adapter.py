@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -85,23 +86,8 @@ def compute_source_hash(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-def build_idempotency_key(
-    source_identity: str,
-    source_hash: str,
-    coverage_start: str | None,
-    coverage_end: str | None,
-    schema_version: str,
-    parser_version: str,
-) -> str:
+def build_idempotency_key(parts: Sequence[str]) -> str:
     """Build a retry-stable key for one adapter collection window."""
-    parts = [
-        source_identity,
-        source_hash,
-        coverage_start or "",
-        coverage_end or "",
-        schema_version,
-        parser_version,
-    ]
     digest = hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
     return digest[:HASH_LENGTH_CHARS]
 
@@ -176,12 +162,14 @@ def parse_json_statement(file_path: Path) -> tuple[SourceAdapterContract, list[d
         coverage_kind=coverage_kind,
         currency=currency,
         idempotency_key=build_idempotency_key(
-            identity,
-            source_hash,
-            coverage_start,
-            coverage_end,
-            schema_version,
-            parser_version,
+            (
+                identity,
+                source_hash,
+                coverage_start or "",
+                coverage_end or "",
+                schema_version,
+                parser_version,
+            )
         ),
     )
     return contract, mapped_records
@@ -209,14 +197,16 @@ def ingest_json_statement(file_path: Path, csv_base_dir: Path) -> dict[str, Any]
         logger.error("JSON statement collection failed (%s)", type(exc).__name__)
         verification = _write_verification(
             csv_base_dir,
-            contract=None,
-            status="failed",
-            source_filename=file_path.name,
-            error_kind=type(exc).__name__,
-            inserted=0,
-            dedup_skips=0,
-            validation_skips=0,
-            evidence_appended=0,
+            {
+                "contract": None,
+                "status": "failed",
+                "source_filename": file_path.name,
+                "error_kind": type(exc).__name__,
+                "inserted": 0,
+                "dedup_skips": 0,
+                "validation_skips": 0,
+                "evidence_appended": 0,
+            },
         )
         return _failed_result(retryable=True, verification=verification)
 
@@ -239,14 +229,16 @@ def ingest_json_statement(file_path: Path, csv_base_dir: Path) -> dict[str, Any]
     dedup_skips = int(write_result["rows_skipped"])
     verification = _write_verification(
         csv_base_dir,
-        contract=contract,
-        status="ok",
-        source_filename=file_path.name,
-        error_kind=None,
-        inserted=inserted,
-        dedup_skips=dedup_skips,
-        validation_skips=len(skipped_rows),
-        evidence_appended=evidence_appended,
+        {
+            "contract": contract,
+            "status": "ok",
+            "source_filename": file_path.name,
+            "error_kind": None,
+            "inserted": inserted,
+            "dedup_skips": dedup_skips,
+            "validation_skips": len(skipped_rows),
+            "evidence_appended": evidence_appended,
+        },
     )
     logger.info(
         "JSON statement ingest complete: %s inserted, %s duplicates skipped",
@@ -398,32 +390,22 @@ def _append_evidence(
     )
 
 
-def _write_verification(
-    csv_base_dir: Path,
-    *,
-    contract: SourceAdapterContract | None,
-    status: str,
-    source_filename: str,
-    error_kind: str | None,
-    inserted: int,
-    dedup_skips: int,
-    validation_skips: int,
-    evidence_appended: int,
-) -> dict[str, Any]:
+def _write_verification(csv_base_dir: Path, payload: Mapping[str, Any]) -> dict[str, Any]:
     """Record synthetic-safe usage conditions without originals or secrets."""
+    contract = payload.get("contract")
     verification: dict[str, Any] = {
-        "status": status,
-        "source_filename": source_filename,
+        "status": payload["status"],
+        "source_filename": payload["source_filename"],
         "source_identity": None if contract is None else contract.source_identity,
         "schema_version": None if contract is None else contract.schema_version,
         "parser_version": None if contract is None else contract.parser_version,
         "source_hash": None if contract is None else contract.source_hash,
         "idempotency_key": None if contract is None else contract.idempotency_key,
-        "error_kind": error_kind,
-        "inserted": inserted,
-        "dedup_skips": dedup_skips,
-        "validation_skips": validation_skips,
-        "evidence_appended": evidence_appended,
+        "error_kind": payload["error_kind"],
+        "inserted": payload["inserted"],
+        "dedup_skips": payload["dedup_skips"],
+        "validation_skips": payload["validation_skips"],
+        "evidence_appended": payload["evidence_appended"],
         "credentials_present": False,
         "original_retained_at_source": True,
         "published": False,
