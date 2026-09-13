@@ -112,8 +112,8 @@ def test_failed_attempt_is_not_published(capture, tmp_path, monkeypatch):
     source, _backup, plan = capture
     real = workflow.populate_repository
 
-    def broken(root, manifest, paths):
-        real(root, manifest, paths)
+    def broken(root, manifest, paths, **kwargs):
+        real(root, manifest, paths, **kwargs)
         raise OSError("synthetic disk failure")
 
     monkeypatch.setattr(workflow, "populate_repository", broken)
@@ -150,8 +150,8 @@ def test_source_change_during_build_prevents_publication(capture, tmp_path, monk
     source, backup, plan = capture
     real = workflow.populate_repository
 
-    def changed(root, manifest, paths):
-        real(root, manifest, paths)
+    def changed(root, manifest, paths, **kwargs):
+        real(root, manifest, paths, **kwargs)
         if root == backup:
             (backup / "payload" / "data" / "added").write_text("race")
 
@@ -230,8 +230,8 @@ def test_verify_failure_cleans_scratch_and_preserves_evidence(
         destination.write_bytes(b"partial synthetic copy")
         raise error
 
-    def broken_replay(root, manifest, paths):
-        real_populate(root, manifest, paths)
+    def broken_replay(root, manifest, paths, **kwargs):
+        real_populate(root, manifest, paths, **kwargs)
         raise error
 
     with monkeypatch.context() as patch:

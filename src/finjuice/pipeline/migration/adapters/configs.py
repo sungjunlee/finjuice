@@ -55,9 +55,15 @@ def config(emitter: Emitter, data: bytes, artifact: str, kind: Any) -> bool:
             identifier, kind, artifact, emitter.occurrence, status, PARSER, parsed
         ),
     )
-    # Selection across capture roots belongs to the whole-capture coordinator.
     if kind in {"rules", "goals"}:
-        emitter.issue("config_head_requires_explicit_selection")
+        timestamp = emitter.context.config_head_timestamp
+        if timestamp is not None:
+            emitter.call("set_config_head", kind, identifier, updated_at=timestamp)
+            emitter.records["config_head"] += 1
+            if status == "invalid":
+                emitter.issue("canonical_config_head_invalid")
+        else:
+            emitter.issue("config_head_requires_explicit_selection")
     return bool(status == "parsed")
 
 

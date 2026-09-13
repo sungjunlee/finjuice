@@ -33,6 +33,7 @@ from finjuice.pipeline.migration.common import (
     tree_inventory,
 )
 from finjuice.pipeline.migration.plan import file_context
+from finjuice.pipeline.migration.policy import LEGACY_POLICY, migration_policy
 from finjuice.pipeline.storage.sqlite import (
     ConfigRevisionRecord,
     GenerationPaths,
@@ -53,10 +54,15 @@ def baseline_origin(capture: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def populate_repository(root: Path, capture: dict[str, Any], paths: GenerationPaths) -> None:
+def populate_repository(
+    root: Path, capture: dict[str, Any], paths: GenerationPaths, *, policy: str = LEGACY_POLICY
+) -> None:
     """Populate only preserved source state; create no historical audit or approval."""
     checksum = capture["canonical_digest"]
-    generation = migration_entity_id(checksum, "dataset_generation", {"baseline": True})
+    generation_locator: dict[str, Any] = {"baseline": True}
+    if policy != LEGACY_POLICY:
+        generation_locator["migration_policy"] = policy
+    generation = migration_entity_id(checksum, "dataset_generation", generation_locator)
     with RepositoryBuilder(paths, generation) as builder:
         artifact = builder.publish_source_path(root / MANIFEST_FILENAME)
         occurrence = migration_entity_id(checksum, "source_occurrence", {"capture_manifest": True})
@@ -99,7 +105,7 @@ def populate_repository(root: Path, capture: dict[str, Any], paths: GenerationPa
         for entry in capture["entries"]:
             if entry["type"] == "file":
                 source = root / payload_relative(entry["root"], entry["path"])
-                preserve_file(builder, source, file_context(capture, entry))
+                preserve_file(builder, source, file_context(capture, entry, policy=policy))
         builder.finalize()
 
 
@@ -147,6 +153,7 @@ def build_migration(
     validate_attempt_id(parent_attempt_id)
     plan_path = reject_symlink_chain(plan)
     frozen = load_sealed(plan_path, PLAN_VERSION)
+    migration_policy(frozen)
     if frozen.get("completion_marker") != "planned":
         raise MigrationError("Migration plan is incomplete.")
     source = reject_symlink_chain(plan_path.parent / frozen["capture_locator"])
@@ -196,7 +203,7 @@ def _build_attempt(
 
     paths = GenerationPaths(work)
     capture = plan["capture"]
-    populate_repository(source, capture, paths)
+    populate_repository(source, capture, paths, policy=migration_policy(plan))
     portable_plan = plan
     write_text_atomic(paths.manifests / "plan-evidence.json", canonical(portable_plan) + "\n")
     manifest = seal(

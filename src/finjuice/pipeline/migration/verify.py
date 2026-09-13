@@ -26,6 +26,7 @@ from finjuice.pipeline.migration.common import (
     load_sealed,
 )
 from finjuice.pipeline.migration.plan import analyze_capture
+from finjuice.pipeline.migration.policy import migration_policy
 from finjuice.pipeline.storage.sqlite import GenerationPaths, RepositoryReader, SourceObjectStore
 from finjuice.pipeline.storage.sqlite.repository import _READ_TABLE_SQL
 
@@ -84,6 +85,7 @@ def verify_contents(root: Path, manifest: dict[str, Any]) -> None:
     reject_symlink_chain(paths.database)
     evidence_file = paths.manifests / "plan-evidence.json"
     plan = load_sealed(evidence_file, PLAN_VERSION)
+    policy = migration_policy(plan)
     if (
         file_digest(paths.database) != manifest["database_digest"]
         or file_digest(evidence_file) != manifest["plan_evidence_digest"]
@@ -112,10 +114,10 @@ def verify_contents(root: Path, manifest: dict[str, Any]) -> None:
         capture_root = scratch / "capture"
         capture_root.mkdir()
         _restore_capture(paths, manifest, capture_root)
-        if analyze_capture(capture_root, manifest["capture"]) != manifest["inputs"]:
+        if analyze_capture(capture_root, manifest["capture"], policy=policy) != manifest["inputs"]:
             raise MigrationError("Source input dispositions do not match preserved evidence.")
         expected = GenerationPaths(scratch / "expected")
-        populate_repository(capture_root, manifest["capture"], expected)
+        populate_repository(capture_root, manifest["capture"], expected, policy=policy)
         if semantic_snapshot(expected.database) != actual:
             raise MigrationError(
                 "Typed rows, provenance, payloads or dispositions differ from source."

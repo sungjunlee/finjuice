@@ -102,8 +102,10 @@ rule or crash-durability guarantee, and no disk was filled for testing.
   match is not a completed link. The proposed options and recommended contract
   are in [ADR-0015](../architecture/decisions/0015-cross-file-overview-derivation.md);
   adoption and implementation remain pending.
-- Config head selection is not implemented. Revisions alone must not be treated
-  as active rules/goals configuration.
+- New plans select canonical rules/goals heads from the frozen primary data root
+  as described below. Other configuration copies remain preserved revisions;
+  missing or invalid canonical documents are not replaced with alternative copies.
+  Older policy plans retain their original unselected-head behavior.
 - Failed attempts are rejected through their unpublished workspace and missing
   publication authority. A durable failure-phase manifest and validated parent
   attempt lineage are not implemented; `--parent-attempt-id` records a supplied
@@ -117,3 +119,34 @@ rule or crash-durability guarantee, and no disk was filled for testing.
 
 The governing acceptance contract remains
 [ssot-migration-recovery-contract.md](ssot-migration-recovery-contract.md).
+
+## Canonical configuration baseline policy
+
+The existing runtime reads exactly `rules.yaml` and `goals.yaml` at the primary
+legacy data root (`Config.rules_file` and `Config.goals_file`). New sealed private
+plans record `migration_policy = legacy_preservation.config_heads.v2` and select
+those captured revisions as baseline heads. Nested files, external roots, `.yml`
+and `.json` copies remain distinct evidence; neither filename similarity, byte
+identity, parse success nor modification time grants them canonical status.
+The retained `config_head_requires_explicit_selection` issue on an alternative
+marks that revision as unselected; it does not require replacing an existing
+canonical head or grant the alternative authority.
+
+The selected head retains the exact source bytes, occurrence, revision ID and
+parsed status. An invalid canonical document is still the actual canonical
+source, marked invalid with an explicit issue; a valid alternative cannot silently
+replace it. If the canonical file is absent there is no head. A selected head is
+baseline state, not a historical edit: `updated_changeset_id` stays null and the
+head timestamp is the immutable capture completion time, not an invented edit time.
+
+A missing policy field means the original `legacy_preservation.v1` behavior;
+explicit v1 also replays that behavior. Unknown policy values fail before build
+publication or successful verification. The policy is sealed into the plan and
+bound by the candidate's existing plan-evidence digest. Plan analysis and source
+replay use the same policy. V2 generation IDs include the policy so a v1 candidate
+without heads cannot share a generation/revision identity with the v2 baseline.
+Source occurrence and config revision identities remain unchanged. No public CLI
+flags or SQLite schema version change.
+This preserves old candidates without treating their missing heads as completion
+of the new canonical-config requirement. Runtime activation and consumer parity
+remain separate acceptance gates.

@@ -15,7 +15,7 @@ from finjuice.pipeline.backup.paths import (
     reject_symlink_chain,
     require_outside_program_repo,
 )
-from finjuice.pipeline.backup.types import COMPLETION_MARKER, MANIFEST_FILENAME
+from finjuice.pipeline.backup.types import COMPLETION_MARKER, DATA_ROOT_NAME, MANIFEST_FILENAME
 from finjuice.pipeline.migration.adapters import FileContext, analyze_file
 from finjuice.pipeline.migration.common import (
     PLAN_VERSION,
@@ -25,25 +25,37 @@ from finjuice.pipeline.migration.common import (
     seal,
     tree_inventory,
 )
+from finjuice.pipeline.migration.policy import CONFIG_HEAD_POLICY, LEGACY_POLICY
 
 
-def file_context(capture: dict[str, Any], entry: dict[str, Any]) -> FileContext:
+def file_context(
+    capture: dict[str, Any], entry: dict[str, Any], *, policy: str = LEGACY_POLICY
+) -> FileContext:
     version = capture.get("data_schema_version")
     return FileContext(
         capture["canonical_digest"].removeprefix("sha256:"),
         entry["root"],
         entry["path"],
         None if version is None else str(version),
+        capture["capture"]["completed_at"]
+        if policy == CONFIG_HEAD_POLICY
+        and entry["root"] == DATA_ROOT_NAME
+        and entry["path"] in {"rules.yaml", "goals.yaml"}
+        else None,
     )
 
 
-def analyze_capture(root: Path, capture: dict[str, Any]) -> list[dict[str, Any]]:
+def analyze_capture(
+    root: Path, capture: dict[str, Any], *, policy: str = LEGACY_POLICY
+) -> list[dict[str, Any]]:
     inputs = []
     for entry in capture["entries"]:
         item = {"root": entry["root"], "path": entry["path"], "type": entry["type"]}
         if entry["type"] == "file":
             source = root / payload_relative(entry["root"], entry["path"])
-            item["analysis"] = analyze_file(source, file_context(capture, entry)).to_dict()
+            item["analysis"] = analyze_file(
+                source, file_context(capture, entry, policy=policy)
+            ).to_dict()
         else:
             item.update(disposition="migrated", reason="Directory inventory preserved.")
         inputs.append(item)
@@ -86,11 +98,12 @@ def plan_migration(
     plan = seal(
         {
             "schema_version": PLAN_VERSION,
+            "migration_policy": CONFIG_HEAD_POLICY,
             "completion_marker": "planned",
             "capture_locator": Path(os.path.relpath(root, base)).as_posix(),
             "capture": capture,
             "source_inventory": before,
-            "inputs": analyze_capture(root, capture),
+            "inputs": analyze_capture(root, capture, policy=CONFIG_HEAD_POLICY),
         }
     )
     verify_backup(location)

@@ -27,6 +27,7 @@ class FileContext:
     root_name: str
     relative_path: str
     source_schema_version: str | None = None
+    config_head_timestamp: str | None = None
 
 
 @dataclass(frozen=True)
