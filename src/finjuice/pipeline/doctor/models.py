@@ -1,6 +1,6 @@
 """Typed models for doctor environment checks."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Optional
 
 
@@ -39,3 +39,4 @@ class DoctorResult:
     payload: dict[str, Any]
     sections: list[tuple[str, list[CheckResult]]]
     next_step: str
+    metadata: dict[str, Any] = field(default_factory=dict)

@@ -27,13 +27,18 @@ existing callers can keep importing from this module.
 
 from __future__ import annotations
 
-from typing import Any
+from copy import deepcopy
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Any
 
 from finjuice import get_version
 from finjuice.pipeline.config import Config
 from finjuice.pipeline.doctor.analytics_duckdb import _check_analytics_duckdb
-from finjuice.pipeline.doctor.configuration import _check_configuration
-from finjuice.pipeline.doctor.data_directory import _check_data_directory
+from finjuice.pipeline.doctor.configuration import (
+    _check_configuration,
+    _check_configuration_environment,
+)
+from finjuice.pipeline.doctor.data_directory import _check_data_directory, _observe_data_directory
 from finjuice.pipeline.doctor.data_status import _check_data_status
 from finjuice.pipeline.doctor.dependencies import _check_dependencies
 from finjuice.pipeline.doctor.models import (
@@ -64,18 +69,30 @@ from finjuice.pipeline.doctor.system import (
     _check_python_version,
 )
 
+if TYPE_CHECKING:
+    from finjuice.pipeline.doctor.repository import RepositoryDoctorResult
 
-def _build_doctor_result(config: Config) -> DoctorResult:
+
+def _build_doctor_result(
+    config: Config, *, repository: RepositoryDoctorResult | None = None
+) -> DoctorResult:
     """Build doctor output for both JSON and text renderers."""
+    observed_started = datetime.now(timezone.utc).isoformat()
     system_checks = [
         _check_python_version(),
         _check_finjuice_version(),
         _check_os_info(),
     ]
     skill_runtime_results = _check_skill_runtime()
-    data_dir_results = _check_data_directory(config)
-    config_results = _check_configuration(config)
-    data_results = _check_data_status(config)
+    if repository is None:
+        data_dir_results = _check_data_directory(config)
+        config_results = _check_configuration(config)
+        data_results = _check_data_status(config)
+    else:
+        data_dir_results = _observe_data_directory(config)
+        config_results = list(repository.config_checks)
+        data_results = list(repository.data_checks)
+    environment_results = _check_configuration_environment() if repository is not None else []
     dep_results = _check_dependencies()
     analytics_results, missing_extras, install_hint = _check_analytics_duckdb()
 
@@ -84,11 +101,16 @@ def _build_doctor_result(config: Config) -> DoctorResult:
         *skill_runtime_results,
         *data_dir_results,
         *config_results,
+        *environment_results,
         *data_results,
         *dep_results,
         *analytics_results,
     ]
-    next_step = _suggest_next_step(data_dir_results, config_results, data_results)
+    next_step = (
+        repository.next_step
+        if repository is not None
+        else _suggest_next_step(data_dir_results, config_results, data_results)
+    )
 
     payload: dict[str, Any] = {
         "checks": [check.to_dict() for check in all_checks],
@@ -114,16 +136,60 @@ def _build_doctor_result(config: Config) -> DoctorResult:
         "missing_extras": missing_extras,
         "install_hint": install_hint,
     }
-    return DoctorResult(
-        payload=payload,
-        sections=[
-            ("시스템", system_checks),
-            ("스킬 런타임", skill_runtime_results),
-            ("데이터 디렉토리", data_dir_results),
-            ("설정", config_results),
-            ("데이터", data_results),
-            ("의존성", dep_results),
-            ("Analytics / DuckDB", analytics_results),
-        ],
-        next_step=next_step,
+    sections = [
+        ("시스템", system_checks),
+        ("스킬 런타임", skill_runtime_results),
+        ("데이터 디렉토리", data_dir_results),
+        ("설정", config_results),
+        ("데이터", data_results),
+        ("의존성", dep_results),
+        ("Analytics / DuckDB", analytics_results),
+    ]
+    if repository is not None:
+        return _canonical_result(
+            DoctorResult(payload, sections, next_step),
+            repository,
+            environment_results,
+            observed_started,
+        )
+    return DoctorResult(payload, sections, next_step)
+
+
+def _canonical_result(
+    result: DoctorResult,
+    repository: RepositoryDoctorResult,
+    environment: list[CheckResult],
+    observed_started: str,
+) -> DoctorResult:
+    """Separate canonical evidence from runtime and staged observations."""
+    basis = {
+        check.name: "repository" for check in [*repository.config_checks, *repository.data_checks]
+    }
+    basis["repository_staged_imports"] = "staged_observation"
+    for check in result.payload["checks"]:
+        check["basis"] = basis.get(check["name"], "runtime_observation")
+    sections = [
+        (
+            title if title in ("설정", "데이터") else f"외부 관측: {title}",
+            [check for check in checks if check.name != "repository_staged_imports"],
+        )
+        for title, checks in result.sections
+    ]
+    sections.insert(4, ("외부 관측: 환경 변수", environment))
+    sections.insert(
+        6,
+        (
+            "외부 관측: staged imports",
+            [
+                check
+                for check in repository.data_checks
+                if check.name == "repository_staged_imports"
+            ],
+        ),
     )
+    metadata = deepcopy(repository.metadata)
+    metadata["runtime_observation"] = {
+        "observation_started_at": observed_started,
+        "observation_completed_at": datetime.now(timezone.utc).isoformat(),
+    }
+    return DoctorResult(result.payload, sections, result.next_step, metadata=metadata)

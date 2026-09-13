@@ -2411,6 +2411,14 @@ doctor --json output
       "items": {
         "additionalProperties": true,
         "properties": {
+          "basis": {
+            "enum": [
+              "repository",
+              "runtime_observation",
+              "staged_observation"
+            ],
+            "type": "string"
+          },
           "detail": {
             "type": [
               "string",

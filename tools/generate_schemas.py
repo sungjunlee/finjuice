@@ -448,6 +448,10 @@ doctor_schema = command_schema(
         "checks": array_of(
             object_schema(
                 {
+                    "basis": {
+                        "type": "string",
+                        "enum": ["repository", "runtime_observation", "staged_observation"],
+                    },
                     "detail": string_or_null,
                     "message": string,
                     "name": string,
