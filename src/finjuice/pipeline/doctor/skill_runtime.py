@@ -13,7 +13,7 @@ from pathlib import Path
 from finjuice import get_version
 from finjuice.pipeline.doctor.models import CheckResult
 
-SKILL_RUNTIME_REQUIRED_VERSION = "0.8.2"
+SKILL_RUNTIME_REQUIRED_VERSION = "0.8.3"
 SKILL_RUNTIME_UPDATE_COMMAND = "skills/finjuice/scripts/ensure_finjuice_cli.sh --update --json"
 SKILL_RUNTIME_HELPER_ENV = "FINJUICE_SKILL_HELPER"
 KNOWN_SKILL_CAPABILITIES = {
