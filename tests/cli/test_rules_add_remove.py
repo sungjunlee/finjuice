@@ -531,6 +531,7 @@ rules:
 
     def test_add_rule_validation_on_write(self, tmp_path: Path) -> None:
         """Validation warnings are included when the new rule overlaps existing ones."""
+        # Arrange
         data_dir = tmp_path / "data"
         _write_rules(
             data_dir,
@@ -544,6 +545,7 @@ rules:
 """,
         )
 
+        # Act
         result = runner.invoke(
             app,
             [
@@ -563,9 +565,11 @@ rules:
             ],
         )
 
+        # Assert
         assert result.exit_code == 0
         payload = json.loads(result.output)
         validation = payload["validation"]
+        assert validation["status"] == "issues"
         assert validation["warnings"] >= 1
         assert "total_problems" in validation
         assert validation["total_problems"] >= 1
@@ -577,6 +581,7 @@ rules:
 
     def test_add_rule_json_filters_unrelated_overlap_warnings(self, tmp_path: Path) -> None:
         """rules add --json should not flood problems with pre-existing overlaps."""
+        # Arrange
         data_dir = tmp_path / "data"
         _write_rules(
             data_dir,
@@ -595,6 +600,7 @@ rules:
 """,
         )
 
+        # Act
         result = runner.invoke(
             app,
             [
@@ -612,12 +618,86 @@ rules:
             ],
         )
 
+        # Assert
         assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
         validation = payload["validation"]
         assert validation["problems"] == []
         assert validation["total_problems"] > 0
         assert validation["warnings"] >= 1
+        assert validation["status"] == "issues"
+
+        validate_result = runner.invoke(
+            app,
+            ["--data-dir", str(data_dir), "rules", "validate", "--json"],
+        )
+        assert validate_result.exit_code == 0, validate_result.output
+        validate_payload = json.loads(validate_result.output)
+        assert validate_payload["status"] == validation["status"]
+        assert validate_payload["errors"] == validation["errors"]
+        assert validate_payload["warnings"] == validation["warnings"]
+        assert len(validate_payload["problems"]) == validation["total_problems"]
+        assert "total_problems" not in validate_payload
+
+    def test_add_rule_json_keeps_only_new_rule_overlaps(self, tmp_path: Path) -> None:
+        """A new overlapping rule should not re-list pre-existing overlaps it does not join."""
+        # Arrange
+        data_dir = tmp_path / "data"
+        _write_rules(
+            data_dir,
+            """version: 1
+rules:
+  - name: coffee_general
+    match: "Star"
+    fields: [merchant_raw]
+    tags: ["cafe"]
+    priority: 90
+  - name: coffee_specific
+    match: "Starbucks"
+    fields: [merchant_raw]
+    tags: ["cafe", "coffee"]
+    priority: 80
+  - name: grocery_emart
+    match: "Emart"
+    fields: [merchant_raw]
+    tags: ["grocery"]
+    priority: 70
+""",
+        )
+
+        # Act
+        result = runner.invoke(
+            app,
+            [
+                "--data-dir",
+                str(data_dir),
+                "rules",
+                "add",
+                "--name",
+                "grocery_emart_everyday",
+                "--match",
+                "EmartEveryday",
+                "--tags",
+                "grocery",
+                "--priority",
+                "60",
+                "--json",
+            ],
+        )
+
+        # Assert
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        validation = payload["validation"]
+        assert validation["problems"]
+        assert validation["total_problems"] > len(validation["problems"])
+        for problem in validation["problems"]:
+            assert "grocery_emart_everyday" in problem["rules"]
+        assert any("grocery_emart" in problem["rules"] for problem in validation["problems"])
+        assert not any(
+            set(problem["rules"]) == {"coffee_general", "coffee_specific"}
+            for problem in validation["problems"]
+        )
 
         validate_result = runner.invoke(
             app,
@@ -626,10 +706,12 @@ rules:
         assert validate_result.exit_code == 0, validate_result.output
         validate_payload = json.loads(validate_result.output)
         assert len(validate_payload["problems"]) == validation["total_problems"]
-        assert "total_problems" not in validate_payload
+        assert validate_payload["warnings"] == validation["warnings"]
+        assert validate_payload["errors"] == validation["errors"]
 
-    def test_remove_rule_json_filters_unrelated_overlap_warnings(self, tmp_path: Path) -> None:
-        """rules remove --json should not flood problems with unrelated overlaps."""
+    def test_update_rule_json_filters_unrelated_overlap_warnings(self, tmp_path: Path) -> None:
+        """rules add update path shares the writer and filters to the updated rule."""
+        # Arrange
         data_dir = tmp_path / "data"
         _write_rules(
             data_dir,
@@ -653,6 +735,62 @@ rules:
 """,
         )
 
+        # Act
+        result = runner.invoke(
+            app,
+            [
+                "--data-dir",
+                str(data_dir),
+                "rules",
+                "add",
+                "--name",
+                "unique_widget",
+                "--match",
+                "UniqueWidgetXYZ",
+                "--tags",
+                "misc,tools",
+                "--json",
+            ],
+        )
+
+        # Assert
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        assert payload["action"] == "updated"
+        validation = payload["validation"]
+        assert validation["problems"] == []
+        assert validation["total_problems"] >= 1
+        assert validation["status"] == "issues"
+        for problem in validation["problems"]:
+            assert "unique_widget" in problem["rules"]
+
+    def test_remove_rule_json_filters_unrelated_overlap_warnings(self, tmp_path: Path) -> None:
+        """rules remove --json should not flood problems with unrelated overlaps."""
+        # Arrange
+        data_dir = tmp_path / "data"
+        _write_rules(
+            data_dir,
+            """version: 1
+rules:
+  - name: coffee_general
+    match: "Star"
+    fields: [merchant_raw]
+    tags: ["cafe"]
+    priority: 90
+  - name: coffee_specific
+    match: "Starbucks"
+    fields: [merchant_raw]
+    tags: ["cafe", "coffee"]
+    priority: 80
+  - name: unique_widget
+    match: "UniqueWidgetXYZ"
+    fields: [merchant_raw]
+    tags: ["misc"]
+    priority: 50
+""",
+        )
+
+        # Act
         result = runner.invoke(
             app,
             [
@@ -666,6 +804,7 @@ rules:
             ],
         )
 
+        # Assert
         assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
         validation = payload["validation"]

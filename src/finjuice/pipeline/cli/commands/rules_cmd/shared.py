@@ -73,9 +73,10 @@ def _serialize_validation_summary(
 ) -> dict[str, Any]:
     """Build a JSON-safe validation summary.
 
-    When *focus_rule* is set (rules add/remove), ``problems`` is filtered to
-    issues that name that rule. ``errors``/``warnings`` stay full-set counts,
-    and ``total_problems`` is the unfiltered issue count.
+    When *focus_rule* is set (rules add/update/remove), ``problems`` is filtered
+    to issues that name that rule on either side. ``status`` / ``errors`` /
+    ``warnings`` stay full-set values, and ``total_problems`` is the
+    unfiltered issue count so callers can still see the rest of the report.
     """
     problems = [_validation_issue_to_problem(issue) for issue in result.issues]
     payload: dict[str, Any] = {
