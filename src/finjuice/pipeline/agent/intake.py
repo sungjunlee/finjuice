@@ -194,6 +194,13 @@ def _upsert_evidence(store: IntakeStore, payload: IntakeInput, digest: str) -> E
         has_xlsx=bool(payload.xlsx_bytes),
         created_revision=store.revision,
     )
+    blob = payload.image_bytes or payload.xlsx_bytes
+    if blob:
+        existing_blob = store.original_blobs.get(digest)
+        if existing_blob is None:
+            store.original_blobs[digest] = blob
+        elif existing_blob != blob:
+            raise IdempotencyConflictError("Original source bytes do not match the stored digest.")
     store.evidence[evidence_id] = record
     store.source_digests[digest] = evidence_id
     return record

@@ -32,6 +32,7 @@ from finjuice.pipeline.agent import (
     WithdrawRequest,
     operator_payload,
     render_operator_view,
+    retained_original,
     source_digest,
 )
 from finjuice.pipeline.agent.models import (
@@ -66,6 +67,7 @@ MODEL_NAMES = (
     "ImpactScope",
     "ConfirmRequest",
     "IntakeError",
+    "retained_original",
 )
 
 
@@ -141,6 +143,15 @@ def test_same_screenshot_and_description_do_not_duplicate_records() -> None:
     assert len(session.store.evidence) == 1
     assert len(session.store.proposals) == 1
     assert len(session.store.extractions) == 1
+    assert retained_original(session.store, first.source_digest) == payload.image_bytes
+
+
+def test_xlsx_original_bytes_are_preserved() -> None:
+    """XLSX source bytes stay retrievable by digest after intake."""
+    session = IntakeSession()
+    payload = _xlsx_input()
+    receipt = session.submit(payload)
+    assert retained_original(session.store, receipt.source_digest) == payload.xlsx_bytes
 
 
 def test_tool_retry_with_different_payload_conflicts() -> None:

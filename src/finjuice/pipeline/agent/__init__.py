@@ -44,6 +44,7 @@ from finjuice.pipeline.agent.models import (
     UncertainMappingError,
     UnknownRecordError,
     WithdrawRequest,
+    retained_original,
 )
 from finjuice.pipeline.agent.render import (
     operator_payload,
@@ -87,6 +88,7 @@ __all__ = [
     "pending_decisions",
     "recurring_rules",
     "render_operator_view",
+    "retained_original",
     "source_digest",
     "submit_intake",
     "withdraw_changeset",

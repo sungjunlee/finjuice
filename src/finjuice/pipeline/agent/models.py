@@ -271,6 +271,15 @@ class IntakeStore:
     changesets: dict[str, ChangesetRecord] = field(default_factory=dict)
     receipts: dict[tuple[str, str], dict[str, object]] = field(default_factory=dict)
     source_digests: dict[str, str] = field(default_factory=dict)
+    original_blobs: dict[str, bytes] = field(default_factory=dict)
+
+
+def retained_original(store: IntakeStore, source_digest: str) -> bytes:
+    """Return preserved screenshot/XLSX bytes for a source digest."""
+    blob = store.original_blobs.get(source_digest)
+    if blob is None:
+        raise IntakeError("Original source bytes were not preserved.")
+    return blob
 
 
 def stored_text(stored: Mapping[str, object], key: str) -> str:
