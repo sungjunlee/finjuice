@@ -83,20 +83,29 @@ def validate_scenarios_config_file(
             ),
         )
 
-    raw_text = scenarios_file.read_text(encoding="utf-8")
+    return validate_scenarios_config_bytes(scenarios_file.read_bytes(), source_label=scenarios_file)
+
+
+def validate_scenarios_config_bytes(
+    content: bytes, *, source_label: Path = Path("scenarios.yaml")
+) -> ScenariosConfigValidationResult:
+    """Validate detached UTF-8 scenarios with the complete semantic contract."""
     try:
+        raw_text = content.decode("utf-8")
         document = yaml.compose(raw_text)
         payload = yaml.safe_load(raw_text)
-    except yaml.YAMLError as exc:
+    except (yaml.YAMLError, UnicodeError) as exc:
         mark = getattr(exc, "problem_mark", None)
         issue = ScenariosConfigIssue(
             path="scenarios.yaml",
-            message="invalid YAML syntax",
+            message="invalid UTF-8 encoding"
+            if isinstance(exc, UnicodeError)
+            else "invalid YAML syntax",
             line=(mark.line + 1) if mark is not None else None,
             column=(mark.column + 1) if mark is not None else None,
         )
         return ScenariosConfigValidationResult(
-            path=scenarios_file,
+            path=source_label,
             exists=True,
             config=ScenariosConfig(),
             issues=[issue],
@@ -110,7 +119,7 @@ def validate_scenarios_config_file(
     config = _validate_scenarios_payload(payload, locations, issues)
 
     return ScenariosConfigValidationResult(
-        path=scenarios_file,
+        path=source_label,
         exists=True,
         config=config,
         issues=issues,

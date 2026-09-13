@@ -283,6 +283,34 @@ The parity fixture uses the producer's complete nine-column report schema; a
 separate regression verifies the incomplete-header rejection. Private-corpus
 compatibility for such inputs remains an open preservation/consumer gate.
 
-History, forecast, checkup and combined status/portfolio calculations are still
-pending; a combined calculation must obtain all inputs from one reader bundle.
+Checkup and combined status/portfolio calculations are still pending; a combined
+calculation must obtain all inputs from one reader bundle.
 No private operational migration or activation is established by these tests.
+
+
+### Portfolio history and forecasts
+
+`networth history` uses the same detached portfolio source under
+`legacy_networth_history.v1`. It visits primary partition months in reverse order,
+skips empty months, selects each month's maximum snapshot date, takes the requested
+number of available points, then reverses their order. Path months are not replaced
+with row-date months. The current selected manual assets and liabilities apply to
+all points; historical configuration revisions are not retrospectively selected.
+Balance reports and the parent date option do not enter the legacy history result.
+Unrelated opaque balance reports therefore do not prevent asset-only history.
+
+`networth forecast` uses `legacy_networth_forecast.v1` with a single detached
+portfolio for its starting position, scenarios and goals. It preserves as-of
+selection, balance precedence, single/all scenario output and lifecycle calculation.
+Scenarios must have a selected, parsed, semantically valid canonical document
+(`required_selected_scenarios.v1`). Goals are also fully validated, rather than
+reading only the target field. Only explicit absence with an empty goals revision
+inventory permits no target (`canonical_absence_no_target.v1`); unselected,
+opaque, invalid and alternate-only configurations are not treated as absent.
+
+The byte validators and pure forecast calculations never reopen live files.
+Human output and JSON metadata identify the revision, policy and as-of date; JSON
+also records configuration selection policies. If a config changes after the
+read, the existing result stays pinned and a new read observes the later revision.
+Missing start dates still require source observations or an explicit forecast date.
+Active configuration/calculation failures use static errors without parser content.

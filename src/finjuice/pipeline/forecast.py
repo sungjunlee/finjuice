@@ -52,6 +52,7 @@ from finjuice.pipeline.forecast_validators import (
     ScenariosConfigValidationError,
     ScenariosConfigValidationResult,
     ScenarioValidationIssues,
+    validate_scenarios_config_bytes,
     validate_scenarios_config_file,
 )
 from finjuice.pipeline.networth import NetWorthPosition, normalize_asset_name
@@ -76,7 +77,9 @@ __all__ = [
     "ScenariosConfigValidationResult",
     "build_forecast",
     "load_scenarios_config",
+    "load_scenarios_config_bytes",
     "serialize_forecast_result",
+    "validate_scenarios_config_bytes",
     "validate_scenarios_config_file",
 ]
 
@@ -129,6 +132,14 @@ def load_scenarios_config(
     )
     if not result.is_valid:
         raise ScenariosConfigValidationError(scenarios_file, result.issues)
+    return result.config
+
+
+def load_scenarios_config_bytes(content: bytes) -> ScenariosConfig:
+    """Load fully validated scenarios from detached authoritative bytes."""
+    result = validate_scenarios_config_bytes(content)
+    if not result.is_valid:
+        raise ScenariosConfigValidationError(result.path, result.issues)
     return result.config
 
 

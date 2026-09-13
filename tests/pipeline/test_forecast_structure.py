@@ -22,8 +22,8 @@ def test_forecast_reexports_math_helpers_identity() -> None:
     assert forecast._round_money is helpers._round_money
 
 
-def test_forecast_public_api_unchanged_by_helper_split() -> None:
-    """The forecast module keeps its documented public API surface."""
+def test_forecast_public_api_preserves_helpers_and_adds_detached_config_loaders() -> None:
+    """Existing exports remain available alongside the detached configuration APIs."""
     forecast = importlib.import_module("finjuice.pipeline.forecast")
 
     assert forecast.__all__ == [
@@ -46,6 +46,8 @@ def test_forecast_public_api_unchanged_by_helper_split() -> None:
         "ScenariosConfigValidationResult",
         "build_forecast",
         "load_scenarios_config",
+        "load_scenarios_config_bytes",
         "serialize_forecast_result",
+        "validate_scenarios_config_bytes",
         "validate_scenarios_config_file",
     ]
