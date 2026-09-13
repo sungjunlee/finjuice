@@ -178,9 +178,7 @@ def tag_command(
     """
     config = _require_tag_config(ctx, edit)
 
-    if edit is None and (
-        add_tag or remove_tag or set_category is not None or set_note is not None
-    ):
+    if edit is None and (add_tag or remove_tag or set_category is not None or set_note is not None):
         emit_error(
             "Manual edit flags require --edit <row_hash>.",
             error_code=ErrorCode.INVALID_ARGS,
