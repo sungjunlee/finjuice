@@ -24,6 +24,7 @@ def _sample_suggestion(merchant: str = "Netflix") -> dict[str, object]:
         "merchant": merchant,
         "transaction_count": 3,
         "distinct_dates": 1,
+        "avg_rows_per_date": 3.0,
         "total_amount": 51000.0,
         "avg_amount": 17000.0,
         "amount_stddev": 0.0,
@@ -229,6 +230,8 @@ class TestSuggestRulesCommand:
         redacted = payload["suggestions"][0]
         assert payload["_meta"]["privacy"]["profile"] == "redacted"
         assert redacted["merchant"] == "[REDACTED]"
+        assert redacted["distinct_dates"] == 1
+        assert redacted["avg_rows_per_date"] == 3.0
         assert redacted["total_amount"] is None
         assert redacted["avg_amount"] is None
         assert redacted["payment_method"] == "[REDACTED]"
@@ -292,6 +295,7 @@ class TestSuggestRulesCommand:
             {
                 "transaction_count": 3,
                 "distinct_dates": 1,
+                "avg_rows_per_date": 3.0,
                 "active_month_count": 1,
                 "is_recurring": True,
                 "banksalad_category": {"major": "정기지출", "minor": "구독"},
@@ -309,7 +313,9 @@ class TestSuggestRulesCommand:
             }
         ]
         assert '"merchant":' not in serialized
-        assert "amount" not in serialized
+        assert "total_amount" not in serialized
+        assert "avg_amount" not in serialized
+        assert "amount_stddev" not in serialized
         assert "sample_memos" not in serialized
         assert "Netflix" not in serialized
         assert "Monthly plan" not in serialized
@@ -348,6 +354,8 @@ class TestSuggestRulesCommand:
         assert "미태그 거래 분석" in clean_output
         assert "Merchant Context" in clean_output
         assert "Netflix" in clean_output
+        assert "1일" in clean_output
+        assert "일평균" in clean_output
         assert "Monthly plan" in clean_output
         mock_generate.assert_called_once()
 

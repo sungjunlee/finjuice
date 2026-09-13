@@ -78,13 +78,22 @@ def format_suggestions_report(suggestions: list[dict[str, Any]]) -> str:
         memo_text = ", ".join(suggestion.get("sample_memos", [])) or "-"
         active_months = ", ".join(suggestion.get("active_months", [])) or "-"
         time_patterns = suggestion.get("time_patterns", {})
+        distinct_dates = int(suggestion.get("distinct_dates") or 0)
+        transaction_count = int(suggestion["transaction_count"])
+        avg_rows_per_date = suggestion.get("avg_rows_per_date")
+        if avg_rows_per_date is None:
+            avg_rows_per_date = (
+                round(transaction_count / distinct_dates, 2) if distinct_dates > 0 else 0.0
+            )
 
         lines.extend(
             [
                 f"{index}. {suggestion['merchant']}",
                 (
                     "   거래 "
-                    f"{suggestion['transaction_count']}건 | 총액 ₩{suggestion['total_amount']:,.0f}"
+                    f"{transaction_count}건 | 고유일 {distinct_dates}일"
+                    f" | 일평균 {float(avg_rows_per_date):.2f}건"
+                    f" | 총액 ₩{suggestion['total_amount']:,.0f}"
                     f" | 평균 ₩{suggestion['avg_amount']:,.0f}"
                     f" | 표준편차 ₩{suggestion['amount_stddev']:,.0f}"
                 ),

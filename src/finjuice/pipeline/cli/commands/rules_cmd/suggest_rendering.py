@@ -82,11 +82,19 @@ def _render_suggestion_context_table(
     for suggestion in suggestions:
         active_months = suggestion.get("active_months") or []
         active_text = ", ".join(active_months) if active_months else "-"
+        transaction_count = int(suggestion["transaction_count"])
+        distinct_dates = int(suggestion.get("distinct_dates") or 0)
+        avg_rows_per_date = suggestion.get("avg_rows_per_date")
+        if avg_rows_per_date is None:
+            avg_rows_per_date = (
+                round(transaction_count / distinct_dates, 2) if distinct_dates > 0 else 0.0
+            )
         table.add_row(
             suggestion["merchant"],
             (
-                f"{int(suggestion['transaction_count']):,}건\n"
-                f"{int(suggestion.get('distinct_dates') or 0):,}일\n"
+                f"{transaction_count:,}건\n"
+                f"{distinct_dates:,}일\n"
+                f"일평균 {float(avg_rows_per_date):.2f}건\n"
                 f"평균 ₩{float(suggestion['avg_amount']):,.0f}\n"
                 f"총액 ₩{float(suggestion['total_amount']):,.0f}"
             ),

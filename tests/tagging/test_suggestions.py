@@ -92,6 +92,7 @@ def _sample_suggestion(
         "merchant": "Netflix",
         "transaction_count": 3,
         "distinct_dates": 1,
+        "avg_rows_per_date": 3.0,
         "total_amount": 51000.0,
         "avg_amount": 17000.0,
         "amount_stddev": 0.0,
@@ -193,6 +194,7 @@ class TestGenerateMerchantContext:
         assert suggestion["merchant"] == "Netflix"
         assert suggestion["transaction_count"] == 2
         assert suggestion["distinct_dates"] == 2
+        assert suggestion["avg_rows_per_date"] == 1.0
         assert suggestion["total_amount"] == 34000.0
         assert suggestion["avg_amount"] == 17000.0
         assert suggestion["amount_stddev"] == 0.0
@@ -246,6 +248,15 @@ class TestGenerateMerchantContext:
         assert suggestion["merchant"] == "CafeSameDay"
         assert suggestion["transaction_count"] == 5
         assert suggestion["distinct_dates"] == 1
+        assert suggestion["avg_rows_per_date"] == 5.0
+        assert suggestion["total_amount"] == 25000.0
+        assert suggestion["avg_amount"] == 5000.0
+
+        again = generate_merchant_context(data_dir, top_n=5, min_count=2)
+        assert again[0]["transaction_count"] == suggestion["transaction_count"]
+        assert again[0]["distinct_dates"] == suggestion["distinct_dates"]
+        assert again[0]["avg_rows_per_date"] == suggestion["avg_rows_per_date"]
+        assert again[0]["total_amount"] == suggestion["total_amount"]
 
     def test_respects_top_n_and_min_count(self, tmp_path: Path) -> None:
         """Applies min-count filtering and top-N limiting."""
@@ -420,6 +431,8 @@ class TestFormatHelpers:
 
         assert "Merchant Context for Rules Suggest" in report
         assert "Netflix" in report
+        assert "고유일 1일" in report
+        assert "일평균 3.00건" in report
         assert "정기지출 / 구독" in report
         assert "Monthly plan" in report
         assert "자동 적용 태그: 구독, 정기지출" in report

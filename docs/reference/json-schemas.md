@@ -5474,6 +5474,9 @@ rules suggest --json output
       "items": {
         "additionalProperties": true,
         "properties": {
+          "avg_rows_per_date": {
+            "type": "number"
+          },
           "distinct_dates": {
             "type": "integer"
           }

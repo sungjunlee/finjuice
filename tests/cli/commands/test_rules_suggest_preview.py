@@ -187,6 +187,7 @@ def test_rules_suggest_preview_json_includes_rich_context(tmp_path: Path) -> Non
     assert suggestion["merchant"] == "Netflix"
     assert suggestion["transaction_count"] == 2
     assert suggestion["distinct_dates"] == 2
+    assert suggestion["avg_rows_per_date"] == 1.0
     assert suggestion["avg_amount"] == 17000.0
     assert suggestion["amount_stddev"] == 0.0
     assert suggestion["active_months"] == ["2024-10"]
@@ -205,6 +206,37 @@ def test_rules_suggest_preview_json_includes_rich_context(tmp_path: Path) -> Non
     assert rule["category"] == "구독"
     assert rule["tags"] == ["구독", "정기지출"]
     assert rule["priority"] == 80  # single month, not recurring
+
+
+def test_rules_suggest_json_same_day_rows_report_visit_hints(tmp_path: Path) -> None:
+    """Five same-merchant same-day rows stay 5 transactions and 1 visit date."""
+    data_dir = tmp_path / "data"
+    _write_transactions(
+        data_dir,
+        [
+            _build_transaction(
+                f"same_day_{index}",
+                "2024-10-01",
+                "CafeSameDay",
+                -5000.0,
+                source_row=index,
+            )
+            for index in range(1, 6)
+        ],
+    )
+    (data_dir / "rules.yaml").write_text("version: 1\nrules: []\n", encoding="utf-8")
+
+    result = runner.invoke(app, ["--data-dir", str(data_dir), "rules", "suggest", "--json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    suggestion = payload["suggestions"][0]
+    assert suggestion["merchant"] == "CafeSameDay"
+    assert suggestion["transaction_count"] == 5
+    assert suggestion["distinct_dates"] == 1
+    assert suggestion["avg_rows_per_date"] == 5.0
+    assert suggestion["total_amount"] == 25000.0
+    assert suggestion["avg_amount"] == 5000.0
 
 
 def test_rules_suggest_json_marks_payment_gateway_as_skip_rule(tmp_path: Path) -> None:

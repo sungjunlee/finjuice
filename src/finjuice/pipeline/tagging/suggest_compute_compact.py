@@ -26,9 +26,19 @@ def _compact_rule_suggestion(suggestion: dict[str, Any]) -> dict[str, Any]:
     """Return compact workflow cues for one rule suggestion."""
     similar_merchants = suggestion.get("similar_merchants") or []
     active_months = suggestion.get("active_months") or []
+    transaction_count = int(suggestion.get("transaction_count") or 0)
+    distinct_dates = int(suggestion.get("distinct_dates") or 0)
+    raw_avg_rows = suggestion.get("avg_rows_per_date")
+    if raw_avg_rows is None:
+        avg_rows_per_date = (
+            round(transaction_count / distinct_dates, 2) if distinct_dates > 0 else 0.0
+        )
+    else:
+        avg_rows_per_date = round(float(raw_avg_rows), 2)
     return {
-        "transaction_count": int(suggestion.get("transaction_count") or 0),
-        "distinct_dates": int(suggestion.get("distinct_dates") or 0),
+        "transaction_count": transaction_count,
+        "distinct_dates": distinct_dates,
+        "avg_rows_per_date": avg_rows_per_date,
         "active_month_count": len(active_months),
         "is_recurring": bool(suggestion.get("is_recurring")),
         "banksalad_category": suggestion.get("banksalad_category"),

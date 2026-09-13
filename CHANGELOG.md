@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 User-facing PRs add a bullet here (`Added` / `Changed` / `Fixed` / `Removed`).
 Release prep moves these bullets into `## [X.Y.Z]`. Refactor-only PRs skip this.
 
+### Added
+
+- `finjuice rules suggest` rows include optional `avg_rows_per_date` next to
+  `distinct_dates`, so same-day approval splits read as visit frequency (#486).
+
+
 ---
 
 ## [0.8.2] - 2026-09-13

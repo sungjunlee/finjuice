@@ -52,8 +52,10 @@ def _interactive_apply_suggestions(
 
         # Display suggestion
         typer.echo(f"[{i}/{len(suggestions)}] {suggestion['merchant']}")
+        distinct_dates = int(suggestion.get("distinct_dates") or 0)
         typer.echo(
             f"     거래: {int(suggestion['transaction_count'])}건, "
+            f"고유일 {distinct_dates}일, "
             f"₩{float(suggestion['total_amount']):,.0f}"
         )
         typer.echo(f'     패턴: "{suggestion["pattern"]}"')

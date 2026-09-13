@@ -112,6 +112,13 @@ def _round_ratio(value: Any) -> float:
     return round(float(value), 2)
 
 
+def _avg_rows_per_date(transaction_count: int, distinct_dates: int) -> float:
+    """Return display-only rows-per-distinct-date for suggestion payloads."""
+    if distinct_dates <= 0:
+        return 0.0
+    return round(transaction_count / distinct_dates, 2)
+
+
 def generate_merchant_context(
     data_dir: Path,
     rules_file: Optional[Path] = None,
@@ -166,10 +173,13 @@ def generate_merchant_context(
             continue
 
         avg_amount = float(context.get("avg_amount") or 0.0)
+        transaction_count = int(context.get("transaction_count") or 0)
+        distinct_dates = int(context.get("distinct_dates") or 0)
         suggestion: dict[str, Any] = {
             "merchant": merchant,
-            "transaction_count": int(context.get("transaction_count") or 0),
-            "distinct_dates": int(context.get("distinct_dates") or 0),
+            "transaction_count": transaction_count,
+            "distinct_dates": distinct_dates,
+            "avg_rows_per_date": _avg_rows_per_date(transaction_count, distinct_dates),
             "total_amount": round(float(context.get("total_amount") or 0.0), 2),
             "avg_amount": round(avg_amount, 2),
             "amount_stddev": round(float(context.get("amount_stddev") or 0.0), 2),

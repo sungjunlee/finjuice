@@ -1202,6 +1202,7 @@ rules_test_schema = command_schema(
 
 rules_suggest_suggestion_schema = object_schema(
     {
+        "avg_rows_per_date": number,
         "distinct_dates": integer,
     },
 )
