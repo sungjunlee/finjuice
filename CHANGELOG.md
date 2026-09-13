@@ -12,6 +12,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 User-facing PRs add a bullet here (`Added` / `Changed` / `Fixed` / `Removed`).
 Release prep moves these bullets into `## [X.Y.Z]`. Refactor-only PRs skip this.
 
+### Fixed
+
+- `finjuice tag --edit --help` no longer crashes with a traceback; malformed
+  `--edit` values fail with a readable message (#482).
+- `finjuice rules add` JSON output no longer floods pre-existing overlap
+  warnings; the full count stays in `total_problems` (#483).
+- `finjuice rules add --match` help text now describes the actual
+  case-insensitive substring matching instead of regex (#484).
+
+### Added
+
+- `finjuice rules suggest` rows include `distinct_dates` so repeated
+  same-day approval rows are not mistaken for separate store visits (#486).
+
 ---
 
 ## [0.8.1] - 2026-09-12
