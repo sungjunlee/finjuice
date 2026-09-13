@@ -190,7 +190,7 @@ class AccountRegistry:
             as_of=as_of,
             scope="personal",
             views=tuple(views),
-            unknown_owner_account_ids=self._unknown_owner_ids(),
+            unknown_owner_account_ids=self._unknown_owner_ids(as_of),
         )
 
     def query_household(self, household_id: str, as_of: date) -> QueryResult:
@@ -210,7 +210,7 @@ class AccountRegistry:
             as_of=as_of,
             scope="household",
             views=tuple(views),
-            unknown_owner_account_ids=self._unknown_owner_ids(),
+            unknown_owner_account_ids=self._unknown_owner_ids(as_of),
         )
 
     def _dispatch_changeset(self, changeset: SemanticChangeset) -> None:
@@ -286,12 +286,13 @@ class AccountRegistry:
             "shares": list(shares),
         }
 
-    def _unknown_owner_ids(self) -> tuple[str, ...]:
-        return tuple(
-            account.account_id
-            for account in self._sorted_accounts()
-            if account.ownership_state == "unknown"
-        )
+    def _unknown_owner_ids(self, as_of: date) -> tuple[str, ...]:
+        unknown: list[str] = []
+        for account in self._sorted_accounts():
+            shares = shares_on_date(self._shares, account.account_id, as_of)
+            if account.ownership_state == "unknown" or not shares:
+                unknown.append(account.account_id)
+        return tuple(unknown)
 
     def _sorted_accounts(self) -> tuple[Account, ...]:
         return tuple(self._accounts[key] for key in sorted(self._accounts))
@@ -359,8 +360,11 @@ def _validate_share_set(shares: list[OwnershipShare], account_id: str) -> None:
                 raise AccountsError("Ownership periods overlap for one party.")
         seen_parties.append(share)
     starts = {item.period.start for item in shares}
-    for as_of in sorted(starts):
+    ends = {item.period.end for item in shares if item.period.end is not None}
+    for as_of in sorted(starts | ends):
         active = [item for item in shares if contains(item.period, as_of)]
+        if not active:
+            continue
         if share_total(active) != _ONE:
             raise AccountsError("Confirmed shares on a date must sum to 1.")
 
@@ -389,7 +393,7 @@ def _view_from_shares(
     owners = tuple(sorted({item.party_id for item in shares}))
     return AccountView(
         account=account,
-        ownership_state=account.ownership_state,
+        ownership_state="asserted" if shares else "unknown",
         owner_party_ids=owners,
         share_for_party=share_for_party,
     )

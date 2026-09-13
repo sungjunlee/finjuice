@@ -563,3 +563,81 @@ def test_queries_and_snapshots_live_in_helper_modules() -> None:
         period=period,
     )
     assert snapshots.parse_scope(snapshots.scope_record(scope)) == scope
+
+
+def test_query_as_of_without_active_share_surfaces_unknown_owner() -> None:
+    """Ended shares must not keep a global asserted flag on that date."""
+    from finjuice.pipeline.accounts.errors import AccountsError
+
+    registry = _seed_identities(AccountRegistry())
+    registry.mark_baseline()
+    registry.apply_changeset(
+        SemanticChangeset(
+            changeset_id=CHANGESET_OWN,
+            changeset_type="ownership_correction",
+            reason="Time-bounded ownership.",
+            snapshot=CorrectionSnapshot(
+                before={"account_id": ACC_IRP, "ownership_state": "unknown", "shares": []},
+                after={
+                    "account_id": ACC_IRP,
+                    "ownership_state": "asserted",
+                    "shares": [
+                        {
+                            "account_id": ACC_IRP,
+                            "party_id": PARTY_A,
+                            "share": "1",
+                            "start": "2024-01-01",
+                            "end": "2024-06-01",
+                            "confirmation_state": "confirmed",
+                        }
+                    ],
+                },
+            ),
+        )
+    )
+    during = registry.query_personal(PARTY_A, date(2024, 3, 1))
+    after = registry.query_personal(PARTY_A, date(2024, 6, 1))
+    assert during.views[0].ownership_state == "asserted"
+    assert after.views == ()
+    assert ACC_IRP in after.unknown_owner_account_ids
+
+
+def test_share_end_boundary_requires_remaining_shares_sum_to_one() -> None:
+    """A 0.5/0.5 joint that ends for one party must not stay asserted."""
+    from finjuice.pipeline.accounts.errors import AccountsError
+
+    registry = _seed_identities(AccountRegistry())
+    registry.mark_baseline()
+    with pytest.raises(AccountsError, match="sum to 1"):
+        registry.apply_changeset(
+            SemanticChangeset(
+                changeset_id="13131313-1313-4131-8131-131313131318",
+                changeset_type="ownership_correction",
+                reason="Incomplete joint at end boundary.",
+                snapshot=CorrectionSnapshot(
+                    before={"account_id": ACC_IRP, "ownership_state": "unknown", "shares": []},
+                    after={
+                        "account_id": ACC_IRP,
+                        "ownership_state": "asserted",
+                        "shares": [
+                            {
+                                "account_id": ACC_IRP,
+                                "party_id": PARTY_A,
+                                "share": "0.5",
+                                "start": "2024-01-01",
+                                "end": "2024-06-01",
+                                "confirmation_state": "confirmed",
+                            },
+                            {
+                                "account_id": ACC_IRP,
+                                "party_id": PARTY_B,
+                                "share": "0.5",
+                                "start": "2024-01-01",
+                                "end": None,
+                                "confirmation_state": "confirmed",
+                            },
+                        ],
+                    },
+                ),
+            )
+        )
