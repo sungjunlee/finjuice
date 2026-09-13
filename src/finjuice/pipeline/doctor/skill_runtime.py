@@ -57,9 +57,10 @@ def _helper_path_if_file(path: Path) -> Path | None:
     """Return *path* when it resolves to an existing file."""
     try:
         resolved = path.expanduser()
-    except OSError:
+        is_file = resolved.is_file()
+    except (OSError, RuntimeError):
         return None
-    if resolved.is_file():
+    if is_file:
         return resolved
     return None
 
