@@ -169,9 +169,12 @@ cutover gate.
 The hidden category marker is migrated as follows:
 
 1. retain the original `tags_manual` sequence in legacy payload;
-2. split visible tags from values beginning with
-   `__finjuice_category_override__:`;
-3. reproduce the current selection rule (the last non-empty marker wins);
+2. recognize markers beginning with `__finjuice_category_override__:` after
+   stripping surrounding whitespace, while retaining every non-marker tag in its
+   original spelling, order, and multiplicity in the typed visible sequence;
+3. reproduce the existing legacy category selection: strip full tag strings,
+   ignore empty strings, deduplicate the normalized full strings in first-seen
+   order, then select the last marker with a non-empty stripped suffix;
 4. store the selected value in explicit `category_manual` and store all marker
    occurrences for evidence; and
 5. recompute nothing: persisted `category_final` remains the baseline result.
@@ -197,13 +200,22 @@ currency defaulting, category/rule recalculation, account renaming/merging,
 owner inference, duplicate resolution, or changed totals are semantic changes
 and fail baseline parity.
 
-The additional representation code `hidden_category_sentinel_extracted.v1`
-permits only the typed-field split described above: legacy payload retains the
-entire original sequence, typed `tags_manual` is its ordered visible
-subsequence, and `category_manual` is the last non-empty marker. Parity checks
-all three separately; it never compares a typed visible-tag field directly to
-the legacy encoded CSV string. This is not permission to discard a marker or
-change the effective category.
+The additional representation allowance `hidden_category_sentinel_extracted.v1`
+permits the typed-field split with the entire original sequence retained in
+legacy payload and the original visible subsequence retained in typed
+`tags_manual`. The implemented audit discriminator is the candidate's sealed
+`migration_policy`, not a per-row representation-code column: no per-row
+sentinel extraction code is currently emitted. New adapter policy
+`legacy_preservation.manual_state.v3` applies the normalized legacy selection
+rule above, without normalizing or deduplicating the retained visible
+subsequence. For example, markers A, B, A select B because the repeated full
+marker A was already seen; a whitespace-only suffix never overrides a prior
+category. Previously sealed v1/v2 adapter plans retain their original literal
+marker extraction on replay; verifying such a candidate does not certify
+corrected manual-category parity. A new v3 plan is required for that parity gate.
+Parity checks all three separately; it never compares a typed visible-tag field
+directly to the legacy encoded CSV string. This is not permission to discard a
+marker or change the effective category.
 
 ## 4. Atomic mutation and audit contract
 

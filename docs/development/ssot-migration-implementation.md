@@ -45,9 +45,10 @@ not require an active-data boundary.
   retained as evidence with explicit issues before financial typed insertion.
   Analysis and build use the same checks without reclassifying invalid values.
 - Transaction rows preserve persisted final category, notes, transfer flags and
-  group identifiers. The last nonempty hidden category marker becomes the manual
-  category; visible manual tags retain their order and duplicates. Original
-  marker arrays remain in row evidence. No accounts or owners are inferred.
+  group identifiers. New v3 plans select the manual category using the frozen
+  legacy normalization and duplicate-marker semantics described below; visible
+  tags retain their original spelling, order, and duplicates. Original marker
+  arrays remain in row evidence. No accounts or owners are inferred.
 - Configuration revisions retain source bytes and parse status. Config decimals
   represented as lexical strings have an explicit representation issue. Raw
   XLSX/ZIP, audit history, overlays, and unsupported formats remain source evidence.
@@ -88,11 +89,6 @@ rule or crash-durability guarantee, and no disk was filled for testing.
 
 ## Remaining gates
 
-- Hidden category selection remains an unresolved acceptance question: the legacy
-  helper strips/deduplicates tags, while the preservation contract specifies the
-  original last nonempty marker and ordered visible subsequence. This slice keeps
-  its existing selection, original sequence, and persisted final category; it does
-  not resolve that conflict by changing either rule.
 - Derived balance/cashflow/insurance/investment/loan rows retain opaque evidence
   with `unresolved_source_fact`. A capture-wide lookup alone cannot link separate
   files: each file has its own source occurrence, while the current repository
@@ -123,9 +119,9 @@ The governing acceptance contract remains
 ## Canonical configuration baseline policy
 
 The existing runtime reads exactly `rules.yaml` and `goals.yaml` at the primary
-legacy data root (`Config.rules_file` and `Config.goals_file`). New sealed private
-plans record `migration_policy = legacy_preservation.config_heads.v2` and select
-those captured revisions as baseline heads. Nested files, external roots, `.yml`
+legacy data root (`Config.rules_file` and `Config.goals_file`). Sealed private
+plans using `legacy_preservation.config_heads.v2` or the newer manual-state v3
+policy select those captured revisions as baseline heads. Nested files, external roots, `.yml`
 and `.json` copies remain distinct evidence; neither filename similarity, byte
 identity, parse success nor modification time grants them canonical status.
 The retained `config_head_requires_explicit_selection` issue on an alternative
@@ -150,3 +146,29 @@ flags or SQLite schema version change.
 This preserves old candidates without treating their missing heads as completion
 of the new canonical-config requirement. Runtime activation and consumer parity
 remain separate acceptance gates.
+
+## Manual category policy
+
+New sealed plans use `legacy_preservation.manual_state.v3`, which retains v2
+canonical config-head selection and freezes the existing legacy manual-category
+interpretation. It strips full tag strings, ignores empty strings, deduplicates
+those normalized strings in first-seen order, and chooses the last marker with
+a nonempty stripped suffix. The implementation is local to the frozen adapter:
+future changes to the runtime helper cannot silently reinterpret a sealed plan.
+
+Only marker recognition and `category_manual` use that interpretation. The typed
+visible sequence keeps each original non-marker string, including whitespace and
+duplicates. Legacy payload and source bytes retain all markers and original tags.
+Persisted `category_final`, `tags_final`, notes, and other manual state remain
+unchanged; this extraction does not run tagging or recompute a category.
+
+Existing v1/v2 plans still replay their original literal extraction. Their
+verification proves their own policy, not v3 category parity. A new v3 candidate
+has a distinct policy-scoped generation ID while preserving original source and
+entity identities. It must pass the new manual-state parity checks before
+cutover; no existing candidate is silently rewritten.
+
+The sealed plan policy is the implemented discriminator for extraction semantics;
+there is no emitted per-row sentinel representation-code field. Consumer parity
+must distinguish original stored visible tags from the normalized legacy display
+view instead of using storage equality as proof of display equality.

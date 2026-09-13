@@ -6,6 +6,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
+from finjuice.pipeline.migration.policy import LEGACY_POLICY
 from finjuice.pipeline.storage.sqlite.ids import migration_entity_id
 from finjuice.pipeline.storage.sqlite.records import (
     EntityKind,
@@ -28,6 +29,7 @@ class FileContext:
     relative_path: str
     source_schema_version: str | None = None
     config_head_timestamp: str | None = None
+    migration_policy: str = LEGACY_POLICY
 
 
 @dataclass(frozen=True)

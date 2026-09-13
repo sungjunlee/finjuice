@@ -25,7 +25,11 @@ from finjuice.pipeline.migration.common import (
     seal,
     tree_inventory,
 )
-from finjuice.pipeline.migration.policy import CONFIG_HEAD_POLICY, LEGACY_POLICY
+from finjuice.pipeline.migration.policy import (
+    CONFIG_HEAD_POLICY,
+    LEGACY_POLICY,
+    MANUAL_STATE_POLICY,
+)
 
 
 def file_context(
@@ -38,10 +42,11 @@ def file_context(
         entry["path"],
         None if version is None else str(version),
         capture["capture"]["completed_at"]
-        if policy == CONFIG_HEAD_POLICY
+        if policy in (CONFIG_HEAD_POLICY, MANUAL_STATE_POLICY)
         and entry["root"] == DATA_ROOT_NAME
         and entry["path"] in {"rules.yaml", "goals.yaml"}
         else None,
+        policy,
     )
 
 
@@ -98,12 +103,12 @@ def plan_migration(
     plan = seal(
         {
             "schema_version": PLAN_VERSION,
-            "migration_policy": CONFIG_HEAD_POLICY,
+            "migration_policy": MANUAL_STATE_POLICY,
             "completion_marker": "planned",
             "capture_locator": Path(os.path.relpath(root, base)).as_posix(),
             "capture": capture,
             "source_inventory": before,
-            "inputs": analyze_capture(root, capture, policy=CONFIG_HEAD_POLICY),
+            "inputs": analyze_capture(root, capture, policy=MANUAL_STATE_POLICY),
         }
     )
     verify_backup(location)
