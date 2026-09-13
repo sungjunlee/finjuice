@@ -8,6 +8,7 @@ from typing import Any
 import polars as pl
 import yaml
 
+from finjuice.pipeline.budget_status_helpers import _budget_status
 from finjuice.pipeline.checkup.models import BudgetPostureSummary, BudgetSummary
 from finjuice.pipeline.checkup.partitions import (
     expense_rows,
@@ -175,16 +176,3 @@ def _budget_row(name: str, target: int, actual: int) -> dict[str, Any]:
         "progress_pct": progress_pct,
         "status": _budget_status(progress_pct=progress_pct, target=target, actual=actual),
     }
-
-
-def _budget_status(*, progress_pct: float | None, target: int, actual: int) -> str:
-    """Return the normalized budget posture enum."""
-    if target <= 0:
-        return "over" if actual > 0 else "on-track"
-    if progress_pct is None:
-        return "under"
-    if progress_pct > 100.0:
-        return "over"
-    if progress_pct >= 90.0:
-        return "on-track"
-    return "under"

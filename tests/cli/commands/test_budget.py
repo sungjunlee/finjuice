@@ -112,11 +112,11 @@ def test_budget_status_json_reports_total_category_states_and_unbudgeted_spend(
         "actual": 15000,
         "remaining": -15000,
         "progress_pct": None,
-        "status": "over",
+        "status": "untracked",
     }
     assert payload["health"] == {
         "status": "warning",
-        "reasons": ["over_budget_categories", "unbudgeted_spend"],
+        "reasons": ["over_budget_categories"],
     }
     assert payload["actionable"] is True
     assert payload["signals"] == {
@@ -127,13 +127,14 @@ def test_budget_status_json_reports_total_category_states_and_unbudgeted_spend(
         "under_budget_count": 1,
         "remaining_total": 80000,
         "filters_applied": 0,
+        "untracked_total": 15000,
     }
     assert payload["review"] == {
         "month": "2026-04",
         "target": 250000,
         "actual": 170000,
         "remaining": 80000,
-        "at_risk_categories": ["식비", "카페", "의료"],
+        "at_risk_categories": ["식비", "카페"],
         "over_budget_categories": ["카페"],
         "unbudgeted_categories": ["의료"],
     }
@@ -181,6 +182,7 @@ def test_budget_status_missing_goals_yaml_returns_empty_envelope(
         "under_budget_count": 0,
         "remaining_total": None,
         "filters_applied": 0,
+        "untracked_total": 0,
     }
     assert payload["review"] == {
         "month": payload["month"],
@@ -229,8 +231,10 @@ def test_budget_status_missing_goals_yaml_preserves_filter_metadata(
     assert payload["signals"]["filters_applied"] == 3
 
 
-def test_budget_status_unbudgeted_only_uses_matching_next_step_signal(tmp_path: Path) -> None:
-    """Unbudgeted-only warnings should not emit an over-budget next-step signal."""
+def test_budget_status_unbudgeted_only_does_not_warn_when_share_is_small(
+    tmp_path: Path,
+) -> None:
+    """Small untracked spend is informational and must not flip health to warning."""
     data_dir = tmp_path / "data"
     (data_dir / "imports").mkdir(parents=True)
     (data_dir / "exports").mkdir()
@@ -266,6 +270,65 @@ def test_budget_status_unbudgeted_only_uses_matching_next_step_signal(tmp_path: 
         app,
         ["--data-dir", str(data_dir), "budget", "status", "--json", "--month", "2026-04"],
     )
+    human_result = runner.invoke(
+        app,
+        ["--data-dir", str(data_dir), "budget", "status", "--month", "2026-04"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert human_result.exit_code == 0, human_result.output
+    payload = json.loads(result.output)
+    rows = {row["name"]: row for row in payload["categories"]}
+    assert rows["의료"]["status"] == "untracked"
+    assert payload["health"] == {
+        "status": "ok",
+        "reasons": [],
+    }
+    assert payload["actionable"] is False
+    assert payload["signals"]["over_budget_count"] == 0
+    assert payload["signals"]["unbudgeted_count"] == 1
+    assert payload["signals"]["untracked_total"] == 20_000
+    assert payload["next_steps"] == []
+    assert "untracked" in human_result.output
+
+
+def test_budget_status_unbudgeted_spend_warns_when_share_is_material(tmp_path: Path) -> None:
+    """Untracked spend above the warning share still uses the unbudgeted next-step signal."""
+    data_dir = tmp_path / "data"
+    (data_dir / "imports").mkdir(parents=True)
+    (data_dir / "exports").mkdir()
+    (data_dir / "metadata").mkdir()
+    (data_dir / "rules.yaml").write_text("version: 1\nrules: []\n", encoding="utf-8")
+    (data_dir / "goals.yaml").write_text(
+        "\n".join(
+            [
+                "version: 1",
+                "monthly_budget:",
+                "  total: 300000",
+                "  categories:",
+                "    식비: 200000",
+                '  updated: "2026-04-15"',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    _write_month(
+        data_dir,
+        pl.DataFrame(
+            [
+                _transaction_row("2026-04-02", -80_000, "식비", "Grocer"),
+                _transaction_row("2026-04-03", -80_000, "의료", "Clinic"),
+            ]
+        ),
+        "2026",
+        "04",
+    )
+
+    result = runner.invoke(
+        app,
+        ["--data-dir", str(data_dir), "budget", "status", "--json", "--month", "2026-04"],
+    )
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
@@ -275,6 +338,7 @@ def test_budget_status_unbudgeted_only_uses_matching_next_step_signal(tmp_path: 
     }
     assert payload["signals"]["over_budget_count"] == 0
     assert payload["signals"]["unbudgeted_count"] == 1
+    assert payload["signals"]["untracked_total"] == 80_000
     assert payload["next_steps"][0]["signal"] == "unbudgeted_spend"
 
 
@@ -825,7 +889,7 @@ def test_budget_status_flags_unmatched_goal_category_names(tmp_path: Path) -> No
         "actual": 40_000,
         "remaining": -40_000,
         "progress_pct": None,
-        "status": "over",
+        "status": "untracked",
     }
     assert payload["unmatched_goal_categories"] == [
         {"name": "카페", "actual": 0, "suggested": ["카페/간식"]},

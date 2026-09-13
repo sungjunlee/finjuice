@@ -1586,7 +1586,8 @@ budget status --json output
             "enum": [
               "under",
               "on-track",
-              "over"
+              "over",
+              "untracked"
             ],
             "type": "string"
           },
@@ -1766,7 +1767,8 @@ budget status --json output
               "enum": [
                 "under",
                 "on-track",
-                "over"
+                "over",
+                "untracked"
               ],
               "type": "string"
             },
