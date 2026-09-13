@@ -56,6 +56,9 @@
     "goals_file": {
       "additionalProperties": true,
       "properties": {
+        "authority": {
+          "type": "string"
+        },
         "exists": {
           "type": "boolean"
         },
@@ -66,6 +69,18 @@
           ]
         },
         "path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "revision_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "selection_state": {
           "type": "string"
         },
         "updated": {

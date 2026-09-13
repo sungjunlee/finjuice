@@ -12,6 +12,11 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, BinaryIO, Callable, Final, Iterator, TypeVar, cast
 
+from finjuice.pipeline.storage.sqlite.analysis_reads import (
+    AnalysisReadSnapshot,
+    analysis_snapshot,
+    unmaterialized_transaction_months,
+)
 from finjuice.pipeline.storage.sqlite.checkup_reads import (
     CheckupReadSnapshot,
     import_preview_snapshot,
@@ -637,6 +642,11 @@ class RepositoryReader(AbstractContextManager["RepositoryReader"]):
             raise RuntimeError("Repository reader is already closed.")
         return transaction_snapshot(self._connection, self.info, self._repository_paths)
 
+    def analysis_snapshot(self) -> AnalysisReadSnapshot:
+        """Return transactions and canonical config selections from this revision."""
+        transactions = self.transaction_snapshot()
+        return analysis_snapshot(self._connection, self._repository_paths, transactions)
+
     def checkup_snapshot(self, digests: tuple[str, ...] = ()) -> CheckupReadSnapshot:
         """Read all checkup domains and requested import evidence from this revision."""
         if self._closed:
@@ -648,6 +658,7 @@ class RepositoryReader(AbstractContextManager["RepositoryReader"]):
                 self.portfolio_snapshot(),
                 import_preview_snapshot(self._connection, self.info, digests),
                 rules_config_snapshot(self._connection, self._repository_paths),
+                unmaterialized_transaction_months(self._connection),
             )
         )
 

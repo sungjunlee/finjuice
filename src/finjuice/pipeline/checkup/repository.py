@@ -92,6 +92,8 @@ def collect_repository_checkup(
 def _collect(
     snapshot: CheckupReadSnapshot, options: RepositoryCheckupOptions, preview: StagedImportSummary
 ) -> CheckupBundle:
+    if snapshot.unmaterialized_months:
+        raise RepositoryCheckupError("Canonical transaction evidence is incomplete for checkup.")
     config, today, fast = options.config, options.today, options.fast
     filters, notes = checkup_rules(snapshot.rules)
     goals = checkup_goals(snapshot.portfolio.goals)

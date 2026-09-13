@@ -40,6 +40,7 @@ from finjuice.pipeline.budget_status_helpers import (
 )
 from finjuice.pipeline.config import Config
 from finjuice.pipeline.goals import (
+    GoalsLoadResult,
     GoalsValidationProblem,
     dump_goals_roundtrip_bytes,
     load_goals_file,
@@ -96,12 +97,32 @@ def compute_budget_status(
         "exists": goals_result.exists,
     }
 
+    if goals_result.exists and goals_result.document is None:
+        raise GoalsFileInvalidError(goals_result.problems)
+    actuals, filters_applied = _load_budget_actuals(
+        config,
+        month=month,
+        load_report_filters=load_report_filters,
+    )
+    return _assemble_budget_status(
+        goals_result,
+        goals_file,
+        actuals,
+        month=month,
+        filters_applied=filters_applied,
+    )
+
+
+def _assemble_budget_status(
+    goals_result: GoalsLoadResult,
+    goals_file: dict[str, Any],
+    actuals: dict[str, int],
+    *,
+    month: str,
+    filters_applied: int,
+) -> dict[str, Any]:
+    """Build the standalone budget payload from detached validated inputs."""
     if not goals_result.exists:
-        _, filters_applied = _load_budget_actuals(
-            config,
-            month=month,
-            load_report_filters=load_report_filters,
-        )
         return {
             "month": month,
             "goals_file": goals_file,
@@ -123,12 +144,6 @@ def compute_budget_status(
 
     assert goals_result.document is not None
     budget = goals_result.document.monthly_budget
-    actuals, filters_applied = _load_budget_actuals(
-        config,
-        month=month,
-        load_report_filters=load_report_filters,
-    )
-
     category_rows = _build_category_rows(budget, actuals)
     unmatched_goal_categories = _unmatched_goal_categories(budget, actuals)
     summary = _build_summary_row(budget, actuals)

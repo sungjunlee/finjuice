@@ -816,7 +816,15 @@ budget_status_schema = command_schema(
         "actionable": boolean,
         "categories": array_of(budget_row_schema),
         "goals_file": object_schema(
-            {"exists": boolean, "notes": string_or_null, "path": string, "updated": string_or_null},
+            {
+                "exists": boolean,
+                "notes": string_or_null,
+                "path": string_or_null,
+                "updated": string_or_null,
+                "authority": string,
+                "selection_state": string,
+                "revision_id": string_or_null,
+            },
             required=["path", "exists"],
         ),
         "health": object_schema(
@@ -884,7 +892,10 @@ budget_validate_schema = command_schema(
     "budget_validate.schema.json",
     "budget validate --json output",
     {
-        "path": string,
+        "path": string_or_null,
+        "authority": string,
+        "selection_state": string,
+        "revision_id": string_or_null,
         "problems": array_of(object_any),
         "status": {"enum": ["valid", "invalid"], "type": "string"},
     },

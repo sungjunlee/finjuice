@@ -346,3 +346,44 @@ New evidence-only or empty workbooks still count as pending. Per-file capture an
 mapping failures are counted; invalid canonical completion evidence fails the whole
 checkup. Preview never writes objects, transactions or revisions. Fast mode counts
 staged names as unexamined pending files and does not open workbook contents.
+
+
+### Standalone budget, validation and review
+
+`budget status` and `review` read a minimal analysis bundle containing transactions
+and rules/goals selection inventories from one reader. They do not run checkup or
+load portfolio tables and import preview identities. Their calculation policies
+are `legacy_budget_status.v1` and `legacy_review.v1`, with revision, calculation
+month/as-of date and selection metadata. Active goals descriptors use `path=null`
+plus canonical authority/selection/revision; legacy filesystem paths remain strings.
+`budget validate` validates those selected canonical goals with
+`canonical_goals_validation.v1`, including explicit invalid, absent and unselected
+states. Human output identifies the canonical source instead of printing `None`.
+
+The standalone calculations deliberately retain their own legacy meanings. Budget
+excludes confirmed transfers and shared non-consumption patterns, uses raw tag
+strings, projects the legacy CSV null literals (empty string, `NA`, `NULL`)
+without modifying canonical evidence, preserves the null category fallback,
+chooses the partition path month,
+and loads filters lazily only for a present partition. `--no-filter` remains an
+explicit bypass of report filters. Review preserves default/untagged/confidence
+predicates, their AND combination, sorting and original row hashes. Explicit month
+selects a partition and then filters row dates; implicit latest month selects only
+the partition. Review does not apply report filters. Its JSON privacy and pagination
+retain their existing behavior and include repository metadata in `--max-bytes`.
+
+Review notes use the same selected canonical rules bytes, only when matches exist.
+Invalid/unselected notes leave transactions available with a static warning in JSON
+metadata and human output. No live rules fallback or global logger toggling occurs.
+
+Preserved primary transaction CSV evidence without corresponding typed transactions
+must not masquerade as an empty or complete result. The analysis snapshot records
+affected months for unmaterialized row observations, preserved opaque ragged or
+duplicate-header rows, and file-level CSV parse failures. It verifies primary source,
+capture, locator and provenance associations. Auxiliary roots and normal header-only
+empty partitions do not trigger this guard. Budget/review fail for affected selected
+months (review all-history checks all months); checkup fails for any such month.
+Unrelated complete months and goals-only validation remain available. This guard
+does not convert unsupported legacy records, relax frozen migration policies, or
+establish full private-corpus parity. Other existing read consumers still require
+the corresponding completeness boundary; operating activation remains gated.

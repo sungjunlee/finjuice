@@ -31,6 +31,7 @@ class CheckupReadSnapshot:
     portfolio: PortfolioReadSnapshot
     imports: ImportPreviewSnapshot
     rules: PortfolioConfigSnapshot
+    unmaterialized_months: tuple[str, ...] = ()
 
 
 def import_preview_snapshot(

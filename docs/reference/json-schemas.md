@@ -1614,6 +1614,9 @@ budget status --json output
     "goals_file": {
       "additionalProperties": true,
       "properties": {
+        "authority": {
+          "type": "string"
+        },
         "exists": {
           "type": "boolean"
         },
@@ -1624,6 +1627,18 @@ budget status --json output
           ]
         },
         "path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "revision_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "selection_state": {
           "type": "string"
         },
         "updated": {
@@ -1846,8 +1861,11 @@ budget validate --json output
 | Field | Type | Required |
 |-------|------|----------|
 | `_meta` | `$ref` _meta.schema.json | yes |
-| `path` | `string` | yes |
+| `authority` | `string` | no |
+| `path` | `string` \| `null` | yes |
 | `problems` | `array`[`object`] | yes |
+| `revision_id` | `string` \| `null` | no |
+| `selection_state` | `string` | no |
 | `status` | enum(`valid`, `invalid`) | yes |
 
 ```json
@@ -1859,8 +1877,14 @@ budget validate --json output
     "_meta": {
       "$ref": "_meta.schema.json"
     },
-    "path": {
+    "authority": {
       "type": "string"
+    },
+    "path": {
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "problems": {
       "items": {
@@ -1868,6 +1892,15 @@ budget validate --json output
         "type": "object"
       },
       "type": "array"
+    },
+    "revision_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "selection_state": {
+      "type": "string"
     },
     "status": {
       "enum": [

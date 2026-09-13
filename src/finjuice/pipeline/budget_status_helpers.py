@@ -57,6 +57,14 @@ def _load_budget_actuals(
         return {}, 0
 
     report_filters = load_report_filters()
+    return _budget_actuals_from_frame(source_df, report_filters)
+
+
+def _budget_actuals_from_frame(
+    source_df: pl.DataFrame,
+    report_filters: ReportFilters,
+) -> tuple[dict[str, int], int]:
+    """Calculate standalone consumption actuals without loading files."""
     filtered_df, filters_applied = apply_report_filters(source_df, report_filters)
     expense_df = _expense_rows(filtered_df)
     if expense_df.is_empty():
