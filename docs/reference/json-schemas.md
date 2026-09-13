@@ -946,7 +946,7 @@ automation run --json output
       }
     }
   ],
-  "description": "automation run --json output. The raw and redacted privacy profiles include data_dir and merchant_pressure samples; compact replaces those samples with counts.",
+  "description": "automation run --json output. The raw and redacted privacy profiles include data_dir and merchant_pressure samples; compact replaces those samples with counts. Canonical pending samples have validation_skips:null because exact-import dispositions are distinct from legacy validation skips; independent preview totals are identified in _meta.",
   "properties": {
     "_meta": {
       "$ref": "_meta.schema.json"
@@ -989,6 +989,74 @@ automation run --json output
     },
     "pending_imports": {
       "additionalProperties": true,
+      "properties": {
+        "estimated_new_asset_rows": {
+          "type": "integer"
+        },
+        "estimated_new_rows": {
+          "type": "integer"
+        },
+        "failed_file_count": {
+          "type": "integer"
+        },
+        "failed_files": {
+          "items": {
+            "additionalProperties": true,
+            "properties": {
+              "error": {
+                "type": "string"
+              },
+              "source_file": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "files_found": {
+          "type": "integer"
+        },
+        "pending_files": {
+          "type": "integer"
+        },
+        "sample_file_count": {
+          "type": "integer"
+        },
+        "sample_files": {
+          "items": {
+            "additionalProperties": true,
+            "properties": {
+              "estimated_new_asset_rows": {
+                "type": "integer"
+              },
+              "estimated_new_rows": {
+                "type": "integer"
+              },
+              "source_file": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "validation_skips": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
       "type": "object"
     },
     "tagging_pressure": {
@@ -1002,7 +1070,10 @@ automation run --json output
             "additionalProperties": true,
             "properties": {
               "avg_amount": {
-                "type": "number"
+                "type": [
+                  "number",
+                  "null"
+                ]
               },
               "merchant": {
                 "type": "string"
@@ -1014,7 +1085,10 @@ automation run --json output
                 "type": "array"
               },
               "total_amount": {
-                "type": "number"
+                "type": [
+                  "number",
+                  "null"
+                ]
               },
               "transaction_count": {
                 "type": "integer"

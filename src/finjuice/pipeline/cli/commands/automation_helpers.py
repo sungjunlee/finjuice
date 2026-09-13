@@ -30,17 +30,17 @@ class AutomationNextStepPayload(TypedDict):
 class PendingImportFailurePayload(TypedDict):
     """Stable pending-import failure sample."""
 
-    source_file: str
+    source_file: str | None
     error: str
 
 
 class PendingImportFilePayload(TypedDict):
     """Stable pending-import sample."""
 
-    source_file: str
+    source_file: str | None
     estimated_new_rows: int
     estimated_new_asset_rows: int
-    validation_skips: int
+    validation_skips: int | None
 
 
 class PendingImportsPayload(TypedDict):

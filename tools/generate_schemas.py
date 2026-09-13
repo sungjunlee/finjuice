@@ -995,10 +995,10 @@ networth_forecast_schema = command_schema(
 
 automation_merchant_pressure_schema = object_schema(
     {
-        "avg_amount": number,
+        "avg_amount": number_or_null,
         "merchant": string,
         "sample_memos": array_of(string),
-        "total_amount": number,
+        "total_amount": number_or_null,
         "transaction_count": integer,
     },
     required=["merchant", "transaction_count", "total_amount", "avg_amount", "sample_memos"],
@@ -1033,6 +1033,29 @@ automation_tagging_pressure_schema = object_schema(
     ],
 )
 
+automation_pending_imports_schema = object_schema(
+    {
+        "status": string,
+        "files_found": integer,
+        "pending_files": integer,
+        "estimated_new_rows": integer,
+        "estimated_new_asset_rows": integer,
+        "failed_files": array_of(object_schema({"source_file": string_or_null, "error": string})),
+        "sample_files": array_of(
+            object_schema(
+                {
+                    "source_file": string_or_null,
+                    "estimated_new_rows": integer,
+                    "estimated_new_asset_rows": integer,
+                    "validation_skips": integer_or_null,
+                }
+            )
+        ),
+        "failed_file_count": integer,
+        "sample_file_count": integer,
+    }
+)
+
 automation_run_schema = command_schema(
     "automation_run.schema.json",
     "automation run --json output",
@@ -1042,7 +1065,7 @@ automation_run_schema = command_schema(
         "enabled": boolean,
         "large_transactions": object_any,
         "next_steps": array_of(next_step_schema),
-        "pending_imports": object_any,
+        "pending_imports": automation_pending_imports_schema,
         "tagging_pressure": automation_tagging_pressure_schema,
         "thresholds": object_schema(
             {"large_transaction": number, "untagged_count": integer},
@@ -1063,7 +1086,9 @@ automation_run_schema = command_schema(
 )
 automation_run_schema["description"] = (
     "automation run --json output. The raw and redacted privacy profiles include "
-    "data_dir and merchant_pressure samples; compact replaces those samples with counts."
+    "data_dir and merchant_pressure samples; compact replaces those samples with counts. "
+    "Canonical pending samples have validation_skips:null because exact-import dispositions "
+    "are distinct from legacy validation skips; independent preview totals are identified in _meta."
 )
 automation_run_schema["allOf"] = [
     {

@@ -67,7 +67,7 @@ def suggestions_from_snapshot(
     snapshot: AnalysisReadSnapshot, options: SuggestionReadOptions
 ) -> RepositorySuggestions:
     """Calculate using an existing detached revision without opening another reader."""
-    rules = _selected_rules(snapshot.rules)
+    rules = selected_suggestion_rules(snapshot.rules)
     frame = analysis_frame(snapshot, decode_tags=False)
     stats, suggestions = suggestions_from_frame(frame, rules, options)
     metadata = analysis_metadata(snapshot, "legacy_rules_suggest.v1")
@@ -86,19 +86,20 @@ def suggestions_from_frame(
         stats = _augment_suggestion_stats(
             coverage_stats_from_connection(connection, options.file_id)
         )
-        _require_finite(stats)
+        require_finite_values(stats)
         if stats["suggestable_untagged_count"] == 0:
             return stats, []
         contexts, tagged = merchant_context_from_connection(
             connection, options.top_n, options.min_count, options.file_id
         )
-        _require_finite((contexts, tagged))
+        require_finite_values((contexts, tagged))
         suggestions = score_merchant_contexts(contexts, tagged, patterns, names, options.top_n)
-        _require_finite(suggestions)
+        require_finite_values(suggestions)
         return stats, suggestions
 
 
-def _selected_rules(selection: PortfolioConfigSnapshot) -> list[TagRule]:
+def selected_suggestion_rules(selection: PortfolioConfigSnapshot) -> list[TagRule]:
+    """Load the selected parsed rules; allow only a genuinely absent empty inventory."""
     if selection.selection_state == "absent" and not selection.revisions:
         return []
     head = selection.head
@@ -107,7 +108,7 @@ def _selected_rules(selection: PortfolioConfigSnapshot) -> list[TagRule]:
     return load_rules_bytes(head.content)
 
 
-def _require_finite(value: Any) -> None:
+def require_finite_values(value: Any) -> None:
     """Reject unsupported numeric aggregates instead of publishing NaN or infinity."""
     if isinstance(value, float) and not math.isfinite(value):
         raise ValueError("Suggestion aggregates must be finite.")
@@ -115,7 +116,7 @@ def _require_finite(value: Any) -> None:
         raise ValueError("Suggestion aggregates must be finite.")
     if isinstance(value, dict):
         for item in value.values():
-            _require_finite(item)
+            require_finite_values(item)
     elif isinstance(value, (list, tuple)):
         for item in value:
-            _require_finite(item)
+            require_finite_values(item)

@@ -523,3 +523,31 @@ projection tests. `FINJUICE_SQLITE_GENERATION` does not select CLI authority:
 An unrelated generation cannot replace either canonical or legacy selected data.
 The helpers' row-date month projection is not the canonical source-partition
 scope policy. Full #436 consumer and operational acceptance remains open.
+
+
+### Canonical one-shot automation
+
+`automation run` captures staged XLSX bytes once, then reads one checkup snapshot
+for canonical transactions, selected rules and import-completion evidence. It
+projects primary/native transactions with the same null/scoping policy as rule
+suggestions; semantic validity of unrelated goals does not block these signals.
+Incomplete transaction evidence, invalid/unselected rules, missing activation
+proof and nonfinite amount cells fail with a static error instead of clear zeros.
+Tagging and large-transaction calculations reuse existing SQL/projections and the
+normalized transfer view. Threshold zero keeps its existing disabled meaning.
+The command performs no import, rule application or scheduled workflow execution.
+
+`legacy_automation_signals.v1` identifies the dataset/rules revision. Thresholds
+remain runtime configuration; staged files have separate observation timestamps
+and `independent_baseline.v1` metadata. Pending row totals are sums of independent
+file previews against that revision, not predictions of a sequential deduplicated
+batch. An empty or evidence-only new workbook is pending, while a verified exact
+completed import is a no-op. Capture/mapping failures retain only static error
+codes in output; broken canonical lookup evidence fails the whole operation.
+
+Canonical sample `validation_skips` is null because exact-import quarantined,
+unsupported and uncovered counts are different measures. Their separate aggregate
+dispositions appear in metadata. Unknown filenames remain null. Raw, redacted and
+compact profiles preserve their established sample handling; merchant amounts
+may be null in redacted output and the schema reflects that existing behavior.
+Checkup shares the same per-file evaluation while retaining its aggregate output.
