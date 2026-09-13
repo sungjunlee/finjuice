@@ -1202,7 +1202,12 @@ rules_test_schema = command_schema(
 
 rules_suggest_suggestion_schema = object_schema(
     {
+        "ambiguous_reason": string_or_null,
+        "auto_apply_eligible": boolean,
+        "default_action": string,
         "distinct_dates": integer,
+        "merchant_kind": string,
+        "name_variants": array_of(string),
     },
 )
 
