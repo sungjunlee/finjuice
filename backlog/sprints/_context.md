@@ -86,3 +86,8 @@
 
 
 - 2026-09-14 release evidence checkpoint: 독립 raw binding trust + wheel/lock retained bytes 검증 구현. Cursor Unicode ZIP alias P2를7실패로재현하고 수정; 최종full4395PASS1SKIP90.93%, source/installed50PASS86origins/1SHA, 후속Cursor524.72s P1P2없음. 실제f492wheel+lock 검증은별도합성trust등록이며 운영activation아님. 최종commit/원격은active sprint와PR481참조. Capsule별도worktree18PASS/root18PASS, Cursor리뷰중(/tmp/finjuice-recovery-capsule-review). 다음wrapper는codex/ssot-recovery-bundle에서Cursor구현중(/tmp/finjuice-recovery-bundle-implementation), inherited6files고정. main258c66b변경없음/PR503OPEN/PR463requiredreview대기. fullbundle/실제retention/private/offdevice/운영/M3–M5는미완료.
+
+
+- 2026-09-14 capsule 진행: migrate HEAD b4916e9에 새 capsule 3개 파일이 미커밋 상태다. 최초 Cursor18PASS/P1P2없음 이후 root가 float count/size 허용을2FAIL로 재현하고 canonical JSON 타입 비교로 수정했다. 소스/설치본70PASS,465origins,2SHA일치. 전체검사 session62830 및 후속리뷰41425 진행 중이며 상세 근거는 active sprint와 /tmp/finjuice-recovery-capsule-review/revision/에 있다. Wrapper는 별도worktree의 Cursor supervisor PID49780에서 구현 중이다. 이전toolhandle23005는unknown이지만 실제프로세스가live임을 확인했으므로 재시작하지 않았다. Wrapper에 전달된 inherited capsule는 옛버전이므로 root수정을 보존해 통합해야 한다. PR463requiredreview/PR503OPEN/main258c66b이며 original25중20개미완료다.
+
+- Capsule 최종전체4415PASS1SKIP90.96%778.72s와후속Cursor20PASS/P1P2없음확인, 소스/설치70PASS465origins2SHA로커밋진행. 새main fbc1682(#504–506)가발견됐으므로이full을새main통합검증으로표시하지않는다. Wrapper초안은Cursor13PASS로완료됐고root4실패재현/수정후별도worktree87focused진행중. 다음newmain정확금액/정본보존통합및wrapper검증을계속한다.
