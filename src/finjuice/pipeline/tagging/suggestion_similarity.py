@@ -206,9 +206,7 @@ def _merchant_cluster_payload(
         _normalize_merchant_for_similarity(merchant) for merchant in unique_merchants
     }
     reason = (
-        MERCHANT_CLUSTER_REASON
-        if len(normalized_keys) == 1
-        else TRUNCATED_MERCHANT_CLUSTER_REASON
+        MERCHANT_CLUSTER_REASON if len(normalized_keys) == 1 else TRUNCATED_MERCHANT_CLUSTER_REASON
     )
     return {
         "key": key,

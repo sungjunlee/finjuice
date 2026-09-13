@@ -40,8 +40,7 @@ def test_truncated_prefix_clusters_same_store_and_leaves_lotte_mart_alone() -> N
     assert mart not in clusters
     assert stem not in clusters
     member_counts = {
-        member["merchant"]: member["transaction_count"]
-        for member in clusters[truncated]["members"]
+        member["merchant"]: member["transaction_count"] for member in clusters[truncated]["members"]
     }
     assert member_counts[truncated] == 7
     assert member_counts[full_name] == 25
