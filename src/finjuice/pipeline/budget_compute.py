@@ -25,6 +25,7 @@ from finjuice.pipeline.budget_edit_helpers import (
 )
 from finjuice.pipeline.budget_status_helpers import (
     STATUS_ON_TRACK_MIN_PCT,  # noqa: F401 — re-exported for existing budget imports
+    UNTRACKED_SPEND_WARNING_SHARE,  # noqa: F401 — re-exported for existing budget imports
     ReportFiltersLoader,
     _budget_category_expr,  # noqa: F401 — re-exported for existing budget imports
     _budget_status,  # noqa: F401 — re-exported for existing budget imports
@@ -55,6 +56,7 @@ __all__ = [
     "BudgetEditCancelledError",
     "GoalsFileInvalidError",
     "STATUS_ON_TRACK_MIN_PCT",
+    "UNTRACKED_SPEND_WARNING_SHARE",
     "compute_budget_edit",
     "compute_budget_edit_bytes",
     "compute_budget_status",

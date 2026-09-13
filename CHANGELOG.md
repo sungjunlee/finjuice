@@ -14,6 +14,26 @@ Release prep moves these bullets into `## [X.Y.Z]`. Refactor-only PRs skip this.
 
 ---
 
+## [0.8.3] - 2026-09-13
+
+### Added
+
+- `finjuice explain --pick N` selects the nth listed match without a prompt, and
+  `--json` includes candidate `row_hash` values for non-interactive audits (#493).
+
+### Fixed
+
+- `finjuice budget status` treats categories with no target as `untracked`
+  instead of `over`, and overall health ignores leftover untracked spend unless
+  it exceeds 25% of consumption (#495).
+- `finjuice doctor` no longer warns that `ensure_finjuice_cli.sh` is missing
+  when `FINJUICE_SKILL_HELPER` points at a valid helper outside the working
+  directory (#494).
+- `rules suggest` skips easy-pay brands, masked/generic ledger labels, and merges
+  statement-truncated store names (#485).
+
+---
+
 ## [0.8.2] - 2026-09-13
 
 ### Fixed
@@ -572,7 +592,8 @@ pip install finjuice
 - **Schema**: v2 with 24 columns (see templates/schema.yaml)
 - **Platforms**: macOS, Linux, Windows (via WSL)
 
-[Unreleased]: https://github.com/sungjunlee/finjuice/compare/v0.8.2...HEAD
+[Unreleased]: https://github.com/sungjunlee/finjuice/compare/v0.8.3...HEAD
+[0.8.3]: https://github.com/sungjunlee/finjuice/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/sungjunlee/finjuice/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/sungjunlee/finjuice/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/sungjunlee/finjuice/compare/v0.7.1...v0.8.0

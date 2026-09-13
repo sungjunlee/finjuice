@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
   "name": "finjuice",
-  "version": "0.8.2",
-  "generated_at": "2026-09-13T06:16:33+00:00",
+  "version": "0.8.3",
+  "generated_at": "2026-09-13T07:18:37+00:00",
   "tools": [
     {
       "name": "assets.balance",
@@ -715,6 +715,14 @@
               "null"
             ],
             "description": "Filter by date (YYYY-MM-DD)",
+            "default": null
+          },
+          "pick": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Select the nth listed match (1-based) without prompting",
             "default": null
           },
           "json": {

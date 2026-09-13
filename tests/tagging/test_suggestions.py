@@ -1,5 +1,6 @@
 """Tests for the DuckDB-backed merchant context suggestion engine."""
 
+import json
 from pathlib import Path
 
 import polars as pl
@@ -308,6 +309,198 @@ class TestGenerateMerchantContext:
             "ambiguous_reason": None,
             "default_action": "create_rule",
         }
+
+    def test_easy_pay_brand_defaults_to_skip_rule(self, tmp_path: Path) -> None:
+        """Easy-pay brands reuse payment_gateway skip_rule, not create_rule."""
+        assert classify_merchant_kind("네이버페이") == {
+            "merchant_kind": "payment_gateway",
+            "ambiguous_reason": "payment_gateway",
+            "default_action": "skip_rule",
+        }
+        assert classify_merchant_kind("카카오페이")["default_action"] == "skip_rule"
+        assert classify_merchant_kind("토스페이")["merchant_kind"] == "payment_gateway"
+        assert classify_merchant_kind("NHN케이씨피")["merchant_kind"] == "payment_gateway"
+
+        data_dir = tmp_path / "data"
+        create_test_transactions(
+            data_dir,
+            [
+                _transaction("np_1", "2024-10-01", "네이버페이", -4300.0, tags_final=[]),
+                _transaction("np_2", "2024-10-02", "네이버페이", -8900.0, tags_final=[]),
+            ],
+        )
+
+        suggestions = generate_merchant_context(data_dir, top_n=10, min_count=2)
+
+        assert len(suggestions) == 1
+        suggestion = suggestions[0]
+        assert suggestion["merchant"] == "네이버페이"
+        assert suggestion["merchant_kind"] == "payment_gateway"
+        assert suggestion["ambiguous_reason"] == "payment_gateway"
+        assert suggestion["default_action"] == "skip_rule"
+        assert suggestion["auto_apply_eligible"] is False
+
+    def test_masked_ledger_label_defaults_to_skip_rule(self, tmp_path: Path) -> None:
+        """Asterisk-filled labels must never become create_rule candidates."""
+        assert classify_merchant_kind("*****") == {
+            "merchant_kind": "masked_label",
+            "ambiguous_reason": "masked_label",
+            "default_action": "skip_rule",
+        }
+
+        data_dir = tmp_path / "data"
+        create_test_transactions(
+            data_dir,
+            [
+                _transaction("mask_1", "2024-10-01", "*****", -1000.0, tags_final=[]),
+                _transaction("mask_2", "2024-10-02", "*****", -1500.0, tags_final=[]),
+            ],
+        )
+
+        suggestions = generate_merchant_context(data_dir, top_n=10, min_count=2)
+
+        assert len(suggestions) == 1
+        suggestion = suggestions[0]
+        assert suggestion["merchant"] == "*****"
+        assert suggestion["merchant_kind"] == "masked_label"
+        assert suggestion["default_action"] == "skip_rule"
+        assert suggestion["auto_apply_eligible"] is False
+
+    def test_generic_ledger_label_defaults_to_skip_rule(self, tmp_path: Path) -> None:
+        """Generic transfer/payment labels must never become create_rule candidates."""
+        assert classify_merchant_kind("송금 내역")["merchant_kind"] == "generic_label"
+        assert classify_merchant_kind("출금 내역")["default_action"] == "skip_rule"
+        assert classify_merchant_kind("자동결제") == {
+            "merchant_kind": "generic_label",
+            "ambiguous_reason": "generic_label",
+            "default_action": "skip_rule",
+        }
+        assert classify_merchant_kind("이체")["default_action"] == "skip_rule"
+
+        data_dir = tmp_path / "data"
+        create_test_transactions(
+            data_dir,
+            [
+                _transaction("gen_1", "2024-10-01", "송금 내역", -20000.0, tags_final=[]),
+                _transaction("gen_2", "2024-10-02", "송금 내역", -15000.0, tags_final=[]),
+            ],
+        )
+
+        suggestions = generate_merchant_context(data_dir, top_n=10, min_count=2)
+
+        assert len(suggestions) == 1
+        suggestion = suggestions[0]
+        assert suggestion["merchant"] == "송금 내역"
+        assert suggestion["merchant_kind"] == "generic_label"
+        assert suggestion["default_action"] == "skip_rule"
+        assert suggestion["auto_apply_eligible"] is False
+
+    def test_truncated_store_prefix_clusters_merge_into_one_suggestion(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """Statement-truncated store names surface as one suggestion with both variants."""
+        truncated = "롯데쇼핑(주) 프리"
+        full = "롯데쇼핑(주) 프리미엄아울렛 의왕점"
+        data_dir = tmp_path / "data"
+        create_test_transactions(
+            data_dir,
+            [
+                _transaction("cut_1", "2024-10-01", truncated, -10000.0, tags_final=[]),
+                _transaction("cut_2", "2024-10-02", truncated, -11000.0, tags_final=[]),
+                _transaction("full_1", "2024-10-03", full, -12000.0, tags_final=[]),
+                _transaction("full_2", "2024-10-04", full, -13000.0, tags_final=[]),
+                _transaction("full_3", "2024-10-05", full, -14000.0, tags_final=[]),
+            ],
+        )
+
+        suggestions = generate_merchant_context(data_dir, top_n=10, min_count=2)
+
+        assert len(suggestions) == 1
+        suggestion = suggestions[0]
+        assert suggestion["merchant"] == full
+        assert suggestion["name_variants"] == [truncated, full]
+        assert suggestion["transaction_count"] == 5
+        assert suggestion["merchant_cluster"]["reason"] == "truncated_store_prefix"
+        member_names = {member["merchant"] for member in suggestion["merchant_cluster"]["members"]}
+        assert member_names == {truncated, full}
+        assert suggestion["pattern"] == _escape_regex_special_chars(truncated)
+
+    def test_non_prefix_distinct_stores_stay_separate(self, tmp_path: Path) -> None:
+        """Stores that do not share a truncation prefix remain independent clusters."""
+        data_dir = tmp_path / "data"
+        create_test_transactions(
+            data_dir,
+            [
+                _transaction("gn_1", "2024-10-01", "스타벅스 강남점", -5100.0, tags_final=[]),
+                _transaction("gn_2", "2024-10-02", "스타벅스 강남점", -5200.0, tags_final=[]),
+                _transaction("ys_1", "2024-10-03", "스타벅스 역삼점", -5300.0, tags_final=[]),
+                _transaction("ys_2", "2024-10-04", "스타벅스 역삼점", -5400.0, tags_final=[]),
+                _transaction("sb_1", "2024-10-05", "스타벅스", -5500.0, tags_final=[]),
+                _transaction("sb_2", "2024-10-06", "스타벅스", -5600.0, tags_final=[]),
+            ],
+        )
+
+        suggestions = generate_merchant_context(data_dir, top_n=10, min_count=2)
+
+        merchants = {suggestion["merchant"] for suggestion in suggestions}
+        assert merchants == {"스타벅스 강남점", "스타벅스 역삼점", "스타벅스"}
+        for suggestion in suggestions:
+            assert suggestion["name_variants"] == [suggestion["merchant"]]
+            assert suggestion["merchant_cluster"]["reason"] != "truncated_store_prefix"
+
+    def test_suggestion_json_fields_remain_additive(self, tmp_path: Path) -> None:
+        """New suggestion fields are additive; existing names and meanings stay."""
+        stable_keys = {
+            "merchant",
+            "transaction_count",
+            "distinct_dates",
+            "total_amount",
+            "avg_amount",
+            "amount_stddev",
+            "active_months",
+            "is_recurring",
+            "banksalad_category",
+            "payment_method",
+            "time_patterns",
+            "similar_merchants",
+            "merchant_cluster",
+            "pattern",
+            "sample_memos",
+            "merchant_kind",
+            "ambiguous_reason",
+            "default_action",
+            "auto_apply_eligible",
+            "suggested_rule",
+        }
+        data_dir = tmp_path / "data"
+        create_test_transactions(
+            data_dir,
+            [
+                _transaction("cafe_1", "2024-10-01", "Local Cafe", -4000.0, tags_final=[]),
+                _transaction("cafe_2", "2024-10-02", "Local Cafe", -4500.0, tags_final=[]),
+            ],
+        )
+
+        suggestions = generate_merchant_context(data_dir, top_n=10, min_count=2)
+
+        assert len(suggestions) == 1
+        suggestion = suggestions[0]
+        assert stable_keys <= suggestion.keys()
+        assert suggestion["name_variants"] == ["Local Cafe"]
+        assert suggestion["merchant_kind"] == "merchant"
+        assert suggestion["default_action"] == "create_rule"
+        assert suggestion["auto_apply_eligible"] is True
+        schema = json.loads(Path("schemas/rules_suggest.schema.json").read_text(encoding="utf-8"))
+        assert schema["additionalProperties"] is True
+        suggestion_schema = schema["properties"]["suggestions"]["items"]
+        assert suggestion_schema["additionalProperties"] is True
+        properties = suggestion_schema["properties"]
+        assert "distinct_dates" in properties
+        assert "name_variants" in properties
+        assert "merchant_kind" in properties
+        assert "default_action" in properties
+        assert "auto_apply_eligible" in properties
 
     def test_file_id_filter_limits_suggestions_to_one_import(self, tmp_path: Path) -> None:
         """rules suggest engine should support import-scoped curation."""
@@ -780,3 +973,13 @@ def test_merchant_context_queries_live_in_helper_module() -> None:
     assert "def get_suggestion_coverage_stats" in queries_text
     assert "def _merchant_context_query" in queries_text
     assert "def _similar_merchants_query" in queries_text
+
+
+def test_payment_gateway_with_corporate_suffix_is_skipped():
+    from finjuice.pipeline.tagging.suggestion_scoring_classify import (
+        classify_merchant_kind,
+    )
+
+    result = classify_merchant_kind("나이스페이먼츠 주식회사")
+    assert result["default_action"] == "skip_rule"
+    assert result["merchant_kind"] == "payment_gateway"

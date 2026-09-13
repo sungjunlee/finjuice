@@ -1589,7 +1589,8 @@ budget status --json output
             "enum": [
               "under",
               "on-track",
-              "over"
+              "over",
+              "untracked"
             ],
             "type": "string"
           },
@@ -1769,7 +1770,8 @@ budget status --json output
               "enum": [
                 "under",
                 "on-track",
-                "over"
+                "over",
+                "untracked"
               ],
               "type": "string"
             },
@@ -2417,6 +2419,59 @@ explain --json output
     "candidates": {
       "items": {
         "additionalProperties": true,
+        "properties": {
+          "amount": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "category_final": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "index": {
+            "type": "integer"
+          },
+          "major_raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "memo_raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "merchant_raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "minor_raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "row_hash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
         "type": "object"
       },
       "type": "array"
@@ -5477,8 +5532,29 @@ rules suggest --json output
       "items": {
         "additionalProperties": true,
         "properties": {
+          "ambiguous_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "auto_apply_eligible": {
+            "type": "boolean"
+          },
+          "default_action": {
+            "type": "string"
+          },
           "distinct_dates": {
             "type": "integer"
+          },
+          "merchant_kind": {
+            "type": "string"
+          },
+          "name_variants": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "type": "object"

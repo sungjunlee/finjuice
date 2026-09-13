@@ -43,11 +43,21 @@ CLASSIFY_FUNCTION_NAMES = (
     "classify_merchant_kind",
     "is_auto_apply_eligible",
 )
-CLASSIFY_PRIVATE_FUNCTION_NAMES = ("_normalize_payment_gateway_key",)
-CLASSIFY_CONSTANT_NAMES = ("PAYMENT_GATEWAY_AMBIGUOUS_REASON",)
+CLASSIFY_PRIVATE_FUNCTION_NAMES = (
+    "_normalize_payment_gateway_key",
+    "_is_masked_ledger_label",
+    "_skip_rule_classification",
+)
+CLASSIFY_CONSTANT_NAMES = (
+    "PAYMENT_GATEWAY_AMBIGUOUS_REASON",
+    "MASKED_LABEL_AMBIGUOUS_REASON",
+    "GENERIC_LABEL_AMBIGUOUS_REASON",
+)
 CLASSIFY_PRIVATE_CONSTANT_NAMES = (
     "_KNOWN_PAYMENT_GATEWAY_NORMALIZED",
     "_PAYMENT_GATEWAY_PREFIXES",
+    "_GENERIC_LEDGER_LABEL_NORMALIZED",
+    "_CREATE_RULE_CLASSIFICATION",
 )
 
 

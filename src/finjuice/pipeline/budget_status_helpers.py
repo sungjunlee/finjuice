@@ -25,6 +25,12 @@ logger = logging.getLogger(__name__)
 
 STATUS_ON_TRACK_MIN_PCT = 90.0
 
+# Untracked spend (target == 0 / missing) is informational unless it exceeds this
+# share of total consumption actuals. 25% keeps leftover small categories from
+# flipping overall health when every budgeted category is fine, while still
+# warning when a large share of spend has no target.
+UNTRACKED_SPEND_WARNING_SHARE = 0.25
+
 ReportFiltersLoader = Callable[[], ReportFilters]
 
 
@@ -186,78 +192,25 @@ def _build_budget_guidance(
     ``extras`` carries ``filters_applied`` (int) and
     ``unmatched_goal_categories`` (list of dicts) so the call surface stays
     under the repo's function-argument ratchet.
+
+    ``health.status`` is driven by budgeted (target > 0) categories. Untracked
+    spend stays in ``signals.untracked_total`` and only joins ``health.reasons``
+    when it exceeds :data:`UNTRACKED_SPEND_WARNING_SHARE` of total actuals.
     """
     filters_applied = extras.get("filters_applied", 0)
     unmatched_goal_categories = extras.get("unmatched_goal_categories") or []
-    over_budget_count = sum(
-        1 for row in category_rows if row["status"] == "over" and row["target"] > 0
+    counts = _budget_category_signal_counts(category_rows)
+    total_actual = 0 if summary is None else int(summary["actual"])
+    reasons = _budget_health_reasons(
+        goals_exists=goals_exists,
+        extras={
+            "over_budget_count": counts["over_budget_count"],
+            "untracked_total": counts["untracked_total"],
+            "total_actual": total_actual,
+            "unmatched_goal_categories": unmatched_goal_categories,
+        },
     )
-    unbudgeted_count = sum(1 for row in category_rows if row["target"] == 0 and row["actual"] > 0)
-    on_track_count = sum(1 for row in category_rows if row["status"] == "on-track")
-    under_budget_count = sum(1 for row in category_rows if row["status"] == "under")
-    over_budget_categories = [
-        row["name"] for row in category_rows if row["status"] == "over" and row["target"] > 0
-    ]
-    unbudgeted_categories = [
-        row["name"] for row in category_rows if row["target"] == 0 and row["actual"] > 0
-    ]
-    at_risk_categories = [
-        row["name"]
-        for row in category_rows
-        if row["status"] in {"on-track", "over"} or (row["target"] == 0 and row["actual"] > 0)
-    ]
-
-    reasons: list[str] = []
-    if not goals_exists:
-        reasons.append("missing_goals_file")
-    else:
-        if over_budget_count > 0:
-            reasons.append("over_budget_categories")
-        if unbudgeted_count > 0:
-            reasons.append("unbudgeted_spend")
-        if unmatched_goal_categories:
-            reasons.append("unmatched_goal_categories")
-
-    next_steps: list[dict[str, str]] = []
-    if not goals_exists:
-        next_steps.append(
-            {
-                "signal": "missing_goals_file",
-                "message": "Create monthly budget targets before relying on budget status.",
-                "command": "finjuice budget edit --help",
-            }
-        )
-    elif reasons:
-        if "over_budget_categories" in reasons or "unbudgeted_spend" in reasons:
-            review_signal = (
-                "over_budget_categories"
-                if "over_budget_categories" in reasons
-                else "unbudgeted_spend"
-            )
-            next_steps.append(
-                {
-                    "signal": review_signal,
-                    "message": "Inspect this month's review queue before changing the budget.",
-                    "command": f"finjuice review --json --month {month}",
-                }
-            )
-        if "unmatched_goal_categories" in reasons:
-            next_steps.append(
-                {
-                    "signal": "unmatched_goal_categories",
-                    "message": (
-                        "Rename goals.yaml categories so they exactly match category_final values."
-                    ),
-                    "command": "finjuice budget edit --help",
-                }
-            )
-        next_steps.append(
-            {
-                "signal": "budget_adjustment",
-                "message": "Update goals.yaml targets when the current budget is outdated.",
-                "command": "finjuice budget edit --help",
-            }
-        )
+    next_steps = _budget_next_steps(month=month, goals_exists=goals_exists, reasons=reasons)
 
     return {
         "health": {
@@ -267,34 +220,145 @@ def _build_budget_guidance(
         "actionable": bool(reasons),
         "signals": {
             "goals_file_exists": goals_exists,
-            "over_budget_count": over_budget_count,
-            "unbudgeted_count": unbudgeted_count,
-            "on_track_count": on_track_count,
-            "under_budget_count": under_budget_count,
+            "over_budget_count": counts["over_budget_count"],
+            "unbudgeted_count": counts["unbudgeted_count"],
+            "on_track_count": counts["on_track_count"],
+            "under_budget_count": counts["under_budget_count"],
             "remaining_total": None if summary is None else summary["remaining"],
             "filters_applied": filters_applied,
+            "untracked_total": counts["untracked_total"],
         },
         "review": {
             "month": month,
             "target": None if summary is None else summary["target"],
             "actual": None if summary is None else summary["actual"],
             "remaining": None if summary is None else summary["remaining"],
-            "at_risk_categories": at_risk_categories,
-            "over_budget_categories": over_budget_categories,
-            "unbudgeted_categories": unbudgeted_categories,
+            "at_risk_categories": counts["at_risk_categories"],
+            "over_budget_categories": counts["over_budget_categories"],
+            "unbudgeted_categories": counts["unbudgeted_categories"],
         },
         "next_steps": next_steps,
     }
 
 
+def _budget_category_signal_counts(category_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Summarize per-category status buckets for health and review cues."""
+    over_budget_categories = [
+        row["name"] for row in category_rows if row["status"] == "over" and row["target"] > 0
+    ]
+    unbudgeted_categories = [
+        row["name"] for row in category_rows if int(row["target"]) <= 0 and int(row["actual"]) > 0
+    ]
+    return {
+        "over_budget_count": len(over_budget_categories),
+        "unbudgeted_count": len(unbudgeted_categories),
+        "on_track_count": sum(1 for row in category_rows if row["status"] == "on-track"),
+        "under_budget_count": sum(1 for row in category_rows if row["status"] == "under"),
+        "over_budget_categories": over_budget_categories,
+        "unbudgeted_categories": unbudgeted_categories,
+        "at_risk_categories": [
+            row["name"] for row in category_rows if row["status"] in {"on-track", "over"}
+        ],
+        "untracked_total": sum(
+            int(row["actual"])
+            for row in category_rows
+            if int(row["target"]) <= 0 and int(row["actual"]) > 0
+        ),
+    }
+
+
+def _budget_health_reasons(*, goals_exists: bool, extras: dict[str, Any]) -> list[str]:
+    """Return health.reasons; untracked spend warns only above the share cutoff."""
+    if not goals_exists:
+        return ["missing_goals_file"]
+
+    reasons: list[str] = []
+    if int(extras.get("over_budget_count") or 0) > 0:
+        reasons.append("over_budget_categories")
+    untracked_total = int(extras.get("untracked_total") or 0)
+    total_actual = int(extras.get("total_actual") or 0)
+    if untracked_total > 0 and _untracked_spend_is_material(untracked_total, total_actual):
+        reasons.append("unbudgeted_spend")
+    if extras.get("unmatched_goal_categories"):
+        reasons.append("unmatched_goal_categories")
+    return reasons
+
+
+def _untracked_spend_is_material(untracked_total: int, total_actual: int) -> bool:
+    """Return True when untracked spend should raise health to warning.
+
+    Untracked spend is informational below :data:`UNTRACKED_SPEND_WARNING_SHARE`
+    of total consumption actuals. A 25% cutoff keeps leftover small categories
+    from flipping overall health when every budgeted category is on track,
+    while still warning when a large share of spend has no target.
+    """
+    if total_actual <= 0 or untracked_total <= 0:
+        return False
+    return (untracked_total / total_actual) > UNTRACKED_SPEND_WARNING_SHARE
+
+
+def _budget_next_steps(
+    *,
+    month: str,
+    goals_exists: bool,
+    reasons: list[str],
+) -> list[dict[str, str]]:
+    """Build next-step cues from health reasons."""
+    if not goals_exists:
+        return [
+            {
+                "signal": "missing_goals_file",
+                "message": "Create monthly budget targets before relying on budget status.",
+                "command": "finjuice budget edit --help",
+            }
+        ]
+    if not reasons:
+        return []
+
+    next_steps: list[dict[str, str]] = []
+    if "over_budget_categories" in reasons or "unbudgeted_spend" in reasons:
+        review_signal = (
+            "over_budget_categories" if "over_budget_categories" in reasons else "unbudgeted_spend"
+        )
+        next_steps.append(
+            {
+                "signal": review_signal,
+                "message": "Inspect this month's review queue before changing the budget.",
+                "command": f"finjuice review --json --month {month}",
+            }
+        )
+    if "unmatched_goal_categories" in reasons:
+        next_steps.append(
+            {
+                "signal": "unmatched_goal_categories",
+                "message": (
+                    "Rename goals.yaml categories so they exactly match category_final values."
+                ),
+                "command": "finjuice budget edit --help",
+            }
+        )
+    next_steps.append(
+        {
+            "signal": "budget_adjustment",
+            "message": "Update goals.yaml targets when the current budget is outdated.",
+            "command": "finjuice budget edit --help",
+        }
+    )
+    return next_steps
+
+
 def _budget_status(*, progress_pct: float | None, target: int, actual: int) -> str:
-    """Return the status enum for one budget row."""
+    """Return the status enum for one budget row.
+
+    Untracked rows (target missing or ``target <= 0``) are never ``over``.
+    ``over`` / ``on-track`` / ``under`` apply only when ``target > 0``.
+    """
     if target <= 0:
-        return "over" if actual > 0 else "on-track"
+        return "untracked"
+    if actual > target or (progress_pct is not None and progress_pct > 100.0):
+        return "over"
     if progress_pct is None:
         return "under"
-    if progress_pct > 100.0:
-        return "over"
     if progress_pct >= STATUS_ON_TRACK_MIN_PCT:
         return "on-track"
     return "under"

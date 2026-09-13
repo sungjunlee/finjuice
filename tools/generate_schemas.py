@@ -782,7 +782,7 @@ budget_row_schema = object_schema(
         "name": string,
         "progress_pct": number_or_null,
         "remaining": integer,
-        "status": {"enum": ["under", "on-track", "over"], "type": "string"},
+        "status": {"enum": ["under", "on-track", "over", "untracked"], "type": "string"},
         "target": integer,
     },
     required=["name", "target", "actual", "remaining", "progress_pct", "status"],
@@ -1203,7 +1203,12 @@ rules_test_schema = command_schema(
 
 rules_suggest_suggestion_schema = object_schema(
     {
+        "ambiguous_reason": string_or_null,
+        "auto_apply_eligible": boolean,
+        "default_action": string,
         "distinct_dates": integer,
+        "merchant_kind": string,
+        "name_variants": array_of(string),
     },
 )
 
@@ -1625,7 +1630,21 @@ explain_schema = command_schema(
     "explain.schema.json",
     "explain --json output",
     {
-        "candidates": array_of(object_any),
+        "candidates": array_of(
+            object_schema(
+                {
+                    "amount": number_or_null,
+                    "category_final": string_or_null,
+                    "date": string_or_null,
+                    "index": integer,
+                    "major_raw": string_or_null,
+                    "memo_raw": string_or_null,
+                    "merchant_raw": string_or_null,
+                    "minor_raw": string_or_null,
+                    "row_hash": string_or_null,
+                }
+            )
+        ),
         "classification": {"type": ["object", "null"]},
         "date_filter": string_or_null,
         "match_count": integer,
