@@ -112,25 +112,26 @@ def _format_currency(amount: int) -> str:
 
 def _style_status(status: str) -> str:
     """Return a colored Rich token for the status enum."""
-    if status == "over":
-        return "[red]over[/red]"
-    if status == "on-track":
-        return "[green]on-track[/green]"
-    return "[cyan]under[/cyan]"
+    return _status_markup(status, status)
 
 
 def _format_progress(progress_pct: float | None, status: str) -> str:
     """Render progress_pct with status-aware styling."""
-    if progress_pct is None:
-        if status == "over":
-            return "[red]-[/red]"
+    if progress_pct is None and status not in {"over", "untracked"}:
         return "-"
-    rendered = f"{progress_pct:.2f}%"
-    if status == "over":
-        return f"[red]{rendered}[/red]"
-    if status == "on-track":
-        return f"[green]{rendered}[/green]"
-    return f"[cyan]{rendered}[/cyan]"
+    token = "-" if progress_pct is None else f"{progress_pct:.2f}%"
+    return _status_markup(token, status)
+
+
+def _status_markup(text: str, status: str) -> str:
+    """Wrap ``text`` with the Rich color used for ``status``."""
+    styles = {
+        "over": "red",
+        "on-track": "green",
+        "untracked": "dim",
+    }
+    color = styles.get(status, "cyan")
+    return f"[{color}]{text}[/{color}]"
 
 
 def _display_change_value(value: Any) -> str:

@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 User-facing PRs add a bullet here (`Added` / `Changed` / `Fixed` / `Removed`).
 Release prep moves these bullets into `## [X.Y.Z]`. Refactor-only PRs skip this.
 
+### Fixed
+
+- `finjuice budget status` treats categories with no target as `untracked`
+  instead of `over`, and overall health ignores leftover untracked spend unless
+  it exceeds 25% of consumption (#495).
+
 ---
 
 ## [0.8.2] - 2026-09-13

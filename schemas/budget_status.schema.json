@@ -32,7 +32,8 @@
             "enum": [
               "under",
               "on-track",
-              "over"
+              "over",
+              "untracked"
             ],
             "type": "string"
           },
@@ -212,7 +213,8 @@
               "enum": [
                 "under",
                 "on-track",
-                "over"
+                "over",
+                "untracked"
               ],
               "type": "string"
             },

@@ -781,7 +781,7 @@ budget_row_schema = object_schema(
         "name": string,
         "progress_pct": number_or_null,
         "remaining": integer,
-        "status": {"enum": ["under", "on-track", "over"], "type": "string"},
+        "status": {"enum": ["under", "on-track", "over", "untracked"], "type": "string"},
         "target": integer,
     },
     required=["name", "target", "actual", "remaining", "progress_pct", "status"],
