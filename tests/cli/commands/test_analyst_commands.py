@@ -33,6 +33,7 @@ def mock_data_dir(tmp_path):
             "minor_raw": ["Cafe", "Sub", "Online"],
             "type_norm": ["expense", "expense", "expense"],
             "is_transfer": [0, 0, 0],
+            "row_hash": ["hash_starbucks", "hash_netflix", "hash_coupang"],
             # Serialize lists to JSON strings for CSV writing
             "tags_final": [json.dumps(["cafe"]), json.dumps([]), json.dumps(["shopping"])],
             "category_final": ["Cafe", "Entertainment", "Shopping"],
@@ -54,6 +55,41 @@ rules:
     priority: 50
 """)
 
+    return data_dir
+
+
+@pytest.fixture
+def multi_explain_data_dir(tmp_path):
+    """Create a data directory with several Starbucks matches for selection tests."""
+    data_dir = tmp_path / "data"
+    transactions_dir = data_dir / "transactions" / "2024" / "10"
+    transactions_dir.mkdir(parents=True)
+
+    df = pl.DataFrame(
+        {
+            "date": ["2024-10-03", "2024-10-02", "2024-10-01"],
+            "merchant_raw": ["Starbucks Gangnam", "Starbucks Jamsil", "Netflix"],
+            "amount": [-5500, -4500, -15000],
+            "memo_raw": ["Latte", "Americano", "Subscription"],
+            "major_raw": ["Food", "Food", "Ent"],
+            "minor_raw": ["Cafe", "Cafe", "Sub"],
+            "type_norm": ["expense", "expense", "expense"],
+            "is_transfer": [0, 0, 0],
+            "row_hash": ["hash_gangnam", "hash_jamsil", "hash_netflix"],
+            "tags_final": [json.dumps(["cafe"]), json.dumps(["cafe"]), json.dumps([])],
+            "category_final": ["Cafe", "Cafe", "Entertainment"],
+        }
+    )
+    df.write_csv(transactions_dir / "transactions.csv")
+    (data_dir / "rules.yaml").write_text("""
+version: 1
+rules:
+  - name: coffee
+    match: "Starbucks"
+    fields: ["merchant_raw"]
+    tags: ["cafe"]
+    priority: 50
+""")
     return data_dir
 
 
@@ -174,3 +210,78 @@ def test_explain_command_date_format_validation(mock_data_dir):
     )
     assert result.exit_code == 3  # VALIDATION_ERROR
     assert "Invalid date format" in cli_text(result)
+
+
+def test_explain_pick_selects_nth_listed_candidate(multi_explain_data_dir):
+    """--pick N should explain the Nth listed match without prompting."""
+    # Arrange
+    data_dir = multi_explain_data_dir
+
+    # Act
+    result = runner.invoke(
+        app,
+        ["--data-dir", str(data_dir), "explain", "Starbucks", "--pick", "2"],
+    )
+
+    # Assert
+    text = cli_text(result)
+    assert result.exit_code == 0
+    assert "Select transaction number" not in text
+    assert "Starbucks Jamsil" in text
+    assert "Americano" in text
+    assert "Starbucks Gangnam" not in text
+
+    json_result = runner.invoke(
+        app,
+        ["--data-dir", str(data_dir), "explain", "Starbucks", "--pick", "2", "--json"],
+    )
+    assert json_result.exit_code == 0
+    payload = json.loads(json_result.output)
+    assert payload["selected_index"] == 2
+    assert payload["transaction"]["row_hash"] == "hash_jamsil"
+    assert payload["transaction"]["merchant_raw"] == "Starbucks Jamsil"
+
+
+def test_explain_json_returns_candidates_without_prompting(multi_explain_data_dir):
+    """--json should return listed candidates with row_hash and skip the prompt."""
+    # Arrange
+    data_dir = multi_explain_data_dir
+
+    # Act
+    result = runner.invoke(
+        app,
+        ["--data-dir", str(data_dir), "explain", "Starbucks", "--json"],
+    )
+
+    # Assert
+    assert result.exit_code == 0
+    assert "Select transaction number" not in result.output
+    payload = json.loads(result.output)
+    assert payload["match_count"] == 2
+    assert payload["selected_index"] == 1
+    assert [candidate["row_hash"] for candidate in payload["candidates"]] == [
+        "hash_gangnam",
+        "hash_jamsil",
+    ]
+    assert payload["transaction"]["row_hash"] == "hash_gangnam"
+    assert payload["transaction"]["merchant_raw"] == "Starbucks Gangnam"
+
+
+def test_explain_prompts_when_multiple_match_without_flags(multi_explain_data_dir):
+    """Interactive selection remains the default when no --pick/--json is given."""
+    # Arrange
+    data_dir = multi_explain_data_dir
+
+    # Act
+    result = runner.invoke(
+        app,
+        ["--data-dir", str(data_dir), "explain", "Starbucks"],
+        input="2\n",
+    )
+
+    # Assert
+    text = cli_text(result)
+    assert result.exit_code == 0
+    assert "Select transaction number" in text
+    assert "Starbucks Jamsil" in text
+    assert "Americano" in text

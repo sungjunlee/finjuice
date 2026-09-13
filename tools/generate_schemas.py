@@ -1624,7 +1624,21 @@ explain_schema = command_schema(
     "explain.schema.json",
     "explain --json output",
     {
-        "candidates": array_of(object_any),
+        "candidates": array_of(
+            object_schema(
+                {
+                    "amount": number_or_null,
+                    "category_final": string_or_null,
+                    "date": string_or_null,
+                    "index": integer,
+                    "major_raw": string_or_null,
+                    "memo_raw": string_or_null,
+                    "merchant_raw": string_or_null,
+                    "minor_raw": string_or_null,
+                    "row_hash": string_or_null,
+                }
+            )
+        ),
         "classification": {"type": ["object", "null"]},
         "date_filter": string_or_null,
         "match_count": integer,

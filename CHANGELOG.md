@@ -12,11 +12,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 User-facing PRs add a bullet here (`Added` / `Changed` / `Fixed` / `Removed`).
 Release prep moves these bullets into `## [X.Y.Z]`. Refactor-only PRs skip this.
 
+### Added
+
+- `finjuice explain --pick N` selects the nth listed match without a prompt, and
+  `--json` includes candidate `row_hash` values for non-interactive audits (#493).
+
 ### Fixed
 
 - `finjuice budget status` treats categories with no target as `untracked`
   instead of `over`, and overall health ignores leftover untracked spend unless
   it exceeds 25% of consumption (#495).
+- `finjuice doctor` no longer warns that `ensure_finjuice_cli.sh` is missing
+  when `FINJUICE_SKILL_HELPER` points at a valid helper outside the working
+  directory (#494).
 
 ---
 
