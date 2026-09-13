@@ -5,13 +5,14 @@ projects typed repository rows into the legacy CSV transaction frame contract
 (:data:`~finjuice.pipeline.storage.csv_schema.CSV_COLUMNS`) so existing read
 commands keep their human and JSON output contracts while reading from SQLite.
 
-The generation root is runtime configuration (``FINJUICE_SQLITE_GENERATION``);
-its location is never hard-coded here, per the migration/recovery contract.
-Reads are deterministic for one dataset revision: rows are projected from a
-validated snapshot and sorted by ``datetime`` with a stable sort.
+Explicit helper calls may select a generation with ``FINJUICE_SQLITE_GENERATION``.
+That variable is not activation evidence and does not select runtime CLI authority.
+CLI consumers use the provider-validated snapshot facade; these helpers support
+standalone projection and explicit detached-frame compatibility checks.
 
-TODO(#436 follow-up): wire ``query``/``explain`` and the detailed status
-insights snapshot to the same SQLite read path.
+Rows are projected from one validated snapshot and sorted by ``datetime`` with a
+stable sort. Passing a projected frame to DuckDB does not confer a canonical
+revision or permission to replace an active repository snapshot.
 """
 
 from __future__ import annotations
@@ -64,6 +65,23 @@ def resolve_generation_database() -> Path | None:
             f"{GENERATION_ENV_VAR} is set but no published repository database was found."
         )
     return database
+
+
+def configured_transactions_frame() -> pl.DataFrame | None:
+    """Return the SQLite transaction frame when a generation is configured.
+
+    Returns:
+        Decoded CSV-contract frame from the published repository, or ``None``
+        when ``FINJUICE_SQLITE_GENERATION`` is unset so callers keep using CSV.
+
+    Raises:
+        SqliteReadSourceError: If the variable is set but the generation
+            root holds no published repository database.
+    """
+    database = resolve_generation_database()
+    if database is None:
+        return None
+    return read_transactions_frame(database)
 
 
 def read_transactions_frame(database: Path) -> pl.DataFrame:
@@ -263,6 +281,7 @@ def _build_frame(rows: list[dict[str, Any]]) -> pl.DataFrame:
 __all__ = [
     "GENERATION_ENV_VAR",
     "SqliteReadSourceError",
+    "configured_transactions_frame",
     "distinct_month_count",
     "filter_month_frame",
     "latest_month_label",
