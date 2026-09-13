@@ -26,6 +26,9 @@ from finjuice.pipeline.asset_config_helpers import (
     _walk_node as _walk_node,
 )
 from finjuice.pipeline.asset_config_helpers import (
+    validate_assets_config_bytes as validate_assets_config_bytes,
+)
+from finjuice.pipeline.asset_config_helpers import (
     validate_assets_config_file as validate_assets_config_file,
 )
 
@@ -42,6 +45,8 @@ __all__ = [
     "Liability",
     "ManualAsset",
     "load_assets_config",
+    "load_assets_config_bytes",
+    "validate_assets_config_bytes",
     "validate_assets_config_file",
 ]
 
@@ -143,4 +148,12 @@ def load_assets_config(
     result = validate_assets_config_file(assets_file, allow_missing_file=allow_missing_file)
     if not result.is_valid:
         raise AssetsConfigValidationError(assets_file, result.issues)
+    return result.config
+
+
+def load_assets_config_bytes(content: bytes) -> AssetsConfig:
+    """Load the validated assets configuration from detached UTF-8 source bytes."""
+    result = validate_assets_config_bytes(content)
+    if not result.is_valid:
+        raise AssetsConfigValidationError(result.path, result.issues)
     return result.config

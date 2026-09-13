@@ -235,8 +235,8 @@ payloads and account/resource records remain available to later display adapters
 
 Assets/goals/scenarios configuration has an explicit `selected`, `unselected`
 or `absent` state. Selected bytes are object-hash verified and retain parse
-status. Missing selection is never treated as an empty financial configuration
-and never triggers live YAML fallback. A consumer must validate financial
+status. An unselected preserved revision is never treated as an empty financial
+configuration and never triggers live YAML fallback. A consumer must validate financial
 configuration semantics before calculating. Frozen older migration policies
 are not rewritten to fill their missing heads.
 
@@ -250,3 +250,39 @@ before treating empty typed tables as no report data. This storage
 checkpoint does not yet connect assets/networth/history/forecast/checkup CLI
 consumers or claim their baseline parity. Combined status/portfolio calculations
 will need a single reader bundle rather than two independent facade reads.
+
+
+### Portfolio display and current net worth consumers
+
+`assets status`, `assets show`, `assets balance`, `networth`, and `networth
+breakdown` select authority once and calculate from a detached portfolio snapshot.
+Active reads do not reopen CSV partitions or YAML configuration. JSON metadata
+identifies the generation, revision and display/calculation policy; human output
+also identifies the pinned source. Asset holdings keep legacy display values
+alongside canonical IDs and exact coefficient/scale/lexical values.
+
+`legacy_portfolio_display.v1` uses primary data-root partition paths and source
+row order, retaining empty months. Auxiliary capture roots remain evidence and
+do not enter these totals. Native rows use valid snapshot-date months and UUID
+order, with explicit native identity labels where no legacy alias exists.
+Raw asset commands retain latest-partition behavior; net worth searches backward
+past empty months, filters by the requested date, and preserves reported-balance
+precedence and manual normalized-name overrides. This is a compatibility policy,
+not a new ownership allocation or currency conversion policy.
+
+Net worth validates the selected assets configuration bytes semantically.
+`selected_assets_config.v1` rejects invalid or opaque selections. Only an explicit
+`absent` state with an empty revision inventory permits the legacy empty manual
+configuration (`canonical_absence_empty.v1`). A missing head alone is insufficient:
+old-policy unselected revisions and alternative preserved copies fail closed.
+
+Preserved primary rows without typed display values raise a static error rather
+than disappearing from totals. In particular, legacy CSV reading tolerates some
+incomplete balance headers that frozen migration policies preserve as opaque.
+The parity fixture uses the producer's complete nine-column report schema; a
+separate regression verifies the incomplete-header rejection. Private-corpus
+compatibility for such inputs remains an open preservation/consumer gate.
+
+History, forecast, checkup and combined status/portfolio calculations are still
+pending; a combined calculation must obtain all inputs from one reader bundle.
+No private operational migration or activation is established by these tests.

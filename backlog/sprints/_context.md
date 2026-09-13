@@ -62,3 +62,6 @@
 
 - 최신 기반은 PR463의 main0.8.3 통합 `2070d97`이다. 전체3197/설치85 및 CI10성공·2skip을 확인했고 MERGEABLE이며 필수 비작성자 승인만 남았다. Auto-merge 기능은 비활성이다. Migrate는 `e9df2e4`로 기반을 통합했다(생산/test 추가 diff0).
 - Portfolio 저장 DTO와 authority facade는 전체3594 PASS·1 SKIP(90.02%), 후속12개 및 최종 설치38개를 검증했고 Claude 교차 리뷰에 P1/P2가 없다. 설정 미선택·구schema 지원 차이, 원본/provenance, exact 수치와 소유·관계 증거를 보존한다. 최종 commit은 스프린트/원격 head를 확인한다. 다음은 DTO에서 기존 표시 frame과 월/as-of 선택을 구성해 assets/networth/history/forecast/checkup에 연결하는 것이다. Schema5 테이블 지원을 보고 변환 완료로 간주하지 않으며 미변환·격리 증거를 없던 자료로 취급하지 않는다. 상세 지도는 `/tmp/finjuice-overview-assets-read-map.md`다.
+
+- Portfolio consumers checkpoint: assets status/show/balance 및 networth overview/breakdown 연결. 전체3632 PASS·1 SKIP90.22%, 설치46 PASS/439 origins/8 sourceSHA, 정적·보안gate통과. Cursor consumer814.78s/security320.30s 두 리뷰 P1/P2없음; security의 비동작 confidence1건만 raw scanner와맞춤. 명시 absent+빈 revision만 빈수동설정, unselected/invalid/미변환primary보고는실패. 최종commit/PR은원격head·스프린트확인. 다음 history→scenarios bytes/forecast→same-reader status+portfolio/checkup.
+- 검증 비용 운영: 작은 수정은 --no-cov focused, 소스동결 checkpoint에서 full+coverage/installed, 결과기준tree와후속delta기록. 다음 예정full에 --durations=20. 주석/fixture/근거만변경시동일전체검사·전체리뷰반복하지않음. 현재passing full은재시작하지않았다.

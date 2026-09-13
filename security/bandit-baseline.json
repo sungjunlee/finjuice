@@ -3,7 +3,11 @@
   "tool": "bandit",
   "generated_at": "2026-05-12T15:36:26Z",
   "severity_threshold": "MEDIUM",
-  "identity_fields": ["test_id", "filename", "function"],
+  "identity_fields": [
+    "test_id",
+    "filename",
+    "function"
+  ],
   "findings": [
     {
       "test_id": "B608",
@@ -184,6 +188,87 @@
       "issue_confidence": "LOW",
       "test_name": "hardcoded_sql_expressions",
       "rationale": "DuckDB coverage query assembles only static SQL fragments and internal transfer predicates; no user input is concatenated; see src/finjuice/pipeline/tagging/suggestions.py:get_suggestion_coverage_stats."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/analytics/duckdb_layer.py",
+      "function": "DuckDBAnalytics.read_partitions",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Additional repository SELECT quotes every requested column with quote_duckdb_identifier and uses the fixed transactions_raw relation; no caller SQL fragment is interpolated. Reviewed 2026-09-13. Re-review if these identifier/value boundaries change; remove this entry when the dynamic expression or finding is removed."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/analytics/duckdb_view.py",
+      "function": "DuckDBTransactionsView._register_repository_transactions",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Projection is exactly * or * REPLACE (CAST(date AS DATE) AS date), chosen by an internal date-compatibility boolean; the Arrow relation name is fixed. Reviewed 2026-09-13. Re-review if these identifier/value boundaries change; remove this entry when the dynamic expression or finding is removed."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/cli/commands/explain_reads.py",
+      "function": "_search",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "WHERE concatenates only fixed ILIKE ? and optional date = ? clauses; query and date values are passed separately to execute as bound parameters. Reviewed 2026-09-13. Re-review if these identifier/value boundaries change; remove this entry when the dynamic expression or finding is removed."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/cli/commands/query.py",
+      "function": "_filter_prefix",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "The report-filter builder emits a fixed predicate structure and escapes every pattern/category/date through quote_duckdb_string_literal; it never accepts a raw SQL fragment. Reviewed 2026-09-13. Re-review if these identifier/value boundaries change; remove this entry when the dynamic expression or finding is removed."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/portfolio_reads.py",
+      "function": "_rows",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "The table identifier must belong to the module-level fixed _TABLES allowlist before interpolation; SELECT and ORDER BY are constants. Reviewed 2026-09-13. Re-review if these identifier/value boundaries change; remove this entry when the dynamic expression or finding is removed."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/portfolio_reads.py",
+      "function": "_selected",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Table and column identifiers are checked against fixed allowlists; placeholder text contains only question marks and commas, and all selected IDs are bound separately. Reviewed 2026-09-13. Re-review if these identifier/value boundaries change; remove this entry when the dynamic expression or finding is removed."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/repository.py",
+      "function": "<module>",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "The schema-v5 SELECT map is built only from the source-defined LEGACY_OVERVIEW_TABLES tuple; public reads select an existing map key rather than interpolate a caller table name. Reviewed 2026-09-13. Re-review if these identifier/value boundaries change; remove this entry when the dynamic expression or finding is removed."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/schema_v5.py",
+      "function": "_immutable_guards",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Trigger SQL uses only source-defined LEGACY_OVERVIEW_TABLES, fixed UPDATE/DELETE operations, and fixed conflict predicates; no runtime data enters the DDL. Reviewed 2026-09-13. Re-review if these identifier/value boundaries change; remove this entry when the dynamic expression or finding is removed."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/schema_v5.py",
+      "function": "validate_v5_invariants",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "SELECT identifiers come only from the source-defined five-entry _DETAIL_TABLES mapping; no caller-provided identifier or value is interpolated. Reviewed 2026-09-13. Re-review if these identifier/value boundaries change; remove this entry when the dynamic expression or finding is removed."
     }
   ]
 }
