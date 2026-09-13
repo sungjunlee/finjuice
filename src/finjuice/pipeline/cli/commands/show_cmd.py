@@ -9,7 +9,7 @@ follow-on.
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import polars as pl
 import typer
@@ -105,6 +105,83 @@ def _load_sqlite_latest_month(database: Path) -> tuple[Optional[pl.DataFrame], O
     return filter_month_frame(df, year_int, mon_int), month_label
 
 
+def _load_month_frame(
+    config: Any,
+    sqlite_database: Optional[Path],
+    month: str,
+    *,
+    json_output: bool,
+) -> tuple[Optional[pl.DataFrame], str]:
+    """Load one specific month from SQLite or CSV partitions (same contract)."""
+    year_str, mon_str = month.split("-")
+    year_int, mon_int = int(year_str), int(mon_str)
+    if sqlite_database is not None:
+        df = _load_sqlite_month(sqlite_database, year_int, mon_int)
+    else:
+        csv_path = config.csv_base_dir / year_str / mon_str / "transactions.csv"
+        if not csv_path.exists():
+            df = None
+        else:
+            from finjuice.pipeline.storage.csv_transactions import read_month
+
+            df = read_month(config.csv_base_dir, year_int, mon_int)
+    if df is None:
+        emit_error(
+            f"No data for {month}",
+            error_code=ErrorCode.NO_DATA,
+            exit_code=ExitCode.NO_DATA,
+            json_output=json_output,
+            command="show",
+        )
+    return df, f"Transactions ({month})"
+
+
+def _load_bare_frame(
+    config: Any,
+    sqlite_database: Optional[Path],
+    filters: tuple[bool, Optional[str], Optional[str]],
+    *,
+    json_output: bool,
+) -> tuple[Optional[pl.DataFrame], str, str]:
+    """Load the bare-`show` scope (all partitions or latest month).
+
+    ``filters`` is ``(untagged, tag, merchant)`` — only their presence
+    decides the scan scope; the actual filtering stays in the command.
+    """
+    untagged, tag, merchant = filters
+    search_all_partitions = untagged or tag is not None or merchant is not None
+    if not search_all_partitions:
+        # Latest month
+        if sqlite_database is not None:
+            df, month_label = _load_sqlite_latest_month(sqlite_database)
+        else:
+            df, month_label = _load_latest_month(config.csv_base_dir)
+        if df is None:
+            emit_error(
+                "No transaction data found",
+                error_code=ErrorCode.NO_DATA,
+                exit_code=ExitCode.NO_DATA,
+                json_output=json_output,
+                command="show",
+            )
+        assert month_label is not None, "month_label should not be None when df is not None"
+        return df, f"Transactions ({month_label})", ""
+    if sqlite_database is not None:
+        df, partition_count = _load_sqlite_all(sqlite_database)
+    else:
+        df, partition_count = _load_all_partitions(config.csv_base_dir)
+    if df is None:
+        emit_error(
+            "No transaction data found",
+            error_code=ErrorCode.NO_DATA,
+            exit_code=ExitCode.NO_DATA,
+            json_output=json_output,
+            command="show",
+        )
+    partition_word = "partition" if partition_count == 1 else "partitions"
+    return df, "Transactions", f" across {partition_count} {partition_word}"
+
+
 def show_command(
     ctx: typer.Context,
     month: Optional[str] = typer.Option(None, "--month", help="Filter by month (YYYY-MM)"),
@@ -180,67 +257,20 @@ def show_command(
         from finjuice.pipeline.storage.sqlite.read_compat import resolve_generation_database
 
         sqlite_database = resolve_generation_database()
-        df: Optional[pl.DataFrame]
         filters_applied = 0
         scope_hint = ""
         table_title = "Transactions"
         if month:
-            # Specific month
-            year_str, mon_str = month.split("-")
-            year_int, mon_int = int(year_str), int(mon_str)
-            if sqlite_database is not None:
-                df = _load_sqlite_month(sqlite_database, year_int, mon_int)
-            else:
-                csv_path = config.csv_base_dir / year_str / mon_str / "transactions.csv"
-                if not csv_path.exists():
-                    df = None
-                else:
-                    from finjuice.pipeline.storage.csv_transactions import read_month
-
-                    df = read_month(config.csv_base_dir, year_int, mon_int)
-            if df is None:
-                emit_error(
-                    f"No data for {month}",
-                    error_code=ErrorCode.NO_DATA,
-                    exit_code=ExitCode.NO_DATA,
-                    json_output=json_output,
-                    command="show",
-                )
-            table_title = f"Transactions ({month})"
+            df, table_title = _load_month_frame(
+                config, sqlite_database, month, json_output=json_output
+            )
         else:
-            search_all_partitions = untagged or tag is not None or merchant is not None
-            if search_all_partitions:
-                if sqlite_database is not None:
-                    df, partition_count = _load_sqlite_all(sqlite_database)
-                else:
-                    df, partition_count = _load_all_partitions(config.csv_base_dir)
-                if df is None:
-                    emit_error(
-                        "No transaction data found",
-                        error_code=ErrorCode.NO_DATA,
-                        exit_code=ExitCode.NO_DATA,
-                        json_output=json_output,
-                        command="show",
-                    )
-                partition_word = "partition" if partition_count == 1 else "partitions"
-                scope_hint = f" across {partition_count} {partition_word}"
-            else:
-                # Latest month
-                if sqlite_database is not None:
-                    df, month_label = _load_sqlite_latest_month(sqlite_database)
-                else:
-                    df, month_label = _load_latest_month(config.csv_base_dir)
-                if df is None:
-                    emit_error(
-                        "No transaction data found",
-                        error_code=ErrorCode.NO_DATA,
-                        exit_code=ExitCode.NO_DATA,
-                        json_output=json_output,
-                        command="show",
-                    )
-                assert month_label is not None, "month_label should not be None when df is not None"
-                month = month_label
-                table_title = f"Transactions ({month})"
+            df, table_title, scope_hint = _load_bare_frame(
+                config,
+                sqlite_database,
+                (untagged, tag, merchant),
+                json_output=json_output,
+            )
 
         report_filters = load_cli_report_filters(
             ctx,
