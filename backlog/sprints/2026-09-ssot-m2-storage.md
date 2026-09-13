@@ -528,3 +528,15 @@ Claude Opus5high 교차 리뷰는 exit0/577.7s, 근거 있는 P1/P2 없음이다
 
 - Capsule 최종확정: 전체4415PASS1SKIP90.96%,778.72s/exit0. 최종frozen3파일무변경, 소스/설치70PASS465origins2SHA, Cursor후속279.48s독립20PASS/P1P2없음. 커밋대상은캡슐3파일과연속성2문서다. 전체검사완료직후freshfetch에서main fbc1682(#504JSONadapter,#505N:M대사저장,#506월마감)를확인했다. 이최종full은main258c66b기반의캡슐검증이며새main3PR통합검증이아니다. 다음엔새main과기존정확금액/정본경로를보존해통합한다.
 - Wrapper Cursor1631.84s exit0/13focusedPASS32.36s로구현완료. root는4실패(생성중/봉인중실패임시tree정리,inventorysize/activationrevision float허용)를재현후수정했고최신capsulehelper도반영했다. 3helper통합87focused검사진행중이며mypy1/complexity110통과. 아직wrapper3파일은별도worktree이며mainwriter미통합이다.
+
+
+## 2026-09-14 통합 진행 및 실행 효율 조정
+
+- main fbc1682(PR #504–#506)를 별도 통합 worktree에서 병합 중이다. 기존 정확 계산·실제 작업량 계측은 nm.py로 보존하고 JSON adapter를 현 append API와 전체 legacy lease에 연결했다. 집중 115개 및 정적 검사 통과; 동결 소스 전체/설치본/Cursor 검증은 진행 중이며 종료 결과를 회수한다.
+- #446–#448은 부분 구현 PR의 자동 종료였으므로 canonical 연결과 실제 운영 AC를 남겨 다시 열었다. 원래 25개 범위 중 20개 미완료다. 새 PR #507–#511은 아직 미머지다. #510의 schema v2/별도 authority marker는 현재 schema5 및 검증된 active.json 체계와 대조 후 필요한 동작만 통합한다.
+- 사용자 효율 지시: 작은 helper 단위 전체 pytest·wheel 설치·장시간 전체 리뷰 반복을 중단한다. 기능/AC 묶음 구현과 자체검토를 완료하고 동결한 뒤 통합·머지·배포 checkpoint에서 전체 검증한다. 후속 수정은 실패 재현과 관련 회귀로 확인하며 이전 전체 결과의 적용 소스를 구분한다. 살아 있는 검사/리뷰를 관측 timeout으로 재시작하지 않는다. Codex는 AC·통합·판단에 집중하고 명세가 분명한 구현은 승인된 route에 묶어 위임한다. 변경 없는 로그·quota·refs 재조회와 상세 이력 중복 기록을 줄인다.
+- 복구 bundle 초안은 설치본 89개/466개 module origin 및 3개 source-wheel-installed SHA가 일치했다. Cursor review의 activation/release 빈 디렉터리 허용 지적은 별도 writer가 좁은 회귀로 보완 중이다. 이 수정만으로 전체 리뷰/전체 테스트를 다시 시작하지 않으며 다음 기능 묶음에 통합한다. 실제 배포·개인 자료 변경은 없다.
+
+- 후속: main506 Cursor 교차 리뷰는 중요 통합 결함 없음, 독립115PASS; 설치본115PASS/494module origins 및 production3개 source-wheel-installed SHA 일치. 전체pytest는 동일 실행을 유지 중이며 최종결과 미확정이다. Wrapper 빈디렉터리2실패 재현 후21PASS로 보완했고 전체검사/리뷰를 다시 시작하지 않았다.
+- 다음 기능 묶음은 별도 codex/ssot-recovery-operator(392500c 기반 + 최신wrapper3파일)에서 Cursor Grok4.6high가 ssot backup의 capture/verify/inactive restore bundle 명령 흐름을 구현 중이다. 명시적인 독립 expected JSON, 실제 DTO·복원영수증·human/JSON/catalog 및 synthetic 후속수정/재백업 흐름을 묶어 전달했다. 30분 supervisor /tmp/finjuice-recovery-operator-implementation/run.py, tool session35410. root는 해당 writer 파일을 수정하지 않는다. 집중검사만 수행하고 기능 묶음 통합 시 전체/설치/교차 검증한다.
+- 결정 시점 quota08:49KST: CodexPro oauth/exact 주간61%사용39%잔여/reset09-19 17:10KST/pace 소진1일1시간(리셋전), 5시간·월간unknown,credits0. CursorUltra web/confidenceunknown 월간primary42.0263%사용57.9737%잔여,secondary32.361%사용67.639%잔여,tertiary100%사용0%잔여/reset09-17 00:44KST/primary·secondary 리셋까지유지;5시간·주간unknown,USD20.54사용/USD20한도. 이후review완료selected조회는 /tmp/finjuice-main506-review/quota-cursor-after.json으로 기록 중이다.
