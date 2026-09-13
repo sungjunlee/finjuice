@@ -722,8 +722,8 @@ finjuice --version
 │ breakdown   Show aggregated asset breakdown by category or asset.                                                    │
 │ history     Show monthly net worth history from available snapshots.                                                 │
 │ forecast    Project net worth under deterministic scenario assumptions.                                              │
-│ init        Create a starter assets.yaml from the built-in template.                                                 │
-│ validate    Validate assets.yaml and report line-numbered errors.                                                    │
+│ init        Initialize assets settings; repositories receive an empty configuration.                                 │
+│ validate    Validate the selected assets configuration and report issues.                                            │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```
@@ -786,7 +786,7 @@ finjuice --version
 
  Usage: finjuice networth validate [OPTIONS]
 
- Validate assets.yaml and report line-numbered errors.
+ Validate the selected assets configuration and report issues.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ --json          Output as JSON                                                                                       │

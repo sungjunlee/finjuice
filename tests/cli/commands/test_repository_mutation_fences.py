@@ -100,7 +100,6 @@ def active_root(tmp_path: Path) -> _ActiveRoot:
     [
         (("init", "--no-git"), "Repository activation is present"),
         (("validate", "--fix"), "Repository activation is present"),
-        (("networth", "init"), "Repository activation is present"),
         (
             ("rules", "suggest", "--apply", "--yes"),
             "SQLite repository is active",
@@ -114,7 +113,7 @@ def test_legacy_entrypoints_fail_closed_without_mutating_active_repository(
     message_fragment: str,
     json_output: bool,
 ) -> None:
-    """Eight human/JSON entry paths must reject legacy writes after activation."""
+    """Legacy human/JSON entry paths must reject legacy writes after activation."""
     before = _authority_state(active_root)
     argv = ["--data-dir", str(active_root.root), *command]
     if json_output:

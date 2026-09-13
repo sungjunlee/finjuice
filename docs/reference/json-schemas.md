@@ -4184,9 +4184,12 @@ networth init --json output
 | Field | Type | Required |
 |-------|------|----------|
 | `_meta` | `$ref` _meta.schema.json | yes |
+| `authority` | `string` | no |
 | `created` | `boolean` | yes |
 | `message` | `string` | yes |
-| `path` | `string` | yes |
+| `path` | `string` \| `null` | yes |
+| `revision_id` | `string` \| `null` | no |
+| `selection_state` | `string` | no |
 
 ```json
 {
@@ -4197,6 +4200,9 @@ networth init --json output
     "_meta": {
       "$ref": "_meta.schema.json"
     },
+    "authority": {
+      "type": "string"
+    },
     "created": {
       "type": "boolean"
     },
@@ -4204,6 +4210,18 @@ networth init --json output
       "type": "string"
     },
     "path": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "revision_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "selection_state": {
       "type": "string"
     }
   },
@@ -4225,12 +4243,15 @@ networth validate --json output
 | Field | Type | Required |
 |-------|------|----------|
 | `_meta` | `$ref` _meta.schema.json | yes |
+| `authority` | `string` | no |
 | `errors` | `integer` | yes |
 | `exists` | `boolean` | yes |
 | `liabilities` | `integer` | yes |
 | `manual_assets` | `integer` | yes |
-| `path` | `string` | yes |
+| `path` | `string` \| `null` | yes |
 | `problems` | `array`[`object`] | yes |
+| `revision_id` | `string` \| `null` | no |
+| `selection_state` | `string` | no |
 | `status` | enum(`valid`, `issues`) | yes |
 | `valid` | `boolean` | yes |
 | `version` | `integer` \| `null` | yes |
@@ -4245,6 +4266,9 @@ networth validate --json output
     "_meta": {
       "$ref": "_meta.schema.json"
     },
+    "authority": {
+      "type": "string"
+    },
     "errors": {
       "type": "integer"
     },
@@ -4258,7 +4282,10 @@ networth validate --json output
       "type": "integer"
     },
     "path": {
-      "type": "string"
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "problems": {
       "items": {
@@ -4304,6 +4331,15 @@ networth validate --json output
         "type": "object"
       },
       "type": "array"
+    },
+    "revision_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "selection_state": {
+      "type": "string"
     },
     "status": {
       "enum": [

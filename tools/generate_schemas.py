@@ -617,6 +617,20 @@ problem_schema = object_schema(
     required=["severity", "type", "path", "message", "line", "column", "formatted"],
 )
 
+networth_init_schema = command_schema(
+    "networth_init.schema.json",
+    "networth init --json output",
+    {
+        "path": string_or_null,
+        "created": boolean,
+        "message": string,
+        "authority": string,
+        "selection_state": string,
+        "revision_id": string_or_null,
+    },
+    ["path", "created", "message"],
+)
+
 networth_validate_schema = command_schema(
     "networth_validate.schema.json",
     "networth validate --json output",
@@ -625,7 +639,10 @@ networth_validate_schema = command_schema(
         "exists": boolean,
         "liabilities": integer,
         "manual_assets": integer,
-        "path": string,
+        "path": string_or_null,
+        "authority": string,
+        "selection_state": string,
+        "revision_id": string_or_null,
         "problems": array_of(problem_schema),
         "status": {"enum": ["valid", "issues"], "type": "string"},
         "valid": boolean,
@@ -2023,6 +2040,7 @@ SCHEMAS: dict[str, JsonSchema] = {
     "networth_forecast.schema.json": networth_forecast_schema,
     "networth_history.schema.json": networth_history_schema,
     "networth_validate.schema.json": networth_validate_schema,
+    "networth_init.schema.json": networth_init_schema,
     "query.schema.json": query_schema,
     "refresh.schema.json": refresh_schema,
     "review.schema.json": review_schema,

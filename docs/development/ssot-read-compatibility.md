@@ -409,3 +409,27 @@ available with incomplete evidence. An intact receipt is not a transaction-compl
 claim. Failed exports must leave previously published artifacts unchanged. Static public
 errors do not expose the preserved row contents. Supporting every opaque historical
 record as a typed transaction remains a separate acceptance requirement.
+
+## Canonical assets configuration setup and validation
+
+`networth validate` inspects selected canonical assets bytes from one portfolio snapshot.
+The JSON descriptor has a null file path and explicit authority, selection state and config
+revision; metadata identifies `canonical_assets_validation.v1`. Explicit absence remains
+valid because net worth can use imported asset snapshots without manual configuration.
+Preserved but unselected settings are not absence. Invalid or unselected settings produce
+static issues rather than parser excerpts or financial values. This configuration-only
+check remains available when transaction evidence cannot be projected completely.
+
+`networth init` now supports repository authority. A genuinely absent config is initialized
+with version 1 and empty manual-assets/liabilities lists, after semantic validation. It does
+not put the legacy example file's fictitious holdings into a canonical ledger. The mutation
+uses the observed generation and revision as concurrency preconditions. Existing selected
+settings, invalid settings and unselected preserved revisions are never overwritten, and
+repeating initialization does not create another revision. A concurrent write causes a
+static failure instead of being replaced. Successful output carries the committed revision
+under `canonical_assets_initialization.v1`; no live assets.yaml is created or edited.
+
+Legacy initialization still creates its existing example file, and legacy validation keeps
+its file diagnostics. Initialization registers structure, not actual family holdings; actual
+manual asset input and ownership facts must come from the user or verified source evidence.
+These changes do not establish full private-corpus parity or authorize operating activation.

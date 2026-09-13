@@ -6,13 +6,28 @@
     "_meta": {
       "$ref": "_meta.schema.json"
     },
+    "authority": {
+      "type": "string"
+    },
     "created": {
       "type": "boolean"
     },
-    "path": {
+    "message": {
       "type": "string"
     },
-    "message": {
+    "path": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "revision_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "selection_state": {
       "type": "string"
     }
   },
