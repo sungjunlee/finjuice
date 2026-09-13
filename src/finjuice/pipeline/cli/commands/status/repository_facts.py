@@ -20,6 +20,9 @@ from finjuice.pipeline.storage.report_filter_exprs import (
     matched_report_filter_rule_indexes,
 )
 from finjuice.pipeline.storage.sqlite.status_reads import ConfigHeadSnapshot, StatusReadSnapshot
+from finjuice.pipeline.storage.sqlite.transaction_completeness import (
+    require_transaction_completeness,
+)
 from finjuice.pipeline.tagging.models import ReportFilters
 from finjuice.pipeline.tagging.rules_yaml_io import load_report_filters_bytes
 
@@ -33,6 +36,7 @@ def collect_repository_status_facts(options: StatusOptions) -> StatusFacts | Non
         snapshot = read_status_snapshot(options.config.data_dir, options.evidence_provider)
         if snapshot is None:
             return None
+        require_transaction_completeness(snapshot.transactions)
         return _collect(snapshot, options)
     except StatusCommandError:
         raise

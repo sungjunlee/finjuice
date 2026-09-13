@@ -22,6 +22,9 @@ from finjuice.pipeline.storage.read_facade import (
     snapshot_metadata,
     transaction_frame,
 )
+from finjuice.pipeline.storage.sqlite.transaction_completeness import (
+    require_transaction_completeness,
+)
 from finjuice.pipeline.storage.sqlite.transaction_reads import TransactionReadSnapshot
 from finjuice.pipeline.tagging.matcher import _get_rule_match, apply_tagging_rules_v3
 from finjuice.pipeline.tagging.models import TagRule
@@ -67,6 +70,7 @@ def repository_explain(
         snapshot = read_transaction_snapshot(config.data_dir, get_activation_evidence_provider(ctx))
         if snapshot is None:
             return False
+        require_transaction_completeness(snapshot)
         rules = _rules(snapshot)
         matches = _search(snapshot, request.query, request.date) if rules else pl.DataFrame()
         _emit_snapshot_result(snapshot, rules, matches, request)

@@ -15,7 +15,6 @@ from typing import Any, BinaryIO, Callable, Final, Iterator, TypeVar, cast
 from finjuice.pipeline.storage.sqlite.analysis_reads import (
     AnalysisReadSnapshot,
     analysis_snapshot,
-    unmaterialized_transaction_months,
 )
 from finjuice.pipeline.storage.sqlite.checkup_reads import (
     CheckupReadSnapshot,
@@ -651,14 +650,15 @@ class RepositoryReader(AbstractContextManager["RepositoryReader"]):
         """Read all checkup domains and requested import evidence from this revision."""
         if self._closed:
             raise RuntimeError("Repository reader is already closed.")
+        status = self.status_snapshot()
         return deepcopy(
             CheckupReadSnapshot(
                 self.info,
-                self.status_snapshot(),
+                status,
                 self.portfolio_snapshot(),
                 import_preview_snapshot(self._connection, self.info, digests),
                 rules_config_snapshot(self._connection, self._repository_paths),
-                unmaterialized_transaction_months(self._connection),
+                status.transactions.unmaterialized_months,
             )
         )
 

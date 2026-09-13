@@ -27,6 +27,9 @@ from finjuice.pipeline.sql_utils import (
 from finjuice.pipeline.storage.authority import ActivationEvidenceProvider
 from finjuice.pipeline.storage.read_facade import read_transaction_snapshot, transaction_frame
 from finjuice.pipeline.storage.schema_registry import get_current_schema
+from finjuice.pipeline.storage.sqlite.transaction_completeness import (
+    require_transaction_completeness,
+)
 from finjuice.pipeline.tagging.rules import ReportFilters
 
 DUCKDB_AVAILABLE, duckdb, _ = detect_analytics_dependencies()
@@ -100,6 +103,7 @@ class DuckDBTransactionsView:
             RuntimeError: If view creation fails.
         """
         if self.repository_snapshot is not None:
+            require_transaction_completeness(self.repository_snapshot)
             if require_transactions and not self.repository_snapshot.rows:
                 raise FileNotFoundError("No transaction data found in the active repository.")
             self._register_repository_transactions()

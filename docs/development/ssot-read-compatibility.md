@@ -1,8 +1,8 @@
 # SQLite read compatibility
 
-Issue #436 remains open. This checkpoint connects transaction reads and the `query`,
-`template run`, and `show` commands; it does not establish parity for every consumer, export,
-or arbitrary SQL.
+Issue #436 remains open. The checkpoints below connect canonical transaction, portfolio,
+analysis and export reads; they do not establish parity for every consumer, historical
+input shape, or arbitrary SQL.
 
 `RepositoryReader.transaction_snapshot()` materializes current transaction columns,
 exact amount/confidence text, provenance-bound original aliases, and canonical rules
@@ -52,11 +52,11 @@ Template execution resolves filters after opening its transaction snapshot. Ordi
 SQL and dynamic pivot discovery/aggregation use that same pinned authority and rules;
 JSON metadata carries its revision alongside existing template metadata.
 
-Current limitations: other CLI/analysis consumers still need evidence injection and
-repository reads; overview/asset read projections, generated exports with revision
-manifests/stale identification, partition-pattern repository reads, and complete
-human/JSON/SQL parity remain #436 work. SQLite activation and actual corpus memory,
-performance, preservation and operational recovery remain separate acceptance gates.
+Current limitations: remaining validation and diagnostic consumers still need canonical
+read coverage, and complete human/JSON/SQL parity remains #436 work. The later sections
+record the connected portfolio, partition, analysis and export consumers. SQLite activation
+and actual corpus memory, performance, preservation and operational recovery remain
+separate acceptance gates.
 
 ## Show partition scope
 
@@ -385,5 +385,27 @@ empty partitions do not trigger this guard. Budget/review fail for affected sele
 months (review all-history checks all months); checkup fails for any such month.
 Unrelated complete months and goals-only validation remain available. This guard
 does not convert unsupported legacy records, relax frozen migration policies, or
-establish full private-corpus parity. Other existing read consumers still require
-the corresponding completeness boundary; operating activation remains gated.
+establish full private-corpus parity. The next section records the shared boundary
+for other transaction reads; operating activation remains gated.
+
+## Incomplete transaction evidence
+
+The transaction snapshot carries the proven primary partition months containing preserved
+CSV evidence that has no typed transaction. Rows, scope, this inventory and the revision
+identity come from the same reader. Analysis and checkup reuse that inventory rather than
+opening another reader or repeating its query. Opaque source bytes remain preserved.
+
+Consumers check completeness after choosing their scope and before returning empty or
+filtered results. Query/template execution, status, explain and export require complete
+transaction evidence across all primary partitions. SQL predicates and export periods
+filter row dates and cannot prove a narrower source-partition scope. `--no-filter` does
+not bypass completeness. Show checks its selected partition month, or every month for
+an all-scope search; a different incomplete month does not block an explicit complete
+month. True empty partitions keep their existing behavior.
+
+The read facade still returns diagnostic evidence. `export-verify` compares a saved
+receipt's revision and artifact bytes without aggregating transactions, so it remains
+available with incomplete evidence. An intact receipt is not a transaction-completeness
+claim. Failed exports must leave previously published artifacts unchanged. Static public
+errors do not expose the preserved row contents. Supporting every opaque historical
+record as a typed transaction remains a separate acceptance requirement.

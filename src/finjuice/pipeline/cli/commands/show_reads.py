@@ -11,6 +11,9 @@ from finjuice.pipeline.cli.report_filters import no_filter_requested
 from finjuice.pipeline.storage.csv_transactions_read_normalize import _decode_tag_columns
 from finjuice.pipeline.storage.read_facade import transaction_frame
 from finjuice.pipeline.storage.sqlite.errors import RepositoryIntegrityError
+from finjuice.pipeline.storage.sqlite.transaction_completeness import (
+    require_transaction_completeness,
+)
 from finjuice.pipeline.storage.sqlite.transaction_reads import TransactionReadSnapshot
 from finjuice.pipeline.tagging.rules import ReportFilters
 from finjuice.pipeline.tagging.rules_yaml_io import load_report_filters_bytes
@@ -27,6 +30,7 @@ def repository_show_rows(
     selected_month = month
     if selected_month is None and not search_all and months:
         selected_month = months[-1]
+    require_transaction_completeness(snapshot, month=selected_month)
     if selected_month is not None and selected_month not in months:
         return None, selected_month, len(months)
     if selected_month is None and not search_all:

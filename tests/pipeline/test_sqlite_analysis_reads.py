@@ -150,5 +150,18 @@ def test_unmaterialized_primary_rows_and_file_failures_are_not_empty(
     with RepositoryReader(candidate / "finjuice.sqlite3") as reader:
         snapshot = reader.analysis_snapshot()
     assert snapshot.unmaterialized_months == ("2026-01",)
+    assert snapshot.transactions.unmaterialized_months == snapshot.unmaterialized_months
+    from finjuice.pipeline.storage.sqlite.errors import RepositoryIntegrityError
+    from finjuice.pipeline.storage.sqlite.transaction_completeness import (
+        require_transaction_completeness,
+    )
+
+    with pytest.raises(RepositoryIntegrityError, match="lack typed read values"):
+        require_transaction_completeness(snapshot.transactions)
+    with pytest.raises(RepositoryIntegrityError):
+        require_transaction_completeness(snapshot.transactions, month="2026-01")
+    require_transaction_completeness(snapshot.transactions, month="2026-02")
+    require_transaction_completeness(snapshot.transactions, month="2026-03")
+    require_transaction_completeness(snapshot.transactions, month="2026-04")
     assert len(snapshot.transactions.rows) == 1
     assert snapshot.transactions.partition_months == ("2026-01", "2026-02", "2026-03")

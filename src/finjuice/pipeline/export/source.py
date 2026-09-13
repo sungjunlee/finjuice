@@ -18,6 +18,9 @@ from finjuice.pipeline.storage.read_facade import (
     snapshot_metadata,
     transaction_frame,
 )
+from finjuice.pipeline.storage.sqlite.transaction_completeness import (
+    require_transaction_completeness,
+)
 from finjuice.pipeline.storage.sqlite.transaction_reads import TransactionReadSnapshot
 from finjuice.pipeline.tagging.models import ReportFilters
 from finjuice.pipeline.tagging.rules_yaml_io import load_report_filters_bytes
@@ -57,6 +60,7 @@ def load_export_source(
         snapshot = read_transaction_snapshot(data_dir, evidence_provider)
         if snapshot is None:
             return None
+        require_transaction_completeness(snapshot)
         return _project_source(snapshot, options)
     except Exception:
         raise RepositoryExportError(
