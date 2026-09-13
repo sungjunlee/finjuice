@@ -79,6 +79,14 @@ wall-clock metadata is excluded from semantic comparison; the candidate database
 bytes are separately hashed. Verification does not need the original capture
 directory and does not write to the candidate database.
 
+Existing adapter policies v1/v2/v3 explicitly select SQLite schema v4 for building,
+validation and semantic comparison. The reader selects the exact v4 table registry;
+a later runtime default cannot silently add tables to old digests. Unsupported
+requested versions and mismatched database headers fail closed. Runtime defaults
+still require the current schema, which remains v4. This pins the replay boundary;
+it does not implement v5. A future v5 change must preserve the v4 DDL, helper and
+registry contents and add its own initialization and validation route.
+
 Adapter replay detects corruption and inconsistency; it is not an independent
 parser oracle. Separate synthetic assertions check expected transaction meaning,
 exact values, duplicate identity, config status, and raw evidence.
@@ -96,11 +104,12 @@ and after directory publication.
   with `unresolved_source_fact`. A capture-wide lookup alone cannot link separate
   files: each file has its own source occurrence, while the current repository
   invariant requires a projection and its fact to share one occurrence. The
-  remaining contract decision is how to represent verified cross-file derivation
-  while preserving distinct original file occurrences; even a unique legacy ID
-  match is not a completed link. The proposed options and recommended contract
-  are in [ADR-0015](../architecture/decisions/0015-cross-file-overview-derivation.md);
-  adoption and implementation remain pending.
+  accepted direction is to preserve reported values independently of reference
+  assessment, using existing row observations and distinct file occurrences.
+  Even a unique legacy ID match is not a completed link.
+  [ADR-0015](../architecture/decisions/0015-cross-file-overview-derivation.md)
+  defines the reported-value and reference contract. Schema v5, those tables and
+  their adapters remain unimplemented; the schema-v4 replay boundary is pinned.
 - New plans select canonical rules/goals heads from the frozen primary data root
   as described below. Other configuration copies remain preserved revisions;
   missing or invalid canonical documents are not replaced with alternative copies.

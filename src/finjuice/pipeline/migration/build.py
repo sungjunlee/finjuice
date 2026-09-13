@@ -41,7 +41,11 @@ from finjuice.pipeline.migration.common import (
     tree_inventory,
 )
 from finjuice.pipeline.migration.plan import file_context
-from finjuice.pipeline.migration.policy import LEGACY_POLICY, migration_policy
+from finjuice.pipeline.migration.policy import (
+    LEGACY_POLICY,
+    migration_policy,
+    migration_schema_version,
+)
 from finjuice.pipeline.storage.sqlite import (
     ConfigRevisionRecord,
     GenerationPaths,
@@ -71,7 +75,9 @@ def populate_repository(
     if policy != LEGACY_POLICY:
         generation_locator["migration_policy"] = policy
     generation = migration_entity_id(checksum, "dataset_generation", generation_locator)
-    with RepositoryBuilder(paths, generation) as builder:
+    with RepositoryBuilder(
+        paths, generation, expected_schema_version=migration_schema_version(policy)
+    ) as builder:
         artifact = builder.publish_source_path(root / MANIFEST_FILENAME)
         occurrence = migration_entity_id(checksum, "source_occurrence", {"capture_manifest": True})
         builder.add_source_occurrence(
@@ -238,7 +244,9 @@ def _build_attempt(
 
     paths = GenerationPaths(work)
     capture = plan["capture"]
-    populate_repository(source, capture, paths, policy=migration_policy(plan))
+    policy = migration_policy(plan)
+    schema_version = migration_schema_version(policy)
+    populate_repository(source, capture, paths, policy=policy)
     portable_plan = plan
     write_text_atomic(paths.manifests / "plan-evidence.json", canonical(portable_plan) + "\n")
     manifest = seal(
@@ -255,7 +263,9 @@ def _build_attempt(
             "baseline_origin": baseline_origin(capture),
             "inputs": plan["inputs"],
             "database_digest": file_digest(paths.database),
-            "semantic_digest": semantic_snapshot(paths.database),
+            "semantic_digest": semantic_snapshot(
+                paths.database, expected_schema_version=schema_version
+            ),
             "plan_evidence_digest": file_digest(paths.manifests / "plan-evidence.json"),
         }
     )

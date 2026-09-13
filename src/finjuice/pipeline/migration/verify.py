@@ -28,16 +28,15 @@ from finjuice.pipeline.migration.common import (
     load_sealed,
 )
 from finjuice.pipeline.migration.plan import analyze_capture
-from finjuice.pipeline.migration.policy import migration_policy
+from finjuice.pipeline.migration.policy import migration_policy, migration_schema_version
 from finjuice.pipeline.storage.sqlite import GenerationPaths, RepositoryReader, SourceObjectStore
-from finjuice.pipeline.storage.sqlite.repository import _READ_TABLE_SQL
 
 
-def semantic_snapshot(database: Path) -> str:
+def semantic_snapshot(database: Path, *, expected_schema_version: int | None = None) -> str:
     """Hash every repository table, excluding only schema-install wall-clock metadata."""
     state = {}
-    with RepositoryReader(database) as reader:
-        for table in _READ_TABLE_SQL:
+    with RepositoryReader(database, expected_schema_version=expected_schema_version) as reader:
+        for table in reader.table_names:
             rows = reader.rows(table)
             if table == "schema_migrations":
                 rows = [
@@ -126,6 +125,7 @@ def verify_contents(root: Path, manifest: dict[str, Any]) -> None:
     evidence_file = paths.manifests / "plan-evidence.json"
     plan = load_sealed(evidence_file, PLAN_VERSION)
     policy = migration_policy(plan)
+    schema_version = migration_schema_version(policy)
     if (
         file_digest(paths.database) != manifest["database_digest"]
         or file_digest(evidence_file) != manifest["plan_evidence_digest"]
@@ -146,7 +146,7 @@ def verify_contents(root: Path, manifest: dict[str, Any]) -> None:
         or planned_manifest[0]["sha256"] != manifest["capture_object_digest"]
     ):
         raise MigrationError("Original capture bytes do not match the immutable plan.")
-    actual = semantic_snapshot(paths.database)
+    actual = semantic_snapshot(paths.database, expected_schema_version=schema_version)
     if actual != manifest["semantic_digest"]:
         raise MigrationError("Candidate repository semantic digest does not match.")
     with tempfile.TemporaryDirectory(prefix="finjuice-migration-verify-") as directory:
@@ -158,7 +158,7 @@ def verify_contents(root: Path, manifest: dict[str, Any]) -> None:
             raise MigrationError("Source input dispositions do not match preserved evidence.")
         expected = GenerationPaths(scratch / "expected")
         populate_repository(capture_root, manifest["capture"], expected, policy=policy)
-        if semantic_snapshot(expected.database) != actual:
+        if semantic_snapshot(expected.database, expected_schema_version=schema_version) != actual:
             raise MigrationError(
                 "Typed rows, provenance, payloads or dispositions differ from source."
             )

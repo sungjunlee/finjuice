@@ -36,4 +36,4 @@
 
 공개 가능한 issue/PR·worktree·검사 요약·다음 행동은 활성 스프린트에 남긴다. 실제 금융 데이터·비밀·상세 운영 경로·검증 원본은 repo 밖 비공개 기록에 둔다. 각 스프린트를 마친 뒤 그 실행 기록을 보존하고 다음 마일스톤 스프린트로 이어간다.
 
-- 최신 통합 checkpoint: `c1a3c94`는 main `309c42b`의 0.8.3 변경을 보존한다. 전체3,367 PASS·1 SKIP, coverage89.56%, 정적 검사 및 별도 설치본의 새 후보/과거 세 정책 후보 재생을 통과했다. 다음 구현은 ADR-0015 순서에 따라 schema별 정확한 registry와 migration 전용 legacy replay 경계를 먼저 고정하고 reported 값·참조 판정을 추가하는 것이다.
+- 최신 통합 checkpoint: `c1a3c94`는 main `309c42b`의 0.8.3 변경을 보존한다. 전체3,367 PASS·1 SKIP, coverage89.56%, 정적 검사 및 별도 설치본의 새 후보/과거 세 정책 후보 재생을 통과했다. 기존 세 policy의 schema4 고정과 정확한 reader/builder/검증/registry 경계를 구현했다. 전체3,380 PASS·1 SKIP89.57%, 실제옛후보와별도설치본재생, Opus5high의근거있는P1/P2없음을확인했다. 다음 구현은 v4내용을 보존하면서 v5reported 값 테이블·새정책과 capture참조판정을 추가하는 것이다.

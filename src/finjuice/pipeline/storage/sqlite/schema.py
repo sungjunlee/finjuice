@@ -947,6 +947,29 @@ def _immutable_trigger_sql() -> str:
     return "\n".join(statements)
 
 
+def _resolve_schema_version(expected_schema_version: int | None) -> int:
+    """Select an implemented exact schema; omission retains the runtime current contract."""
+    version = SQLITE_SCHEMA_VERSION if expected_schema_version is None else expected_schema_version
+    if type(version) is not int or version != 4:
+        raise RepositoryVersionError("Unsupported requested SQLite schema version.")
+    return version
+
+
+def _initialize_schema(
+    connection: sqlite3.Connection,
+    dataset_generation: str,
+    *,
+    dataset_revision: int = 0,
+    schema_version: int,
+) -> None:
+    """Install the selected schema without following future runtime schema additions."""
+    _resolve_schema_version(schema_version)
+    steps = {4: (_apply_schema_v2, _apply_schema_v3, _apply_schema_v4)}[schema_version]
+    _apply_schema_v1(connection, dataset_generation, dataset_revision=dataset_revision)
+    for apply_schema in steps:
+        apply_schema(connection)
+
+
 def initialize_repository(paths: GenerationPaths, dataset_generation: str) -> RepositoryInfo:
     """Build the current schema through every migration and publish a new candidate."""
     validate_entity_id(dataset_generation)
@@ -956,10 +979,7 @@ def initialize_repository(paths: GenerationPaths, dataset_generation: str) -> Re
     staging = paths.root / f".finjuice-sqlite-staging-{uuid.uuid4().hex}"
     connection = _connect_builder(staging)
     try:
-        _apply_schema_v1(connection, dataset_generation)
-        _apply_schema_v2(connection)
-        _apply_schema_v3(connection)
-        _apply_schema_v4(connection)
+        _initialize_schema(connection, dataset_generation, schema_version=SQLITE_SCHEMA_VERSION)
         info = _validate_connection(
             connection,
             expected_generation=dataset_generation,
@@ -1308,16 +1328,19 @@ def _connect_snapshot(path: Path) -> sqlite3.Connection:
     return connection
 
 
-def _read_info(connection: sqlite3.Connection) -> RepositoryInfo:
+def _read_info(
+    connection: sqlite3.Connection, *, expected_schema_version: int | None = None
+) -> RepositoryInfo:
+    expected_version = _resolve_schema_version(expected_schema_version)
     application_id = int(connection.execute("PRAGMA application_id").fetchone()[0])
     schema_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
     if application_id != SQLITE_APPLICATION_ID:
         raise RepositoryVersionError("SQLite file is not a finjuice authoritative repository.")
-    if schema_version != SQLITE_SCHEMA_VERSION:
-        relation = "newer than" if schema_version > SQLITE_SCHEMA_VERSION else "unsupported by"
+    if schema_version != expected_version:
+        relation = "newer than" if schema_version > expected_version else "unsupported by"
         raise RepositoryVersionError(
             f"SQLite schema v{schema_version} is {relation} this build "
-            f"(supported v{SQLITE_SCHEMA_VERSION})."
+            f"(supported v{expected_version})."
         )
     try:
         row = connection.execute(
@@ -1373,8 +1396,9 @@ def _validate_connection(
     *,
     expected_generation: str | None = None,
     object_paths: GenerationPaths | None = None,
+    expected_schema_version: int | None = None,
 ) -> RepositoryInfo:
-    info = _read_info(connection)
+    info = _read_info(connection, expected_schema_version=expected_schema_version)
     if expected_generation is not None and info.dataset_generation != expected_generation:
         raise RepositoryIntegrityError("Repository generation does not match the builder request.")
     integrity = connection.execute("PRAGMA integrity_check").fetchall()
@@ -1383,13 +1407,21 @@ def _validate_connection(
     foreign_keys = connection.execute("PRAGMA foreign_key_check").fetchall()
     if foreign_keys:
         raise RepositoryIntegrityError("SQLite foreign_key_check failed.")
-    _validate_application_invariants(connection)
+    _validate_application_invariants(connection, schema_version=info.schema_version)
     if object_paths is not None:
         _validate_source_objects(connection, object_paths)
     return info
 
 
-def _validate_application_invariants(connection: sqlite3.Connection) -> None:
+def _validate_application_invariants(
+    connection: sqlite3.Connection, *, schema_version: int
+) -> None:
+    _resolve_schema_version(schema_version)
+    {4: _validate_v4_application_invariants}[schema_version](connection)
+
+
+def _validate_v4_application_invariants(connection: sqlite3.Connection) -> None:
+    """Validate the complete v4 contract, independent of later schema additions."""
     for query in _ENTITY_SUBTYPE_CHECKS:
         if connection.execute(query).fetchone() is not None:
             raise RepositoryIntegrityError("An entity is missing its matching typed row.")

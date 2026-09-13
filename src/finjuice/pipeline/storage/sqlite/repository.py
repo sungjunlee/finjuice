@@ -43,15 +43,13 @@ from finjuice.pipeline.storage.sqlite.records import (
 )
 from finjuice.pipeline.storage.sqlite.schema import (
     RepositoryInfo,
-    _apply_schema_v1,
-    _apply_schema_v2,
-    _apply_schema_v3,
-    _apply_schema_v4,
     _cleanup_staging,
     _connect_builder,
     _connect_snapshot,
+    _initialize_schema,
     _prepare_generation_layout,
     _publish_database,
+    _resolve_schema_version,
     _validate_connection,
 )
 from finjuice.pipeline.storage.sqlite.snapshot import inspection_snapshot
@@ -60,7 +58,7 @@ from finjuice.pipeline.storage.sqlite.writes import (
 )
 from finjuice.pipeline.storage.sqlite.writes import TypedRowWriter
 
-_READ_TABLE_SQL: Final = {
+_READ_TABLE_SQL_V4: Final = {
     "repository_meta": "SELECT * FROM repository_meta",
     "schema_migrations": "SELECT * FROM schema_migrations",
     "entities": "SELECT * FROM entities",
@@ -108,6 +106,13 @@ _READ_TABLE_SQL: Final = {
     "agent_intake_applications": "SELECT * FROM agent_intake_applications",
 }
 
+
+def _read_table_sql(schema_version: int) -> Mapping[str, str]:
+    """Return exactly the authoritative table surface of the selected schema."""
+    _resolve_schema_version(schema_version)
+    return {4: _READ_TABLE_SQL_V4}[schema_version]
+
+
 # Shared with TypedRowWriter so builder exact-value SQL has exactly one definition.
 _EXACT_SUBTYPE_INSERT_SQL: Final = _WRITER_EXACT_SUBTYPE_INSERT_SQL
 
@@ -138,7 +143,10 @@ class RepositoryBuilder:
         paths: GenerationPaths,
         dataset_generation: str,
         dataset_revision: int = 0,
+        *,
+        expected_schema_version: int | None = None,
     ) -> None:
+        self._schema_version = _resolve_schema_version(expected_schema_version)
         validate_entity_id(dataset_generation)
         if isinstance(dataset_revision, bool) or not isinstance(dataset_revision, int):
             raise ValueError("Dataset revision must be the integer zero for a new repository.")
@@ -159,14 +167,12 @@ class RepositoryBuilder:
         self._closed = False
         self._published_artifacts: list[SourceArtifact] = []
         try:
-            _apply_schema_v1(
+            _initialize_schema(
                 self._connection,
                 dataset_generation,
                 dataset_revision=dataset_revision,
+                schema_version=self._schema_version,
             )
-            _apply_schema_v2(self._connection)
-            _apply_schema_v3(self._connection)
-            _apply_schema_v4(self._connection)
         except Exception:
             self._connection.close()
             self._closed = True
@@ -452,6 +458,7 @@ class RepositoryBuilder:
                 self._connection,
                 expected_generation=self.dataset_generation,
                 object_paths=self.paths,
+                expected_schema_version=self._schema_version,
             )
         except Exception:
             self.abort()
@@ -499,7 +506,15 @@ class RepositoryBuilder:
 class RepositoryReader(AbstractContextManager["RepositoryReader"]):
     """Read a stable DB/WAL snapshot without touching source SQLite sidecars."""
 
-    def __init__(self, database: Path, *, scratch_root: Path | None = None) -> None:
+    def __init__(
+        self,
+        database: Path,
+        *,
+        scratch_root: Path | None = None,
+        expected_schema_version: int | None = None,
+    ) -> None:
+        schema_version = _resolve_schema_version(expected_schema_version)
+        self._read_table_sql = _read_table_sql(schema_version)
         self._snapshot_context = inspection_snapshot(database, scratch_root=scratch_root)
         snapshot = self._snapshot_context.__enter__()
         try:
@@ -508,6 +523,7 @@ class RepositoryReader(AbstractContextManager["RepositoryReader"]):
             self.info = _validate_connection(
                 self._connection,
                 object_paths=repository_paths,
+                expected_schema_version=schema_version,
             )
         except Exception:
             self._snapshot_context.__exit__(None, None, None)
@@ -525,11 +541,16 @@ class RepositoryReader(AbstractContextManager["RepositoryReader"]):
     ) -> None:
         self.close()
 
+    @property
+    def table_names(self) -> tuple[str, ...]:
+        """Return the authoritative tables for this reader's exact schema."""
+        return tuple(self._read_table_sql)
+
     def rows(self, table: str) -> list[dict[str, Any]]:
         """Return rows from one fixed schema table as dictionaries."""
         if self._closed:
             raise RuntimeError("Repository reader is already closed.")
-        query = _READ_TABLE_SQL.get(table)
+        query = self._read_table_sql.get(table)
         if query is None:
             raise ValueError("Table is not part of the authoritative repository read surface.")
         cursor = self._connection.execute(query)
