@@ -279,9 +279,7 @@ class AccountRegistry:
 
     def _ownership_payload(self, account_id: str) -> dict[str, object]:
         account = self._require_account(account_id)
-        shares = tuple(
-            share_record(item) for item in self._shares if item.account_id == account_id
-        )
+        shares = tuple(share_record(item) for item in self._shares if item.account_id == account_id)
         return {
             "account_id": account_id,
             "ownership_state": account.ownership_state,
