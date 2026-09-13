@@ -4860,6 +4860,9 @@ rules add --json output
           ],
           "type": "string"
         },
+        "total_problems": {
+          "type": "integer"
+        },
         "total_rules": {
           "type": "integer"
         },
@@ -4873,7 +4876,8 @@ rules add --json output
         "errors",
         "warnings",
         "passed",
-        "problems"
+        "problems",
+        "total_problems"
       ],
       "type": "object"
     }

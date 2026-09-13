@@ -105,7 +105,10 @@ def _compute_add_rule(
     result: dict[str, Any] = {
         "action": action,
         "rule": _serialize_rule_payload(candidate_rule),
-        "validation": _serialize_validation_summary(validation_result),
+        "validation": _serialize_validation_summary(
+            validation_result,
+            focus_rule=candidate_rule.name,
+        ),
     }
 
     if dry_run:
@@ -186,7 +189,11 @@ def _compute_add_rule(
 def add_rule_command(
     ctx: typer.Context,
     name: str = typer.Option(..., "--name", help="Rule name (letters, numbers, underscores)"),
-    match_pattern: str = typer.Option(..., "--match", help="Pipe-separated regex patterns"),
+    match_pattern: str = typer.Option(
+        ...,
+        "--match",
+        help="Pipe-separated case-insensitive substring patterns",
+    ),
     tags: str = typer.Option(..., "--tags", help="Comma-separated tags"),
     category: Optional[str] = typer.Option(None, "--category", help="Optional category"),
     priority: int = typer.Option(

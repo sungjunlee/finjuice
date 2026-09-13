@@ -1130,6 +1130,22 @@ rules_validation_summary_schema = object_schema(
     required=["status", "total_rules", "errors", "warnings", "passed", "problems"],
 )
 
+rules_mutation_validation_schema = object_schema(
+    {
+        **dict(rules_validation_summary_schema["properties"]),
+        "total_problems": integer,
+    },
+    required=[
+        "status",
+        "total_rules",
+        "errors",
+        "warnings",
+        "passed",
+        "problems",
+        "total_problems",
+    ],
+)
+
 rules_validate_schema = command_schema(
     "rules_validate.schema.json",
     "rules validate --json output",
@@ -1149,7 +1165,7 @@ rules_add_schema = command_schema(
         "preview_action": {"enum": ["would_add", "would_update"], "type": "string"},
         "rule": rule_detail_schema,
         "rules_file_modified": boolean,
-        "validation": rules_validation_summary_schema,
+        "validation": rules_mutation_validation_schema,
     },
     ["action", "rule", "validation"],
 )

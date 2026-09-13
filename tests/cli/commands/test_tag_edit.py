@@ -315,7 +315,7 @@ def test_tag_edit_invalid_row_hash_returns_error(tag_edit_data_dir: Path) -> Non
             str(tag_edit_data_dir),
             "tag",
             "--edit",
-            "missinghash",
+            "ffffffffffffffff",
             "--add-tag",
             "검진",
             "--json",
@@ -607,3 +607,28 @@ def test_tag_edit_json_includes_needs_review(review_data_dir: Path) -> None:
     txn = payload["transaction"]
     assert txn["needs_review"] == 0
     assert txn["confidence"] == 1.0
+
+
+def test_tag_edit_help_after_edit_flag_exits_without_traceback() -> None:
+    """`tag --edit --help` should show usage instead of crashing on missing config."""
+    result = runner.invoke(app, ["tag", "--edit", "--help"])
+
+    assert result.exit_code == 0, result.output
+    assert "Traceback" not in result.output
+    assert "AttributeError" not in result.output
+    output = result.output
+    assert "Usage" in output or "--edit" in output
+
+
+def test_tag_edit_malformed_hash_exits_with_readable_error(tag_edit_data_dir: Path) -> None:
+    """`--edit` with a non-hash value should fail fast with a readable error."""
+    result = runner.invoke(
+        app,
+        ["--data-dir", str(tag_edit_data_dir), "tag", "--edit", "not-a-hash"],
+    )
+
+    assert result.exit_code != 0
+    assert "Traceback" not in result.output
+    output = result.output.lower()
+    assert "row_hash" in output or "hexadecimal" in output
+    assert "16" in result.output
