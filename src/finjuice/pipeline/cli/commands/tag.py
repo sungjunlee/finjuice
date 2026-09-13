@@ -52,20 +52,34 @@ def _exit_with_tag_usage(ctx: typer.Context | None) -> NoReturn:
     raise typer.Exit(0)
 
 
+def _exit_with_missing_tag_config() -> NoReturn:
+    """Exit non-zero when tag ran without initialized CLI configuration."""
+    emit_error(
+        "Tag command is missing CLI configuration. Re-run with a valid --data-dir.",
+        error_code=ErrorCode.UNEXPECTED_ERROR,
+        exit_code=ExitCode.GENERAL_ERROR,
+        suggestion="finjuice tag --help",
+        command="tag",
+    )
+
+
+# Typer's normal --help flow cannot be relied on here: `--edit` takes a value,
+# so `finjuice tag --edit --help` swallows `--help` as the edit argument instead
+# of showing command help. Exit 0 with usage only for that swallow case.
 def _require_tag_config(ctx: typer.Context | None, edit: str | None) -> Any:
-    """Return CLI config, or print usage when help consumed ``--edit``.
+    """Return CLI config, or fail when configuration was never initialized.
 
     ``finjuice tag --edit --help`` treats ``--help`` as the ``--edit`` value,
-    so the root callback skips config setup. Exit with usage instead of
-    crashing on a missing config.
+    so the root callback skips config setup. Exit 0 with usage only for that
+    swallow case; other missing-config paths fail with a readable error.
     """
     if edit in {"--help", "-h"}:
         _exit_with_tag_usage(ctx)
     if ctx is None or not isinstance(getattr(ctx, "obj", None), dict):
-        _exit_with_tag_usage(ctx)
+        _exit_with_missing_tag_config()
     config = ctx.obj.get("config")
     if config is None:
-        _exit_with_tag_usage(ctx)
+        _exit_with_missing_tag_config()
     return config
 
 

@@ -16,8 +16,9 @@ Release prep moves these bullets into `## [X.Y.Z]`. Refactor-only PRs skip this.
 
 - `finjuice tag --edit --help` no longer crashes with a traceback; malformed
   `--edit` values fail with a readable message (#482).
-- `finjuice rules add` JSON output no longer floods pre-existing overlap
-  warnings; the full count stays in `total_problems` (#483).
+- `finjuice rules add` and `rules remove` JSON output no longer flood
+  pre-existing overlap warnings; the full count stays in `total_problems`
+  (#483).
 - `finjuice rules add --match` help text now describes the actual
   case-insensitive substring matching instead of regex (#484).
 

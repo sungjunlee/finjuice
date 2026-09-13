@@ -73,6 +73,11 @@
     "suggestions": {
       "items": {
         "additionalProperties": true,
+        "properties": {
+          "distinct_dates": {
+            "type": "integer"
+          }
+        },
         "type": "object"
       },
       "type": "array"

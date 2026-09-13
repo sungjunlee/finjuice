@@ -233,6 +233,7 @@ def _compute_remove_rule(
 ) -> dict[str, Any]:
     """Compute the result payload for `finjuice rules remove`."""
     from finjuice.pipeline.tagging.rules_yaml_io import load_rules, remove_rule_roundtrip
+    from finjuice.pipeline.tagging.validator import validate_rules
 
     command = "rules remove"
 
@@ -267,6 +268,8 @@ def _compute_remove_rule(
             json_output=json_output,
             command=command,
         )
+
+    validation_result = validate_rules(existing_rules)
 
     try:
         remove_rule_roundtrip(name, config.rules_file)
@@ -304,7 +307,14 @@ def _compute_remove_rule(
         rule_name=name,
         change_summary="rule removed",
     )
-    return {"action": "removed", "rule_name": name}
+    return {
+        "action": "removed",
+        "rule_name": name,
+        "validation": _serialize_validation_summary(
+            validation_result,
+            focus_rule=name,
+        ),
+    }
 
 
 def remove_rule_command(

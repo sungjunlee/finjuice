@@ -1173,8 +1173,12 @@ rules_add_schema = command_schema(
 rules_remove_schema = command_schema(
     "rules_remove.schema.json",
     "rules remove --json output",
-    {"action": {"enum": ["removed"], "type": "string"}, "rule_name": string},
-    ["action", "rule_name"],
+    {
+        "action": {"enum": ["removed"], "type": "string"},
+        "rule_name": string,
+        "validation": rules_mutation_validation_schema,
+    },
+    ["action", "rule_name", "validation"],
 )
 
 rules_test_schema = command_schema(
@@ -1196,6 +1200,12 @@ rules_test_schema = command_schema(
     ["rule_name", "scope", "match_count", "sample", "monthly_distribution", "cross_tags_top"],
 )
 
+rules_suggest_suggestion_schema = object_schema(
+    {
+        "distinct_dates": integer,
+    },
+)
+
 rules_suggest_schema = command_schema(
     "rules_suggest.schema.json",
     "rules suggest --json output",
@@ -1211,7 +1221,7 @@ rules_suggest_schema = command_schema(
         "suggestable_coverage_before_pct": number,
         "suggestable_total_count": integer,
         "suggestable_untagged_count": integer,
-        "suggestions": array_of(object_any),
+        "suggestions": array_of(rules_suggest_suggestion_schema),
         "total_count": integer,
         "transfer_exclusions": object_schema(
             {

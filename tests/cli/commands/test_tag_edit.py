@@ -2,11 +2,14 @@
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import polars as pl
 import pytest
+import typer
 from typer.testing import CliRunner
 
+from finjuice.pipeline.cli.commands.tag import _require_tag_config
 from finjuice.pipeline.cli.main import app
 from finjuice.pipeline.storage.csv_partition import read_month, write_month
 from finjuice.pipeline.tagging.manual import MANUAL_CATEGORY_PREFIX
@@ -306,7 +309,7 @@ def test_tag_edit_no_op_does_not_append_audit_event(review_data_dir: Path) -> No
     assert _read_audit_events(review_data_dir) == []
 
 
-def test_tag_edit_invalid_row_hash_returns_error(tag_edit_data_dir: Path) -> None:
+def test_tag_edit_unknown_row_hash_returns_error(tag_edit_data_dir: Path) -> None:
     """Unknown row_hash should exit with a machine-readable NO_DATA error."""
     result = runner.invoke(
         app,
@@ -618,6 +621,20 @@ def test_tag_edit_help_after_edit_flag_exits_without_traceback() -> None:
     assert "AttributeError" not in result.output
     output = result.output
     assert "Usage" in output or "--edit" in output
+
+
+def test_require_tag_config_missing_context_exits_nonzero() -> None:
+    """Missing config outside the `--edit --help` swallow case must fail."""
+    with pytest.raises(typer.Exit) as exc_info:
+        _require_tag_config(None, None)
+
+    assert exc_info.value.exit_code != 0
+
+    ctx = SimpleNamespace(obj={"config": None})
+    with pytest.raises(typer.Exit) as exc_info:
+        _require_tag_config(ctx, STARBUCKS_HASH)  # type: ignore[arg-type]
+
+    assert exc_info.value.exit_code != 0
 
 
 def test_tag_edit_malformed_hash_exits_with_readable_error(tag_edit_data_dir: Path) -> None:
