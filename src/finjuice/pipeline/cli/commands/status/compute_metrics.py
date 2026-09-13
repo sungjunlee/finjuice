@@ -9,6 +9,7 @@ these names so existing callers can keep importing from that module.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -55,6 +56,36 @@ def _collect_transaction_metrics(
     top_n: int,
 ) -> _TransactionMetrics:
     """Aggregate row, date, tagging, and filter metrics across partitions."""
+    return _metrics_from_frames(
+        _iter_partition_frames(partitions),
+        report_filters,
+        report_filter_expr,
+        top_n=top_n,
+    )
+
+
+def _iter_partition_frames(partitions: list[Path]) -> Iterator[pl.DataFrame]:
+    """Yield readable partition frames, warning about unreadable ones."""
+    for partition_path in partitions:
+        try:
+            yield _read_status_partition(partition_path)
+        except (OSError, pl.exceptions.ComputeError) as exc:
+            logger.warning("Could not read %s: %s", partition_path, exc)
+
+
+def _metrics_from_frames(
+    frames: Iterable[pl.DataFrame],
+    report_filters: ReportFilters,
+    report_filter_expr: pl.Expr | None,
+    *,
+    top_n: int,
+) -> _TransactionMetrics:
+    """Aggregate row, date, tagging, and filter metrics across frames.
+
+    Accepts any iterable of transaction frames shaped like the status
+    partition reads, so SQLite-backed reads (#436) reuse the exact CSV
+    aggregation semantics.
+    """
     total_rows = 0
     min_date = None
     max_date = None
@@ -67,9 +98,8 @@ def _collect_transaction_metrics(
     untagged_merchants: dict[str, int] = {}
     matched_filter_indexes: set[int] = set()
 
-    for partition_path in partitions:
+    for df in frames:
         try:
-            df = _read_status_partition(partition_path)
             matched_filter_indexes.update(matched_report_filter_rule_indexes(df, report_filters))
             if report_filter_expr is not None:
                 df = df.filter(~report_filter_expr)
@@ -90,7 +120,7 @@ def _collect_transaction_metrics(
             ]
             _add_untagged_merchants(untagged_merchants, row_metrics["untagged"])
         except (OSError, pl.exceptions.ComputeError) as exc:
-            logger.warning("Could not read %s: %s", partition_path, exc)
+            logger.warning("Could not process a transaction partition frame: %s", exc)
 
     untagged_merchant_list, untagged_merchants_total = _top_untagged_merchants(
         untagged_merchants,
