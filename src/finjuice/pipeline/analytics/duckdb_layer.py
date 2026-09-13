@@ -90,6 +90,7 @@ class DuckDBAnalytics(DuckDBTransactionsView):
     Args:
         data_dir: Path to data directory containing transactions/ partitions
         memory_limit: Optional memory limit for DuckDB (e.g., "1GB")
+        source_frame: Optional decoded transaction frame from SQLite read-compat
 
     Raises:
         ImportError: If duckdb package is not installed
@@ -101,6 +102,7 @@ class DuckDBAnalytics(DuckDBTransactionsView):
         memory_limit: Optional[str] = None,
         report_filters: ReportFilters | None = None,
         require_transactions: bool = True,
+        source_frame: Any | None = None,
     ) -> None:
         if not DUCKDB_AVAILABLE:
             raise ImportError(DUCKDB_INSTALL_HINT)
@@ -109,6 +111,7 @@ class DuckDBAnalytics(DuckDBTransactionsView):
             memory_limit=memory_limit,
             report_filters=report_filters,
             require_transactions=require_transactions,
+            source_frame=source_frame,
         )
 
     def read_partitions(
