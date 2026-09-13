@@ -178,6 +178,7 @@ def generate_cli_docs() -> None:
         "init",
         "query",
         "template",
+        "ssot",
     ]
     group_subcommands: dict[str, list[str]] = {
         "automation": ["run"],
@@ -186,6 +187,7 @@ def generate_cli_docs() -> None:
         "assets": ["status", "show"],
         "networth": ["breakdown", "history", "forecast", "validate"],
         "template": ["run"],
+        "ssot": ["backup"],
     }
 
     output_path = ROOT / "docs/reference/cli.md"

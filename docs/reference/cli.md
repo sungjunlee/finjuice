@@ -70,6 +70,7 @@ finjuice --version
 │ version         Show finjuice CLI version and data schema version.                                                   │
 │ workspace       Manage workspace directories (symlink-based)                                                         │
 │ backup          Create, verify, and restore a complete legacy data-tree backup.                                      │
+│ ssot            SQLite authoritative-storage operators that do not replace legacy backup.                            │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Advanced ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ ingest          Import XLSX files from imports/ directory into CSV partitions.                                       │
@@ -929,6 +930,44 @@ finjuice --version
 | `spending_comparison` | Period-over-period total spending comparison | `period_days:int` optional (default=7, min=1, max=365) |
 | `compare` | Baseline-vs-current monthly-average comparison by category, major, or merchant | `baseline_months:month_window` required<br>`current_months:month_window` required<br>`group_by:enum` optional (default=category_final)<br>`type_norm:enum` optional (default=expense) |
 | `pivot` | Dynamic pivot by row axis, column axis, and metric | `row:enum` required<br>`col:enum` required<br>`value:enum` optional (default=amount)<br>`agg:enum` optional (default=sum)<br>`months:month_range` optional (default=None)<br>`top_n_cols:int` optional (default=10, min=1, max=100) |
+
+---
+
+## `finjuice ssot`
+
+```
+
+ Usage: finjuice ssot [OPTIONS] COMMAND [ARGS]...
+
+ SQLite authoritative-storage operators that do not replace legacy backup.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ backup   Create, restore, and inspect a SQLite generation backup.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup`
+
+```
+
+ Usage: finjuice ssot backup [OPTIONS] COMMAND [ARGS]...
+
+ Create, restore, and inspect a SQLite generation backup.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ create    Capture one SQLite generation snapshot and its referenced artifacts.                                       │
+│ restore   Restore a verified SQLite backup into an inactive isolated directory.                                      │
+│ status    Report whether one SQLite backup directory is complete and trusted.                                        │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
 
 ---
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 import re
 from pathlib import Path
@@ -144,6 +145,21 @@ CATALOGUED_COMMANDS = [
         "backup restore",
         ["backup", "restore", "--json"],
         "backup_restore.schema.json",
+    ),
+    (
+        "ssot backup create",
+        ["ssot", "backup", "create", "--json"],
+        "ssot_backup_create.schema.json",
+    ),
+    (
+        "ssot backup restore",
+        ["ssot", "backup", "restore", "--json"],
+        "ssot_backup_restore.schema.json",
+    ),
+    (
+        "ssot backup status",
+        ["ssot", "backup", "status", "--json"],
+        "ssot_backup_status.schema.json",
     ),
 ]
 
@@ -452,6 +468,46 @@ def _materialize_backup_catalog_args(schema_data_dir: Path, label: str) -> list[
     ]
 
 
+def _materialize_ssot_backup_catalog_args(schema_data_dir: Path, label: str) -> list[str]:
+    """Build synthetic SQLite backup CLI args against an isolated generation."""
+    from finjuice.pipeline.storage.sqlite import GenerationPaths, RepositoryBuilder
+
+    generation = schema_data_dir.parent / "ssot-generation"
+    backup_dir = schema_data_dir.parent / "ssot-backup"
+    restore_dir = schema_data_dir.parent / "ssot-restore"
+    if not (generation / "finjuice.sqlite3").is_file():
+        paths = GenerationPaths(generation)
+        with RepositoryBuilder(paths, "11111111-1111-4111-8111-111111111111") as builder:
+            builder.publish_source(io.BytesIO(b"ssot backup schema fixture"))
+            builder.finalize()
+    create_args = [
+        "ssot",
+        "backup",
+        "create",
+        "--source",
+        str(generation),
+        "--output",
+        str(backup_dir),
+        "--json",
+    ]
+    if label == "ssot backup create":
+        return create_args
+    if not backup_dir.exists():
+        created = runner.invoke(app, create_args)
+        assert created.exit_code == 0, created.output[:500]
+    if label == "ssot backup status":
+        return ["ssot", "backup", "status", str(backup_dir), "--json"]
+    return [
+        "ssot",
+        "backup",
+        "restore",
+        str(backup_dir),
+        "--target",
+        str(restore_dir),
+        "--json",
+    ]
+
+
 @pytest.mark.parametrize(("label", "cmd_args", "schema_file"), CATALOGUED_COMMANDS)
 def test_command_output_validates_against_schema(
     schema_data_dir: Path,
@@ -462,6 +518,8 @@ def test_command_output_validates_against_schema(
     """Actual Typer CLI --json output should validate against its artifact."""
     if label.startswith("backup "):
         cmd_args = _materialize_backup_catalog_args(schema_data_dir, label)
+    if label.startswith("ssot backup "):
+        cmd_args = _materialize_ssot_backup_catalog_args(schema_data_dir, label)
     result = runner.invoke(app, ["--data-dir", str(schema_data_dir), *cmd_args])
 
     assert result.exit_code == 0, f"{label} failed: {result.output[:500]}"

@@ -1,0 +1,67 @@
+{
+  "$id": "ssot_backup_restore.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "byte_count": {
+      "type": "integer"
+    },
+    "checks": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "dataset_revision": {
+      "type": "integer"
+    },
+    "file_count": {
+      "type": "integer"
+    },
+    "generation_status": {
+      "enum": [
+        "inactive"
+      ],
+      "type": "string"
+    },
+    "manifest_digest": {
+      "type": "string"
+    },
+    "source_generation": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "restored"
+      ],
+      "type": "string"
+    },
+    "verified": {
+      "type": "boolean"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "byte_count",
+    "checks",
+    "dataset_revision",
+    "file_count",
+    "generation_status",
+    "manifest_digest",
+    "source_generation",
+    "status",
+    "verified",
+    "warnings"
+  ],
+  "title": "ssot backup restore --json output",
+  "type": "object"
+}

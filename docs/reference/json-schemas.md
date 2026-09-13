@@ -79,6 +79,9 @@ command/code/exit-code combinations against this schema.
 | `schemas/rules_test.schema.json` | rules test --json output | `rule_name`, `scope`, `match_count`, `sample`, `monthly_distribution`, `cross_tags_top` |
 | `schemas/rules_validate.schema.json` | rules validate --json output | `status`, `total_rules`, `errors`, `warnings`, `passed`, `problems` |
 | `schemas/show.schema.json` | show --json output | `rows`, `row_count`, `total_matches`, `pagination` |
+| `schemas/ssot_backup_create.schema.json` | ssot backup create --json output | `activation_binding`, `backup_id`, `backup_kind`, `byte_count`, `complete`, `config_revision_count`, `database_digest`, `dataset_revision`, `file_count`, `manifest_digest`, `manifest_schema_version`, `source_generation`, `status`, `warnings` |
+| `schemas/ssot_backup_restore.schema.json` | ssot backup restore --json output | `byte_count`, `checks`, `dataset_revision`, `file_count`, `generation_status`, `manifest_digest`, `source_generation`, `status`, `verified`, `warnings` |
+| `schemas/ssot_backup_status.schema.json` | ssot backup status --json output | `byte_count`, `complete`, `file_count`, `manifest_digest`, `reason`, `source_generation` |
 | `schemas/status.schema.json` | status --json output | `data_directory`, `transactions`, `last_import`, `terminology`, `tagging`, `rules_file`, `health`, `actionable`, `signals`, `next_steps` |
 | `schemas/tag.schema.json` | tag --json output | `status` |
 | `schemas/template_list.schema.json` | template list --json output | `templates` |
@@ -5994,6 +5997,258 @@ show --json output
     "pagination"
   ],
   "title": "show --json output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_backup_create.schema.json`
+
+ssot backup create --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `activation_binding` | `string` | yes |
+| `backup_id` | `string` | yes |
+| `backup_kind` | `string` | yes |
+| `byte_count` | `integer` | yes |
+| `complete` | `boolean` | yes |
+| `config_revision_count` | `integer` | yes |
+| `database_digest` | `string` | yes |
+| `dataset_revision` | `integer` | yes |
+| `file_count` | `integer` | yes |
+| `manifest_digest` | `string` | yes |
+| `manifest_schema_version` | `integer` | yes |
+| `source_generation` | `string` | yes |
+| `status` | enum(`complete`) | yes |
+| `warnings` | `array`[`string`] | yes |
+
+```json
+{
+  "$id": "ssot_backup_create.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "activation_binding": {
+      "type": "string"
+    },
+    "backup_id": {
+      "type": "string"
+    },
+    "backup_kind": {
+      "type": "string"
+    },
+    "byte_count": {
+      "type": "integer"
+    },
+    "complete": {
+      "type": "boolean"
+    },
+    "config_revision_count": {
+      "type": "integer"
+    },
+    "database_digest": {
+      "type": "string"
+    },
+    "dataset_revision": {
+      "type": "integer"
+    },
+    "file_count": {
+      "type": "integer"
+    },
+    "manifest_digest": {
+      "type": "string"
+    },
+    "manifest_schema_version": {
+      "type": "integer"
+    },
+    "source_generation": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "complete"
+      ],
+      "type": "string"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "activation_binding",
+    "backup_id",
+    "backup_kind",
+    "byte_count",
+    "complete",
+    "config_revision_count",
+    "database_digest",
+    "dataset_revision",
+    "file_count",
+    "manifest_digest",
+    "manifest_schema_version",
+    "source_generation",
+    "status",
+    "warnings"
+  ],
+  "title": "ssot backup create --json output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_backup_restore.schema.json`
+
+ssot backup restore --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `byte_count` | `integer` | yes |
+| `checks` | `array`[`string`] | yes |
+| `dataset_revision` | `integer` | yes |
+| `file_count` | `integer` | yes |
+| `generation_status` | enum(`inactive`) | yes |
+| `manifest_digest` | `string` | yes |
+| `source_generation` | `string` | yes |
+| `status` | enum(`restored`) | yes |
+| `verified` | `boolean` | yes |
+| `warnings` | `array`[`string`] | yes |
+
+```json
+{
+  "$id": "ssot_backup_restore.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "byte_count": {
+      "type": "integer"
+    },
+    "checks": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "dataset_revision": {
+      "type": "integer"
+    },
+    "file_count": {
+      "type": "integer"
+    },
+    "generation_status": {
+      "enum": [
+        "inactive"
+      ],
+      "type": "string"
+    },
+    "manifest_digest": {
+      "type": "string"
+    },
+    "source_generation": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "restored"
+      ],
+      "type": "string"
+    },
+    "verified": {
+      "type": "boolean"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "byte_count",
+    "checks",
+    "dataset_revision",
+    "file_count",
+    "generation_status",
+    "manifest_digest",
+    "source_generation",
+    "status",
+    "verified",
+    "warnings"
+  ],
+  "title": "ssot backup restore --json output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_backup_status.schema.json`
+
+ssot backup status --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `byte_count` | `integer` | yes |
+| `complete` | `boolean` | yes |
+| `file_count` | `integer` | yes |
+| `manifest_digest` | `string` \| `null` | yes |
+| `reason` | `string` | yes |
+| `source_generation` | `string` \| `null` | yes |
+
+```json
+{
+  "$id": "ssot_backup_status.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "byte_count": {
+      "type": "integer"
+    },
+    "complete": {
+      "type": "boolean"
+    },
+    "file_count": {
+      "type": "integer"
+    },
+    "manifest_digest": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "reason": {
+      "type": "string"
+    },
+    "source_generation": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "_meta",
+    "byte_count",
+    "complete",
+    "file_count",
+    "manifest_digest",
+    "reason",
+    "source_generation"
+  ],
+  "title": "ssot backup status --json output",
   "type": "object"
 }
 ```

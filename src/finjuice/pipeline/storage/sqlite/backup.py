@@ -1,30 +1,27 @@
 """Atomic, verifiable backups of one published authoritative SQLite generation.
 
-One backup is a single self-describing directory holding:
+Each completed backup is an immutable attempt directory:
 
-* ``finjuice.sqlite3`` — a consistent snapshot taken with the SQLite Online
-  Backup API (:meth:`sqlite3.Connection.backup`) so a writer may stay active
-  while the snapshot is captured;
-* ``objects/sha256/...`` — every immutable source object the snapshot
-  references, copied through :class:`SourceObjectStore` so content addressing
-  and read-only permissions survive the round trip;
-* ``backup-manifest.json`` — the completion marker, written last through a
-  temporary file plus :func:`os.replace`.
+* ``attempts/<backup_id>/finjuice.sqlite3`` — a consistent snapshot taken with the
+  SQLite Online Backup API (:meth:`sqlite3.Connection.backup`);
+* ``attempts/<backup_id>/objects/sha256/...`` — every immutable source object,
+  config revision artifact, and release evidence the snapshot references;
+* ``attempts/<backup_id>/backup-manifest.json`` — the attempt completion marker;
+* ``CURRENT`` — a pointer file naming the current attempt, replaced last.
 
-The manifest is the only completion evidence. A backup whose manifest is
-missing, unreadable, or structurally invalid is reported as incomplete and
-never as a success. A transfer failure raises before the new manifest is
-swapped in, so any previous complete manifest in the destination stays
-intact, and publishing prunes payload files the new manifest does not list
-so a complete manifest always describes the exact payload set.
-:func:`backup_status` re-verifies every listed payload file (existence,
-size, and SHA-256) before reporting a backup complete.
+The manifest is the only completion evidence for one attempt. A backup whose
+manifest is missing, unreadable, or structurally invalid is reported as
+incomplete and never as a success. A late DB or manifest failure leaves any
+previous complete attempt untouched; survival of a previous manifest file
+alone is not treated as preservation of the previous payload.
+:func:`backup_status` and :func:`restore_backup` share the same strict
+verification (known fields, unique regular files, listed-payload closure).
 
 :meth:`restore_backup` never opens or writes the original generation: it copies
-the backup into a fresh private root and verifies digests, ``PRAGMA
-integrity_check``, ``PRAGMA foreign_key_check``, and the repository application
-invariants before the copy is reported usable. A failed verification removes
-everything the restore created.
+the current complete attempt into a fresh private root and verifies digests,
+``PRAGMA integrity_check``, ``PRAGMA foreign_key_check``, and the repository
+application invariants before the copy is reported usable. A failed
+verification removes everything the restore created.
 """
 
 from __future__ import annotations
@@ -65,7 +62,6 @@ from finjuice.pipeline.storage.sqlite.schema import (
     RepositoryInfo,
     _cleanup_staging,
     _connect_builder,
-    _copy_source_objects,
     _fsync_directory,
     _normalize_journal_mode,
     _read_info,
@@ -77,13 +73,39 @@ BACKUP_SCHEMA_VERSION: Final = 1
 MANIFEST_FILENAME: Final = "backup-manifest.json"
 DATABASE_BASENAME: Final = "finjuice.sqlite3"
 OBJECT_NAMESPACE: Final = "objects"
+CURRENT_FILENAME: Final = "CURRENT"
+ATTEMPTS_NAMESPACE: Final = "attempts"
+ACTIVATION_ABSENT: Final = "intentionally_absent"
 
 _STAGING_PREFIX: Final = ".finjuice-backup-"
 _CHUNK_SIZE: Final = 1024 * 1024
 _BUSY_TIMEOUT_MS: Final = 5_000
 _DIGEST_RE: Final = re.compile(r"^sha256:[0-9a-f]{64}$")
+_ATTEMPT_RE: Final = re.compile(rf"^{ATTEMPTS_NAMESPACE}/[0-9a-f]{{32}}$")
 _DATABASE_ROLE: Final = "database"
 _OBJECT_ROLE: Final = "object"
+_MANIFEST_KEYS: Final = frozenset(
+    {
+        "activation_binding",
+        "backup_id",
+        "config_revisions",
+        "created_at",
+        "dataset_revision",
+        "files",
+        "kind",
+        "manifest_digest",
+        "release",
+        "schema_version",
+        "source_generation",
+    }
+)
+_FILE_ENTRY_KEYS: Final = frozenset({"byte_length", "path", "sha256"})
+_RELEASE_KEYS: Final = frozenset(
+    {"application_id", "finjuice_version", "schema_version"},
+)
+_CONFIG_REVISION_KEYS: Final = frozenset(
+    {"config_kind", "revision_id", "source_artifact_id"},
+)
 
 #: Checks a completed restore proves before the copy is reported usable.
 RESTORE_CHECKS: Final = (
@@ -127,10 +149,13 @@ class BackupManifest:
     dataset_revision: int
     files: tuple[BackupFileEntry, ...]
     manifest_digest: str
+    release: dict[str, Any] | None = None
+    config_revisions: tuple[dict[str, Any], ...] | None = None
+    activation_binding: str | None = None
 
     def to_payload(self) -> dict[str, Any]:
         """Return the canonical payload covered by :attr:`manifest_digest`."""
-        return {
+        payload: dict[str, Any] = {
             "backup_id": self.backup_id,
             "created_at": self.created_at,
             "dataset_revision": self.dataset_revision,
@@ -139,6 +164,13 @@ class BackupManifest:
             "schema_version": self.schema_version,
             "source_generation": self.source_generation,
         }
+        if self.activation_binding is not None:
+            payload["activation_binding"] = self.activation_binding
+        if self.config_revisions is not None:
+            payload["config_revisions"] = list(self.config_revisions)
+        if self.release is not None:
+            payload["release"] = self.release
+        return payload
 
     @property
     def byte_count(self) -> int:
@@ -168,14 +200,18 @@ class BackupResult:
     manifest_digest: str
     complete: bool = True
     warnings: tuple[str, ...] = ()
+    config_revision_count: int = 0
+    activation_binding: str = ACTIVATION_ABSENT
 
     def to_dict(self) -> dict[str, Any]:
         """Return the privacy-safe CLI payload (no filesystem paths)."""
         return {
+            "activation_binding": self.activation_binding,
             "backup_id": self.backup_id,
             "backup_kind": BACKUP_KIND,
             "byte_count": self.byte_count,
             "complete": self.complete,
+            "config_revision_count": self.config_revision_count,
             "database_digest": self.database_digest,
             "dataset_revision": self.dataset_revision,
             "file_count": self.file_count,
@@ -224,6 +260,7 @@ class RestoreResult:
     verified: bool = True
     checks: tuple[str, ...] = RESTORE_CHECKS
     warnings: tuple[str, ...] = ()
+    generation_status: str = "inactive"
 
     def to_dict(self) -> dict[str, Any]:
         """Return the privacy-safe CLI payload (no filesystem paths)."""
@@ -232,6 +269,7 @@ class RestoreResult:
             "checks": list(self.checks),
             "dataset_revision": self.dataset_revision,
             "file_count": self.file_count,
+            "generation_status": self.generation_status,
             "manifest_digest": self.manifest_digest,
             "source_generation": self.source_generation,
             "status": "restored",
@@ -267,14 +305,17 @@ def resolve_generation_database(generation: Path) -> Path:
 def create_backup(database: Path, destination_root: Path) -> BackupResult:
     """Back up one published generation through the SQLite Online Backup API.
 
-    The snapshot, every immutable source object it references, and a completion
-    manifest are published into ``destination_root``. Re-running against an
-    unchanged generation rewrites identical payload bytes and publishes a new
-    manifest, so a repeated backup is idempotent. Payload files the new
-    manifest does not list (orphans of an earlier failed backup) are pruned
-    before the manifest is published. The new manifest replaces any previous
-    completion manifest as the final atomic step, so a failure at any earlier
-    point leaves the previous complete backup untouched.
+    The snapshot, every immutable source object and config/release artifact it
+    references, and a completion manifest are published as a new immutable
+    attempt. Referenced source objects are GC-pinned until that attempt's
+    pointer is published. Re-running against an unchanged generation writes
+    identical payload bytes into a new attempt and atomically retargets
+    ``CURRENT``. A failure before the pointer swap leaves the previous complete
+    attempt fully intact, including its database and objects.
+
+    Direct v1 destinations (payload files at the backup root) can still be
+    read and restored. Recreating into those roots is refused so the original
+    bytes stay untouched.
 
     Args:
         database: Path to the published ``finjuice.sqlite3`` (or its generation
@@ -289,35 +330,62 @@ def create_backup(database: Path, destination_root: Path) -> BackupResult:
     Raises:
         RepositoryBackupError: If the source generation is missing, the backup
             could not be transferred, or the snapshot failed verification. No
-            new manifest is published in any of those cases, and a previous
-            complete manifest in the destination stays intact.
+            new current pointer is published in any of those cases.
     """
     source_database = resolve_generation_database(database)
     source_root = GenerationPaths(source_database.parent).root
     backup_root = _prepare_backup_root(destination_root, source_root)
-    destination_paths = GenerationPaths(backup_root)
+    backup_id = uuid.uuid4().hex
+    attempt_root = backup_root / ATTEMPTS_NAMESPACE / backup_id
+    destination_paths = GenerationPaths(attempt_root)
     warnings: list[str] = []
-    staged = backup_root / f"{_STAGING_PREFIX}database-{uuid.uuid4().hex}.tmp"
+    pins: _PinnedSources | None = None
+    try:
+        _mkdir_checked(attempt_root, boundary=backup_root)
+    except (OSError, RepositoryPathError) as exc:
+        raise BackupTransferError("Backup attempt directory could not be prepared.") from exc
+    staged = attempt_root / f"{_STAGING_PREFIX}database-{uuid.uuid4().hex}.tmp"
     try:
         connection = _connect_builder(staged)
     except (OSError, RepositoryPathError) as exc:
         raise BackupTransferError("Backup staging database could not be created.") from exc
     try:
         info = _snapshot_into(connection, source_database)
-        _transfer_objects(source_database, connection, destination_paths)
+        config_revisions = _collect_config_revisions(connection)
+        release = _collect_release_evidence(info)
+        pins = _pin_referenced_objects(source_database, connection, backup_root)
+        _transfer_pinned_objects(pins, destination_paths)
         entries = _referenced_object_entries(connection)
+        _assert_config_objects_collected(config_revisions, entries)
         _validate_snapshot(connection, destination_paths)
     except Exception:
         connection.close()
         _cleanup_staging(staged)
+        if pins is not None:
+            pins.release()
         raise
     connection.close()
-    _prune_unlisted_payload(backup_root, entries, warnings)
-    database_entry = _publish_staged_database(staged, destination_paths, warnings)
-    manifest = _write_manifest(backup_root, info, (database_entry, *entries), warnings)
+    try:
+        _prune_unlisted_payload(attempt_root, entries, warnings)
+        database_entry = _publish_staged_database(staged, destination_paths, warnings)
+        manifest = _write_manifest(
+            attempt_root,
+            info,
+            (database_entry, *entries),
+            backup_id=backup_id,
+            release=release,
+            config_revisions=config_revisions,
+        )
+        _publish_current_pointer(backup_root, backup_id, warnings)
+    except Exception:
+        if pins is not None:
+            pins.release()
+        raise
+    assert pins is not None
+    pins.release()
     return BackupResult(
         backup_root=backup_root,
-        manifest_path=backup_root / MANIFEST_FILENAME,
+        manifest_path=attempt_root / MANIFEST_FILENAME,
         backup_id=manifest.backup_id,
         source_generation=manifest.source_generation,
         dataset_revision=manifest.dataset_revision,
@@ -326,6 +394,8 @@ def create_backup(database: Path, destination_root: Path) -> BackupResult:
         database_digest=database_entry.sha256,
         manifest_digest=manifest.manifest_digest,
         warnings=tuple(warnings),
+        config_revision_count=len(config_revisions),
+        activation_binding=ACTIVATION_ABSENT,
     )
 
 
@@ -349,9 +419,10 @@ def restore_backup(backup_root: Path, destination: Path) -> RestoreResult:
         BackupVerificationError: If any digest or database check fails.
         RepositoryPathError: If the destination is unsafe or already populated.
     """
-    source_root = _existing_backup_root(backup_root)
-    manifest = read_backup_manifest(source_root)
-    target_root, created_root = _prepare_restore_root(destination, source_root)
+    pointer_root = _existing_backup_root(backup_root)
+    source_root = resolve_backup_payload_root(pointer_root)
+    manifest = read_backup_manifest(pointer_root)
+    target_root, created_root = _prepare_restore_root(destination, pointer_root)
     target_paths = GenerationPaths(target_root)
     warnings: list[str] = []
     try:
@@ -364,7 +435,7 @@ def restore_backup(backup_root: Path, destination: Path) -> RestoreResult:
         _rollback_restore(target_root, created_root=created_root)
         raise
     return RestoreResult(
-        backup_root=source_root,
+        backup_root=pointer_root,
         destination=target_root,
         database=target_paths.database,
         source_generation=manifest.source_generation,
@@ -373,6 +444,7 @@ def restore_backup(backup_root: Path, destination: Path) -> RestoreResult:
         byte_count=manifest.byte_count,
         manifest_digest=manifest.manifest_digest,
         warnings=tuple(warnings),
+        generation_status="inactive",
     )
 
 
@@ -380,7 +452,8 @@ def read_backup_manifest(backup_root: Path) -> BackupManifest:
     """Parse and self-verify one backup completion manifest.
 
     Args:
-        backup_root: Directory holding ``backup-manifest.json``.
+        backup_root: Pointer root, current attempt directory, or a restored
+            copy that still holds ``backup-manifest.json``.
 
     Returns:
         The verified manifest.
@@ -390,7 +463,7 @@ def read_backup_manifest(backup_root: Path) -> BackupManifest:
             structurally invalid, which always means the backup is incomplete.
         BackupVerificationError: If the manifest does not match its own digest.
     """
-    root = _absolute_root(backup_root)
+    root = resolve_backup_payload_root(backup_root)
     try:
         raw = (root / MANIFEST_FILENAME).read_bytes()
     except OSError as exc:
@@ -404,8 +477,9 @@ def backup_status(backup_root: Path) -> BackupStatus:
     """Report whether one backup directory holds a complete, trusted backup.
 
     A parsed manifest alone is not trusted: every listed payload file is
-    re-verified for existence, recorded size, and SHA-256 digest, and any
-    mismatch is reported as not-complete with a stable reason.
+    re-verified for existence, recorded size, and SHA-256 digest, unlisted
+    or non-regular payload is rejected, and any mismatch is reported as
+    not-complete with a stable reason.
 
     This never raises for an unusable backup: an incomplete backup is reported
     with ``complete=False`` and a stable machine-readable reason.
@@ -419,16 +493,52 @@ def backup_status(backup_root: Path) -> BackupStatus:
     root = _absolute_root(backup_root)
     if not root.is_dir():
         return BackupStatus(root, False, "missing_backup_root", None)
-    if not (root / MANIFEST_FILENAME).is_file():
+    try:
+        payload_root = resolve_backup_payload_root(root)
+    except RepositoryBackupError as exc:
+        return BackupStatus(root, False, exc.reason, None)
+    if not (payload_root / MANIFEST_FILENAME).is_file():
         return BackupStatus(root, False, "missing_manifest", None)
     try:
         manifest = read_backup_manifest(root)
+        defect = _payload_defect_reason(payload_root, manifest)
     except RepositoryBackupError as exc:
         return BackupStatus(root, False, exc.reason, None)
-    defect = _payload_defect_reason(root, manifest)
     if defect is not None:
         return BackupStatus(root, False, defect, manifest)
     return BackupStatus(root, True, "complete", manifest)
+
+
+def resolve_backup_payload_root(backup_root: Path) -> Path:
+    """Return the attempt or direct-v1 directory that holds payload files.
+
+    Args:
+        backup_root: Operator-supplied backup root or an already-resolved
+            attempt directory.
+
+    Returns:
+        The directory containing ``backup-manifest.json`` and payload files.
+
+    Raises:
+        BackupIncompleteError: If ``CURRENT`` is unreadable or names a missing
+            attempt.
+    """
+    root = _absolute_root(backup_root)
+    current = root / CURRENT_FILENAME
+    if not current.exists():
+        return root
+    if _entry_kind(current) != "file":
+        raise BackupIncompleteError("Backup current pointer is not a regular file.")
+    try:
+        relative = current.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        raise BackupIncompleteError("Backup current pointer could not be read.") from exc
+    if _ATTEMPT_RE.fullmatch(relative) is None:
+        raise BackupIncompleteError("Backup current pointer does not name a trusted attempt.")
+    payload = root / relative
+    if not payload.is_dir() or payload.is_symlink():
+        raise BackupIncompleteError("Backup current pointer does not name an attempt directory.")
+    return payload
 
 
 def _snapshot_into(connection: sqlite3.Connection, source_database: Path) -> RepositoryInfo:
@@ -463,15 +573,109 @@ def _connect_readonly(path: Path) -> sqlite3.Connection:
     return connection
 
 
-def _transfer_objects(
+@dataclass
+class _PinnedSources:
+    """Hardlinked or copied source objects held until the backup pointer is durable."""
+
+    pin_root: Path
+    artifacts: tuple[tuple[Path, str, int], ...]
+
+    def release(self) -> None:
+        """Drop GC pins after the completion pointer is published or the attempt fails."""
+        shutil.rmtree(self.pin_root, ignore_errors=True)
+
+
+def _collect_config_revisions(connection: sqlite3.Connection) -> tuple[dict[str, Any], ...]:
+    """Return snapshot config revisions without mixing in live YAML."""
+    rows = connection.execute(
+        "SELECT entity_id, config_kind, source_artifact_id FROM config_revisions "
+        "ORDER BY entity_id",
+    ).fetchall()
+    return tuple(
+        {
+            "config_kind": str(row[1]),
+            "revision_id": str(row[0]),
+            "source_artifact_id": str(row[2]),
+        }
+        for row in rows
+    )
+
+
+def _collect_release_evidence(info: RepositoryInfo) -> dict[str, Any]:
+    """Return snapshot schema identity plus the installed program version."""
+    from finjuice import get_version
+
+    return {
+        "application_id": info.application_id,
+        "finjuice_version": get_version(),
+        "schema_version": info.schema_version,
+    }
+
+
+def _assert_config_objects_collected(
+    config_revisions: tuple[dict[str, Any], ...],
+    entries: tuple[BackupFileEntry, ...],
+) -> None:
+    """Refuse a backup that names a config artifact it did not collect."""
+    collected = {entry.sha256 for entry in entries}
+    for revision in config_revisions:
+        if revision["source_artifact_id"] not in collected:
+            raise BackupVerificationError(
+                "A referenced config revision artifact was not collected into the backup.",
+            )
+
+
+def _pin_referenced_objects(
     source_database: Path,
     connection: sqlite3.Connection,
-    destination_paths: GenerationPaths,
-) -> None:
-    """Verify and carry every referenced immutable object into the backup."""
+    backup_root: Path,
+) -> _PinnedSources:
+    """Hold referenced source inodes so GC cannot drop them during collection."""
+    source_paths = GenerationPaths(source_database.parent)
+    pin_root = backup_root / f"{_STAGING_PREFIX}pins-{uuid.uuid4().hex}"
     try:
-        SourceObjectStore(destination_paths).prepare()
-        _copy_source_objects(source_database, connection, destination_paths)
+        _mkdir_checked(pin_root, boundary=backup_root)
+    except (OSError, RepositoryPathError) as exc:
+        raise BackupTransferError("Backup source pins could not be prepared.") from exc
+    pinned: list[tuple[Path, str, int]] = []
+    try:
+        for entry in _referenced_object_entries(connection):
+            source = source_paths.root / entry.path
+            pin_path = pin_root / entry.sha256.removeprefix("sha256:")
+            _pin_regular_file(source, pin_path)
+            pinned.append((pin_path, entry.sha256, entry.byte_length))
+    except Exception:
+        shutil.rmtree(pin_root, ignore_errors=True)
+        raise
+    return _PinnedSources(pin_root=pin_root, artifacts=tuple(pinned))
+
+
+def _pin_regular_file(source: Path, pin_path: Path) -> None:
+    """Hold one source object by hardlink, falling back to a private copy."""
+    try:
+        os.link(source, pin_path, follow_symlinks=False)
+        return
+    except OSError:
+        pass
+    try:
+        _copy_regular_file(source, pin_path)
+    except BackupTransferError as exc:
+        raise BackupTransferError(
+            "A referenced immutable source object could not be pinned against GC.",
+        ) from exc
+
+
+def _transfer_pinned_objects(pins: _PinnedSources, destination_paths: GenerationPaths) -> None:
+    """Publish GC-pinned source objects into the new attempt."""
+    try:
+        store = SourceObjectStore(destination_paths)
+        store.prepare()
+        for pin_path, artifact_id, byte_length in pins.artifacts:
+            published = store.publish_path(pin_path)
+            if published.artifact_id != artifact_id or published.byte_length != byte_length:
+                raise BackupVerificationError(
+                    "A referenced immutable source object changed while it was backed up.",
+                )
     except OSError as exc:
         raise BackupTransferError("Backup source objects could not be transferred.") from exc
     except (ObjectStoreError, RepositoryIntegrityError, RepositoryPathError) as exc:
@@ -555,30 +759,51 @@ def _record_directory_fsync(directory: Path, warnings: list[str]) -> None:
 
 
 def _write_manifest(
-    backup_root: Path,
+    attempt_root: Path,
     info: RepositoryInfo,
     entries: tuple[BackupFileEntry, ...],
-    warnings: list[str],
+    *,
+    backup_id: str,
+    release: dict[str, Any],
+    config_revisions: tuple[dict[str, Any], ...],
 ) -> BackupManifest:
-    """Atomically swap in the completion manifest for a proven backup.
+    """Atomically publish the completion manifest for one isolated attempt.
 
-    This is the final commit step of :func:`create_backup`: the staged
-    manifest replaces any previous completion manifest through
-    :func:`os.replace`, so any failure before this point leaves the previous
-    complete backup untouched.
+    Directory fsync of the attempt is required before the current pointer may
+    move. A failure here does not retarget ``CURRENT``, so the previous complete
+    attempt stays fully intact.
     """
-    manifest = _completed_manifest(info, entries)
-    staged = backup_root / f"{_STAGING_PREFIX}manifest-{uuid.uuid4().hex}.tmp"
+    manifest = _completed_manifest(
+        info,
+        entries,
+        backup_id=backup_id,
+        release=release,
+        config_revisions=config_revisions,
+    )
+    staged = attempt_root / f"{_STAGING_PREFIX}manifest-{uuid.uuid4().hex}.tmp"
     document = {**manifest.to_payload(), "manifest_digest": manifest.manifest_digest}
     payload = json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     try:
         _write_private_file(staged, payload.encode("utf-8"))
-        os.replace(staged, backup_root / MANIFEST_FILENAME)
+        os.replace(staged, attempt_root / MANIFEST_FILENAME)
+        _fsync_directory(attempt_root)
     except OSError as exc:
         staged.unlink(missing_ok=True)
         raise BackupTransferError("Backup completion manifest could not be published.") from exc
-    _record_directory_fsync(backup_root, warnings)
     return manifest
+
+
+def _publish_current_pointer(backup_root: Path, backup_id: str, warnings: list[str]) -> None:
+    """Atomically retarget ``CURRENT`` after one attempt is durable."""
+    relative = f"{ATTEMPTS_NAMESPACE}/{backup_id}"
+    staged = backup_root / f"{_STAGING_PREFIX}current-{uuid.uuid4().hex}.tmp"
+    try:
+        _write_private_file(staged, f"{relative}\n".encode("utf-8"))
+        os.replace(staged, backup_root / CURRENT_FILENAME)
+    except OSError as exc:
+        staged.unlink(missing_ok=True)
+        raise BackupTransferError("Backup current pointer could not be published.") from exc
+    _record_directory_fsync(backup_root, warnings)
 
 
 def _prune_unlisted_payload(
@@ -588,16 +813,10 @@ def _prune_unlisted_payload(
 ) -> None:
     """Remove destination payload files the new manifest does not list.
 
-    Orphans left behind by an earlier failed backup would otherwise poison
-    the destination permanently: :func:`restore_backup` rejects any backup
-    directory holding payload outside its manifest, so pruning guarantees a
-    complete manifest describes the exact payload set. The fixed snapshot
-    path is always preserved so the previous database survives until it is
-    atomically replaced moments before the manifest swap.
-
-    Every pruned orphan is recorded as a warning: the previous complete
-    manifest in this destination (if any) becomes stale for those paths, so
-    a crash before the new manifest swap is detectable rather than silent.
+    Kept for attempt-local cleanup of staging leftovers. It must never run
+    against a previous complete attempt; previous preservation is proved by
+    leaving that attempt directory intact, not by keeping a stale manifest
+    file at the pointer root.
     """
     listed = {entry.path for entry in entries} | {DATABASE_BASENAME, MANIFEST_FILENAME}
     for path in _inventoried_payload(backup_root):
@@ -615,9 +834,24 @@ def _prune_unlisted_payload(
 
 def _payload_defect_reason(root: Path, manifest: BackupManifest) -> str | None:
     """Return why listed payload disagrees with the manifest, or ``None``."""
+    listed = {entry.path for entry in manifest.files} | {MANIFEST_FILENAME}
+    for path in _inventoried_payload(root):
+        relative = path.relative_to(root).as_posix()
+        kind = _entry_kind(path)
+        if kind == "directory":
+            continue
+        if kind != "file" or relative not in listed:
+            return "unlisted_payload" if relative not in listed else "payload_not_regular_file"
     for entry in manifest.files:
+        target = root / entry.path
         try:
-            byte_length, digest = _hash_regular_file(root / entry.path)
+            kind = _entry_kind(target)
+        except BackupVerificationError:
+            return "payload_missing"
+        if kind != "file":
+            return "payload_missing" if kind == "directory" else "payload_not_regular_file"
+        try:
+            byte_length, digest = _hash_regular_file(target)
         except BackupTransferError:
             return "payload_missing"
         if byte_length != entry.byte_length:
@@ -630,6 +864,10 @@ def _payload_defect_reason(root: Path, manifest: BackupManifest) -> str | None:
 def _completed_manifest(
     info: RepositoryInfo,
     entries: tuple[BackupFileEntry, ...],
+    *,
+    backup_id: str,
+    release: dict[str, Any],
+    config_revisions: tuple[dict[str, Any], ...],
 ) -> BackupManifest:
     """Build the self-digested manifest document for one verified backup."""
     generation = info.dataset_generation
@@ -640,12 +878,15 @@ def _completed_manifest(
     manifest = BackupManifest(
         schema_version=BACKUP_SCHEMA_VERSION,
         kind=BACKUP_KIND,
-        backup_id=uuid.uuid4().hex,
+        backup_id=backup_id,
         created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         source_generation=generation,
         dataset_revision=revision,
         files=ordered,
         manifest_digest="",
+        release=release,
+        config_revisions=config_revisions,
+        activation_binding=ACTIVATION_ABSENT,
     )
     return replace(manifest, manifest_digest=_digest_text(_canonical_json(manifest.to_payload())))
 
@@ -743,14 +984,9 @@ def _restore_manifest_document(
 
 def _reject_unlisted_payload(source_root: Path, manifest: BackupManifest) -> None:
     """Refuse a backup directory holding payload outside its manifest."""
-    listed = {entry.path for entry in manifest.files} | {MANIFEST_FILENAME}
-    for path in _inventoried_payload(source_root):
-        relative = path.relative_to(source_root).as_posix()
-        kind = _entry_kind(path)
-        if kind == "directory":
-            continue
-        if kind != "file" or relative not in listed:
-            raise BackupVerificationError("Backup directory holds payload outside its manifest.")
+    defect = _payload_defect_reason(source_root, manifest)
+    if defect is not None:
+        raise BackupVerificationError("Backup directory failed shared payload verification.")
 
 
 def _inventoried_payload(source_root: Path) -> list[Path]:
@@ -786,6 +1022,13 @@ def _rollback_restore(target_root: Path, *, created_root: bool) -> None:
             child.unlink(missing_ok=True)
 
 
+def _is_direct_v1_backup(root: Path) -> bool:
+    """Return True when payload files sit at the backup root without a pointer."""
+    if (root / CURRENT_FILENAME).exists():
+        return False
+    return (root / MANIFEST_FILENAME).exists() or (root / DATABASE_BASENAME).exists()
+
+
 def _prepare_backup_root(destination_root: Path, source_root: Path) -> Path:
     """Create or reuse a private backup root that is separate from the source."""
     root = _absolute_root(destination_root)
@@ -795,6 +1038,10 @@ def _prepare_backup_root(destination_root: Path, source_root: Path) -> Path:
     except OSError as exc:
         raise RepositoryPathError("Backup destination root could not be prepared.") from exc
     _clear_stale_staging(root)
+    if _is_direct_v1_backup(root):
+        raise RepositoryBackupError(
+            "Existing direct v1 backup is preserved; choose a new destination.",
+        )
     return root
 
 
@@ -844,8 +1091,11 @@ def _absolute_root(path: Path) -> Path:
 def _clear_stale_staging(backup_root: Path) -> None:
     """Remove staging files left behind by an earlier failed backup."""
     try:
-        for staged in backup_root.glob(f"{_STAGING_PREFIX}*.tmp"):
-            staged.unlink(missing_ok=True)
+        for staged in backup_root.glob(f"{_STAGING_PREFIX}*"):
+            if staged.is_dir() and not staged.is_symlink():
+                shutil.rmtree(staged)
+            else:
+                staged.unlink(missing_ok=True)
     except OSError as exc:
         raise BackupTransferError("Stale backup staging files could not be removed.") from exc
 
@@ -855,21 +1105,26 @@ def _copy_regular_file(source: Path, staged: Path) -> tuple[int, str]:
     digest = hashlib.sha256()
     byte_length = 0
     try:
-        with source.open("rb") as reader:
+        source_fd = _open_regular_readonly(source)
+        try:
             descriptor = os.open(staged, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             try:
                 while True:
-                    chunk = reader.read(_CHUNK_SIZE)
+                    chunk = os.read(source_fd, _CHUNK_SIZE)
                     if not chunk:
                         break
                     byte_length += len(chunk)
                     digest.update(chunk)
-                    os.write(descriptor, chunk)
+                    _write_all(descriptor, chunk)
                 os.fsync(descriptor)
             finally:
                 os.close(descriptor)
-    except OSError as exc:
+        finally:
+            os.close(source_fd)
+    except (OSError, BackupTransferError) as exc:
         staged.unlink(missing_ok=True)
+        if isinstance(exc, BackupTransferError):
+            raise
         raise BackupTransferError("Backup payload could not be copied.") from exc
     return byte_length, digest.hexdigest()
 
@@ -879,27 +1134,59 @@ def _hash_regular_file(path: Path) -> tuple[int, str]:
     digest = hashlib.sha256()
     byte_length = 0
     try:
-        with path.open("rb") as reader:
+        descriptor = _open_regular_readonly(path)
+        try:
             while True:
-                chunk = reader.read(_CHUNK_SIZE)
+                chunk = os.read(descriptor, _CHUNK_SIZE)
                 if not chunk:
                     break
                 byte_length += len(chunk)
                 digest.update(chunk)
+        finally:
+            os.close(descriptor)
     except OSError as exc:
         raise BackupTransferError("Backup payload could not be hashed.") from exc
     return byte_length, digest.hexdigest()
+
+
+def _open_regular_readonly(path: Path) -> int:
+    """Open one regular file without following a final symlink."""
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(path, flags)
+    try:
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode):
+            raise BackupTransferError("Backup payload must be a regular file.")
+    except Exception:
+        os.close(descriptor)
+        raise
+    return descriptor
 
 
 def _write_private_file(path: Path, data: bytes) -> None:
     """Create one private regular file with the given bytes."""
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     try:
-        os.write(descriptor, data)
+        _write_all(descriptor, data)
         os.fchmod(descriptor, 0o600)
         os.fsync(descriptor)
-    finally:
+    except Exception:
         os.close(descriptor)
+        path.unlink(missing_ok=True)
+        raise
+    os.close(descriptor)
+
+
+def _write_all(descriptor: int, data: bytes) -> None:
+    """Write every byte, treating a zero-length write as a transfer failure."""
+    remaining = memoryview(data)
+    while remaining:
+        written = os.write(descriptor, remaining)
+        if written <= 0:
+            raise BackupTransferError("Backup payload write made no progress.")
+        remaining = remaining[written:]
 
 
 def _fsync_file(path: Path) -> None:
@@ -932,8 +1219,65 @@ def _manifest_from_bytes(raw: bytes) -> BackupManifest:
     return manifest
 
 
+def _optional_release(raw: Any) -> dict[str, Any] | None:
+    """Validate optional snapshot/program release evidence."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict) or set(raw) != _RELEASE_KEYS:
+        raise BackupIncompleteError("Backup manifest records invalid release evidence.")
+    version = _manifest_text(raw, "finjuice_version")
+    application_id = _manifest_int(raw, "application_id")
+    schema_version = _manifest_int(raw, "schema_version")
+    return {
+        "application_id": application_id,
+        "finjuice_version": version,
+        "schema_version": schema_version,
+    }
+
+
+def _optional_config_revisions(raw: Any) -> tuple[dict[str, Any], ...] | None:
+    """Validate optional snapshot config-revision references."""
+    if raw is None:
+        return None
+    if not isinstance(raw, list):
+        raise BackupIncompleteError("Backup manifest config revisions must be a list.")
+    revisions: list[dict[str, Any]] = []
+    for item in raw:
+        if not isinstance(item, dict) or set(item) != _CONFIG_REVISION_KEYS:
+            raise BackupIncompleteError("Backup manifest records an invalid config revision.")
+        try:
+            revision_id = validate_entity_id(_manifest_text(item, "revision_id"))
+        except ValueError as exc:
+            raise BackupIncompleteError(
+                "Backup manifest records an invalid config revision.",
+            ) from exc
+        artifact_id = _manifest_text(item, "source_artifact_id")
+        if _DIGEST_RE.fullmatch(artifact_id) is None:
+            raise BackupIncompleteError("Backup manifest records an invalid config artifact.")
+        revisions.append(
+            {
+                "config_kind": _manifest_text(item, "config_kind"),
+                "revision_id": revision_id,
+                "source_artifact_id": artifact_id,
+            }
+        )
+    return tuple(revisions)
+
+
+def _optional_activation(raw: Any) -> str | None:
+    """Validate optional activation-binding status."""
+    if raw is None:
+        return None
+    if raw != ACTIVATION_ABSENT:
+        raise BackupIncompleteError("Backup manifest records an unsupported activation binding.")
+    return ACTIVATION_ABSENT
+
+
 def _manifest_from_payload(payload: dict[str, Any]) -> BackupManifest:
     """Build a manifest from validated payload fields."""
+    unknown = set(payload) - _MANIFEST_KEYS
+    if unknown:
+        raise BackupIncompleteError("Backup completion manifest contains unsupported fields.")
     manifest = BackupManifest(
         schema_version=_manifest_int(payload, "schema_version"),
         kind=_manifest_text(payload, "kind"),
@@ -943,6 +1287,9 @@ def _manifest_from_payload(payload: dict[str, Any]) -> BackupManifest:
         dataset_revision=_manifest_int(payload, "dataset_revision"),
         files=_manifest_files(payload.get("files")),
         manifest_digest=_manifest_digest_text(payload),
+        release=_optional_release(payload.get("release")),
+        config_revisions=_optional_config_revisions(payload.get("config_revisions")),
+        activation_binding=_optional_activation(payload.get("activation_binding")),
     )
     if manifest.schema_version != BACKUP_SCHEMA_VERSION or manifest.kind != BACKUP_KIND:
         raise BackupIncompleteError("Backup was written by an unsupported backup format.")
@@ -954,6 +1301,9 @@ def _manifest_files(raw: Any) -> tuple[BackupFileEntry, ...]:
     if not isinstance(raw, list) or not raw:
         raise BackupIncompleteError("Backup manifest must list at least one payload file.")
     entries = tuple(_manifest_file_entry(item) for item in raw)
+    paths = [entry.path for entry in entries]
+    if len(paths) != len(set(paths)):
+        raise BackupIncompleteError("Backup manifest records duplicate payload paths.")
     if sum(1 for entry in entries if entry.role == _DATABASE_ROLE) != 1:
         raise BackupIncompleteError("Backup manifest must record exactly one database snapshot.")
     return entries
@@ -963,6 +1313,8 @@ def _manifest_file_entry(raw: Any) -> BackupFileEntry:
     """Validate one recorded payload file entry."""
     if not isinstance(raw, dict):
         raise BackupIncompleteError("Backup manifest file entries must be JSON objects.")
+    if set(raw) - _FILE_ENTRY_KEYS:
+        raise BackupIncompleteError("Backup manifest file entries contain unsupported fields.")
     path = _manifest_relative_path(_manifest_text(raw, "path"))
     sha256 = _manifest_text(raw, "sha256")
     byte_length = _manifest_int(raw, "byte_length")
@@ -1034,6 +1386,7 @@ def _digest_text(data: bytes) -> str:
 __all__ = [
     "BACKUP_KIND",
     "BACKUP_SCHEMA_VERSION",
+    "CURRENT_FILENAME",
     "DATABASE_BASENAME",
     "MANIFEST_FILENAME",
     "RESTORE_CHECKS",
@@ -1045,6 +1398,7 @@ __all__ = [
     "backup_status",
     "create_backup",
     "read_backup_manifest",
+    "resolve_backup_payload_root",
     "resolve_generation_database",
     "restore_backup",
 ]

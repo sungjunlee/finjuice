@@ -40,6 +40,8 @@ MUTATING_COMMANDS = {
     "rules gaps",
     "rules remove",
     "rules suggest",
+    "ssot backup create",
+    "ssot backup restore",
     "tag",
     "template run",
     "transfer",
@@ -69,6 +71,9 @@ ARTIFACT_COMMANDS = {
     "backup create",
     "backup restore",
     "backup verify",
+    "ssot backup create",
+    "ssot backup restore",
+    "ssot backup status",
     "export",
     "open",
 }
@@ -86,6 +91,13 @@ COMMAND_EXAMPLES = {
     ],
     "backup verify": ["finjuice backup verify <backup-manifest> --json"],
     "backup restore": ["finjuice backup restore <backup-manifest> --target <empty-path> --json"],
+    "ssot backup create": [
+        "finjuice ssot backup create --source <generation> --output <new-path> --json"
+    ],
+    "ssot backup restore": [
+        "finjuice ssot backup restore <backup-dir> --target <empty-path> --json"
+    ],
+    "ssot backup status": ["finjuice ssot backup status <backup-dir> --json"],
 }
 
 

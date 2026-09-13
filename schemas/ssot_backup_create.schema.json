@@ -1,0 +1,77 @@
+{
+  "$id": "ssot_backup_create.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "activation_binding": {
+      "type": "string"
+    },
+    "backup_id": {
+      "type": "string"
+    },
+    "backup_kind": {
+      "type": "string"
+    },
+    "byte_count": {
+      "type": "integer"
+    },
+    "complete": {
+      "type": "boolean"
+    },
+    "config_revision_count": {
+      "type": "integer"
+    },
+    "database_digest": {
+      "type": "string"
+    },
+    "dataset_revision": {
+      "type": "integer"
+    },
+    "file_count": {
+      "type": "integer"
+    },
+    "manifest_digest": {
+      "type": "string"
+    },
+    "manifest_schema_version": {
+      "type": "integer"
+    },
+    "source_generation": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "complete"
+      ],
+      "type": "string"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "activation_binding",
+    "backup_id",
+    "backup_kind",
+    "byte_count",
+    "complete",
+    "config_revision_count",
+    "database_digest",
+    "dataset_revision",
+    "file_count",
+    "manifest_digest",
+    "manifest_schema_version",
+    "source_generation",
+    "status",
+    "warnings"
+  ],
+  "title": "ssot backup create --json output",
+  "type": "object"
+}
