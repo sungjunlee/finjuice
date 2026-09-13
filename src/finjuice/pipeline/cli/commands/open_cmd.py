@@ -9,11 +9,15 @@ import logging
 import platform
 import subprocess
 from pathlib import Path
-from typing import Annotated, Callable, Optional
+from typing import TYPE_CHECKING, Annotated, Callable, Literal, Optional, cast
 
 import typer
 
+from finjuice.pipeline.cli import output
 from finjuice.pipeline.cli.output import console
+
+if TYPE_CHECKING:
+    from finjuice.pipeline.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +114,11 @@ def register_open_command(app: typer.Typer) -> None:
             )
             raise typer.Exit(code=1)
 
+        if target in ("master", "reports") and _open_repository_artifact(
+            ctx, config, cast(Literal["master", "reports"], target)
+        ):
+            return
+
         # Get path
         try:
             path = target_map[target]()
@@ -117,14 +126,7 @@ def register_open_command(app: typer.Typer) -> None:
             console.print(f"Not found: {e}", style="red")
             raise typer.Exit(code=1)
 
-        # Check existence
-        if not path.exists():
-            console.print(f"Path does not exist: {path}", style="red")
-            if target in ("imports", "exports", "reports", "transactions", "tx"):
-                console.print("\nTip: Run 'finjuice refresh' to create directories", style="yellow")
-            elif target == "rules":
-                console.print("\nTip: Create rules.yaml or run 'finjuice init'", style="yellow")
-            raise typer.Exit(code=1)
+        _require_open_path(path, target)
 
         # Open the path
         try:
@@ -135,9 +137,57 @@ def register_open_command(app: typer.Typer) -> None:
             raise typer.Exit(code=1)
 
 
+def _require_open_path(path: Path, target: str | None) -> None:
+    if path.exists():
+        return
+    console.print(f"Path does not exist: {path}", style="red")
+    if target in ("imports", "exports", "reports", "transactions", "tx"):
+        console.print("\nTip: Run 'finjuice refresh' to create directories", style="yellow")
+    elif target == "rules":
+        console.print("\nTip: Create rules.yaml or run 'finjuice init'", style="yellow")
+    raise typer.Exit(code=1)
+
+
 def _get_master_or_raise(export_dir: Path) -> Path:
     """Get latest master file or raise FileNotFoundError."""
     master = find_latest_master(export_dir)
     if master is None:
         raise FileNotFoundError(f"No master files found in {export_dir}")
     return master
+
+
+def _open_repository_artifact(
+    ctx: typer.Context, config: "Config", target: Literal["master", "reports"]
+) -> bool:
+    """Open a verified current export, or retain verified legacy discovery."""
+    from finjuice.pipeline.cli.utils import get_activation_evidence_provider
+    from finjuice.pipeline.export.artifact_discovery import (
+        discover_repository_artifact,
+        validate_selected_artifact,
+    )
+    from finjuice.pipeline.storage.read_facade import read_transaction_snapshot, snapshot_metadata
+
+    try:
+        snapshot = read_transaction_snapshot(config.data_dir, get_activation_evidence_provider(ctx))
+        if snapshot is None:
+            return False
+        current = snapshot_metadata(snapshot)
+        selected = discover_repository_artifact(config.export_dir, current, target)
+        output.info("Export matches the selected repository revision; local receipt is intact.")
+        output.info("Selection uses observed filesystem modification time, not publication time.")
+        validate_selected_artifact(selected, config.export_dir, current)
+    except Exception:
+        output.error("Could not select a verified current repository export.")
+        output.warning(
+            "Check export receipts and authority; use 'finjuice export --format xlsx' "
+            "when current files need regeneration."
+        )
+        raise typer.Exit(code=1) from None
+
+    try:
+        open_path(selected.path)
+    except Exception:
+        output.error("Failed to open the verified export with the system application.")
+        raise typer.Exit(code=1) from None
+    output.success(f"Opened: {selected.path}")
+    return True

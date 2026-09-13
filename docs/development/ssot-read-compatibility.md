@@ -160,6 +160,21 @@ validated repository snapshot. `stale` describes the data identity comparison;
 artifacts or trust compatibility CSV. A local receipt is not authenticated: coordinated
 edits to both receipt and files cannot be detected as tampering by its own hashes.
 
+On an active repository, `open master` and `open reports` discover files only in
+receipted export runs that match one validated repository snapshot. `master` opens
+the declared master workbook; `reports` opens a run's directory containing declared
+report files. Stale receipts are excluded, invalid receipts or damaged files fail
+discovery, and top-level legacy files are never a fallback. If no eligible output
+exists, regenerate it with `finjuice export --format xlsx`. A verified legacy root
+retains its existing file discovery behavior.
+
+When several current runs qualify, selection uses observed manifest modification
+time with a stable path tie-break. This is a filesystem convenience, not proof of
+publication order. The selected receipt and its declared files are checked again
+before invoking the system opener. Revision matching is relative to the snapshot
+selected by this command; it does not lock out subsequent writes or protect against
+an adversarial file replacement during the external application's open operation.
+
 Later sections record status, portfolio and checkup integration. Remaining runtime
 consumers, private corpus parity/performance and operational cutover retain their
 separate #436/operational gates.

@@ -170,13 +170,23 @@ def inspect_repository_export(
     The two independent results distinguish stale data from changed/missing files.
     A matching receipt is not proof against coordinated edits to files and manifest.
     """
+    return inspect_repository_export_inventory(manifest_path, export_root, current)[0]
+
+
+def inspect_repository_export_inventory(
+    manifest_path: Path, export_root: Path, current: dict[str, object]
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Return verification and inventory from the same parsed receipt bytes."""
     runs = export_root.resolve() / "runs"
     path = manifest_path.absolute()
     if path.name != MANIFEST_NAME or not path.parent.parent.resolve() == runs:
         raise ExportArtifactError("Select a manifest inside this dataset's export runs.")
     if any(part.is_symlink() for part in (path, *path.parents)):
         raise ExportArtifactError("Export manifest cannot use symbolic links.")
-    manifest = _validate_manifest(json.loads(path.read_text(encoding="utf-8")))
+    if not path.is_file():
+        raise ExportArtifactError("Export manifest must be a regular file.")
+    content = path.read_bytes()
+    manifest = _validate_manifest(json.loads(content.decode("utf-8")))
     files = []
     for entry in manifest["files"]:
         target = _member(path.parent, entry["path"])
@@ -195,11 +205,11 @@ def inspect_repository_export(
         source.get(key) != current.get(key)
         for key in ("authority", "dataset_generation", "dataset_revision", "sqlite_schema_version")
     )
-    return {
+    verification = {
         "command": "export",
         "operation": "verify_manifest",
         "manifest_path": str(path),
-        "manifest_sha256": _digest(path),
+        "manifest_sha256": hashlib.sha256(content).hexdigest(),
         "source": source,
         "current": current,
         "stale": stale,
@@ -207,6 +217,7 @@ def inspect_repository_export(
         "files": files,
         "verification_policy": "local_export_receipt.v1",
     }
+    return verification, manifest
 
 
 def _describe_absent_xlsx(
