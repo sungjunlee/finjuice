@@ -4,6 +4,7 @@ Tests for import history tracking.
 Tests file_id generation, import recording, archiving, and metadata CRUD operations.
 """
 
+import os
 import re
 from pathlib import Path
 
@@ -18,6 +19,16 @@ from finjuice.pipeline.metadata.import_history import (
     list_source_files,
     record_import,
 )
+
+
+def _record_import(tmp_path, file_path, file_mtime, source_rows, **kwargs):
+    return record_import(
+        file_path,
+        file_mtime,
+        source_rows,
+        authority_data_dir=tmp_path.resolve(),
+        **kwargs,
+    )
 
 
 class TestGenerateFileId:
@@ -97,15 +108,15 @@ class TestArchiveSourceFile:
         # Arrange
         source_file = tmp_path / "source.xlsx"
         source_file.write_text("test data")
-        archive_dir = tmp_path / "archives"
         file_id = "241027_1"
 
         # Act
-        archived_path = archive_source_file(source_file, archive_dir, file_id)
+        data_dir = tmp_path.resolve()
+        archived_path = archive_source_file(source_file, file_id, authority_data_dir=data_dir)
 
         # Assert
         assert archived_path.exists()
-        assert archived_path == archive_dir / f"{file_id}.xlsx"
+        assert archived_path == data_dir / "metadata" / "archives" / f"{file_id}.xlsx"
         assert archived_path.read_text() == "test data"
 
     def test_archive_source_file_creates_archive_dir(self, tmp_path):
@@ -113,11 +124,12 @@ class TestArchiveSourceFile:
         # Arrange
         source_file = tmp_path / "source.xlsx"
         source_file.write_text("test data")
-        archive_dir = tmp_path / "archives"
+        data_dir = tmp_path.resolve()
+        archive_dir = data_dir / "metadata" / "archives"
         assert not archive_dir.exists()
 
         # Act
-        archived_path = archive_source_file(source_file, archive_dir, "241027_1")
+        archived_path = archive_source_file(source_file, "241027_1", authority_data_dir=data_dir)
 
         # Assert
         assert archive_dir.exists()
@@ -127,11 +139,27 @@ class TestArchiveSourceFile:
         """Should raise FileNotFoundError if source file doesn't exist."""
         # Arrange
         source_file = tmp_path / "nonexistent.xlsx"
-        archive_dir = tmp_path / "archives"
 
         # Act & Assert
         with pytest.raises(FileNotFoundError):
-            archive_source_file(source_file, archive_dir, "241027_1")
+            archive_source_file(source_file, "241027_1", authority_data_dir=tmp_path.resolve())
+
+    def test_archive_source_file_preserves_source_mtime(self, tmp_path):
+        """Archived copy must keep the captured source mtime for --from-archive."""
+        # Arrange
+        source_file = tmp_path / "source.xlsx"
+        source_file.write_text("test data")
+        stamp = 1_000_000_000_123_456_789
+        os.utime(source_file, ns=(stamp, stamp))
+        data_dir = tmp_path.resolve()
+
+        # Act
+        archived_path = archive_source_file(source_file, "241027_1", authority_data_dir=data_dir)
+
+        # Assert
+        assert archived_path.stat().st_mtime_ns == stamp
+        assert archived_path.read_text() == "test data"
+        assert source_file.stat().st_mtime_ns == stamp
 
 
 class TestRecordImport:
@@ -140,13 +168,13 @@ class TestRecordImport:
     def test_record_import_without_archive(self, tmp_path):
         """Should record new import without archiving."""
         # Arrange
-        metadata_dir = tmp_path / "metadata"
+        metadata_dir = tmp_path.resolve() / "metadata"
         file_path = Path("data/imports/2024-10-27~2025-10-27.xlsx")
         file_mtime = "2025-11-01T16:05:51.207892"
         source_rows = 597
 
         # Act
-        file_id = record_import(metadata_dir, file_path, file_mtime, source_rows, archived=False)
+        file_id = _record_import(tmp_path, file_path, file_mtime, source_rows, archived=False)
 
         # Assert
         assert file_id == "241027_1"
@@ -171,15 +199,15 @@ class TestRecordImport:
     def test_record_import_with_archive(self, tmp_path):
         """Should record import with archive flag and path."""
         # Arrange
-        metadata_dir = tmp_path / "metadata"
+        metadata_dir = tmp_path.resolve() / "metadata"
         file_path = Path("data/imports/2024-10-27~2025-10-27.xlsx")
         file_mtime = "2025-11-01T16:05:51"
         source_rows = 597
         archived_path = Path("data/metadata/archives/241027_1.xlsx")
 
         # Act
-        record_import(
-            metadata_dir,
+        _record_import(
+            tmp_path,
             file_path,
             file_mtime,
             source_rows,
@@ -196,13 +224,13 @@ class TestRecordImport:
     def test_record_import_preserves_paths_as_private_local_metadata(self, tmp_path):
         """Import history intentionally keeps raw local path metadata for auditability."""
         # Arrange
-        metadata_dir = tmp_path / "metadata"
+        metadata_dir = tmp_path.resolve() / "metadata"
         file_path = Path("data/imports/2024-10-27~2025-10-27.xlsx")
         archived_path = Path("data/metadata/archives/241027_1.xlsx")
 
         # Act
-        record_import(
-            metadata_dir,
+        _record_import(
+            tmp_path,
             file_path,
             "2025-11-01T16:05:51",
             597,
@@ -219,14 +247,14 @@ class TestRecordImport:
     def test_record_import_duplicate_returns_existing_id(self, tmp_path):
         """Should return existing file_id for already-registered file."""
         # Arrange
-        metadata_dir = tmp_path / "metadata"
+        metadata_dir = tmp_path.resolve() / "metadata"
         file_path = Path("data/imports/2024-10-27~2025-10-27.xlsx")
         file_mtime = "2025-11-01T16:05:51"
         source_rows = 597
 
         # Act - record twice
-        file_id_1 = record_import(metadata_dir, file_path, file_mtime, source_rows)
-        file_id_2 = record_import(metadata_dir, file_path, file_mtime, source_rows)
+        file_id_1 = _record_import(tmp_path, file_path, file_mtime, source_rows)
+        file_id_2 = _record_import(tmp_path, file_path, file_mtime, source_rows)
 
         # Assert - same file_id returned
         assert file_id_1 == file_id_2
@@ -238,7 +266,7 @@ class TestRecordImport:
     def test_record_import_multiple_files(self, tmp_path):
         """Should handle multiple import recordings."""
         # Arrange
-        metadata_dir = tmp_path / "metadata"
+        metadata_dir = tmp_path.resolve() / "metadata"
         imports = [
             (Path("data/imports/2024-10-27~2025-10-27.xlsx"), "2025-11-01T16:05:51", 597),
             (Path("data/imports/2024-11-27~2025-11-27.xlsx"), "2025-11-02T10:20:30", 423),
@@ -246,7 +274,7 @@ class TestRecordImport:
         ]
 
         # Act
-        file_ids = [record_import(metadata_dir, path, mtime, rows) for path, mtime, rows in imports]
+        file_ids = [_record_import(tmp_path, path, mtime, rows) for path, mtime, rows in imports]
 
         # Assert
         assert file_ids == ["241027_1", "241127_1", "241027_2"]
@@ -260,14 +288,14 @@ class TestRecordImport:
     def test_record_import_creates_metadata_directory(self, tmp_path):
         """Should auto-create metadata directory if it doesn't exist."""
         # Arrange
-        metadata_dir = tmp_path / "metadata"
+        metadata_dir = tmp_path.resolve() / "metadata"
         assert not metadata_dir.exists()
 
         file_path = Path("data/imports/2024-10-27~2025-10-27.xlsx")
         file_mtime = "2025-11-01T16:05:51"
 
         # Act
-        record_import(metadata_dir, file_path, file_mtime, 597)
+        _record_import(tmp_path, file_path, file_mtime, 597)
 
         # Assert
         assert metadata_dir.exists()
@@ -280,10 +308,10 @@ class TestGetSourceFileInfo:
     def test_get_source_file_info_success(self, tmp_path):
         """Should retrieve import info by file_id."""
         # Arrange
-        metadata_dir = tmp_path / "metadata"
+        metadata_dir = tmp_path.resolve() / "metadata"
         file_path = Path("data/imports/2024-10-27~2025-10-27.xlsx")
         file_mtime = "2025-11-01T16:05:51"
-        file_id = record_import(metadata_dir, file_path, file_mtime, 597)
+        file_id = _record_import(tmp_path, file_path, file_mtime, 597)
 
         # Act
         info = get_source_file_info(metadata_dir, file_id)
@@ -348,14 +376,14 @@ class TestListSourceFiles:
     def test_list_source_files_multiple_entries(self, tmp_path):
         """Should list all import history records."""
         # Arrange
-        metadata_dir = tmp_path / "metadata"
+        metadata_dir = tmp_path.resolve() / "metadata"
         imports = [
             (Path("data/imports/2024-10-27~2025-10-27.xlsx"), "2025-11-01T16:05:51", 597),
             (Path("data/imports/2024-11-27~2025-11-27.xlsx"), "2025-11-02T10:20:30", 423),
         ]
 
         for path, mtime, rows in imports:
-            record_import(metadata_dir, path, mtime, rows)
+            _record_import(tmp_path, path, mtime, rows)
 
         # Act
         df = list_source_files(metadata_dir)

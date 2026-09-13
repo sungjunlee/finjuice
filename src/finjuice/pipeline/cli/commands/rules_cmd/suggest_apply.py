@@ -71,7 +71,11 @@ def _interactive_apply_suggestions(
                 continue
             # Auto mode: apply without prompting
             try:
-                applied_rule = apply_suggestion_to_rules(suggestion, config.rules_file)
+                applied_rule = apply_suggestion_to_rules(
+                    suggestion,
+                    config.rules_file,
+                    authority_data_dir=config.data_dir,
+                )
                 _append_rule_mutation_audit_event(
                     config,
                     command="rules suggest",
@@ -104,7 +108,11 @@ def _interactive_apply_suggestions(
         if response == "y":
             # Apply as-is
             try:
-                applied_rule = apply_suggestion_to_rules(suggestion, config.rules_file)
+                applied_rule = apply_suggestion_to_rules(
+                    suggestion,
+                    config.rules_file,
+                    authority_data_dir=config.data_dir,
+                )
                 _append_rule_mutation_audit_event(
                     config,
                     command="rules suggest",
@@ -133,7 +141,10 @@ def _interactive_apply_suggestions(
 
             try:
                 applied_rule = apply_suggestion_to_rules(
-                    suggestion, config.rules_file, modified_tags=modified_tags
+                    suggestion,
+                    config.rules_file,
+                    modified_tags=modified_tags,
+                    authority_data_dir=config.data_dir,
                 )
                 _append_rule_mutation_audit_event(
                     config,

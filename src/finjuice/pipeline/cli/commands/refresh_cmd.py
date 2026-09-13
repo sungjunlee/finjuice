@@ -15,10 +15,17 @@ from finjuice.pipeline.cli.commands.full_pipeline_orchestrator import (
     run_full_pipeline_orchestrator,
 )
 from finjuice.pipeline.cli.export_runtime import configure_cli_export_result_runtime
+from finjuice.pipeline.cli.mutation_options import with_mutation_options
 from finjuice.pipeline.cli.output import ErrorCode, ExitCode, emit, emit_error
-from finjuice.pipeline.cli.utils import get_config, warn_on_schema_mismatch
+from finjuice.pipeline.cli.pipeline_failure import FullPipelineError
+from finjuice.pipeline.cli.utils import get_config, get_mutation_facade, warn_on_schema_mismatch
 from finjuice.pipeline.constants import SCHEMA_VERSION
 from finjuice.pipeline.metadata import write_schema_version
+from finjuice.pipeline.storage.authority import RepositoryAuthority
+from finjuice.pipeline.storage.sqlite.errors import (
+    MutationConflictError,
+    MutationValidationError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -77,10 +84,7 @@ def _compute_full_pipeline_result(
 
             if step_name == "tag":
                 if step_result.get("skipped"):
-                    output.warning("   ⚠️  건너뜀: rules.yaml 파일 없음")
-                    output.info(
-                        f"   'finjuice init' 실행하여 {config.data_dir / 'rules.yaml'} 생성"
-                    )
+                    _render_missing_rules(step_result, config)
                 else:
                     output.info(
                         f"   ✓ tag: {step_result['tagged']}건 태깅, "
@@ -111,6 +115,14 @@ def _compute_full_pipeline_result(
         )
 
 
+def _render_missing_rules(result: dict[str, Any], config: Any) -> None:
+    if result.get("authority") == "repository":
+        output.warning("   ⚠️  건너뜀: SQLite 정본에 규칙이 없음")
+        return
+    output.warning("   ⚠️  건너뜀: rules.yaml 파일 없음")
+    output.info(f"   'finjuice init' 실행하여 {config.data_dir / 'rules.yaml'} 생성")
+
+
 def _render_full_pipeline_result(result: dict[str, Any], config: Any) -> None:
     """Render final human-readable full-pipeline summary."""
     from finjuice.pipeline.constants import REPORTS_COUNT
@@ -138,7 +150,10 @@ def run_full_pipeline_command(
     configure_cli_export_result_runtime()
 
     try:
-        warn_on_schema_mismatch(config.data_dir)
+        authority = get_mutation_facade(ctx, config).dispatch().authority
+        repository_active = isinstance(authority, RepositoryAuthority)
+        if not repository_active:
+            warn_on_schema_mismatch(config.data_dir)
 
         if not json_output:
             output.section("전체 파이프라인")
@@ -149,7 +164,8 @@ def run_full_pipeline_command(
             json_output,
             command_name=command_name,
         )
-        write_schema_version(config.data_dir, SCHEMA_VERSION)
+        if not repository_active:
+            write_schema_version(config.data_dir, SCHEMA_VERSION)
         emit(
             result,
             json_output,
@@ -159,6 +175,31 @@ def run_full_pipeline_command(
 
     except typer.Exit:
         raise
+    except MutationValidationError as exc:
+        emit_error(
+            str(exc),
+            error_code=ErrorCode.INVALID_ARGS,
+            exit_code=ExitCode.USAGE_ERROR,
+            json_output=json_output,
+            command=command_name,
+        )
+    except MutationConflictError as exc:
+        emit_error(
+            str(exc),
+            error_code=ErrorCode.VALIDATION_FAILED,
+            exit_code=ExitCode.VALIDATION_ERROR,
+            json_output=json_output,
+            command=command_name,
+        )
+    except FullPipelineError as exc:
+        emit_error(
+            str(exc),
+            error_code=exc.error_code,
+            exit_code=exc.exit_code,
+            json_output=json_output,
+            command=command_name,
+            meta_extras=exc.metadata(),
+        )
     except KeyboardInterrupt:
         emit_error(
             "사용자가 파이프라인을 취소했습니다.",
@@ -177,6 +218,7 @@ def run_full_pipeline_command(
         )
 
 
+@with_mutation_options
 def refresh_command(
     ctx: typer.Context,
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),

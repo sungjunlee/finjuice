@@ -2,31 +2,36 @@
 
 Owns reading ``rules.yaml`` into validated
 :class:`~finjuice.pipeline.tagging.models.TagRule` objects. The public
-:func:`load_rules` and :func:`load_rules_collecting` entrypoints are
-re-exported from :mod:`finjuice.pipeline.tagging.rules_yaml_io` so existing
-callers can keep importing from that module. Report-filters loading stays in
+:func:`load_rules`, :func:`load_rules_collecting`, and
+:func:`load_rules_bytes` entrypoints are re-exported from
+:mod:`finjuice.pipeline.tagging.rules_yaml_io` so existing callers can keep
+importing from that module. Report-filters loading stays in
 the IO orchestrator.
 """
 
 from __future__ import annotations
 
 import logging
+import math
 from pathlib import Path
 from typing import Any, List
 
 import yaml
+from ruamel.yaml.error import YAMLError as RuamelYAMLError
 
 from finjuice.pipeline.tagging.models import (
     CollectedLoadResult,
     RuleValidationError,
     TagRule,
 )
+from finjuice.pipeline.tagging.rules_yaml_roundtrip import _make_yaml
 from finjuice.pipeline.tagging.validator import (
     _append_suggestion,
     _candidate_rule_name,
     _extract_suggestion,
     _validate_rule,
 )
+from finjuice.pipeline.yaml_exact import ExactFloatLexeme
 
 logger = logging.getLogger(__name__)
 
@@ -54,16 +59,55 @@ def _load_yaml_document(rules_path: Path, *, allow_missing_file: bool) -> Any:
 def _load_rules_payload(rules_path: Path, *, allow_missing_file: bool) -> List[Any]:
     """Load the raw YAML rules list before per-rule validation."""
     data = _load_yaml_document(rules_path, allow_missing_file=allow_missing_file)
+    return _rules_payload_from_document(data, str(rules_path))
+
+
+def _rules_payload_from_document(data: Any, source: str) -> List[Any]:
+    """Validate and return the rules list from one parsed YAML document."""
     if not data or not isinstance(data, dict) or "rules" not in data:
-        logger.warning(f"No 'rules' key found in {rules_path} - using empty rules")
+        logger.warning("No 'rules' key found in %s - using empty rules", source)
         return []
 
     if not isinstance(data["rules"], list):
-        raise ValueError(
-            f"'rules' must be a list in {rules_path}, got {type(data['rules']).__name__}"
-        )
+        raise ValueError(f"'rules' must be a list in {source}, got {type(data['rules']).__name__}")
 
     return data["rules"]
+
+
+def load_rules_bytes(content: bytes) -> List[TagRule]:
+    """Load validated rules from authoritative exact YAML bytes."""
+    try:
+        data = _make_yaml().load(content.decode("utf-8"))
+    except (UnicodeDecodeError, RuamelYAMLError) as exc:
+        raise ValueError(f"Invalid YAML syntax in authoritative rules: {exc}") from exc
+    raw_rules = _rules_payload_from_document(data, "authoritative rules")
+    rules: List[TagRule] = []
+    for index, rule_dict in enumerate(raw_rules):
+        try:
+            rule_dict = _normalize_exact_rule_metadata(rule_dict, index)
+            validated_rule = _validate_rule(rule_dict, index)
+        except ValueError as exc:
+            message = _append_suggestion(str(exc), _extract_suggestion(exc))
+            raise ValueError(
+                f"Invalid rule at index {index} in authoritative rules:\n{message}"
+            ) from exc
+        rules.append(TagRule(**validated_rule))
+    return sorted(rules, key=lambda rule: rule.priority, reverse=True)
+
+
+def _normalize_exact_rule_metadata(rule_dict: Any, index: int) -> Any:
+    """Restore float-typed metadata while retaining condition threshold lexemes."""
+    if not isinstance(rule_dict, dict):
+        return rule_dict
+    confidence = rule_dict.get("confidence")
+    if not isinstance(confidence, ExactFloatLexeme):
+        return rule_dict
+    parsed_confidence = float(confidence)
+    if not math.isfinite(parsed_confidence):
+        raise ValueError(f"Rule at index {index}: 'confidence' must be finite")
+    normalized = dict(rule_dict)
+    normalized["confidence"] = parsed_confidence
+    return normalized
 
 
 def _collect_validated_rules(raw_rules: List[Any]) -> CollectedLoadResult:

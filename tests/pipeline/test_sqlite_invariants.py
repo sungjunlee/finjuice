@@ -171,10 +171,14 @@ def test_repository_metadata_allows_forward_progress_but_rejects_identity_rewrit
     try:
         connection.execute("UPDATE repository_meta SET dataset_revision = 2 WHERE singleton = 1")
         connection.commit()
-        connection.execute("UPDATE repository_meta SET schema_version = 2 WHERE singleton = 1")
+        next_schema_version = sqlite_schema.SQLITE_SCHEMA_VERSION + 1
+        connection.execute(
+            "UPDATE repository_meta SET schema_version = ? WHERE singleton = 1",
+            (next_schema_version,),
+        )
         assert connection.execute(
             "SELECT schema_version FROM repository_meta WHERE singleton = 1"
-        ).fetchone() == (2,)
+        ).fetchone() == (next_schema_version,)
         connection.rollback()
 
         guarded_statements = (
@@ -1123,10 +1127,16 @@ def test_private_scratch_override_connects_all_read_and_upgrade_apis(tmp_path: P
         builder.finalize()
     scratch = tmp_path / "private-scratch"
 
-    assert inspect_repository(paths.database, scratch_root=scratch).schema_version == 1
-    assert validate_repository(paths.database, scratch_root=scratch).schema_version == 1
+    assert (
+        inspect_repository(paths.database, scratch_root=scratch).schema_version
+        == sqlite_schema.SQLITE_SCHEMA_VERSION
+    )
+    assert (
+        validate_repository(paths.database, scratch_root=scratch).schema_version
+        == sqlite_schema.SQLITE_SCHEMA_VERSION
+    )
     with RepositoryReader(paths.database, scratch_root=scratch) as reader:
-        assert reader.info.schema_version == 1
+        assert reader.info.schema_version == sqlite_schema.SQLITE_SCHEMA_VERSION
     destination = GenerationPaths(tmp_path / "scratch-destination")
     upgrade_repository(paths.database, destination, scratch_root=scratch)
 
@@ -1168,6 +1178,7 @@ def test_scratch_root_rejects_symlink_and_non_private_permissions(tmp_path: Path
 
     permissive = tmp_path / "permissive"
     permissive.mkdir(mode=0o755)
+    permissive.chmod(0o755)
     with pytest.raises(RepositorySnapshotError, match="private"):
         inspect_repository(paths.database, scratch_root=permissive)
 

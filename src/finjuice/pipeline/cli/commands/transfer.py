@@ -10,8 +10,18 @@ from typing import Any
 import typer
 
 from finjuice.pipeline.cli import output
+from finjuice.pipeline.cli.bulk_repository import (
+    compute_repository_transfer,
+    resolve_bulk_mutation,
+)
+from finjuice.pipeline.cli.mutation_options import with_mutation_options
 from finjuice.pipeline.cli.output import ErrorCode, ExitCode, emit, emit_error
 from finjuice.pipeline.cli.utils import get_config
+from finjuice.pipeline.storage.sqlite.errors import (
+    AuthorityError,
+    MutationConflictError,
+    MutationValidationError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,15 +46,24 @@ def _compute_transfer(config: Any) -> dict[str, Any]:
 
 def _render_transfer(result: dict[str, Any]) -> None:
     """Render human-readable transfer summary."""
-    output.success("[OK] Transfer detection complete:")
+    if result.get("dry_run", False):
+        output.info("[Dry-run Summary]")
+    else:
+        output.success("[OK] Transfer detection complete:")
     output.info(f"  Transfer candidates: {result['candidate_rows']}")
     output.info(f"  Transfers detected: {result['pairs_found']}")
     output.info(f"  Confirmed transfer rows: {result['confirmed_transfer_rows']}")
     output.info(f"  Unconfirmed candidate rows: {result['unconfirmed_candidate_rows']}")
+    if result.get("dry_run", False):
+        output.warning("No changes written (dry-run mode)")
 
 
+@with_mutation_options
 def transfer_command(
     ctx: typer.Context,
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Preview transfer pairs in an active SQLite repository"
+    ),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
     """
@@ -59,11 +78,35 @@ def transfer_command(
     config = get_config(ctx)
 
     try:
-        result = _compute_transfer(config)
+        facade, identity = resolve_bulk_mutation(ctx, config)
+        if facade is not None:
+            result = compute_repository_transfer(facade, identity=identity, dry_run=dry_run)
+        else:
+            if dry_run:
+                raise MutationValidationError(
+                    "Transfer --dry-run requires an active SQLite repository."
+                )
+            result = _compute_transfer(config)
         emit(result, json_output, _render_transfer, command="transfer")
 
     except typer.Exit:
         raise  # Re-raise typer.Exit without modification
+    except (AuthorityError, MutationConflictError) as exc:
+        emit_error(
+            str(exc),
+            error_code=ErrorCode.VALIDATION_FAILED,
+            exit_code=ExitCode.VALIDATION_ERROR,
+            json_output=json_output,
+            command="transfer",
+        )
+    except MutationValidationError as exc:
+        emit_error(
+            str(exc),
+            error_code=ErrorCode.INVALID_ARGS,
+            exit_code=ExitCode.USAGE_ERROR,
+            json_output=json_output,
+            command="transfer",
+        )
     except (ValueError, RuntimeError) as e:
         logger.error(f"Transfer detection failed: {e}", exc_info=True)
         emit_error(

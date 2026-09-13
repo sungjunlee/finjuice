@@ -30,6 +30,7 @@ class ImportErrorContext:
     exit_code: ExitCode | int = ExitCode.GENERAL_ERROR
     suggestion: str | None = None
     hints: tuple[str, ...] = ()
+    meta_extras: dict[str, Any] | None = None
 
 
 def format_size(size_bytes: int) -> str:
@@ -57,12 +58,13 @@ def _raise_import_error(
             suggestion=resolved_context.suggestion,
             json_output=True,
             command="import",
+            meta_extras=resolved_context.meta_extras,
         )
 
     error(message)
     for hint in resolved_context.hints:
         console.print(hint, style="dim")
-    raise typer.Exit(code=1)
+    raise typer.Exit(code=resolved_context.exit_code)
 
 
 def _build_import_result(
@@ -209,6 +211,29 @@ def render_scan_multiple_files(candidates: list[Path]) -> None:
 def render_before_pipeline_error() -> None:
     """Render spacing before a pipeline error."""
     console.print()
+
+
+def render_active_dry_run(payload: dict[str, Any]) -> None:
+    """Render an authoritative import dry-run without copy or success banners."""
+    console.print("\n🔍 [bold]미리보기 모드[/bold] - 파일을 처리하지 않습니다\n")
+    if payload.get("preview_unavailable"):
+        render_active_preview_unavailable(payload)
+        return
+    for item in payload.get("receipts", []):
+        counts = item.get("result", {}).get("counts", {}).get("transactions", {})
+        inserted = int(counts.get("inserted", 0) or 0)
+        console.print(f"   {item.get('filename')}: +{inserted}건 예정")
+    warning("⚠️  No changes written (dry-run mode)")
+
+
+def render_active_preview_unavailable(payload: dict[str, Any]) -> None:
+    """Render an honest unavailable preview instead of invented parse counts."""
+    for source in payload.get("unavailable_sources", []):
+        warning(
+            f"미리보기 불가: {source.get('filename')} ({source.get('reason')})",
+            prefix="   ⚠️",
+        )
+    warning("⚠️  No changes written (dry-run mode)")
 
 
 def emit_import_result(result: ImportResult, *, json_output: bool) -> None:

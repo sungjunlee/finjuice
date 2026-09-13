@@ -197,7 +197,12 @@ def compare_data_dir(tmp_path: Path) -> Path:
     for ym_value in sorted(df["_ym"].unique().to_list()):
         year, month = ym_value.split("-")
         month_rows = df.filter(pl.col("_ym") == ym_value).drop("_ym")
-        write_month(data_dir / "transactions", month_rows, int(year), int(month))
+        write_month(
+            month_rows,
+            int(year),
+            int(month),
+            authority_data_dir=data_dir,
+        )
 
     return data_dir
 

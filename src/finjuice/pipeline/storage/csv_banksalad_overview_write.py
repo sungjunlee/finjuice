@@ -14,6 +14,7 @@ from typing import Any
 
 import polars as pl
 
+from finjuice.pipeline.storage.authority import legacy_write_lease
 from finjuice.pipeline.storage.csv_banksalad_overview_cashflow import (
     _cashflow_partition_source_expr,
     _validate_cashflow_partition_source,
@@ -22,104 +23,97 @@ from finjuice.pipeline.storage.csv_banksalad_overview_helpers import (
     _append_partitioned,
     _empty_append_result,
     _ensure_columns,
+    _OverviewTableSpec,
     _write_partition,
 )
-from finjuice.pipeline.storage.csv_schema import (
-    get_banksalad_balance_partition_path,
-    get_banksalad_cashflow_partition_path,
-    get_banksalad_insurance_partition_path,
-    get_banksalad_investment_partition_path,
-    get_banksalad_loan_partition_path,
-    get_banksalad_overview_facts_partition_path,
-)
+from finjuice.pipeline.storage.sqlite.objects import _assert_no_symlink_ancestors
 
 
 def write_banksalad_overview_facts_month(
-    base_dir: Path,
     df: pl.DataFrame,
     year: int,
     month: int,
     sort_by: tuple[str, ...] = ("snapshot_date", "block_id", "source_row", "source_col"),
+    *,
+    authority_data_dir: Path,
 ) -> dict[str, Any]:
     """Write Banksalad overview facts to a monthly partition using atomic replace."""
     from finjuice.pipeline.storage.csv_banksalad_overview import _OVERVIEW_FACT_SPEC
 
-    return _write_partition(
-        spec=_OVERVIEW_FACT_SPEC,
-        partition_path=get_banksalad_overview_facts_partition_path(base_dir, year, month),
-        df=df,
-        sort_by=sort_by,
+    return _leased_write_partition(
+        (_OVERVIEW_FACT_SPEC, "overview_facts"), df, (year, month), sort_by, authority_data_dir
     )
 
 
 def append_banksalad_overview_facts(
-    base_dir: Path, df: pl.DataFrame, deduplicate: bool = True
+    df: pl.DataFrame,
+    deduplicate: bool = True,
+    *,
+    authority_data_dir: Path,
 ) -> dict[str, Any]:
     """Append Banksalad overview facts partitioned by ``snapshot_date``."""
     from finjuice.pipeline.storage.csv_banksalad_overview import _OVERVIEW_FACT_SPEC
 
-    return _append_partitioned(
-        spec=_OVERVIEW_FACT_SPEC,
-        base_dir=base_dir,
-        df=df,
-        partition_column="snapshot_date",
-        deduplicate=deduplicate,
+    return _leased_append_table(
+        (_OVERVIEW_FACT_SPEC, "overview_facts"),
+        df,
+        "snapshot_date",
+        deduplicate,
+        authority_data_dir,
     )
 
 
 def write_banksalad_balance_month(
-    base_dir: Path,
     df: pl.DataFrame,
     year: int,
     month: int,
     sort_by: tuple[str, ...] = ("snapshot_date", "side", "category", "item_name"),
+    *,
+    authority_data_dir: Path,
 ) -> dict[str, Any]:
     """Write Banksalad balance projections to a monthly partition using atomic replace."""
     from finjuice.pipeline.storage.csv_banksalad_overview import _BALANCE_SPEC
 
-    return _write_partition(
-        spec=_BALANCE_SPEC,
-        partition_path=get_banksalad_balance_partition_path(base_dir, year, month),
-        df=df,
-        sort_by=sort_by,
+    return _leased_write_partition(
+        (_BALANCE_SPEC, "balance"), df, (year, month), sort_by, authority_data_dir
     )
 
 
 def append_banksalad_balance(
-    base_dir: Path, df: pl.DataFrame, deduplicate: bool = True
+    df: pl.DataFrame,
+    deduplicate: bool = True,
+    *,
+    authority_data_dir: Path,
 ) -> dict[str, Any]:
     """Append Banksalad balance projections partitioned by ``snapshot_date``."""
     from finjuice.pipeline.storage.csv_banksalad_overview import _BALANCE_SPEC
 
-    return _append_partitioned(
-        spec=_BALANCE_SPEC,
-        base_dir=base_dir,
-        df=df,
-        partition_column="snapshot_date",
-        deduplicate=deduplicate,
+    return _leased_append_table(
+        (_BALANCE_SPEC, "balance"), df, "snapshot_date", deduplicate, authority_data_dir
     )
 
 
 def write_banksalad_cashflow_month(
-    base_dir: Path,
     df: pl.DataFrame,
     year: int,
     month: int,
     sort_by: tuple[str, ...] = ("period_month", "category"),
+    *,
+    authority_data_dir: Path,
 ) -> dict[str, Any]:
     """Write Banksalad cashflow projections to a monthly partition using atomic replace."""
     from finjuice.pipeline.storage.csv_banksalad_overview import _CASHFLOW_SPEC
 
-    return _write_partition(
-        spec=_CASHFLOW_SPEC,
-        partition_path=get_banksalad_cashflow_partition_path(base_dir, year, month),
-        df=df,
-        sort_by=sort_by,
+    return _leased_write_partition(
+        (_CASHFLOW_SPEC, "cashflow"), df, (year, month), sort_by, authority_data_dir
     )
 
 
 def append_banksalad_cashflow(
-    base_dir: Path, df: pl.DataFrame, deduplicate: bool = True
+    df: pl.DataFrame,
+    deduplicate: bool = True,
+    *,
+    authority_data_dir: Path,
 ) -> dict[str, Any]:
     """Append Banksalad cashflow projections.
 
@@ -128,18 +122,154 @@ def append_banksalad_cashflow(
     """
     from finjuice.pipeline.storage.csv_banksalad_overview import _CASHFLOW_SPEC
 
+    base_dir, authority_data_dir = _authority_overview_root(authority_data_dir, "cashflow")
+    with legacy_write_lease(authority_data_dir):
+        return _append_cashflow_unleased(_CASHFLOW_SPEC, base_dir, df, deduplicate)
+
+
+def write_banksalad_insurance_month(
+    df: pl.DataFrame,
+    year: int,
+    month: int,
+    sort_by: tuple[str, ...] = ("snapshot_date", "institution", "policy_name"),
+    *,
+    authority_data_dir: Path,
+) -> dict[str, Any]:
+    """Write Banksalad insurance policies to a monthly partition."""
+    from finjuice.pipeline.storage.csv_banksalad_overview import _INSURANCE_SPEC
+
+    return _leased_write_partition(
+        (_INSURANCE_SPEC, "insurance"), df, (year, month), sort_by, authority_data_dir
+    )
+
+
+def append_banksalad_insurance(
+    df: pl.DataFrame,
+    deduplicate: bool = True,
+    *,
+    authority_data_dir: Path,
+) -> dict[str, Any]:
+    """Append Banksalad insurance policies partitioned by ``snapshot_date``."""
+    from finjuice.pipeline.storage.csv_banksalad_overview import _INSURANCE_SPEC
+
+    return _leased_append_table(
+        (_INSURANCE_SPEC, "insurance"), df, "snapshot_date", deduplicate, authority_data_dir
+    )
+
+
+def write_banksalad_investment_month(
+    df: pl.DataFrame,
+    year: int,
+    month: int,
+    sort_by: tuple[str, ...] = ("snapshot_date", "institution", "product_name"),
+    *,
+    authority_data_dir: Path,
+) -> dict[str, Any]:
+    """Write Banksalad investment positions to a monthly partition."""
+    from finjuice.pipeline.storage.csv_banksalad_overview import _INVESTMENT_SPEC
+
+    return _leased_write_partition(
+        (_INVESTMENT_SPEC, "investments"), df, (year, month), sort_by, authority_data_dir
+    )
+
+
+def append_banksalad_investments(
+    df: pl.DataFrame,
+    deduplicate: bool = True,
+    *,
+    authority_data_dir: Path,
+) -> dict[str, Any]:
+    """Append Banksalad investment positions partitioned by ``snapshot_date``."""
+    from finjuice.pipeline.storage.csv_banksalad_overview import _INVESTMENT_SPEC
+
+    return _leased_append_table(
+        (_INVESTMENT_SPEC, "investments"), df, "snapshot_date", deduplicate, authority_data_dir
+    )
+
+
+def write_banksalad_loan_month(
+    df: pl.DataFrame,
+    year: int,
+    month: int,
+    sort_by: tuple[str, ...] = ("snapshot_date", "institution", "product_name"),
+    *,
+    authority_data_dir: Path,
+) -> dict[str, Any]:
+    """Write Banksalad loan positions to a monthly partition."""
+    from finjuice.pipeline.storage.csv_banksalad_overview import _LOAN_SPEC
+
+    return _leased_write_partition(
+        (_LOAN_SPEC, "loans"), df, (year, month), sort_by, authority_data_dir
+    )
+
+
+def append_banksalad_loans(
+    df: pl.DataFrame,
+    deduplicate: bool = True,
+    *,
+    authority_data_dir: Path,
+) -> dict[str, Any]:
+    """Append Banksalad loan positions partitioned by ``snapshot_date``."""
+    from finjuice.pipeline.storage.csv_banksalad_overview import _LOAN_SPEC
+
+    return _leased_append_table(
+        (_LOAN_SPEC, "loans"), df, "snapshot_date", deduplicate, authority_data_dir
+    )
+
+
+def _leased_write_partition(
+    spec_table: tuple[_OverviewTableSpec, str],
+    df: pl.DataFrame,
+    year_month: tuple[int, int],
+    sort_by: tuple[str, ...],
+    authority_data_dir: Path,
+) -> dict[str, Any]:
+    spec, table = spec_table
+    base_dir, authority_data_dir = _authority_overview_root(authority_data_dir, table)
+    year, month = year_month
+    with legacy_write_lease(authority_data_dir):
+        return _write_partition(
+            spec=spec,
+            partition_path=spec.path_builder(base_dir, year, month),
+            df=df,
+            sort_by=sort_by,
+        )
+
+
+def _leased_append_table(
+    spec_table: tuple[_OverviewTableSpec, str],
+    df: pl.DataFrame,
+    partition_column: str,
+    deduplicate: bool,
+    authority_data_dir: Path,
+) -> dict[str, Any]:
+    spec, table = spec_table
+    base_dir, authority_data_dir = _authority_overview_root(authority_data_dir, table)
+    with legacy_write_lease(authority_data_dir):
+        return _append_partitioned(
+            spec=spec,
+            base_dir=base_dir,
+            df=df,
+            partition_column=partition_column,
+            deduplicate=deduplicate,
+        )
+
+
+def _append_cashflow_unleased(
+    spec: _OverviewTableSpec,
+    base_dir: Path,
+    df: pl.DataFrame,
+    deduplicate: bool,
+) -> dict[str, Any]:
     if df.height == 0:
         return _empty_append_result()
-
     if "period_month" not in df.columns and "snapshot_date" not in df.columns:
         raise ValueError("DataFrame must have 'period_month' or 'snapshot_date' for partitioning")
-
-    df = _ensure_columns(df=df, spec=_CASHFLOW_SPEC)
+    df = _ensure_columns(df=df, spec=spec)
     df = df.with_columns(_cashflow_partition_source_expr().alias("_partition_source"))
     _validate_cashflow_partition_source(df)
-
     return _append_partitioned(
-        spec=_CASHFLOW_SPEC,
+        spec=spec,
         base_dir=base_dir,
         df=df,
         partition_column="_partition_source",
@@ -147,103 +277,12 @@ def append_banksalad_cashflow(
     )
 
 
-def write_banksalad_insurance_month(
-    base_dir: Path,
-    df: pl.DataFrame,
-    year: int,
-    month: int,
-    sort_by: tuple[str, ...] = ("snapshot_date", "institution", "policy_name"),
-) -> dict[str, Any]:
-    """Write Banksalad insurance policies to a monthly partition."""
-    from finjuice.pipeline.storage.csv_banksalad_overview import _INSURANCE_SPEC
-
-    return _write_partition(
-        spec=_INSURANCE_SPEC,
-        partition_path=get_banksalad_insurance_partition_path(base_dir, year, month),
-        df=df,
-        sort_by=sort_by,
-    )
-
-
-def append_banksalad_insurance(
-    base_dir: Path, df: pl.DataFrame, deduplicate: bool = True
-) -> dict[str, Any]:
-    """Append Banksalad insurance policies partitioned by ``snapshot_date``."""
-    from finjuice.pipeline.storage.csv_banksalad_overview import _INSURANCE_SPEC
-
-    return _append_partitioned(
-        spec=_INSURANCE_SPEC,
-        base_dir=base_dir,
-        df=df,
-        partition_column="snapshot_date",
-        deduplicate=deduplicate,
-    )
-
-
-def write_banksalad_investment_month(
-    base_dir: Path,
-    df: pl.DataFrame,
-    year: int,
-    month: int,
-    sort_by: tuple[str, ...] = ("snapshot_date", "institution", "product_name"),
-) -> dict[str, Any]:
-    """Write Banksalad investment positions to a monthly partition."""
-    from finjuice.pipeline.storage.csv_banksalad_overview import _INVESTMENT_SPEC
-
-    return _write_partition(
-        spec=_INVESTMENT_SPEC,
-        partition_path=get_banksalad_investment_partition_path(base_dir, year, month),
-        df=df,
-        sort_by=sort_by,
-    )
-
-
-def append_banksalad_investments(
-    base_dir: Path, df: pl.DataFrame, deduplicate: bool = True
-) -> dict[str, Any]:
-    """Append Banksalad investment positions partitioned by ``snapshot_date``."""
-    from finjuice.pipeline.storage.csv_banksalad_overview import _INVESTMENT_SPEC
-
-    return _append_partitioned(
-        spec=_INVESTMENT_SPEC,
-        base_dir=base_dir,
-        df=df,
-        partition_column="snapshot_date",
-        deduplicate=deduplicate,
-    )
-
-
-def write_banksalad_loan_month(
-    base_dir: Path,
-    df: pl.DataFrame,
-    year: int,
-    month: int,
-    sort_by: tuple[str, ...] = ("snapshot_date", "institution", "product_name"),
-) -> dict[str, Any]:
-    """Write Banksalad loan positions to a monthly partition."""
-    from finjuice.pipeline.storage.csv_banksalad_overview import _LOAN_SPEC
-
-    return _write_partition(
-        spec=_LOAN_SPEC,
-        partition_path=get_banksalad_loan_partition_path(base_dir, year, month),
-        df=df,
-        sort_by=sort_by,
-    )
-
-
-def append_banksalad_loans(
-    base_dir: Path, df: pl.DataFrame, deduplicate: bool = True
-) -> dict[str, Any]:
-    """Append Banksalad loan positions partitioned by ``snapshot_date``."""
-    from finjuice.pipeline.storage.csv_banksalad_overview import _LOAN_SPEC
-
-    return _append_partitioned(
-        spec=_LOAN_SPEC,
-        base_dir=base_dir,
-        df=df,
-        partition_column="snapshot_date",
-        deduplicate=deduplicate,
-    )
+def _authority_overview_root(authority_data_dir: Path, table: str) -> tuple[Path, Path]:
+    """Return the only overview table root allowed beneath an explicit data authority."""
+    normalized_data_dir = authority_data_dir.expanduser().absolute()
+    table_root = normalized_data_dir / "banksalad" / table
+    _assert_no_symlink_ancestors(table_root, allow_missing=True)
+    return table_root, normalized_data_dir
 
 
 __all__ = [

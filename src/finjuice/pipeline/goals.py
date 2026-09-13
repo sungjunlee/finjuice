@@ -7,6 +7,7 @@ here so existing callers can keep importing from this module.
 
 from __future__ import annotations
 
+import io
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -40,6 +41,10 @@ from finjuice.pipeline.goals_validators import (
     validate_goals_payload,
     validate_month_literal,
 )
+from finjuice.pipeline.storage.atomic_files import replace_with_owned_temp
+from finjuice.pipeline.storage.authority import legacy_write_lease
+from finjuice.pipeline.storage.sqlite.objects import _assert_no_symlink_ancestors
+from finjuice.pipeline.yaml_exact import configure_exact_floats
 
 __all__ = [
     "FamilyContext",
@@ -91,7 +96,7 @@ def make_goals_yaml() -> YAML:
     yaml.preserve_quotes = True
     yaml.indent(mapping=2, sequence=4, offset=2)
     yaml.width = 4096
-    return yaml
+    return configure_exact_floats(yaml)
 
 
 def new_goals_document() -> CommentedMap:
@@ -116,11 +121,48 @@ def load_goals_roundtrip(goals_path: Path) -> tuple[YAML, Any | None]:
         return yaml, yaml.load(handle)
 
 
-def write_goals_roundtrip(yaml: YAML, data: CommentedMap, goals_path: Path) -> None:
-    """Persist a round-trip goals document."""
+def load_goals_roundtrip_bytes(content: bytes | None) -> tuple[YAML, Any | None]:
+    """Load exact authoritative goals bytes with round-trip metadata."""
+    yaml = make_goals_yaml()
+    if content is None:
+        return yaml, None
+    return yaml, yaml.load(content.decode("utf-8"))
+
+
+def dump_goals_roundtrip_bytes(yaml: YAML, data: CommentedMap) -> bytes:
+    """Serialize a round-trip goals document to exact UTF-8 bytes."""
+    stream = io.StringIO()
+    yaml.dump(data, stream)
+    return stream.getvalue().encode("utf-8")
+
+
+def write_goals_roundtrip(
+    yaml: YAML,
+    data: CommentedMap,
+    goals_path: Path,
+    *,
+    authority_data_dir: Path,
+) -> None:
+    """Persist the authoritative goals document under the legacy writer fence."""
+    data_dir = authority_data_dir.expanduser().absolute()
+    expected_path = data_dir / "goals.yaml"
+    if goals_path.expanduser().absolute() != expected_path:
+        raise ValueError("Authoritative goals path must be <data-dir>/goals.yaml.")
+    _assert_no_symlink_ancestors(expected_path, allow_missing=True)
+    with legacy_write_lease(data_dir):
+        _assert_no_symlink_ancestors(expected_path, allow_missing=True)
+        _write_goals_roundtrip_unleased(yaml, data, expected_path)
+
+
+def _write_goals_roundtrip_unleased(
+    yaml: YAML,
+    data: CommentedMap,
+    goals_path: Path,
+) -> None:
+    """Write goals bytes while the caller holds the legacy authority lease."""
+    content = dump_goals_roundtrip_bytes(yaml, data)
     goals_path.parent.mkdir(parents=True, exist_ok=True)
-    with goals_path.open("w", encoding="utf-8") as handle:
-        yaml.dump(data, handle)
+    replace_with_owned_temp(goals_path, content)
 
 
 def load_goals_file(goals_path: Path) -> GoalsLoadResult:

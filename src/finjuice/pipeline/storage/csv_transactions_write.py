@@ -15,6 +15,10 @@ from typing import Any
 
 import polars as pl
 
+from finjuice.pipeline.storage.atomic_files import (
+    replace_with_owned_temp as _replace_with_owned_temp,
+)
+from finjuice.pipeline.storage.authority import legacy_write_lease
 from finjuice.pipeline.storage.csv_schema import get_partition_path
 from finjuice.pipeline.storage.csv_transactions_helpers import _ensure_schema_columns
 from finjuice.pipeline.storage.csv_transactions_read_normalize import _empty_transactions_df
@@ -22,19 +26,35 @@ from finjuice.pipeline.storage.csv_transactions_serialize import (
     _cast_int_flag_columns,
     _serialize_tag_columns,
 )
+from finjuice.pipeline.storage.sqlite.objects import _assert_no_symlink_ancestors
 
 logger = logging.getLogger(__name__)
 
 
 def write_month(
-    base_dir: Path,
     df: pl.DataFrame,
     year: int,
     month: int,
     sort_by: str = "datetime",
+    *,
+    authority_data_dir: Path,
 ) -> dict[str, Any]:
     """Write transactions to a monthly partition using Polars (atomic operation)."""
+    base_dir, authority_data_dir = _authority_transaction_root(authority_data_dir)
+    with legacy_write_lease(authority_data_dir):
+        return _write_month_unleased(base_dir, df, year, month, sort_by)
+
+
+def _write_month_unleased(
+    base_dir: Path,
+    df: pl.DataFrame,
+    year: int,
+    month: int,
+    sort_by: str,
+) -> dict[str, Any]:
+    """Write one partition while the caller holds the legacy authority lease."""
     partition_path = get_partition_path(base_dir, year, month)
+    _assert_no_symlink_ancestors(partition_path, allow_missing=True)
     partition_path.parent.mkdir(parents=True, exist_ok=True)
 
     if df.height == 0 and df.width == 0:
@@ -48,15 +68,14 @@ def write_month(
     df = _cast_int_flag_columns(df)
     df = _serialize_tag_columns(df)
 
-    tmp_path = partition_path.with_suffix(".tmp")
-    df.write_csv(
-        tmp_path,
+    csv_text = df.write_csv(
+        None,
         include_header=True,
         separator=",",
         quote_style="necessary",
         line_terminator="\n",
     )
-    tmp_path.replace(partition_path)
+    _replace_with_owned_temp(partition_path, csv_text.encode("utf-8"))
 
     file_size = partition_path.stat().st_size
     return {
@@ -67,13 +86,27 @@ def write_month(
 
 
 def append_transactions(
-    base_dir: Path, df: pl.DataFrame, deduplicate: bool = True
+    df: pl.DataFrame,
+    deduplicate: bool = True,
+    *,
+    authority_data_dir: Path,
 ) -> dict[str, Any]:
     """Append transactions to appropriate monthly partitions using Polars.
 
     Distributes rows by (year, month) extracted from 'date' field.
     Optionally deduplicates by row_hash.
     """
+    base_dir, authority_data_dir = _authority_transaction_root(authority_data_dir)
+    with legacy_write_lease(authority_data_dir):
+        return _append_transactions_unleased(base_dir, df, deduplicate)
+
+
+def _append_transactions_unleased(
+    base_dir: Path,
+    df: pl.DataFrame,
+    deduplicate: bool,
+) -> dict[str, Any]:
+    """Append partitions while the caller holds the legacy authority lease."""
     from finjuice.pipeline.storage.csv_transactions import read_month
 
     if df.height == 0:
@@ -131,7 +164,7 @@ def append_transactions(
             else:
                 merged_df = pl.concat([existing_df, new_rows])
 
-            write_month(base_dir, merged_df, int(year), int(month))
+            _write_month_unleased(base_dir, merged_df, int(year), int(month), "datetime")
             partitions_updated += 1
             rows_inserted += new_rows.height
 
@@ -143,12 +176,28 @@ def append_transactions(
     }
 
 
-def upsert_transaction(base_dir: Path, row: dict[str, Any], key_field: str = "row_hash") -> bool:
+def upsert_transaction(
+    row: dict[str, Any],
+    key_field: str = "row_hash",
+    *,
+    authority_data_dir: Path,
+) -> bool:
     """Update existing transaction or insert new one using Polars.
 
     Uses 'date' field to determine partition, then row_hash to match.
     Returns True if updated, False if inserted.
     """
+    base_dir, authority_data_dir = _authority_transaction_root(authority_data_dir)
+    with legacy_write_lease(authority_data_dir):
+        return _upsert_transaction_unleased(base_dir, row, key_field)
+
+
+def _upsert_transaction_unleased(
+    base_dir: Path,
+    row: dict[str, Any],
+    key_field: str,
+) -> bool:
+    """Upsert one transaction while the caller holds the legacy authority lease."""
     from finjuice.pipeline.storage.csv_transactions import read_month
 
     if "date" not in row:
@@ -177,8 +226,16 @@ def upsert_transaction(base_dir: Path, row: dict[str, Any], key_field: str = "ro
             updated_df = pl.concat([df, pl.DataFrame([row])])
         updated = False
 
-    write_month(base_dir, updated_df, year, month)
+    _write_month_unleased(base_dir, updated_df, year, month, "datetime")
     return updated
+
+
+def _authority_transaction_root(authority_data_dir: Path) -> tuple[Path, Path]:
+    """Return the only transaction root allowed beneath an explicit data authority."""
+    normalized_data_dir = authority_data_dir.expanduser().absolute()
+    transaction_root = normalized_data_dir / "transactions"
+    _assert_no_symlink_ancestors(transaction_root, allow_missing=True)
+    return transaction_root, normalized_data_dir
 
 
 __all__ = [

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
   "name": "finjuice",
-  "version": "0.7.2",
-  "generated_at": "2026-09-08T14:15:38+00:00",
+  "version": "0.8.0",
+  "generated_at": "2026-09-12T08:58:05+00:00",
   "tools": [
     {
       "name": "assets.balance",
@@ -475,6 +475,30 @@
             "type": "boolean",
             "description": "Output as JSON",
             "default": false
+          },
+          "idempotency_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Stable retry key for an authoritative mutation",
+            "default": null
+          },
+          "expected_generation": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Expected active dataset generation",
+            "default": null
+          },
+          "expected_revision": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Expected active dataset revision",
+            "default": null
           }
         },
         "additionalProperties": false
@@ -869,6 +893,30 @@
             "type": "boolean",
             "description": "Output as JSON",
             "default": false
+          },
+          "idempotency_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Stable retry key for an authoritative mutation",
+            "default": null
+          },
+          "expected_generation": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Expected active dataset generation",
+            "default": null
+          },
+          "expected_revision": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Expected active dataset revision",
+            "default": null
           }
         },
         "additionalProperties": false
@@ -931,7 +979,7 @@
     },
     {
       "name": "ingest",
-      "description": "Import XLSX files from imports/ directory into CSV partitions.",
+      "description": "Import XLSX files from imports/ into the selected storage authority.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -950,13 +998,47 @@
           },
           "dry_run": {
             "type": "boolean",
-            "description": "Preview changes without writing to CSV files",
+            "description": "Preview ingestion without writing data",
+            "default": false
+          },
+          "force": {
+            "type": "boolean",
+            "description": "Reparse legacy workbooks in import history; SQLite keeps content deduplication",
+            "default": false
+          },
+          "only_unprocessed": {
+            "type": "boolean",
+            "description": "Skip processed files (legacy: filename history; SQLite: content identity)",
             "default": false
           },
           "json": {
             "type": "boolean",
             "description": "Output as JSON",
             "default": false
+          },
+          "idempotency_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Stable retry key for an authoritative mutation",
+            "default": null
+          },
+          "expected_generation": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Expected active dataset generation",
+            "default": null
+          },
+          "expected_revision": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Expected active dataset revision",
+            "default": null
           }
         },
         "additionalProperties": false
@@ -970,9 +1052,11 @@
           "command",
           "dry_run",
           "from_archive",
+          "history_skipped",
           "preview",
           "source",
-          "summary"
+          "summary",
+          "would_parse"
         ]
       }
     },
@@ -1462,6 +1546,48 @@
       }
     },
     {
+      "name": "reconcile",
+      "description": "Match evidence to ledger payments without writing transactions.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "evidence": {
+            "type": "string",
+            "format": "path",
+            "description": "JSON file of purchase/order/receipt evidence (not the ledger SSOT)"
+          },
+          "window_days": {
+            "type": "integer",
+            "description": "Max day gap between evidence and ledger payment",
+            "default": 14
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Output as JSON",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "evidence"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "reconcile --json output",
+        "top_level_keys": [
+          "_meta",
+          "command",
+          "evidence_count",
+          "groups",
+          "matched",
+          "partial",
+          "payment_count",
+          "unmatched"
+        ]
+      }
+    },
+    {
       "name": "refresh",
       "description": "Re-process all existing data (ingest → tag → transfer → export).",
       "parameters": {
@@ -1471,6 +1597,30 @@
             "type": "boolean",
             "description": "Output as JSON",
             "default": false
+          },
+          "idempotency_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Stable retry key for an authoritative mutation",
+            "default": null
+          },
+          "expected_generation": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Expected active dataset generation",
+            "default": null
+          },
+          "expected_revision": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Expected active dataset revision",
+            "default": null
           }
         },
         "additionalProperties": false
@@ -1613,6 +1763,30 @@
             "type": "boolean",
             "description": "Output as JSON",
             "default": false
+          },
+          "idempotency_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Stable retry key for an authoritative mutation",
+            "default": null
+          },
+          "expected_generation": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Expected active dataset generation",
+            "default": null
+          },
+          "expected_revision": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Expected active dataset revision",
+            "default": null
           }
         },
         "additionalProperties": false,
@@ -1775,6 +1949,30 @@
             "type": "boolean",
             "description": "Output as JSON",
             "default": false
+          },
+          "idempotency_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Stable retry key for an authoritative mutation",
+            "default": null
+          },
+          "expected_generation": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Expected active dataset generation",
+            "default": null
+          },
+          "expected_revision": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Expected active dataset revision",
+            "default": null
           }
         },
         "additionalProperties": false,
@@ -2089,7 +2287,7 @@
     },
     {
       "name": "tag",
-      "description": "Apply tagging rules to all transactions in CSV partitions.",
+      "description": "Apply tagging rules to all transactions in the active storage.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -2141,13 +2339,37 @@
           },
           "dry_run": {
             "type": "boolean",
-            "description": "Preview changes without writing to CSV files",
+            "description": "Preview changes without writing to the active storage",
             "default": false
           },
           "json": {
             "type": "boolean",
             "description": "Output as JSON",
             "default": false
+          },
+          "idempotency_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Stable retry key for an authoritative mutation",
+            "default": null
+          },
+          "expected_generation": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Expected active dataset generation",
+            "default": null
+          },
+          "expected_revision": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Expected active dataset revision",
+            "default": null
           }
         },
         "additionalProperties": false
@@ -2314,10 +2536,39 @@
       "parameters": {
         "type": "object",
         "properties": {
+          "dry_run": {
+            "type": "boolean",
+            "description": "Preview transfer pairs in an active SQLite repository",
+            "default": false
+          },
           "json": {
             "type": "boolean",
             "description": "Output as JSON",
             "default": false
+          },
+          "idempotency_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Stable retry key for an authoritative mutation",
+            "default": null
+          },
+          "expected_generation": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Expected active dataset generation",
+            "default": null
+          },
+          "expected_revision": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Expected active dataset revision",
+            "default": null
           }
         },
         "additionalProperties": false

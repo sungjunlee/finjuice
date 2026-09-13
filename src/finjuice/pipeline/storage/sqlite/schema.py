@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sqlite3
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from fractions import Fraction
 from pathlib import Path
 from typing import Final
 
@@ -23,7 +25,12 @@ from finjuice.pipeline.storage.sqlite.paths import GenerationPaths
 from finjuice.pipeline.storage.sqlite.snapshot import inspection_snapshot
 
 SQLITE_APPLICATION_ID: Final = 0x464A5353  # "FJSS"
-SQLITE_SCHEMA_VERSION: Final = 1
+SQLITE_SCHEMA_VERSION: Final = 4
+_OWNERSHIP_SHARE_UNIT: Final = "ownership_share.v1"
+_SCHEMA_V1: Final = 1
+_SCHEMA_V2: Final = 2
+_SCHEMA_V3: Final = 3
+_SCHEMA_V4: Final = 4
 _BUSY_TIMEOUT_MS: Final = 5_000
 
 _UUID_CHECK = """
@@ -478,6 +485,257 @@ CREATE INDEX idx_observation_effective
 """
 
 
+def _schema_v2_sql() -> str:
+    """Return the additive mutation and relationship schema introduced in v2."""
+    uuid_assertion = _uuid_check("assertion_id")
+    uuid_changeset = _uuid_check("changeset_id")
+    uuid_intake = _uuid_check("intake_artifact_id")
+    return f"""
+CREATE TABLE changesets (
+    changeset_id TEXT PRIMARY KEY NOT NULL CHECK ({uuid_changeset}),
+    command_scope TEXT NOT NULL CHECK (length(command_scope) > 0),
+    idempotency_key TEXT NOT NULL CHECK (length(idempotency_key) > 0),
+    payload_digest TEXT NOT NULL CHECK (
+        length(payload_digest) = 64 AND payload_digest NOT GLOB '*[^0-9a-f]*'
+    ),
+    base_revision INTEGER NOT NULL CHECK (typeof(base_revision) = 'integer' AND base_revision >= 0),
+    committed_revision INTEGER NOT NULL
+        CHECK (typeof(committed_revision) = 'integer' AND committed_revision >= base_revision),
+    state_changed INTEGER NOT NULL CHECK (state_changed IN (0, 1)),
+    actor TEXT NOT NULL CHECK (length(actor) > 0),
+    reason TEXT,
+    confirmation_json TEXT,
+    reversal_of_changeset_id TEXT REFERENCES changesets(changeset_id),
+    created_at TEXT NOT NULL CHECK (length(created_at) > 0),
+    UNIQUE (command_scope, idempotency_key),
+    CHECK (
+        (state_changed = 0 AND committed_revision = base_revision)
+        OR (state_changed = 1 AND committed_revision = base_revision + 1)
+    ),
+    CHECK (reversal_of_changeset_id IS NULL OR reversal_of_changeset_id <> changeset_id)
+);
+
+CREATE TABLE changeset_entries (
+    changeset_id TEXT NOT NULL REFERENCES changesets(changeset_id),
+    entry_index INTEGER NOT NULL CHECK (typeof(entry_index) = 'integer' AND entry_index >= 0),
+    entity_kind TEXT NOT NULL CHECK (length(entity_kind) > 0),
+    entity_id TEXT NOT NULL CHECK (length(entity_id) > 0),
+    action TEXT NOT NULL CHECK (action IN ('insert', 'update', 'delete', 'assert', 'link')),
+    before_json TEXT,
+    after_json TEXT,
+    PRIMARY KEY (changeset_id, entry_index),
+    CHECK (before_json IS NOT NULL OR after_json IS NOT NULL)
+);
+
+CREATE TABLE audit_events (
+    audit_event_id TEXT PRIMARY KEY NOT NULL CHECK ({_uuid_check("audit_event_id")}),
+    changeset_id TEXT NOT NULL UNIQUE REFERENCES changesets(changeset_id),
+    event_kind TEXT NOT NULL CHECK (length(event_kind) > 0),
+    event_json TEXT NOT NULL CHECK (length(event_json) > 1),
+    created_at TEXT NOT NULL CHECK (length(created_at) > 0)
+);
+
+CREATE TABLE idempotency_requests (
+    command_scope TEXT NOT NULL CHECK (length(command_scope) > 0),
+    idempotency_key TEXT NOT NULL CHECK (length(idempotency_key) > 0),
+    request_digest TEXT NOT NULL CHECK (
+        length(request_digest) = 64 AND request_digest NOT GLOB '*[^0-9a-f]*'
+    ),
+    status TEXT NOT NULL CHECK (status IN ('pending', 'committed')),
+    changeset_id TEXT UNIQUE REFERENCES changesets(changeset_id),
+    result_json TEXT,
+    base_revision INTEGER,
+    committed_revision INTEGER,
+    state_changed INTEGER CHECK (state_changed IN (0, 1)),
+    created_at TEXT NOT NULL CHECK (length(created_at) > 0),
+    PRIMARY KEY (command_scope, idempotency_key),
+    CHECK (
+        (status = 'pending' AND changeset_id IS NULL AND result_json IS NULL
+            AND base_revision IS NULL AND committed_revision IS NULL AND state_changed IS NULL)
+        OR
+        (status = 'committed' AND changeset_id IS NOT NULL AND result_json IS NOT NULL
+            AND base_revision IS NOT NULL AND committed_revision IS NOT NULL
+            AND state_changed IS NOT NULL)
+    )
+);
+
+CREATE TABLE ownership_assertion_sets (
+    assertion_id TEXT PRIMARY KEY NOT NULL CHECK ({uuid_assertion}),
+    account_id TEXT NOT NULL REFERENCES accounts(entity_id),
+    effective_from TEXT CHECK (
+        effective_from IS NULL
+        OR coalesce(strftime('%Y-%m-%d', effective_from) = effective_from, 0)
+    ),
+    effective_to TEXT CHECK (
+        effective_to IS NULL
+        OR coalesce(strftime('%Y-%m-%d', effective_to) = effective_to, 0)
+    ),
+    completeness TEXT NOT NULL CHECK (completeness IN ('complete', 'partial', 'unknown')),
+    unknown_remainder INTEGER NOT NULL CHECK (unknown_remainder IN (0, 1)),
+    confirmation_state TEXT NOT NULL
+        CHECK (confirmation_state IN ('unconfirmed', 'confirmed', 'rejected')),
+    evidence_json TEXT NOT NULL CHECK (length(evidence_json) > 1),
+    confirmed_at TEXT,
+    supersedes_assertion_id TEXT REFERENCES ownership_assertion_sets(assertion_id),
+    created_changeset_id TEXT REFERENCES changesets(changeset_id)
+        DEFERRABLE INITIALLY DEFERRED,
+    CHECK (effective_to IS NULL OR effective_from IS NULL OR effective_to >= effective_from),
+    CHECK (
+        (completeness = 'complete' AND unknown_remainder = 0)
+        OR (completeness IN ('partial', 'unknown') AND unknown_remainder = 1)
+    ),
+    CHECK (
+        (confirmation_state = 'confirmed' AND confirmed_at IS NOT NULL)
+        OR (confirmation_state <> 'confirmed' AND confirmed_at IS NULL)
+    ),
+    CHECK (supersedes_assertion_id IS NULL OR supersedes_assertion_id <> assertion_id)
+);
+
+CREATE TABLE ownership_assertion_shares (
+    assertion_id TEXT NOT NULL REFERENCES ownership_assertion_sets(assertion_id),
+    party_id TEXT NOT NULL REFERENCES parties(entity_id),
+    share_value_id TEXT NOT NULL UNIQUE REFERENCES rate_values(value_id),
+    PRIMARY KEY (assertion_id, party_id)
+);
+
+CREATE TABLE entity_relation_assertions (
+    assertion_id TEXT PRIMARY KEY NOT NULL CHECK ({uuid_assertion}),
+    subject_entity_id TEXT NOT NULL REFERENCES entities(entity_id),
+    object_entity_id TEXT NOT NULL REFERENCES entities(entity_id),
+    relation_kind TEXT NOT NULL CHECK (
+        relation_kind IN ('includes', 'overlaps', 'excludes', 'unknown')
+    ),
+    effective_from TEXT CHECK (
+        effective_from IS NULL
+        OR coalesce(strftime('%Y-%m-%d', effective_from) = effective_from, 0)
+    ),
+    effective_to TEXT CHECK (
+        effective_to IS NULL
+        OR coalesce(strftime('%Y-%m-%d', effective_to) = effective_to, 0)
+    ),
+    confirmation_state TEXT NOT NULL
+        CHECK (confirmation_state IN ('unconfirmed', 'confirmed', 'rejected')),
+    evidence_json TEXT NOT NULL CHECK (length(evidence_json) > 1),
+    confirmed_at TEXT,
+    supersedes_assertion_id TEXT REFERENCES entity_relation_assertions(assertion_id),
+    created_changeset_id TEXT REFERENCES changesets(changeset_id)
+        DEFERRABLE INITIALLY DEFERRED,
+    CHECK (subject_entity_id <> object_entity_id),
+    CHECK (effective_to IS NULL OR effective_from IS NULL OR effective_to >= effective_from),
+    CHECK (
+        (confirmation_state = 'confirmed' AND confirmed_at IS NOT NULL)
+        OR (confirmation_state <> 'confirmed' AND confirmed_at IS NULL)
+    ),
+    CHECK (supersedes_assertion_id IS NULL OR supersedes_assertion_id <> assertion_id)
+);
+
+CREATE TABLE agent_intake_artifacts (
+    intake_artifact_id TEXT PRIMARY KEY NOT NULL CHECK ({uuid_intake}),
+    source_artifact_id TEXT NOT NULL UNIQUE REFERENCES source_artifacts(source_artifact_id),
+    media_type TEXT NOT NULL CHECK (length(media_type) > 0),
+    evidence_json TEXT NOT NULL CHECK (length(evidence_json) > 1),
+    created_at TEXT NOT NULL CHECK (length(created_at) > 0)
+);
+
+CREATE TABLE agent_intake_occurrences (
+    occurrence_id TEXT PRIMARY KEY NOT NULL CHECK ({_uuid_check("occurrence_id")}),
+    intake_artifact_id TEXT NOT NULL REFERENCES agent_intake_artifacts(intake_artifact_id),
+    channel TEXT NOT NULL CHECK (length(channel) > 0),
+    received_at TEXT NOT NULL CHECK (length(received_at) > 0),
+    occurrence_json TEXT NOT NULL CHECK (length(occurrence_json) > 1)
+);
+
+CREATE TABLE agent_intake_extractions (
+    extraction_id TEXT PRIMARY KEY NOT NULL CHECK ({_uuid_check("extraction_id")}),
+    occurrence_id TEXT NOT NULL REFERENCES agent_intake_occurrences(occurrence_id),
+    extractor TEXT NOT NULL CHECK (length(extractor) > 0),
+    payload_json TEXT NOT NULL CHECK (length(payload_json) > 1),
+    payload_digest TEXT NOT NULL CHECK (
+        length(payload_digest) = 64 AND payload_digest NOT GLOB '*[^0-9a-f]*'
+    ),
+    created_at TEXT NOT NULL CHECK (length(created_at) > 0),
+    UNIQUE (occurrence_id, extractor, payload_digest)
+);
+
+CREATE TABLE agent_intake_proposals (
+    proposal_id TEXT PRIMARY KEY NOT NULL CHECK ({_uuid_check("proposal_id")}),
+    extraction_id TEXT NOT NULL REFERENCES agent_intake_extractions(extraction_id),
+    policy_version TEXT NOT NULL CHECK (length(policy_version) > 0),
+    command_scope TEXT NOT NULL CHECK (length(command_scope) > 0),
+    idempotency_key TEXT NOT NULL CHECK (length(idempotency_key) > 0),
+    expected_generation TEXT NOT NULL CHECK ({_uuid_check("expected_generation")}),
+    expected_revision INTEGER NOT NULL
+        CHECK (typeof(expected_revision) = 'integer' AND expected_revision >= 0),
+    payload_json TEXT NOT NULL CHECK (length(payload_json) > 1),
+    payload_digest TEXT NOT NULL CHECK (
+        length(payload_digest) = 64 AND payload_digest NOT GLOB '*[^0-9a-f]*'
+    ),
+    created_at TEXT NOT NULL CHECK (length(created_at) > 0),
+    UNIQUE (command_scope, idempotency_key),
+    UNIQUE (
+        extraction_id, command_scope, policy_version, payload_digest,
+        expected_generation, expected_revision
+    )
+);
+
+CREATE TABLE agent_intake_confirmations (
+    confirmation_id TEXT PRIMARY KEY NOT NULL CHECK ({_uuid_check("confirmation_id")}),
+    proposal_id TEXT NOT NULL REFERENCES agent_intake_proposals(proposal_id),
+    confirmation_state TEXT NOT NULL CHECK (confirmation_state IN ('confirmed', 'rejected')),
+    actor TEXT NOT NULL CHECK (length(actor) > 0),
+    confirmation_json TEXT NOT NULL CHECK (length(confirmation_json) > 1),
+    confirmed_at TEXT NOT NULL CHECK (length(confirmed_at) > 0)
+);
+
+CREATE TABLE agent_intake_applications (
+    proposal_id TEXT PRIMARY KEY NOT NULL REFERENCES agent_intake_proposals(proposal_id),
+    confirmation_id TEXT NOT NULL UNIQUE REFERENCES agent_intake_confirmations(confirmation_id),
+    changeset_id TEXT NOT NULL UNIQUE REFERENCES changesets(changeset_id)
+        DEFERRABLE INITIALLY DEFERRED,
+    applied_at TEXT NOT NULL CHECK (length(applied_at) > 0)
+);
+
+CREATE INDEX idx_changesets_revision ON changesets(committed_revision);
+CREATE INDEX idx_ownership_account_interval
+    ON ownership_assertion_sets(account_id, effective_from, effective_to);
+CREATE INDEX idx_relations_subject_object
+    ON entity_relation_assertions(subject_entity_id, object_entity_id);
+"""
+
+
+def _schema_v3_sql() -> str:
+    """Return the canonical configuration-head schema introduced in v3."""
+    return """
+CREATE TABLE config_heads (
+    config_kind TEXT PRIMARY KEY NOT NULL
+        CHECK (config_kind IN ('rules', 'goals', 'assets', 'scenarios', 'schema', 'other')),
+    revision_id TEXT NOT NULL UNIQUE REFERENCES config_revisions(entity_id),
+    updated_changeset_id TEXT REFERENCES changesets(changeset_id) DEFERRABLE INITIALLY DEFERRED,
+    updated_at TEXT NOT NULL CHECK (length(updated_at) > 0)
+);
+"""
+
+
+def _schema_v4_sql() -> str:
+    """Return the source-evidence link schema introduced in v4."""
+    uuid_link = _uuid_check("link_id")
+    return f"""
+CREATE TABLE transaction_source_links (
+    link_id TEXT PRIMARY KEY NOT NULL CHECK ({uuid_link}),
+    transaction_id TEXT NOT NULL REFERENCES transactions(entity_id),
+    provenance_id TEXT NOT NULL UNIQUE REFERENCES record_provenance(provenance_id),
+    observation_id TEXT NOT NULL REFERENCES observations(entity_id),
+    link_kind TEXT NOT NULL CHECK (link_kind IN ('origin', 'duplicate_evidence')),
+    created_changeset_id TEXT NOT NULL REFERENCES changesets(changeset_id)
+        DEFERRABLE INITIALLY DEFERRED
+);
+
+CREATE UNIQUE INDEX uq_transaction_origin_source_link
+    ON transaction_source_links(transaction_id)
+    WHERE link_kind = 'origin';
+"""
+
+
 _IMMUTABLE_TABLES = (
     "schema_migrations",
     "entities",
@@ -497,6 +755,47 @@ _IMMUTABLE_TABLES = (
     "legacy_identifiers",
     "legacy_identifier_supersessions",
 )
+
+_V2_IMMUTABLE_TABLES = (
+    "changesets",
+    "changeset_entries",
+    "audit_events",
+    "ownership_assertion_sets",
+    "ownership_assertion_shares",
+    "entity_relation_assertions",
+    "agent_intake_artifacts",
+    "agent_intake_occurrences",
+    "agent_intake_extractions",
+    "agent_intake_proposals",
+    "agent_intake_confirmations",
+    "agent_intake_applications",
+)
+
+_V2_REINSERT_EXISTS = {
+    "changesets": "changeset_id = NEW.changeset_id OR "
+    "(command_scope = NEW.command_scope AND idempotency_key = NEW.idempotency_key)",
+    "changeset_entries": "changeset_id = NEW.changeset_id AND entry_index = NEW.entry_index",
+    "audit_events": "audit_event_id = NEW.audit_event_id OR changeset_id = NEW.changeset_id",
+    "ownership_assertion_sets": "assertion_id = NEW.assertion_id",
+    "ownership_assertion_shares": "(assertion_id = NEW.assertion_id AND party_id = NEW.party_id) "
+    "OR share_value_id = NEW.share_value_id",
+    "entity_relation_assertions": "assertion_id = NEW.assertion_id",
+    "agent_intake_artifacts": "intake_artifact_id = NEW.intake_artifact_id "
+    "OR source_artifact_id = NEW.source_artifact_id",
+    "agent_intake_occurrences": "occurrence_id = NEW.occurrence_id",
+    "agent_intake_extractions": "extraction_id = NEW.extraction_id OR "
+    "(occurrence_id = NEW.occurrence_id AND extractor = NEW.extractor "
+    "AND payload_digest = NEW.payload_digest)",
+    "agent_intake_proposals": "proposal_id = NEW.proposal_id OR "
+    "(command_scope = NEW.command_scope AND idempotency_key = NEW.idempotency_key) OR "
+    "(extraction_id = NEW.extraction_id AND command_scope = NEW.command_scope "
+    "AND policy_version = NEW.policy_version AND payload_digest = NEW.payload_digest "
+    "AND expected_generation = NEW.expected_generation "
+    "AND expected_revision = NEW.expected_revision)",
+    "agent_intake_confirmations": "confirmation_id = NEW.confirmation_id",
+    "agent_intake_applications": "proposal_id = NEW.proposal_id OR "
+    "confirmation_id = NEW.confirmation_id OR changeset_id = NEW.changeset_id",
+}
 
 _ENTITY_SUBTYPE_CHECKS: Final = (
     "SELECT entity_id FROM entities WHERE entity_kind = 'source_occurrence' "
@@ -544,6 +843,7 @@ _SOURCE_BINDING_CHECKS: Final = (
     (
         "WITH typed_records(entity_id, observation_id, provenance_id) AS ("
         "SELECT entity_id, observation_id, provenance_id FROM transactions UNION ALL "
+        "SELECT link_id, observation_id, provenance_id FROM transaction_source_links UNION ALL "
         "SELECT entity_id, observation_id, provenance_id FROM overview_facts UNION ALL "
         "SELECT entity_id, observation_id, provenance_id FROM overview_balances UNION ALL "
         "SELECT entity_id, observation_id, provenance_id FROM overview_cashflows UNION ALL "
@@ -648,7 +948,7 @@ def _immutable_trigger_sql() -> str:
 
 
 def initialize_repository(paths: GenerationPaths, dataset_generation: str) -> RepositoryInfo:
-    """Build schema v1 in staging, verify it, and publish a new candidate database."""
+    """Build the current schema through every migration and publish a new candidate."""
     validate_entity_id(dataset_generation)
     _prepare_generation_layout(paths)
     if paths.database.exists() or paths.database.is_symlink():
@@ -657,6 +957,9 @@ def initialize_repository(paths: GenerationPaths, dataset_generation: str) -> Re
     connection = _connect_builder(staging)
     try:
         _apply_schema_v1(connection, dataset_generation)
+        _apply_schema_v2(connection)
+        _apply_schema_v3(connection)
+        _apply_schema_v4(connection)
         info = _validate_connection(
             connection,
             expected_generation=dataset_generation,
@@ -699,13 +1002,13 @@ def upgrade_repository(
     with inspection_snapshot(source, scratch_root=scratch_root) as snapshot:
         source_connection = _connect_snapshot(snapshot)
         try:
-            source_info = _read_info(source_connection)
+            source_info = _read_upgrade_info(source_connection)
             if source_info.schema_version > SQLITE_SCHEMA_VERSION:
                 raise RepositoryVersionError(
                     f"SQLite schema v{source_info.schema_version} is newer than supported "
                     f"v{SQLITE_SCHEMA_VERSION}."
                 )
-            if source_info.schema_version != SQLITE_SCHEMA_VERSION:
+            if source_info.schema_version < _SCHEMA_V1:
                 raise RepositoryVersionError(
                     f"SQLite schema v{source_info.schema_version} has no supported upgrade path."
                 )
@@ -714,6 +1017,7 @@ def upgrade_repository(
             try:
                 source_connection.backup(target_connection)
                 _normalize_journal_mode(target_connection)
+                _upgrade_schema_to_current(target_connection, source_info.schema_version)
                 info = _validate_connection(target_connection)
                 _copy_source_objects(source, source_connection, destination)
                 info = _validate_connection(target_connection, object_paths=destination)
@@ -788,7 +1092,7 @@ def _apply_schema_v1(
             "VALUES (1, ?, ?, ?, ?)",
             (
                 SQLITE_APPLICATION_ID,
-                SQLITE_SCHEMA_VERSION,
+                _SCHEMA_V1,
                 dataset_generation,
                 dataset_revision,
             ),
@@ -797,17 +1101,175 @@ def _apply_schema_v1(
             "INSERT INTO schema_migrations (schema_version, migration_name, applied_at) "
             "VALUES (?, ?, ?)",
             (
-                SQLITE_SCHEMA_VERSION,
+                _SCHEMA_V1,
                 "initial_authoritative_storage",
                 datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             ),
         )
         connection.execute(f"PRAGMA application_id = {SQLITE_APPLICATION_ID}")
-        connection.execute(f"PRAGMA user_version = {SQLITE_SCHEMA_VERSION}")
+        connection.execute(f"PRAGMA user_version = {_SCHEMA_V1}")
         connection.execute("COMMIT")
     except Exception:
         connection.execute("ROLLBACK")
         raise
+
+
+def _apply_schema_v2(connection: sqlite3.Connection) -> None:
+    """Apply the real v1-to-v2 mutation and relationship migration."""
+    if int(connection.execute("PRAGMA user_version").fetchone()[0]) != _SCHEMA_V1:
+        raise RepositoryVersionError("Schema v2 requires a schema v1 repository.")
+    try:
+        connection.executescript(
+            "BEGIN IMMEDIATE;\n" + _schema_v2_sql() + _immutable_trigger_sql_for_v2()
+        )
+        applied_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        connection.execute(
+            "INSERT INTO schema_migrations (schema_version, migration_name, applied_at) "
+            "VALUES (?, ?, ?)",
+            (_SCHEMA_V2, "atomic_mutations_and_relationship_assertions", applied_at),
+        )
+        connection.execute(
+            "UPDATE repository_meta SET schema_version = ? WHERE singleton = 1",
+            (_SCHEMA_V2,),
+        )
+        connection.execute(f"PRAGMA user_version = {_SCHEMA_V2}")
+        connection.execute("COMMIT")
+    except Exception:
+        if connection.in_transaction:
+            connection.execute("ROLLBACK")
+        raise
+
+
+def _immutable_trigger_sql_for_v2() -> str:
+    """Create immutability guards only for tables introduced by schema v2."""
+    statements: list[str] = []
+    for table in _V2_IMMUTABLE_TABLES:
+        statements.extend(
+            (
+                f"CREATE TRIGGER {table}_no_update BEFORE UPDATE ON {table} "
+                "BEGIN SELECT RAISE(ABORT, 'immutable preservation row'); END;",
+                f"CREATE TRIGGER {table}_no_delete BEFORE DELETE ON {table} "
+                "BEGIN SELECT RAISE(ABORT, 'immutable preservation row'); END;",
+            )
+        )
+        statements.append(
+            # Table and predicate text come only from the closed module-level allowlists above.
+            f"CREATE TRIGGER {table}_no_reinsert BEFORE INSERT ON {table} "  # nosec B608
+            f"WHEN EXISTS (SELECT 1 FROM {table} WHERE {_V2_REINSERT_EXISTS[table]}) "
+            "BEGIN SELECT RAISE(ABORT, 'immutable preservation row'); END;"
+        )
+    statements.extend(
+        (
+            "CREATE TRIGGER idempotency_requests_guarded_update "
+            "BEFORE UPDATE ON idempotency_requests WHEN "
+            "OLD.status <> 'pending' OR NEW.status <> 'committed' "
+            "OR NEW.command_scope <> OLD.command_scope "
+            "OR NEW.idempotency_key <> OLD.idempotency_key "
+            "OR NEW.request_digest <> OLD.request_digest "
+            "OR NEW.created_at <> OLD.created_at "
+            "BEGIN SELECT RAISE(ABORT, 'protected idempotency receipt'); END;",
+            "CREATE TRIGGER idempotency_requests_no_delete BEFORE DELETE ON idempotency_requests "
+            "BEGIN SELECT RAISE(ABORT, 'protected idempotency receipt'); END;",
+            "CREATE TRIGGER idempotency_requests_no_reinsert BEFORE INSERT "
+            "ON idempotency_requests WHEN EXISTS (SELECT 1 FROM idempotency_requests "
+            "WHERE command_scope = NEW.command_scope AND idempotency_key = NEW.idempotency_key) "
+            "BEGIN SELECT RAISE(ABORT, 'protected idempotency receipt'); END;",
+        )
+    )
+    return "\n".join(statements)
+
+
+def _apply_schema_v3(connection: sqlite3.Connection) -> None:
+    """Apply the v2-to-v3 canonical configuration-head migration."""
+    if int(connection.execute("PRAGMA user_version").fetchone()[0]) != _SCHEMA_V2:
+        raise RepositoryVersionError("Schema v3 requires a schema v2 repository.")
+    try:
+        connection.executescript(
+            "BEGIN IMMEDIATE;\n" + _schema_v3_sql() + _immutable_trigger_sql_for_v3()
+        )
+        applied_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        connection.execute(
+            "INSERT INTO schema_migrations (schema_version, migration_name, applied_at) "
+            "VALUES (?, ?, ?)",
+            (_SCHEMA_V3, "canonical_configuration_heads", applied_at),
+        )
+        connection.execute(
+            "UPDATE repository_meta SET schema_version = ? WHERE singleton = 1",
+            (_SCHEMA_V3,),
+        )
+        connection.execute(f"PRAGMA user_version = {_SCHEMA_V3}")
+        connection.execute("COMMIT")
+    except Exception:
+        if connection.in_transaction:
+            connection.execute("ROLLBACK")
+        raise
+
+
+def _immutable_trigger_sql_for_v3() -> str:
+    """Create protection guards for the configuration heads introduced in v3."""
+    return "\n".join(
+        (
+            "CREATE TRIGGER config_heads_guarded_update BEFORE UPDATE ON config_heads WHEN "
+            "NEW.config_kind <> OLD.config_kind OR NEW.revision_id = OLD.revision_id "
+            "OR NEW.updated_changeset_id IS NULL "
+            "BEGIN SELECT RAISE(ABORT, 'protected config head'); END;",
+            "CREATE TRIGGER config_heads_no_delete BEFORE DELETE ON config_heads "
+            "BEGIN SELECT RAISE(ABORT, 'protected config head'); END;",
+            "CREATE TRIGGER config_heads_no_reinsert BEFORE INSERT ON config_heads "
+            "WHEN EXISTS (SELECT 1 FROM config_heads WHERE config_kind = NEW.config_kind) "
+            "BEGIN SELECT RAISE(ABORT, 'protected config head'); END;",
+        )
+    )
+
+
+def _upgrade_schema_to_current(connection: sqlite3.Connection, source_version: int) -> None:
+    """Apply every later supported schema version onto a cloned candidate."""
+    if source_version == _SCHEMA_V1:
+        _apply_schema_v2(connection)
+    if source_version <= _SCHEMA_V2:
+        _apply_schema_v3(connection)
+    if source_version <= _SCHEMA_V3:
+        _apply_schema_v4(connection)
+
+
+def _apply_schema_v4(connection: sqlite3.Connection) -> None:
+    """Apply the v3-to-v4 source-evidence link migration."""
+    if int(connection.execute("PRAGMA user_version").fetchone()[0]) != _SCHEMA_V3:
+        raise RepositoryVersionError("Schema v4 requires a schema v3 repository.")
+    try:
+        connection.executescript(
+            "BEGIN IMMEDIATE;\n" + _schema_v4_sql() + _immutable_trigger_sql_for_v4()
+        )
+        applied_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        connection.execute(
+            "INSERT INTO schema_migrations (schema_version, migration_name, applied_at) "
+            "VALUES (?, ?, ?)",
+            (_SCHEMA_V4, "transaction_source_evidence_links", applied_at),
+        )
+        connection.execute(
+            "UPDATE repository_meta SET schema_version = ? WHERE singleton = 1",
+            (_SCHEMA_V4,),
+        )
+        connection.execute(f"PRAGMA user_version = {_SCHEMA_V4}")
+        connection.execute("COMMIT")
+    except Exception:
+        if connection.in_transaction:
+            connection.execute("ROLLBACK")
+        raise
+
+
+def _immutable_trigger_sql_for_v4() -> str:
+    """Create append-only guards for source-evidence links introduced in v4."""
+    return "\n".join(
+        (
+            "CREATE TRIGGER transaction_source_links_no_update "
+            "BEFORE UPDATE ON transaction_source_links "
+            "BEGIN SELECT RAISE(ABORT, 'immutable preservation row'); END;",
+            "CREATE TRIGGER transaction_source_links_no_delete "
+            "BEFORE DELETE ON transaction_source_links "
+            "BEGIN SELECT RAISE(ABORT, 'immutable preservation row'); END;",
+        )
+    )
 
 
 def _connect_builder(path: Path) -> sqlite3.Connection:
@@ -873,6 +1335,39 @@ def _read_info(connection: sqlite3.Connection) -> RepositoryInfo:
     return RepositoryInfo(application_id, schema_version, str(row[2]), int(row[3]))
 
 
+def _read_upgrade_info(connection: sqlite3.Connection) -> RepositoryInfo:
+    """Read a supported source identity without mutating an older repository."""
+    application_id = int(connection.execute("PRAGMA application_id").fetchone()[0])
+    schema_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+    if application_id != SQLITE_APPLICATION_ID:
+        raise RepositoryVersionError("SQLite file is not a finjuice authoritative repository.")
+    if schema_version > SQLITE_SCHEMA_VERSION:
+        raise RepositoryVersionError(
+            f"SQLite schema v{schema_version} is newer than supported v{SQLITE_SCHEMA_VERSION}."
+        )
+    if schema_version < _SCHEMA_V1:
+        raise RepositoryVersionError(
+            f"SQLite schema v{schema_version} is unsupported and has no upgrade path."
+        )
+    try:
+        row = connection.execute(
+            "SELECT application_id, schema_version, dataset_generation, dataset_revision "
+            "FROM repository_meta WHERE singleton = 1"
+        ).fetchone()
+    except sqlite3.DatabaseError as exc:
+        raise RepositoryIntegrityError("Repository metadata could not be read.") from exc
+    if row is None or int(row[0]) != application_id or int(row[1]) != schema_version:
+        raise RepositoryIntegrityError("Repository metadata disagrees with SQLite header identity.")
+    try:
+        validate_entity_id(str(row[2]))
+    except ValueError as exc:
+        raise RepositoryIntegrityError("Dataset generation ID is invalid.") from exc
+    revision = int(row[3])
+    if revision < 0:
+        raise RepositoryIntegrityError("Dataset revision must be non-negative.")
+    return RepositoryInfo(application_id, schema_version, str(row[2]), revision)
+
+
 def _validate_connection(
     connection: sqlite3.Connection,
     *,
@@ -903,6 +1398,9 @@ def _validate_application_invariants(connection: sqlite3.Connection) -> None:
             raise RepositoryIntegrityError("An exact value is missing its matching subtype row.")
     _validate_schema_migration_ledger(connection)
     _validate_source_bindings(connection)
+    _validate_v2_invariants(connection)
+    _validate_v3_invariants(connection)
+    _validate_v4_invariants(connection)
     identities = connection.execute(
         "SELECT entity_id, capture_manifest_digest, record_kind, canonical_locator_json "
         "FROM migration_identities ORDER BY entity_id"
@@ -948,6 +1446,325 @@ def _validate_source_bindings(connection: sqlite3.Connection) -> None:
     for query, message in _SOURCE_BINDING_CHECKS:
         if connection.execute(query).fetchone() is not None:
             raise RepositoryIntegrityError(message)
+
+
+def _validate_v2_invariants(connection: sqlite3.Connection) -> None:
+    """Validate cross-row invariants introduced by the mutation schema."""
+    schema_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+    if schema_version < 2:
+        return
+    pending = connection.execute(
+        "SELECT 1 FROM idempotency_requests WHERE status <> 'committed' LIMIT 1"
+    ).fetchone()
+    if pending is not None:
+        raise RepositoryIntegrityError("A published repository contains a pending request.")
+    receipt_mismatch = connection.execute(
+        "SELECT 1 FROM idempotency_requests AS request "
+        "JOIN changesets AS changeset ON changeset.changeset_id = request.changeset_id "
+        "WHERE request.command_scope <> changeset.command_scope "
+        "OR request.idempotency_key <> changeset.idempotency_key "
+        "OR request.base_revision <> changeset.base_revision "
+        "OR request.committed_revision <> changeset.committed_revision "
+        "OR request.state_changed <> changeset.state_changed LIMIT 1"
+    ).fetchone()
+    if receipt_mismatch is not None:
+        raise RepositoryIntegrityError("An idempotency receipt disagrees with its changeset.")
+    _validate_receipt_envelopes(connection)
+    _validate_ownership_assertions(connection)
+    _validate_relation_assertions(connection)
+    _validate_intake_applications(connection)
+
+
+def _validate_v3_invariants(connection: sqlite3.Connection) -> None:
+    """Validate cross-row invariants introduced by canonical configuration heads."""
+    schema_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+    if schema_version < 3:
+        return
+    head_mismatch = connection.execute(
+        "SELECT 1 FROM config_heads AS head "
+        "JOIN config_revisions AS revision ON revision.entity_id = head.revision_id "
+        "WHERE head.config_kind <> revision.config_kind LIMIT 1"
+    ).fetchone()
+    if head_mismatch is not None:
+        raise RepositoryIntegrityError("A config head references another configuration kind.")
+
+
+_SOURCE_LINK_CHECKS: Final = (
+    (
+        "SELECT link.link_id FROM transaction_source_links AS link "
+        "JOIN record_provenance AS provenance ON provenance.provenance_id = link.provenance_id "
+        "JOIN observations AS observation ON observation.entity_id = link.observation_id "
+        "WHERE provenance.source_occurrence_id <> observation.source_occurrence_id",
+        "A source link joins evidence from different source occurrences.",
+    ),
+    (
+        "SELECT link.link_id FROM transaction_source_links AS link "
+        "JOIN transactions AS txn ON txn.entity_id = link.transaction_id "
+        "WHERE link.link_kind = 'origin' "
+        "AND (link.provenance_id <> txn.provenance_id "
+        "OR link.observation_id <> txn.observation_id)",
+        "An origin source link does not match the transaction's preserved origin.",
+    ),
+    (
+        "SELECT link.link_id FROM transaction_source_links AS link "
+        "JOIN transactions AS txn ON txn.entity_id = link.transaction_id "
+        "WHERE link.link_kind = 'duplicate_evidence' "
+        "AND link.provenance_id = txn.provenance_id",
+        "Duplicate evidence must not reuse the transaction origin provenance.",
+    ),
+    (
+        "SELECT transaction_id FROM transaction_source_links "
+        "WHERE link_kind = 'origin' GROUP BY transaction_id HAVING COUNT(*) > 1",
+        "A transaction has more than one origin source link.",
+    ),
+    (
+        "SELECT link.link_id FROM transaction_source_links AS link "
+        "JOIN transactions AS txn ON txn.provenance_id = link.provenance_id "
+        "WHERE txn.entity_id <> link.transaction_id",
+        "A source link reassigns another transaction's origin provenance.",
+    ),
+)
+
+
+def _validate_v4_invariants(connection: sqlite3.Connection) -> None:
+    """Validate source-evidence link bindings introduced in schema v4."""
+    schema_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+    if schema_version < _SCHEMA_V4:
+        return
+    for query, message in _SOURCE_LINK_CHECKS:
+        if connection.execute(query).fetchone() is not None:
+            raise RepositoryIntegrityError(message)
+
+
+def _validate_ownership_assertions(connection: sqlite3.Connection) -> None:
+    totals, metadata = _collect_ownership_state(connection)
+    for assertion_id, (account_id, completeness, confirmation, supersedes) in metadata.items():
+        if confirmation == "confirmed" and completeness == "complete" and totals[assertion_id] != 1:
+            raise RepositoryIntegrityError("Complete confirmed ownership shares must total one.")
+        if supersedes is not None:
+            previous = metadata.get(supersedes)
+            if previous is None or previous[0] != account_id:
+                raise RepositoryIntegrityError(
+                    "An ownership correction must supersede an assertion for the same account."
+                )
+    _validate_active_ownership_overlap(connection)
+
+
+def _collect_ownership_state(
+    connection: sqlite3.Connection,
+) -> tuple[dict[str, Fraction], dict[str, tuple[str, str, str, str | None]]]:
+    rows = connection.execute(
+        "SELECT assertion.assertion_id, assertion.account_id, assertion.completeness, "
+        "assertion.confirmation_state, assertion.supersedes_assertion_id, "
+        "share.share_value_id, value.coefficient, value.scale, rate.unit, "
+        "assertion.effective_from, assertion.effective_to "
+        "FROM ownership_assertion_sets AS assertion "
+        "LEFT JOIN ownership_assertion_shares AS share "
+        "ON share.assertion_id = assertion.assertion_id "
+        "LEFT JOIN exact_values AS value ON value.value_id = share.share_value_id "
+        "LEFT JOIN rate_values AS rate ON rate.value_id = share.share_value_id "
+        "ORDER BY assertion.assertion_id, share.party_id"
+    ).fetchall()
+    totals: dict[str, Fraction] = {}
+    metadata: dict[str, tuple[str, str, str, str | None]] = {}
+    for (
+        assertion_id,
+        account_id,
+        completeness,
+        confirmation_state,
+        supersedes,
+        share_value_id,
+        coefficient,
+        scale,
+        unit,
+        effective_from,
+        effective_to,
+    ) in rows:
+        key = str(assertion_id)
+        metadata[key] = (
+            str(account_id),
+            str(completeness),
+            str(confirmation_state),
+            None if supersedes is None else str(supersedes),
+        )
+        totals.setdefault(key, Fraction(0))
+        _validate_effective_interval(effective_from, effective_to)
+        if share_value_id is not None and unit != _OWNERSHIP_SHARE_UNIT:
+            raise RepositoryIntegrityError(
+                "An ownership share must use the ownership_share.v1 semantic unit."
+            )
+        if coefficient is not None:
+            share = Fraction(int(str(coefficient)), 10 ** int(scale))
+            if share <= 0 or share > 1:
+                raise RepositoryIntegrityError("An ownership share is outside (0, 1].")
+            totals[key] += share
+        if confirmation_state == "confirmed" and totals[key] > 1:
+            raise RepositoryIntegrityError("Confirmed ownership shares exceed one.")
+    return totals, metadata
+
+
+def _validate_active_ownership_overlap(connection: sqlite3.Connection) -> None:
+    overlap = connection.execute(
+        "SELECT 1 FROM ownership_assertion_sets AS left_set "
+        "JOIN ownership_assertion_sets AS right_set "
+        "ON left_set.account_id = right_set.account_id "
+        "AND left_set.assertion_id < right_set.assertion_id "
+        "WHERE left_set.confirmation_state = 'confirmed' "
+        "AND right_set.confirmation_state = 'confirmed' "
+        "AND NOT EXISTS (SELECT 1 FROM ownership_assertion_sets AS successor "
+        "  WHERE successor.supersedes_assertion_id = left_set.assertion_id "
+        "  AND successor.confirmation_state = 'confirmed') "
+        "AND NOT EXISTS (SELECT 1 FROM ownership_assertion_sets AS successor "
+        "  WHERE successor.supersedes_assertion_id = right_set.assertion_id "
+        "  AND successor.confirmation_state = 'confirmed') "
+        "AND coalesce(left_set.effective_to, '9999-12-31T23:59:59Z') "
+        ">= coalesce(right_set.effective_from, '') "
+        "AND coalesce(right_set.effective_to, '9999-12-31T23:59:59Z') "
+        ">= coalesce(left_set.effective_from, '') LIMIT 1"
+    ).fetchone()
+    if overlap is not None:
+        raise RepositoryIntegrityError("Active confirmed ownership assertions overlap.")
+
+
+def _validate_receipt_envelopes(connection: sqlite3.Connection) -> None:
+    for (result_json,) in connection.execute(
+        "SELECT result_json FROM idempotency_requests WHERE status = 'committed'"
+    ).fetchall():
+        try:
+            parsed = json.loads(str(result_json), parse_constant=_reject_json_constant)
+            canonical = json.dumps(
+                parsed,
+                sort_keys=True,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise RepositoryIntegrityError("A stored mutation receipt is invalid JSON.") from exc
+        if (
+            canonical != result_json
+            or not isinstance(parsed, dict)
+            or set(parsed)
+            != {
+                "result",
+                "retained_artifacts",
+            }
+        ):
+            raise RepositoryIntegrityError("A stored mutation receipt is not canonical.")
+        if not isinstance(parsed["result"], dict) or not isinstance(
+            parsed["retained_artifacts"], list
+        ):
+            raise RepositoryIntegrityError("A stored mutation receipt has an invalid envelope.")
+        if any(not isinstance(item, str) or not item for item in parsed["retained_artifacts"]):
+            raise RepositoryIntegrityError("A stored mutation receipt has an invalid artifact ID.")
+
+
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"Non-finite JSON constant is forbidden: {value}")
+
+
+def _validate_intake_applications(connection: sqlite3.Connection) -> None:
+    invalid = connection.execute(
+        "SELECT 1 FROM agent_intake_applications AS application "
+        "JOIN agent_intake_confirmations AS confirmation "
+        "ON confirmation.confirmation_id = application.confirmation_id "
+        "JOIN agent_intake_proposals AS proposal ON proposal.proposal_id = application.proposal_id "
+        "JOIN changesets AS changeset ON changeset.changeset_id = application.changeset_id "
+        "WHERE confirmation.proposal_id <> application.proposal_id "
+        "OR confirmation.confirmation_state <> 'confirmed' "
+        "OR proposal.command_scope <> changeset.command_scope "
+        "OR proposal.idempotency_key <> changeset.idempotency_key "
+        "OR proposal.payload_digest <> changeset.payload_digest "
+        "OR proposal.expected_generation <> "
+        "(SELECT dataset_generation FROM repository_meta WHERE singleton = 1) "
+        "OR proposal.expected_revision <> changeset.base_revision LIMIT 1"
+    ).fetchone()
+    if invalid is not None:
+        raise RepositoryIntegrityError("An intake application lacks a matching confirmed request.")
+    digest_rows = connection.execute(
+        "SELECT payload_json, payload_digest FROM agent_intake_extractions "
+        "UNION ALL SELECT payload_json, payload_digest FROM agent_intake_proposals"
+    ).fetchall()
+    for payload_json, payload_digest in digest_rows:
+        try:
+            parsed = json.loads(str(payload_json))
+            canonical = json.dumps(
+                parsed,
+                sort_keys=True,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise RepositoryIntegrityError("An intake payload is not canonical JSON.") from exc
+        if canonical != payload_json:
+            raise RepositoryIntegrityError("An intake payload is not canonical JSON.")
+        if hashlib.sha256(canonical.encode("utf-8")).hexdigest() != payload_digest:
+            raise RepositoryIntegrityError("An intake payload digest is invalid.")
+
+
+def _validate_relation_assertions(connection: sqlite3.Connection) -> None:
+    """Require coherent active assertions and pair-preserving corrections."""
+    for effective_from, effective_to in connection.execute(
+        "SELECT effective_from, effective_to FROM entity_relation_assertions"
+    ).fetchall():
+        _validate_effective_interval(effective_from, effective_to)
+    invalid = connection.execute(
+        "SELECT 1 FROM entity_relation_assertions AS correction "
+        "LEFT JOIN entity_relation_assertions AS original "
+        "ON original.assertion_id = correction.supersedes_assertion_id "
+        "WHERE correction.supersedes_assertion_id IS NOT NULL "
+        "AND (original.assertion_id IS NULL "
+        "OR original.subject_entity_id <> correction.subject_entity_id "
+        "OR original.object_entity_id <> correction.object_entity_id) LIMIT 1"
+    ).fetchone()
+    if invalid is not None:
+        raise RepositoryIntegrityError(
+            "A relation correction must supersede the same ordered entity pair."
+        )
+    contradiction = connection.execute(
+        "SELECT 1 FROM entity_relation_assertions AS left_assertion "
+        "JOIN entity_relation_assertions AS right_assertion "
+        "ON left_assertion.subject_entity_id = right_assertion.subject_entity_id "
+        "AND left_assertion.object_entity_id = right_assertion.object_entity_id "
+        "AND left_assertion.assertion_id < right_assertion.assertion_id "
+        "WHERE left_assertion.confirmation_state = 'confirmed' "
+        "AND right_assertion.confirmation_state = 'confirmed' "
+        "AND ((left_assertion.relation_kind = 'excludes' "
+        "AND right_assertion.relation_kind IN ('includes', 'overlaps')) "
+        "OR (right_assertion.relation_kind = 'excludes' "
+        "AND left_assertion.relation_kind IN ('includes', 'overlaps'))) "
+        "AND NOT EXISTS (SELECT 1 FROM entity_relation_assertions AS successor "
+        "  WHERE successor.supersedes_assertion_id = left_assertion.assertion_id "
+        "  AND successor.confirmation_state = 'confirmed') "
+        "AND NOT EXISTS (SELECT 1 FROM entity_relation_assertions AS successor "
+        "  WHERE successor.supersedes_assertion_id = right_assertion.assertion_id "
+        "  AND successor.confirmation_state = 'confirmed') "
+        "AND coalesce(left_assertion.effective_to, '9999-12-31') "
+        ">= coalesce(right_assertion.effective_from, '0001-01-01') "
+        "AND coalesce(right_assertion.effective_to, '9999-12-31') "
+        ">= coalesce(left_assertion.effective_from, '0001-01-01') LIMIT 1"
+    ).fetchone()
+    if contradiction is not None:
+        raise RepositoryIntegrityError("Active confirmed relation assertions contradict.")
+
+
+def _validate_effective_interval(effective_from: object, effective_to: object) -> None:
+    start = None if effective_from is None else str(effective_from)
+    end = None if effective_to is None else str(effective_to)
+    if not _is_canonical_calendar_date(start) or not _is_canonical_calendar_date(end):
+        raise RepositoryIntegrityError("Effective bounds must be canonical calendar dates.")
+    if start is not None and end is not None and end < start:
+        raise RepositoryIntegrityError("Effective date range is reversed.")
+
+
+def _is_canonical_calendar_date(value: str | None) -> bool:
+    if value is None:
+        return True
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date().isoformat() == value
+    except ValueError:
+        return False
 
 
 def _validate_source_objects(

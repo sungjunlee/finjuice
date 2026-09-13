@@ -39,28 +39,29 @@ def _record_ingest_import(
     Returns:
         file_id issued (or reused) by import_history.
     """
-    metadata_dir = csv_base_dir.parent / "metadata"
+    authority_data_dir = csv_base_dir.parent
 
     file_id = record_import(
-        metadata_dir=metadata_dir,
         file_path=file_path,
         file_mtime=file_mtime,
         source_rows=source_rows,
         archived=False,
+        authority_data_dir=authority_data_dir,
     )
 
     if archive:
-        archive_dir = metadata_dir / "archives"
-        archived_path = archive_source_file(file_path, archive_dir, file_id)
+        archived_path = archive_source_file(
+            file_path, file_id, authority_data_dir=authority_data_dir
+        )
         logger.info("Archived source file")
 
         record_import(
-            metadata_dir=metadata_dir,
             file_path=file_path,
             file_mtime=file_mtime,
             source_rows=source_rows,
             archived=True,
             archived_path=archived_path,
+            authority_data_dir=authority_data_dir,
         )
 
     return file_id
@@ -77,9 +78,9 @@ def _write_ingest_file_result(
     df_transactions, skipped_rows = _build_transaction_dataframe(file_path, df, file_id)
 
     result = csv_partition.append_transactions(
-        csv_base_dir,
         df_transactions,
         deduplicate=True,
+        authority_data_dir=csv_base_dir.parent,
     )
 
     inserted = result["rows_inserted"]

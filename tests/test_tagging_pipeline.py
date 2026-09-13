@@ -100,7 +100,7 @@ def create_sample_transactions(csv_base_dir: Path) -> None:
     ]
 
     df = pl.DataFrame(transactions)
-    csv_partition.append_transactions(csv_base_dir, df, deduplicate=False)
+    csv_partition.append_transactions(df, deduplicate=False, authority_data_dir=csv_base_dir.parent)
 
 
 class TestTagAllTransactions:
@@ -505,7 +505,9 @@ class TestTagDryRun:
             )
 
         df = pl.DataFrame(transactions)
-        csv_partition.append_transactions(csv_base_dir, df, deduplicate=False)
+        csv_partition.append_transactions(
+            df, deduplicate=False, authority_data_dir=csv_base_dir.parent
+        )
 
         rules = [
             TagRule(
@@ -566,7 +568,9 @@ class TestTagDryRun:
         ]
 
         df = pl.DataFrame(transactions)
-        csv_partition.append_transactions(csv_base_dir, df, deduplicate=False)
+        csv_partition.append_transactions(
+            df, deduplicate=False, authority_data_dir=csv_base_dir.parent
+        )
 
         rules = [
             TagRule(

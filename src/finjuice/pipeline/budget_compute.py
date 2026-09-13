@@ -41,12 +41,15 @@ from finjuice.pipeline.budget_status_helpers import (
 from finjuice.pipeline.config import Config
 from finjuice.pipeline.goals import (
     GoalsValidationProblem,
+    dump_goals_roundtrip_bytes,
     load_goals_file,
     load_goals_roundtrip,
+    load_goals_roundtrip_bytes,
     new_goals_document,
     validate_goals_payload,
     write_goals_roundtrip,
 )
+from finjuice.pipeline.storage.authority import legacy_write_lease
 
 __all__ = [
     "BUDGET_EDIT_UPDATE_HINT",
@@ -55,6 +58,7 @@ __all__ = [
     "STATUS_ON_TRACK_MIN_PCT",
     "UNTRACKED_SPEND_WARNING_SHARE",
     "compute_budget_edit",
+    "compute_budget_edit_bytes",
     "compute_budget_status",
     "compute_budget_validate",
 ]
@@ -165,42 +169,68 @@ def compute_budget_edit(
         confirm: Optional confirmation callback receiving the change count.
             When omitted, the write proceeds without prompting.
     """
-    try:
-        yaml, loaded = load_goals_roundtrip(config.goals_file)
-    except (OSError, YAMLError) as exc:
-        raise GoalsFileInvalidError([_parse_problem_from_exception(exc)]) from exc
+    with legacy_write_lease(config.data_dir):
+        try:
+            yaml, loaded = load_goals_roundtrip(config.goals_file)
+        except (OSError, YAMLError) as exc:
+            raise GoalsFileInvalidError([_parse_problem_from_exception(exc)]) from exc
 
+        result, document = _prepare_budget_edit(config, loaded, updates, confirm)
+        write_goals_roundtrip(
+            yaml,
+            document,
+            config.goals_file,
+            authority_data_dir=config.data_dir,
+        )
+        return result
+
+
+def compute_budget_edit_bytes(
+    config: Config,
+    content: bytes | None,
+    *,
+    updates: list[str],
+    confirm: BudgetEditConfirm | None = None,
+) -> tuple[dict[str, Any], bytes]:
+    """Prepare an exact goals edit without writing a legacy file."""
+    try:
+        yaml, loaded = load_goals_roundtrip_bytes(content)
+    except (OSError, UnicodeError, YAMLError) as exc:
+        raise GoalsFileInvalidError([_parse_problem_from_exception(exc)]) from exc
+    result, document = _prepare_budget_edit(config, loaded, updates, confirm)
+    return result, dump_goals_roundtrip_bytes(yaml, document)
+
+
+def _prepare_budget_edit(
+    config: Config,
+    loaded: Any | None,
+    updates: list[str],
+    confirm: BudgetEditConfirm | None,
+) -> tuple[dict[str, Any], CommentedMap]:
+    """Validate and apply budget updates to one in-memory round-trip document."""
     if loaded is None:
         document = new_goals_document()
     elif not isinstance(loaded, CommentedMap):
         raise GoalsFileInvalidError(
-            [
-                GoalsValidationProblem(
-                    path="goals.yaml",
-                    message="must contain a mapping",
-                )
-            ]
+            [GoalsValidationProblem(path="goals.yaml", message="must contain a mapping")]
         )
     else:
         document = loaded
-
     _bootstrap_budget_document(document)
-
     changes = [_apply_budget_update(document, item) for item in updates]
     validated_document, problems = validate_goals_payload(document)
     if validated_document is None:
         raise GoalsFileInvalidError(problems)
-    assert validated_document is not None
-
     if confirm is not None and not confirm(len(changes)):
         raise BudgetEditCancelledError()
-
-    write_goals_roundtrip(yaml, document, config.goals_file)
-    return {
-        "path": str(config.goals_file),
-        "changes": changes,
-        "monthly_budget": _serialize_monthly_budget(validated_document.monthly_budget),
-    }
+    return (
+        {
+            "path": str(config.goals_file),
+            "changes": changes,
+            "monthly_budget": _serialize_monthly_budget(validated_document.monthly_budget),
+        },
+        document,
+    )
 
 
 def compute_budget_validate(config: Config) -> dict[str, Any]:

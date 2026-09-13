@@ -5,16 +5,22 @@ Split from pipeline.py as part of Issue #269.
 """
 
 import logging
+from contextlib import nullcontext
 from typing import Any, NoReturn
 
 import typer
 
 from finjuice.pipeline.cli.audit_log import append_financial_mutation_event
+from finjuice.pipeline.cli.bulk_repository import (
+    compute_repository_tag,
+    resolve_bulk_mutation,
+)
 from finjuice.pipeline.cli.commands.tag_edit import (
+    TagEditRequest,
     _compute_tag_edit,
     _render_tag_edit,
-    _validate_edit_row_hash,
 )
+from finjuice.pipeline.cli.mutation_options import get_mutation_options, with_mutation_options
 from finjuice.pipeline.cli.output import (
     ErrorCode,
     ExitCode,
@@ -24,9 +30,19 @@ from finjuice.pipeline.cli.output import (
     success,
     warning,
 )
-from finjuice.pipeline.cli.utils import warn_on_schema_mismatch
+from finjuice.pipeline.cli.utils import (
+    get_mutation_facade,
+    mutation_identity,
+    warn_on_schema_mismatch,
+)
 from finjuice.pipeline.constants import SCHEMA_VERSION
 from finjuice.pipeline.metadata import write_schema_version
+from finjuice.pipeline.storage.authority import RepositoryAuthority, legacy_write_lease
+from finjuice.pipeline.storage.sqlite.errors import (
+    AuthorityError,
+    MutationConflictError,
+    MutationValidationError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +150,82 @@ def _render_tag(result: dict[str, Any]) -> None:
     info(f"  Untagged: {result['untagged']}")
 
 
+def _execute_tag_edit_command(
+    ctx: typer.Context,
+    config: Any,
+    request: TagEditRequest,
+    json_output: bool,
+) -> None:
+    """Resolve authority and execute one manual transaction edit command."""
+    mutation_options = get_mutation_options(ctx)
+    identity = mutation_identity(
+        mutation_options.idempotency_key,
+        mutation_options.expected_generation,
+        mutation_options.expected_revision,
+    )
+    facade = get_mutation_facade(ctx, config)
+    repository_active = isinstance(facade.dispatch().authority, RepositoryAuthority)
+    if not repository_active and any(
+        value is not None
+        for value in (
+            mutation_options.idempotency_key,
+            mutation_options.expected_generation,
+            mutation_options.expected_revision,
+        )
+    ):
+        raise ValueError("Mutation identity options require an active SQLite repository.")
+    legacy_mutation_requested = bool(
+        request.add_tags
+        or request.remove_tags
+        or request.set_category is not None
+        or request.set_note is not None
+    )
+    edit_lease = (
+        legacy_write_lease(config.data_dir)
+        if legacy_mutation_requested and not request.dry_run and not repository_active
+        else nullcontext()
+    )
+    with edit_lease:
+        result = _compute_tag_edit(
+            config,
+            request,
+            facade=facade if repository_active else None,
+            identity=identity,
+        )
+        if result["updated"] and not repository_active:
+            write_schema_version(config.data_dir, SCHEMA_VERSION)
+    emit(result, json_output, _render_tag_edit, command="tag")
+
+
+def _execute_bulk_tag_command(
+    ctx: typer.Context, config: Any, dry_run: bool, json_output: bool
+) -> None:
+    """Apply rules through the selected authority and render its result."""
+    facade, identity = resolve_bulk_mutation(ctx, config)
+    if facade is not None:
+        result = compute_repository_tag(facade, identity=identity, dry_run=dry_run)
+        emit(result, json_output, _render_tag, command="tag")
+        return
+
+    result = _compute_tag(config, dry_run, json_output)
+    if not dry_run:
+        write_schema_version(config.data_dir, SCHEMA_VERSION)
+        if int(result["total"]) > 0:
+            append_financial_mutation_event(
+                config.data_dir,
+                {
+                    "command": "tag",
+                    "action": "bulk_apply",
+                    "fields_changed": BULK_TAG_AUDIT_FIELDS,
+                    "change_summary": "bulk tag applied to transaction partitions",
+                    "changed_rows": int(result["total"]),
+                    "partition_count": _count_transaction_partitions(config.csv_base_dir),
+                },
+            )
+    emit(result, json_output, _render_tag, command="tag")
+
+
+@with_mutation_options
 def tag_command(
     ctx: typer.Context,
     edit: str | None = typer.Option(
@@ -164,14 +256,14 @@ def tag_command(
     dry_run: bool = typer.Option(
         False,
         "--dry-run/--no-dry-run",
-        help="Preview changes without writing to CSV files",
+        help="Preview changes without writing to the active storage",
     ),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
     """
-    Apply tagging rules to all transactions in CSV partitions.
+    Apply tagging rules to all transactions in the active storage.
 
-    Loads rules from rules.yaml and applies them to all transactions.
+    Loads rules from the canonical config or legacy rules.yaml.
     Updates tags_rule and tags_final fields.
 
     Use --dry-run to preview changes before applying them.
@@ -193,40 +285,41 @@ def tag_command(
             )
 
         if edit is not None:
-            _validate_edit_row_hash(edit)
-            result = _compute_tag_edit(
+            _execute_tag_edit_command(
+                ctx,
                 config,
-                edit,
-                add_tag,
-                remove_tag,
-                set_category,
-                set_note,
-                dry_run,
+                TagEditRequest(
+                    identifier=edit,
+                    add_tags=add_tag,
+                    remove_tags=remove_tag,
+                    set_category=set_category,
+                    set_note=set_note,
+                    dry_run=dry_run,
+                ),
+                json_output,
             )
-            if result["updated"]:
-                write_schema_version(config.data_dir, SCHEMA_VERSION)
-            emit(result, json_output, _render_tag_edit, command="tag")
             return
 
-        result = _compute_tag(config, dry_run, json_output)
-        if not dry_run:
-            write_schema_version(config.data_dir, SCHEMA_VERSION)
-            if int(result["total"]) > 0:
-                append_financial_mutation_event(
-                    config.data_dir,
-                    {
-                        "command": "tag",
-                        "action": "bulk_apply",
-                        "fields_changed": BULK_TAG_AUDIT_FIELDS,
-                        "change_summary": "bulk tag applied to transaction partitions",
-                        "changed_rows": int(result["total"]),
-                        "partition_count": _count_transaction_partitions(config.csv_base_dir),
-                    },
-                )
-        emit(result, json_output, _render_tag, command="tag")
+        _execute_bulk_tag_command(ctx, config, dry_run, json_output)
 
     except typer.Exit:
         raise  # Re-raise typer.Exit without modification
+    except (AuthorityError, MutationConflictError) as exc:
+        emit_error(
+            str(exc),
+            error_code=ErrorCode.VALIDATION_FAILED,
+            exit_code=ExitCode.VALIDATION_ERROR,
+            json_output=json_output,
+            command="tag",
+        )
+    except MutationValidationError as exc:
+        emit_error(
+            str(exc),
+            error_code=ErrorCode.INVALID_ARGS,
+            exit_code=ExitCode.USAGE_ERROR,
+            json_output=json_output,
+            command="tag",
+        )
     except FileNotFoundError as e:
         logger.error("Tagging failed (%s)", type(e).__name__)
         if edit is not None:

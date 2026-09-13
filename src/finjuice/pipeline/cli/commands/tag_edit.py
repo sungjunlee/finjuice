@@ -8,13 +8,17 @@ and human rendering for manual edits. Bulk rule tagging stays in
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from typing import Any
 
 import polars as pl
 
 from finjuice.pipeline.cli.audit_log import append_financial_mutation_event
 from finjuice.pipeline.cli.output import info, success
+from finjuice.pipeline.cli.utils import mutation_metadata
 from finjuice.pipeline.constants import HASH_LENGTH_CHARS
+from finjuice.pipeline.storage.mutation_facade import MutationIdentity, StorageMutationFacade
+from finjuice.pipeline.storage.sqlite.mutations import ManualTransactionEdit
 from finjuice.pipeline.tagging.manual import (
     build_manual_tags,
     merge_final_tags,
@@ -42,6 +46,18 @@ def _validate_edit_row_hash(row_hash: str) -> None:
         raise ValueError(
             f"Invalid --edit value: expected a {HASH_LENGTH_CHARS}-character hexadecimal row_hash."
         )
+
+
+@dataclass(frozen=True)
+class TagEditRequest:
+    """Stable manual-edit inputs shared by legacy and repository implementations."""
+
+    identifier: str
+    add_tags: list[str] | None
+    remove_tags: list[str] | None
+    set_category: str | None
+    set_note: str | None
+    dry_run: bool
 
 
 def _changed_tag_edit_fields(
@@ -88,28 +104,35 @@ def _normalize_cli_tags(tags: list[str] | None) -> list[str]:
 
 def _compute_tag_edit(
     config: Any,
-    row_hash: str,
-    add_tags: list[str] | None,
-    remove_tags: list[str] | None,
-    set_category: str | None,
-    set_note: str | None,
-    dry_run: bool,
+    request: TagEditRequest,
+    *,
+    facade: StorageMutationFacade | None = None,
+    identity: MutationIdentity = MutationIdentity(),
 ) -> dict[str, Any]:
     """Load, optionally mutate, and return a single transaction by row_hash."""
+    if facade is not None:
+        return _compute_repository_tag_edit(
+            facade,
+            identity,
+            request,
+        )
+
     from finjuice.pipeline.storage import csv_transactions
 
-    requested_add_tags = _normalize_cli_tags(add_tags)
-    requested_remove_tags = set(_normalize_cli_tags(remove_tags))
+    row_hash = request.identifier
+    _validate_edit_row_hash(row_hash)
+    requested_add_tags = _normalize_cli_tags(request.add_tags)
+    requested_remove_tags = set(_normalize_cli_tags(request.remove_tags))
     classification_mutation_requested = bool(
-        requested_add_tags or requested_remove_tags or set_category is not None
+        requested_add_tags or requested_remove_tags or request.set_category is not None
     )
-    mutation_requested = bool(classification_mutation_requested or set_note is not None)
+    mutation_requested = bool(classification_mutation_requested or request.set_note is not None)
 
-    category_override = set_category.strip() if set_category is not None else None
-    if set_category is not None and not category_override:
+    category_override = request.set_category.strip() if request.set_category is not None else None
+    if request.set_category is not None and not category_override:
         raise ValueError("Category override cannot be empty.")
 
-    note_value = set_note.strip() if set_note is not None else None
+    note_value = request.set_note.strip() if request.set_note is not None else None
     if note_value is not None and len(note_value) > MAX_MANUAL_NOTE_CHARS:
         raise ValueError(f"Manual note cannot exceed {MAX_MANUAL_NOTE_CHARS} characters.")
 
@@ -125,7 +148,7 @@ def _compute_tag_edit(
     next_manual_tags = [tag for tag in current_manual_tags if tag not in requested_remove_tags]
     next_manual_tags = merge_final_tags(next_manual_tags, requested_add_tags)
     next_category_override = (
-        category_override if set_category is not None else current_category_override
+        category_override if request.set_category is not None else current_category_override
     )
 
     persisted_manual_tags = build_manual_tags(next_manual_tags, next_category_override)
@@ -160,12 +183,17 @@ def _compute_tag_edit(
         or int(target_row.get("needs_review") or 0) != int(updated_row["needs_review"])
     )
 
-    if updated and not dry_run:
+    if updated and not request.dry_run:
         updated_partition_df = pl.concat(
             [partition_df.filter(pl.col("row_hash") != row_hash), pl.DataFrame([updated_row])],
             how="diagonal_relaxed",
         )
-        csv_transactions.write_month(config.csv_base_dir, updated_partition_df, year, month)
+        csv_transactions.write_month(
+            updated_partition_df,
+            year,
+            month,
+            authority_data_dir=config.data_dir,
+        )
         append_financial_mutation_event(
             config.data_dir,
             {
@@ -181,11 +209,121 @@ def _compute_tag_edit(
         "status": "ok",
         "operation": "edit",
         "row_hash": row_hash,
-        "dry_run": dry_run,
-        "updated": updated and not dry_run,
+        "dry_run": request.dry_run,
+        "updated": updated and not request.dry_run,
         "would_update": updated,
         "partition": {"year": year, "month": month},
         "transaction": present_manual_state(updated_row if mutation_requested else target_row),
+    }
+
+
+def _compute_repository_tag_edit(
+    facade: StorageMutationFacade,
+    identity: MutationIdentity,
+    request: TagEditRequest,
+) -> dict[str, Any]:
+    """Inspect or mutate one transaction through the active repository authority."""
+    identifier = request.identifier
+    requested_add = _normalize_cli_tags(request.add_tags)
+    requested_remove = _normalize_cli_tags(request.remove_tags)
+    category = request.set_category.strip() if request.set_category is not None else None
+    if request.set_category is not None and not category:
+        raise ValueError("Category override cannot be empty.")
+    note = request.set_note.strip() if request.set_note is not None else None
+    if note is not None and len(note) > MAX_MANUAL_NOTE_CHARS:
+        raise ValueError(f"Manual note cannot exceed {MAX_MANUAL_NOTE_CHARS} characters.")
+    edit = ManualTransactionEdit(
+        identifier=identifier,
+        add_tags=tuple(requested_add),
+        remove_tags=tuple(requested_remove),
+        category_supplied=request.set_category is not None,
+        category=category,
+        note_supplied=request.set_note is not None,
+        note=note,
+    )
+    mutation_requested = bool(
+        requested_add
+        or requested_remove
+        or request.set_category is not None
+        or request.set_note is not None
+    )
+    if not mutation_requested:
+        transaction = dict(facade.read_manual_transaction(identifier))
+        return _repository_tag_edit_result(identifier, transaction, dry_run=False)
+
+    if request.dry_run:
+        current = dict(facade.read_manual_transaction(identifier))
+        transaction = _preview_repository_edit(current, edit)
+        result = _repository_tag_edit_result(identifier, transaction, dry_run=True)
+        result["would_update"] = transaction != current
+        return result
+
+    receipt = facade.edit_manual_transaction(edit, identity=identity)
+    result = _repository_tag_edit_result(identifier, dict(receipt.result), dry_run=False)
+    result["updated"] = receipt.state_changed
+    result["would_update"] = receipt.state_changed
+    result.update(mutation_metadata(identity, receipt))
+    return result
+
+
+def _preview_repository_edit(
+    current: dict[str, Any], edit: ManualTransactionEdit
+) -> dict[str, Any]:
+    """Apply manual-edit semantics in memory for active-repository dry runs."""
+    next_state = dict(current)
+    remove = set(edit.remove_tags)
+    manual_tags = [tag for tag in current.get("tags_manual", []) if tag not in remove]
+    manual_tags = merge_final_tags(manual_tags, edit.add_tags)
+    category = edit.category if edit.category_supplied else current.get("category_manual")
+    classification_requested = bool(edit.add_tags or edit.remove_tags or edit.category_supplied)
+    if classification_requested:
+        final_tags = merge_final_tags(current.get("tags_rule"), current.get("tags_ai"), manual_tags)
+        category_final = next(
+            (
+                str(value).strip()
+                for value in (
+                    category,
+                    current.get("category_rule"),
+                    current.get("minor_raw"),
+                    current.get("major_raw"),
+                )
+                if value is not None and str(value).strip()
+            ),
+            "미분류",
+        )
+        next_state.update(
+            {
+                "tags_manual": manual_tags,
+                "tags_final": final_tags,
+                "category_manual": category,
+                "category_final": category_final,
+                "confidence_exact": "1" if final_tags or category is not None else "0",
+                "needs_review": not bool(final_tags or category is not None),
+            }
+        )
+    if edit.note_supplied:
+        next_state["notes_manual"] = edit.note
+    return next_state
+
+
+def _repository_tag_edit_result(
+    identifier: str,
+    transaction: dict[str, Any],
+    *,
+    dry_run: bool,
+) -> dict[str, Any]:
+    transaction["row_hash"] = identifier
+    transaction["notes_manual"] = str(transaction.get("notes_manual") or "")
+    return {
+        "status": "ok",
+        "operation": "edit",
+        "row_hash": identifier,
+        "dry_run": dry_run,
+        "updated": False,
+        "would_update": False,
+        "partition": None,
+        "authority": "repository",
+        "transaction": transaction,
     }
 
 
