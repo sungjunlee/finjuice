@@ -550,3 +550,7 @@ Claude Opus5high 교차 리뷰는 exit0/577.7s, 근거 있는 P1/P2 없음이다
 - 49add1b 설치 checkpoint: 실제wheel0.8.3 SHA6a38c3070253ed00a5cdda6844a741f164731ae7edd48d46c7c545e5fbc4ead8을설치하고265PASS(기존Polars경고2건),runtime/schema8개source-wheel-installedSHA일치. 기록된실제wheel/lock을합성enrollment로bundle에넣은독립driver도통과: 원본제거→검증→격리복원revision1→실제party수정→재백업→2차복원revision2,472개module origin설치경로확인. 운영trust/offdevice/cutover증거아님. 같은동결source전체pytest session61911진행중;새전체실행없음. 근거/tmp/finjuice-recovery-operator-checkpoint/.
 
 - 49add1b 최종전체4,486PASS/1SKIP91.04%,799.06초/exit0;동결18파일무변경. 설치265PASS493origins8SHA와실제wheel합성복원472origins/revision1→2 검증을묶어확정한다. 별도base PR463는main대비BEHIND/REVIEW_REQUIRED/reviews0,main보호규칙승인1건필요. 별도codex/ssot-base-main506에서5083f34+fbc1682 no-commit merge와기존검증adapter재사용을Cursor가진행중(/tmp/finjuice-base-main506-integration/run.py,session83149);현재기능검증과분리하며필수승인을우회하지않는다.
+
+- Base갱신Cursor는19.01초/exit0이나result가시작안내뿐이고tool호출0건,두수정파일도cec0e9d와불일치해작업미수행으로확인했다. quota소진으로분류하거나맹목재시작하지않고동일분리worktree의한정된재사용/회귀검사를native main506_reconcile_integration으로직렬fallback했다. 복구기능acf0cc1의검증/push는완료됐으며영향없음.
+
+- 2026-09-14 기반 갱신 36f4b25: main fbc1682를 병합하고 검증된 adapter/test 두 파일을 cec0e9d와 동일하게 재사용했다. focused 62+119 PASS, 전체 3,254 PASS/1 SKIP(89.22%,119.50초), 설치 115 PASS/400 origins, runtime 18 SHA 및 동결 23파일 일치. Ruff/mypy 440/complexity/hooks 통과. 최종 Opus 5 high 검토 진행 중이며 push 전 회수한다. migrate acf0cc1와 기반 갱신의 merge-tree는 tree diff 0으로, 이후 ancestry 통합 때문에 전체 4,486개 검사를 반복할 필요는 없다. 최신 fetch에서 main 추가 변경 없음, PR507–512는 OPEN이며 새 PR512를 읽기전용 비교 중이다.

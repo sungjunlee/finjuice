@@ -23,7 +23,7 @@ GitHub Issues가 명세·AC·상태의 정본이다. 실행 권한과 완료 조
 
 ## 다음 행동
 
-1. 별도 기반 PR463 갱신을 회수한다: codex/ssot-base-main506, HEAD5083f34 + MERGE_HEADfbc1682, Cursor supervisor /tmp/finjuice-base-main506-integration/run.py/session83149. 기존 검증 adapter2파일 재사용과 새 main 회귀를 검사하며 아직 커밋 전이다. 실제 핸들/프로세스를 확인하고 관측 timeout으로 재시작하지 않는다.
+1. 기반 PR463 갱신은 별도 codex/ssot-base-main506의 36f4b25에 커밋됐다(5083f34 + main fbc1682). 전체 3,254 PASS/1 SKIP, 설치 115 PASS, runtime 18 SHA 및 동결 23파일 검증 완료. 최종 Opus 5 high supervisor PID37904가 진행 중이며 /tmp/finjuice-base-main506-checkpoint/에서 type=result를 회수한다. 완료 전 재시작하지 않는다. 현재 migrate와 merge-tree 결과의 tree diff는 0이며, 검토 완료 후 기반 push 및 ancestry 통합만 필요하다.
 2. 복구 기능49add1b의 전체/설치/실제wheel복원 및 GPT 교차검토는 완료됐다. 새 근거 없이 반복하지 않는다. 기반 PR463는 최신main보다뒤처져갱신중이며GitHub필수승인1건이여전히필요하다.
 3. 다음 retention/운영 연결은 PR507 작성 세션이 미확인이다. 네 제안 파일을 덮어쓰지 않는다. 읽기전용 연결점 지도는 `/tmp/finjuice-recovery-operator-checkpoint/pr507-bridge-map.md`; 실제graph/독립key/운영증거와 순수정책·상태계산을 구분한다.
 4. Durable reference retention, private 전수 보존/성능, 실제 배포·cutover·첫 사용, 장비 밖 사본·키 복구·용량·RPO/RTO와 M4/M5 실제 사례는 아직 미완료다. 동작하지 않은 CLI나 운영 증거를 만들지 않는다.
