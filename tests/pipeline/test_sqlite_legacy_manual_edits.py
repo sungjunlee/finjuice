@@ -12,7 +12,7 @@ import pytest
 from finjuice.pipeline.migration import build_migration, plan_migration
 from finjuice.pipeline.storage.authority import AuthorityPaths
 from finjuice.pipeline.storage.mutation_facade import MutationIdentity
-from finjuice.pipeline.storage.sqlite import RepositoryReader
+from finjuice.pipeline.storage.sqlite import GenerationPaths, RepositoryReader, upgrade_repository
 from finjuice.pipeline.storage.sqlite.errors import RepositoryIntegrityError
 from finjuice.pipeline.storage.sqlite.mutations import (
     ManualTransactionEdit,
@@ -29,6 +29,9 @@ def test_real_migration_note_edit_noop_replay_and_classification_boundary(tmp_pa
     plan, candidate = tmp_path / "plan.json", tmp_path / "candidate"
     plan_migration(capture, output=plan, active_data_dir=source)
     build_migration(plan, candidate, active_data_dir=source)
+    upgraded = GenerationPaths(tmp_path / "upgraded")
+    upgrade_repository(candidate / "finjuice.sqlite3", upgraded)
+    candidate = upgraded.root
     with RepositoryReader(candidate / "finjuice.sqlite3") as reader:
         generation = reader.info.dataset_generation
     root = tmp_path / "active"

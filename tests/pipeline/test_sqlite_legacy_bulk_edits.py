@@ -13,7 +13,7 @@ from finjuice.pipeline.backup import ConsistencyEvidence, CreateRequest, create_
 from finjuice.pipeline.migration import build_migration, plan_migration
 from finjuice.pipeline.storage.authority import AuthorityPaths
 from finjuice.pipeline.storage.mutation_facade import MutationIdentity
-from finjuice.pipeline.storage.sqlite import RepositoryReader
+from finjuice.pipeline.storage.sqlite import GenerationPaths, RepositoryReader, upgrade_repository
 from finjuice.pipeline.storage.sqlite.bulk_tagging import BulkTagCommand
 from finjuice.pipeline.storage.sqlite.bulk_transfer import BulkTransferCommand
 from finjuice.pipeline.storage.sqlite.errors import RepositoryIntegrityError
@@ -55,6 +55,9 @@ def _migrate(tmp_path: Path):
     create_backup(CreateRequest(source, capture, ConsistencyEvidence("stopped_writers", ("test",))))
     plan_migration(capture, output=plan, active_data_dir=source)
     build_migration(plan, candidate, active_data_dir=source)
+    upgraded = GenerationPaths(tmp_path / "upgraded")
+    upgrade_repository(candidate / "finjuice.sqlite3", upgraded)
+    candidate = upgraded.root
     with RepositoryReader(candidate / "finjuice.sqlite3") as reader:
         generation = reader.info.dataset_generation
     root = tmp_path / "active"

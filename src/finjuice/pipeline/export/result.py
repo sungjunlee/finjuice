@@ -248,7 +248,7 @@ def _compute_export_result(  # noqa: PLR0913 - moved helper keeps the existing p
         return _repository_export(run, source, format_lower, auto_open, dry_run)
     from finjuice.pipeline.query import configured_snapshot, write_derived_outputs
 
-    detached = configured_snapshot()
+    detached = configured_snapshot(config.data_dir)
     detached_frame = detached.frame if detached is not None else None
     if detached is not None and not dry_run:
         write_derived_outputs(detached)

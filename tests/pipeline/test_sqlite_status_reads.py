@@ -135,7 +135,7 @@ def test_legacy_history_uses_only_proven_primary_rows_and_preserves_timestamps(
     create_backup(CreateRequest(source, capture, ConsistencyEvidence("stopped_writers", ("test",))))
     plan_migration(capture, output=plan, active_data_dir=source)
     build_migration(plan, candidate, active_data_dir=source)
-    with RepositoryReader(candidate / "finjuice.sqlite3") as reader:
+    with RepositoryReader(candidate / "finjuice.sqlite3", expected_schema_version=5) as reader:
         snapshot = reader.status_snapshot()
     assert [
         (row.legacy_file_id, row.imported_at, row.source_row)

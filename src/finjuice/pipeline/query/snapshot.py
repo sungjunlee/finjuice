@@ -120,6 +120,8 @@ def configured_source_frame(
         authority = resolve_storage_authority(data_dir, evidence_provider).authority
         if not isinstance(authority, LegacyAuthority):
             return None
+        if any((data_dir / "transactions").glob("*/*/transactions.csv")):
+            return None
     database = resolve_generation_database()
     if database is None:
         return None
