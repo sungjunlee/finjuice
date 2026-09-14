@@ -423,3 +423,58 @@ def test_build_refuses_source_as_staging(tmp_path: Path) -> None:
     plan = migrate.plan_migration(capture_path)
     with pytest.raises(MigrationError, match="outside the frozen source"):
         migrate.build_migration(plan, source, active_data_dir=source)
+
+
+def _append_transaction(source: Path, **overrides: str) -> None:
+    path = source / "transactions" / "2024" / "01" / "transactions.csv"
+    headers = list(_transaction_row().keys())
+    with path.open(encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    rows.append(_transaction_row(**overrides))
+    _write_csv(path, headers, rows)
+
+
+def test_verify_accepts_opaque_transaction_row(tmp_path: Path) -> None:
+    """Unparseable amount is preserved_opaque and still verifies."""
+    source = _frozen_dataset(tmp_path)
+    _append_transaction(source, source_row="9", amount="n/a", row_hash="opaquehash01")
+    overlay = tmp_path / "overlay.yaml"
+    overlay.write_text("overlay: true\n", encoding="utf-8")
+    capture = migrate.capture_frozen_inputs(source, extra_roots={"overlay": overlay})
+    capture_path = tmp_path / "capture.json"
+    migrate.write_capture_manifest(capture, capture_path)
+    plan = migrate.plan_migration(capture_path)
+    plan_path = tmp_path / "plan.json"
+    migrate.write_plan(plan, plan_path)
+    staging = tmp_path / "opaque"
+    result = migrate.build_migration(plan_path, staging, active_data_dir=source)
+    assert result.status == "ok"
+    assert result.unexplained_loss_count == 0
+    assert result.dispositions.get("preserved_opaque", 0) >= 1
+    verified = migrate.verify_migration(staging)
+    assert verified.status == "ok"
+
+
+def test_verify_uses_ordinal_when_row_hash_and_source_row_collide(tmp_path: Path) -> None:
+    """Duplicate row_hash+source_row still verify by ordinal locator."""
+    source = _frozen_dataset(tmp_path)
+    _append_transaction(
+        source,
+        source_row="2",
+        row_hash="duphash01234567",
+        merchant_raw="합성카페-복제",
+        mystery_field="복제원문",
+    )
+    overlay = tmp_path / "overlay.yaml"
+    overlay.write_text("overlay: true\n", encoding="utf-8")
+    capture = migrate.capture_frozen_inputs(source, extra_roots={"overlay": overlay})
+    capture_path = tmp_path / "capture.json"
+    migrate.write_capture_manifest(capture, capture_path)
+    plan = migrate.plan_migration(capture_path)
+    plan_path = tmp_path / "plan.json"
+    migrate.write_plan(plan, plan_path)
+    staging = tmp_path / "dup"
+    result = migrate.build_migration(plan_path, staging, active_data_dir=source)
+    assert result.status == "ok"
+    verified = migrate.verify_migration(staging)
+    assert verified.status == "ok"

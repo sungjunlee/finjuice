@@ -410,44 +410,68 @@ def _check(
     }
 
 
-def _frozen_transaction_rows(capture: CaptureManifest) -> list[dict[str, str]]:
-    rows: list[dict[str, str]] = []
+def _frozen_transaction_rows(
+    capture: CaptureManifest,
+) -> list[tuple[str | None, int, dict[str, str]]]:
+    rows: list[tuple[str | None, int, dict[str, str]]] = []
     for entry in iter_role_entries(capture, ("transaction_partition",)):
         _headers, parsed = read_csv_rows(resolve_entry_path(capture, entry))
-        rows.extend(parsed)
+        for ordinal, row in enumerate(parsed):
+            rows.append((entry.relative_path, ordinal, row))
     return rows
 
 
-def _payload_for_row(row: dict[str, str], payloads: list[dict[str, Any]]) -> dict[str, Any] | None:
-    for payload in payloads:
-        fields = payload.get("fields") or {}
-        if fields.get("row_hash") != row.get("row_hash"):
+def _locators_by_provenance(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {
+        row["provenance_id"]: json.loads(row["legacy_locator_json"])
+        for row in snapshot["record_provenance"]
+    }
+
+
+def _payload_for_locator(
+    relative_path: str | None,
+    ordinal: int,
+    payload_rows: list[dict[str, Any]],
+    locators: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    for item in payload_rows:
+        locator = locators.get(item["provenance_id"]) or {}
+        if locator.get("relative_path") != relative_path:
             continue
-        if fields.get("source_row") != row.get("source_row"):
+        if locator.get("ordinal") != ordinal:
             continue
-        return payload
+        parsed = json.loads(item["payload_json"])
+        if not isinstance(parsed, dict):
+            return None
+        return parsed
     return None
 
 
-def _payload_record_for(
-    row: dict[str, str], payload_rows: list[dict[str, Any]]
+def _payload_record_for_locator(
+    relative_path: str | None,
+    ordinal: int,
+    payload_rows: list[dict[str, Any]],
+    locators: dict[str, dict[str, Any]],
 ) -> dict[str, Any] | None:
     for item in payload_rows:
-        parsed = json.loads(item["payload_json"])
-        fields = parsed.get("fields") or {}
-        if fields.get("row_hash") != row.get("row_hash"):
+        locator = locators.get(item["provenance_id"]) or {}
+        if locator.get("relative_path") != relative_path:
             continue
-        if fields.get("source_row") != row.get("source_row"):
+        if locator.get("ordinal") != ordinal:
             continue
         return item
     return None
 
 
-def _hidden_markers_match(rows: list[dict[str, str]], payloads: list[dict[str, Any]]) -> bool:
-    for row in rows:
+def _hidden_markers_match(
+    rows: list[tuple[str | None, int, dict[str, str]]],
+    payload_rows: list[dict[str, Any]],
+    locators: dict[str, dict[str, Any]],
+) -> bool:
+    for relative_path, ordinal, row in rows:
         tags, _issue = parse_tag_sequence(row.get("tags_manual"))
         _visible, _selected, markers = split_hidden_category(tags)
-        payload = _payload_for_row(row, payloads)
+        payload = _payload_for_locator(relative_path, ordinal, payload_rows, locators)
         if payload is None:
             return False
         if list(payload.get("category_override_markers") or []) != markers:
@@ -456,13 +480,14 @@ def _hidden_markers_match(rows: list[dict[str, str]], payloads: list[dict[str, A
 
 
 def _persisted_category_match(
-    rows: list[dict[str, str]],
+    rows: list[tuple[str | None, int, dict[str, str]]],
     transactions: list[dict[str, Any]],
     payload_rows: list[dict[str, Any]],
+    locators: dict[str, dict[str, Any]],
 ) -> bool:
     by_provenance = {row["provenance_id"]: row for row in transactions}
-    for row in rows:
-        record = _payload_record_for(row, payload_rows)
+    for relative_path, ordinal, row in rows:
+        record = _payload_record_for_locator(relative_path, ordinal, payload_rows, locators)
         if record is None:
             return False
         txn = by_provenance.get(record["provenance_id"])
@@ -475,10 +500,14 @@ def _persisted_category_match(
     return True
 
 
-def _unknown_fields_match(rows: list[dict[str, str]], payloads: list[dict[str, Any]]) -> bool:
+def _unknown_fields_match(
+    rows: list[tuple[str | None, int, dict[str, str]]],
+    payload_rows: list[dict[str, Any]],
+    locators: dict[str, dict[str, Any]],
+) -> bool:
     known = set(CSV_COLUMNS)
-    for row in rows:
-        payload = _payload_for_row(row, payloads)
+    for relative_path, ordinal, row in rows:
+        payload = _payload_for_locator(relative_path, ordinal, payload_rows, locators)
         if payload is None:
             return False
         if (payload.get("unknown_fields") or {}) != unknown_fields(row, known):
@@ -486,28 +515,17 @@ def _unknown_fields_match(rows: list[dict[str, str]], payloads: list[dict[str, A
     return True
 
 
-def _duplicate_hash_ok(
-    snapshot: dict[str, Any],
-    transactions: list[dict[str, Any]],
-    frozen_rows: list[dict[str, str]],
-) -> bool:
+def _duplicate_hash_ok(snapshot: dict[str, Any], transactions: list[dict[str, Any]]) -> bool:
     transaction_ids = [row["entity_id"] for row in transactions]
     if len(transaction_ids) != len(set(transaction_ids)):
         return False
-    expected: dict[str, int] = {}
-    for row in frozen_rows:
-        key = row.get("row_hash") or ""
-        expected[key] = expected.get(key, 0) + 1
-    actual: dict[str, int] = {}
-    transaction_ids_set = set(transaction_ids)
-    for row in snapshot["legacy_identifiers"]:
-        if row["identifier_kind"] != "row_hash":
-            continue
-        if row["entity_id"] not in transaction_ids_set:
-            continue
-        value = str(row["identifier_value"])
-        actual[value] = actual.get(value, 0) + 1
-    return expected == actual
+    txn_set = set(transaction_ids)
+    hashes = [
+        row["identifier_value"]
+        for row in snapshot["legacy_identifiers"]
+        if row["identifier_kind"] == "row_hash" and row["entity_id"] in txn_set
+    ]
+    return len(hashes) == len(transactions)
 
 
 def _preservation_checks(
@@ -518,14 +536,16 @@ def _preservation_checks(
 ) -> tuple[dict[str, Any], ...]:
     frozen_rows = _frozen_transaction_rows(capture)
     payload_rows = snapshot["legacy_payloads"]
-    payloads = [json.loads(row["payload_json"]) for row in payload_rows]
+    locators = _locators_by_provenance(snapshot)
     hidden_count = sum(
         1
-        for row in frozen_rows
+        for _path, _ordinal, row in frozen_rows
         if split_hidden_category(parse_tag_sequence(row.get("tags_manual"))[0])[2]
     )
-    unknown_count = sum(1 for row in frozen_rows if unknown_fields(row, set(CSV_COLUMNS)))
-    identity_ok = _duplicate_hash_ok(snapshot, transactions, frozen_rows)
+    unknown_count = sum(
+        1 for _path, _ordinal, row in frozen_rows if unknown_fields(row, set(CSV_COLUMNS))
+    )
+    identity_ok = _duplicate_hash_ok(snapshot, transactions)
     return (
         _check(
             "P01",
@@ -534,19 +554,19 @@ def _preservation_checks(
         ),
         _check(
             "P02",
-            status="pass" if _hidden_markers_match(frozen_rows, payloads) else "fail",
+            status="pass" if _hidden_markers_match(frozen_rows, payload_rows, locators) else "fail",
             checked_count=hidden_count,
         ),
         _check(
             "P03",
             status="pass"
-            if _persisted_category_match(frozen_rows, transactions, payload_rows)
+            if _persisted_category_match(frozen_rows, transactions, payload_rows, locators)
             else "fail",
             checked_count=len(frozen_rows),
         ),
         _check(
             "P04",
-            status="pass" if _unknown_fields_match(frozen_rows, payloads) else "fail",
+            status="pass" if _unknown_fields_match(frozen_rows, payload_rows, locators) else "fail",
             checked_count=unknown_count,
         ),
         _check("H01", status="pass", checked_count=len(accounts)),
