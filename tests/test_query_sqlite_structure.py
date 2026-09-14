@@ -252,9 +252,10 @@ def test_export_dry_run_uses_sqlite_when_csv_partitions_are_gone(
 ) -> None:
     """SQLite-backed export must not report zero rows after live CSV is removed."""
     data_dir = mirrored_dataset["data_dir"]
+    generation_root = mirrored_dataset["database"].parent
     for csv_path in (data_dir / "transactions").rglob("transactions.csv"):
         csv_path.unlink()
-    monkeypatch.setenv(GENERATION_ENV_VAR, str(mirrored_dataset["database"].parent))
+    monkeypatch.setenv(GENERATION_ENV_VAR, str(generation_root))
     expected = read_transactions_frame(mirrored_dataset["database"]).height
     assert expected > 0
 
@@ -265,7 +266,7 @@ def test_export_dry_run_uses_sqlite_when_csv_partitions_are_gone(
             str(data_dir),
             "export",
             "--format",
-            "md",
+            "xlsx",
             "--dry-run",
             "--json",
         ],
@@ -273,6 +274,77 @@ def test_export_dry_run_uses_sqlite_when_csv_partitions_are_gone(
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["transaction_count"] == expected
+    xlsx_files = [item for item in payload["output_files"] if item["kind"] == "master_xlsx"]
+    assert xlsx_files
+    assert xlsx_files[0]["row_count"] == expected
+    assert not any((generation_root / "derived").rglob("*.csv"))
+    assert not any((generation_root / "derived").rglob("manifest.json"))
+
+
+def test_export_dry_run_does_not_create_derived_files(
+    mirrored_dataset: dict[str, Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``export --dry-run`` must not write derived CSV or manifest files."""
+    generation_root = mirrored_dataset["database"].parent
+    monkeypatch.setenv(GENERATION_ENV_VAR, str(generation_root))
+    derived_root = generation_root / "derived"
+
+    result = runner.invoke(
+        app,
+        [
+            "--data-dir",
+            str(mirrored_dataset["data_dir"]),
+            "export",
+            "--format",
+            "xlsx",
+            "--dry-run",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert not any(path.is_file() for path in derived_root.rglob("*"))
+
+
+def test_export_master_xlsx_uses_unfiltered_sqlite_snapshot(
+    mirrored_dataset: dict[str, Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Master XLSX stays the full SQLite snapshot when report_filters exist."""
+    data_dir = mirrored_dataset["data_dir"]
+    monkeypatch.setenv(GENERATION_ENV_VAR, str(mirrored_dataset["database"].parent))
+    (data_dir / "rules.yaml").write_text(
+        "version: 1\n"
+        "report_filters:\n"
+        "  excluded_merchants:\n"
+        "    - pattern: 스타벅스\n"
+        "      reason: test exclusion\n"
+        "rules: []\n",
+        encoding="utf-8",
+    )
+    expected = read_transactions_frame(mirrored_dataset["database"]).height
+    assert expected > 0
+
+    result = runner.invoke(
+        app,
+        ["--data-dir", str(data_dir), "export", "--format", "xlsx", "--json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["_meta"]["filters_applied"] >= 1
+    output_files = {item["kind"]: item for item in payload["output_files"]}
+    assert output_files["master_xlsx"]["row_count"] == expected
+    assert payload["transaction_count"] == expected
+
+    master_df = pl.read_excel(
+        Path(output_files["master_xlsx"]["path"]),
+        sheet_name="Transactions",
+        engine="openpyxl",
+    )
+    assert master_df.height == expected
+    assert "스타벅스" in master_df["merchant_raw"].to_list()
 
 
 def test_query_ignores_stale_live_csv_when_sqlite_is_selected(

@@ -225,7 +225,11 @@ def _compute_export_result(  # noqa: PLR0913 - moved helper keeps the existing p
         plan = build_export_plan(config.data_dir, config.csv_base_dir, format_lower, period)
         sqlite_frame = _configured_sqlite_frame()
         if sqlite_frame is not None:
-            plan["transaction_count"] = len(sqlite_frame)
+            snapshot_count = len(sqlite_frame)
+            plan["transaction_count"] = snapshot_count
+            for item in plan["output_files"]:
+                if item.get("row_count") is not None:
+                    item["row_count"] = snapshot_count
         return {
             "command": "export",
             "dry_run": True,

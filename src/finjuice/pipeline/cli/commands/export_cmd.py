@@ -107,7 +107,8 @@ def export_command(
     validate_period(period, json_output)
 
     try:
-        _write_sqlite_derived_if_configured()
+        if not dry_run:
+            _write_sqlite_derived_if_configured()
         result = export_result._compute_export_result(
             ctx,
             config,
