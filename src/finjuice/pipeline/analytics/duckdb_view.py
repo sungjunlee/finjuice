@@ -9,6 +9,7 @@ subclasses this type so existing callers keep the same public API.
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from pathlib import Path
 from types import TracebackType
 from typing import Any, Optional
@@ -28,6 +29,7 @@ from finjuice.pipeline.sql_utils import (
 from finjuice.pipeline.storage.authority import ActivationEvidenceProvider
 from finjuice.pipeline.storage.read_facade import read_transaction_snapshot, transaction_frame
 from finjuice.pipeline.storage.schema_registry import get_current_schema
+from finjuice.pipeline.storage.sqlite.errors import RepositoryIntegrityError
 from finjuice.pipeline.storage.sqlite.transaction_completeness import (
     require_transaction_completeness,
 )
@@ -113,9 +115,7 @@ class DuckDBTransactionsView:
         """
         if self.repository_snapshot is not None:
             require_transaction_completeness(self.repository_snapshot)
-            if require_transactions and not self.repository_snapshot.rows:
-                raise FileNotFoundError("No transaction data found in the active repository.")
-            self._register_repository_transactions()
+            self._register_repository_transactions(require_transactions=require_transactions)
             return
 
         if self._source_frame is not None:
@@ -178,10 +178,24 @@ class DuckDBTransactionsView:
             logger.error(f"Failed to create transactions view: {e}")
             raise RuntimeError(f"Failed to create transactions view: {e}") from e
 
-    def _register_repository_transactions(self) -> None:
+    def _register_repository_transactions(self, *, require_transactions: bool) -> None:
         """Register a stable Arrow relation sourced only from the verified repository."""
         assert self.repository_snapshot is not None
-        frame = transaction_frame(self.repository_snapshot)
+        snapshot = self.repository_snapshot
+        scopes = {scope.transaction_id: scope for scope in snapshot.scopes}
+        identifiers = {row["transaction_id"] for row in snapshot.rows}
+        if (
+            len(scopes) != len(snapshot.scopes)
+            or len(identifiers) != len(snapshot.rows)
+            or set(scopes) != identifiers
+        ):
+            raise RepositoryIntegrityError(
+                "Transaction snapshot has invalid partition scope evidence."
+            )
+        rows = tuple(row for row in snapshot.rows if scopes[row["transaction_id"]].included)
+        if require_transactions and not rows:
+            raise FileNotFoundError("No transaction data found in the active repository.")
+        frame = transaction_frame(replace(snapshot, rows=rows))
         register_transaction_frame(self.conn, frame, self.report_filters)
 
     def _validate_csv_schema(self, detected_columns: list[str]) -> None:

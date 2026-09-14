@@ -57,3 +57,18 @@ Release binding JSON stays on the existing exact-key contract in
 Malformed, incomplete, symlink, digest, root, release, or imported-code
 mismatches fail closed with a static error. New errors and logs must not
 include private raw values, paths, or financial rows.
+
+## Installation and copied datasets
+
+Export the production dependency lock with the `analytics` extra when the host
+will run query, explain, or analytics consumers. A base-only lock omits DuckDB.
+Retain that exact lock in the independently approved release binding.
+
+When transferring a verified generation, preserve immutable object permissions
+as well as bytes. Validate object lengths and hashes after extraction and reject
+write permission bits before opening the repository. Changing the validation
+rule is not a substitute for preserving the copied generation correctly.
+
+Default transaction query, status, explain, and export use proven primary
+partition scope plus native records. Preserved historical rows remain in the
+repository; status source diagnostics still report their separate scope.

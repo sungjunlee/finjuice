@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import polars as pl
@@ -121,6 +121,15 @@ def _rules(snapshot: TransactionReadSnapshot) -> list[TagRule]:
 
 
 def _search(snapshot: TransactionReadSnapshot, query: str, date: str | None) -> pl.DataFrame:
+    scopes = {scope.transaction_id: scope for scope in snapshot.scopes}
+    identifiers = {row["transaction_id"] for row in snapshot.rows}
+    if (
+        len(scopes) != len(snapshot.scopes)
+        or len(identifiers) != len(snapshot.rows)
+        or set(scopes) != identifiers
+    ):
+        raise ValueError("Invalid explanation scope evidence.")
+    rows = tuple(row for row in snapshot.rows if scopes[row["transaction_id"]].included)
     available, duckdb, _ = detect_analytics_dependencies()
     if not available:
         raise _ExplainDependencyError(DUCKDB_INSTALL_HINT)
@@ -132,7 +141,7 @@ def _search(snapshot: TransactionReadSnapshot, query: str, date: str | None) -> 
         where += " AND date = ?"
         parameters.append(date)
     with duckdb.connect(":memory:") as connection:
-        connection.register("rows", transaction_frame(snapshot).to_arrow())
+        connection.register("rows", transaction_frame(replace(snapshot, rows=rows)).to_arrow())
         result: pl.DataFrame = connection.execute(
             "SELECT row_hash, date, merchant_raw, memo_raw, amount, major_raw, minor_raw, "
             "category_final, transaction_id FROM rows WHERE "

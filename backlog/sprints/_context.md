@@ -4,6 +4,8 @@ GitHub 이슈가 명세·AC·상태의 정본이다. 전체 목표는 `goals/fin
 
 ## 현재 재개점 — 2026-09-14
 
+- 2026-09-15: 실제 설치본 소비자 비교에서 보존된 historical 행이 기본 조회에 혼입되는 차이를 발견했다. query/status/explain/export의 primary 범위를 수정하고 합성 실제 migration·native 유지·scope 오류 회귀를 추가했다. 원본 및 전체 진단은 보존한다. Opus 교차 리뷰 두 차례의 지적과 경계 조건 회귀를 반영했고, 수정된 최종 wheel의 실제 소비자 재비교 전에는 전환 수용을 완료하지 않는다. 호스트 설치에는 analytics extra와 object 읽기 전용 권한 보존이 필요함을 실제 실패·복구로 확인했다.
+
 - PR #521 `ceae05d`의 CI 34852394131은 전체 PASS다. 사용자 승인으로 관리자 squash merge를 완료했다(main `16e4f82`).
 - 새 실제 마이그레이션은 종료 코드 0: 980 inputs, DB integrity/FK/object hash/capture 재구성/adapter 재생성 의미 비교 PASS. 독립 비교 1,652,643개·consumer 비교 640,024개에서 차이 0이다. 미지원 CSV는 보존된 backups/exports/metadata이고 quarantine은 0이지만 원본 참조·소유권/환율·운영 수용의 불확실성을 숨기지 않는다.
 - 설치된 #521 wheel이 만든 실제 입력과 수동 설정을 운영 분석 함수에 전달한 격리 비교는 원본 캡처와 일치했다. 원래 schema5 DB를 보존한 별도 schema9 upgrade도 53개 기존 테이블·1,045,729행/원래 컬럼 비교에서 차이 0, integrity/FK PASS다. 합성 Linux 사본에서 구 설치본이 새 marker를 무시하고 쓰는 경우와 OS 읽기 전용 경계의 차단(errno30)을 검증했다. 실제 서비스 적용·전환은 남아 있다.

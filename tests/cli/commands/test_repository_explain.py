@@ -315,3 +315,69 @@ def test_unknown_rule_fields_do_not_log_rule_names_or_keys(
     assert marker not in caplog.text
     assert "private-value" not in caplog.text
     warning.assert_called_with("Rule has %s unknown fields; they will be ignored.", 1)
+
+
+def test_explain_excludes_preserved_historical_transactions(tmp_path, monkeypatch):
+    import shutil
+
+    create = query_fixture.create_backup
+
+    def with_history(request):
+        (request.source / "rules.yaml").write_bytes(RULES)
+        partition = request.source / "transactions/2026/09/transactions.csv"
+        historical = request.source / "backups/transactions/2026/09/transactions.csv"
+        historical.parent.mkdir(parents=True)
+        shutil.copyfile(partition, historical)
+        return create(request)
+
+    monkeypatch.setattr(query_fixture, "create_backup", with_history)
+    root = query_fixture.query_root.__wrapped__(tmp_path)
+    before = read_transaction_snapshot(root.root, root.provider)
+    assert before is not None and len(before.rows) == 4
+    baseline = _explain(root, "shop-0", legacy=True)
+    actual = _explain(root, "shop-0")
+    assert baseline.exit_code == actual.exit_code == 0, actual.output
+    assert (
+        json.loads(actual.output)["classification"] == json.loads(baseline.output)["classification"]
+    )
+    assert _explain(root, "shop-0", human=True).exit_code == 0
+    assert read_transaction_snapshot(root.root, root.provider) == before
+
+
+@pytest.mark.parametrize("damage", ["missing", "duplicate", "extra"])
+def test_explain_rejects_invalid_scope_evidence(explain_root, monkeypatch, damage):
+    from dataclasses import replace
+
+    snapshot = read_transaction_snapshot(explain_root.root, explain_root.provider)
+    assert snapshot is not None
+    scopes = snapshot.scopes
+    if damage == "missing":
+        scopes = scopes[1:]
+    elif damage == "duplicate":
+        scopes = (*scopes, scopes[0])
+    else:
+        scopes = (*scopes, replace(scopes[0], transaction_id="unknown"))
+    monkeypatch.setattr(
+        "finjuice.pipeline.cli.commands.explain_reads.read_transaction_snapshot",
+        lambda *_: replace(snapshot, scopes=scopes),
+    )
+    result = _explain(explain_root, "shop-0")
+    assert result.exit_code != 0
+    assert "validated data" in json.loads(result.output)["error"]["message"]
+
+
+def test_explain_preserves_native_scope_without_partition(explain_root):
+    from dataclasses import replace
+
+    from finjuice.pipeline.cli.commands.explain_reads import _search
+    from finjuice.pipeline.storage.sqlite.transaction_scopes import TransactionScope
+
+    snapshot = read_transaction_snapshot(explain_root.root, explain_root.provider)
+    assert snapshot is not None
+    native = {**snapshot.rows[0], "transaction_id": "native", "merchant_raw": "native-shop"}
+    detached = replace(
+        snapshot,
+        rows=(*snapshot.rows, native),
+        scopes=(*snapshot.scopes, TransactionScope("native", None, True)),
+    )
+    assert _search(detached, "native-shop", None)["transaction_id"].to_list() == ["native"]
