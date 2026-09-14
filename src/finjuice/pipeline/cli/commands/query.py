@@ -21,7 +21,7 @@ from finjuice.pipeline.cli.report_filters import (
     load_cli_report_filters,
 )
 from finjuice.pipeline.cli.utils import get_config
-from finjuice.pipeline.storage.sqlite.read_compat import configured_transactions_frame
+from finjuice.pipeline.query import configured_source_frame
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +112,7 @@ def query_command(
         with DuckDBAnalytics(
             config.data_dir,
             require_transactions=False,
-            source_frame=configured_transactions_frame(),
+            source_frame=configured_source_frame(),
         ) as analytics:
             # View 'transactions' is automatically registered in __init__
             # (See src/finjuice/pipeline/analytics/duckdb_layer.py)

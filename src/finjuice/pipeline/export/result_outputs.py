@@ -25,13 +25,19 @@ def _generate_xlsx_outputs(run: ExportRunContext) -> tuple[int, list[dict[str, A
     from finjuice.pipeline.constants import REPORTS_COUNT
     from finjuice.pipeline.export.master import export_master_xlsx
     from finjuice.pipeline.export.reports import generate_all_reports
-    from finjuice.pipeline.export.result import _emit_info
+    from finjuice.pipeline.export.result import _configured_sqlite_frame, _emit_info
 
     master_path = run.paths.export_dir / f"master_{run.paths.today}.xlsx"
     logger.info(f"Exporting master file to: {master_path}")
 
     _emit_info(f"Exporting master file: {master_path}", emit_text=run.emit_text)
-    row_count = export_master_xlsx(run.config.csv_base_dir, master_path)
+    # Master XLSX is the unfiltered audit ledger. report_filters apply to
+    # report CSVs/html/md only — never pass the filtered report_source_df here.
+    row_count = export_master_xlsx(
+        run.config.csv_base_dir,
+        master_path,
+        source_df=_configured_sqlite_frame(),
+    )
     generated_artifacts = [
         build_output_entry(
             master_path,

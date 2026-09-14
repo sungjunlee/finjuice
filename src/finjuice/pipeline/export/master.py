@@ -24,7 +24,11 @@ MASTER_EXPORT_COLUMNS = tuple(csv_partition.CSV_COLUMNS)
 TAG_EXPORT_COLUMNS = ("tags_rule", "tags_ai", "tags_manual", "tags_final")
 
 
-def export_master_xlsx(csv_base_dir: Path, output_path: Path) -> int:
+def export_master_xlsx(
+    csv_base_dir: Path,
+    output_path: Path,
+    source_df: pl.DataFrame | None = None,
+) -> int:
     """
     Export all transactions to master XLSX file.
 
@@ -36,6 +40,8 @@ def export_master_xlsx(csv_base_dir: Path, output_path: Path) -> int:
     Args:
         csv_base_dir: Base directory for CSV partitions (e.g., data/transactions/)
         output_path: Path to output XLSX file (e.g., master_20251031.xlsx)
+        source_df: Optional authoritative frame. When set, CSV partitions are
+            not read — used for SQLite-backed export.
 
     Returns:
         int: Number of transactions exported
@@ -49,8 +55,9 @@ def export_master_xlsx(csv_base_dir: Path, output_path: Path) -> int:
         >>> print(f"Exported {count} transactions")
     """
     try:
-        # Load all transactions from CSV partitions
-        df = csv_partition.get_all_transactions(csv_base_dir)
+        df = (
+            source_df if source_df is not None else csv_partition.get_all_transactions(csv_base_dir)
+        )
         row_count = len(df)
 
         if row_count == 0:
