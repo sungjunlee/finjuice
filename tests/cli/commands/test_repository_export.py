@@ -378,3 +378,70 @@ def test_export_row_mutation_during_render_keeps_original_values(query_root, mon
     assert check["source"]["dataset_revision"] == 0
     assert check["current"]["dataset_revision"] == 1
     assert check["stale"] is True and check["integrity"] == "intact"
+
+
+def test_export_excludes_historical_rows_and_dates(tmp_path, monkeypatch):
+    import tests.cli.commands.test_repository_query as module
+
+    create = module.create_backup
+
+    def with_history(request):
+        partition = request.source / "transactions/2026/09/transactions.csv"
+        historical = request.source / "backups/transactions/2026/09/transactions.csv"
+        historical.parent.mkdir(parents=True)
+        historical.write_text(partition.read_text().replace("2026-09-01", "2030-09-01"))
+        return create(request)
+
+    monkeypatch.setattr(module, "create_backup", with_history)
+    root = module.query_root.__wrapped__(tmp_path)
+    before = read_transaction_snapshot(root.root, root.provider)
+    assert before is not None and len(before.rows) == 4
+    old = _payload(_export(root, legacy=True))
+    new = _payload(_export(root))
+    assert new["transaction_count"] == old["transaction_count"] == 2
+    assert new["_meta"]["calculation_as_of"] == "2026-09-01"
+    old_files, new_files = _files(old), _files(new)
+    for kind in old_files:
+        if kind != "master_xlsx":
+            assert new_files[kind].read_bytes() == old_files[kind].read_bytes(), kind
+    assert read_transaction_snapshot(root.root, root.provider) == before
+
+
+@pytest.mark.parametrize("damage", ["missing", "duplicate", "extra"])
+def test_export_rejects_invalid_scope_evidence(query_root, monkeypatch, damage):
+    from dataclasses import replace
+
+    snapshot = read_transaction_snapshot(query_root.root, query_root.provider)
+    assert snapshot is not None
+    scopes = snapshot.scopes
+    if damage == "missing":
+        scopes = scopes[1:]
+    elif damage == "duplicate":
+        scopes = (*scopes, scopes[0])
+    else:
+        scopes = (*scopes, replace(scopes[0], transaction_id="unknown"))
+    monkeypatch.setattr(
+        source, "read_transaction_snapshot", lambda *_: replace(snapshot, scopes=scopes)
+    )
+    result = _export(query_root)
+    assert result.exit_code != 0
+    assert "validated artifacts" in json.loads(result.output)["error"]["message"]
+
+
+def test_export_keeps_native_scope_without_partition(query_root):
+    from dataclasses import replace
+
+    from finjuice.pipeline.storage.sqlite.transaction_scopes import TransactionScope
+
+    snapshot = read_transaction_snapshot(query_root.root, query_root.provider)
+    assert snapshot is not None
+    native = {**snapshot.rows[0], "transaction_id": "native", "date": "2030-01-01"}
+    detached = replace(
+        snapshot,
+        rows=(*snapshot.rows, native),
+        scopes=(*snapshot.scopes, TransactionScope("native", None, True)),
+    )
+    result = source._project_source(detached, source.ExportSourceOptions("all", None, True, False))
+    assert result.full_frame.height == result.report_frame.height == 3
+    assert "native" in result.full_frame["transaction_id"].to_list()
+    assert result.metadata["calculation_as_of"] == "2030-01-01"

@@ -22,6 +22,8 @@ recoverable/operational-complete boolean and never activates a host or source.
 `--expected` is a regular-file JSON document the operator retains separately.
 Capture, verify, and restore never fill, copy, or correct it from
 `active.json`, a migration candidate, release paths, or the bundle body.
+Launching the ordinary CLI against an enrolled root is a separate pinned-host
+runtime; see [ssot-host-runtime.md](ssot-host-runtime.md).
 
 Enroll the same DTO fields as `ExpectedRecoveryGraph` with exact keys and no
 duplicates:

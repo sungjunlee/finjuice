@@ -76,7 +76,8 @@ def _project_source(
         if snapshot.rules_content is not None and snapshot.rules_parsed_status != "parsed":
             raise ValueError("Canonical rules head is not parsed.")
         filters = load_report_filters_bytes(snapshot.rules_content)
-    full = _decode_tag_columns(transaction_frame(_source_order(snapshot)))
+    primary = _source_order(snapshot)
+    full = _decode_tag_columns(transaction_frame(primary))
     report = full
     if options.format in {"html", "md"} and options.period is not None:
         report = report.filter(pl.col("date").str.starts_with(options.period))
@@ -84,7 +85,7 @@ def _project_source(
     metadata = {
         **snapshot_metadata(snapshot),
         "calculation_policy": "legacy_export.v1",
-        "calculation_as_of": _calculation_as_of(snapshot),
+        "calculation_as_of": _calculation_as_of(primary),
         "format": options.format,
         "period": options.period,
         "filters_disabled": options.filters_disabled,
@@ -107,7 +108,15 @@ def _calculation_as_of(snapshot: TransactionReadSnapshot) -> str | None:
 
 
 def _source_order(snapshot: TransactionReadSnapshot) -> TransactionReadSnapshot:
-    """Restore proven CSV occurrence order without excluding other stored rows."""
+    """Select primary and native rows in proven CSV occurrence order."""
+    scopes = {scope.transaction_id: scope for scope in snapshot.scopes}
+    identifiers = {row["transaction_id"] for row in snapshot.rows}
+    if (
+        len(scopes) != len(snapshot.scopes)
+        or len(identifiers) != len(snapshot.rows)
+        or set(scopes) != identifiers
+    ):
+        raise ValueError("Invalid export scope evidence.")
     proven = {
         scope.transaction_id: (scope.month, scope.source_row)
         for scope in snapshot.scopes
@@ -115,7 +124,7 @@ def _source_order(snapshot: TransactionReadSnapshot) -> TransactionReadSnapshot:
     }
     rows = tuple(
         sorted(
-            snapshot.rows,
+            (row for row in snapshot.rows if scopes[row["transaction_id"]].included),
             key=lambda row: (
                 row["transaction_id"] not in proven,
                 *proven.get(row["transaction_id"], ("", 0)),

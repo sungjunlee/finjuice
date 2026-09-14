@@ -88,9 +88,17 @@ def _frame(snapshot: StatusReadSnapshot) -> pl.DataFrame:
             s.transaction_id,
         ),
     )
-    if {scope.transaction_id for scope in scopes} != set(by_id):
-        raise ValueError("Missing status scope evidence.")
-    ordered = replace(transactions, rows=tuple(by_id[scope.transaction_id] for scope in scopes))
+    identifiers = {scope.transaction_id for scope in scopes}
+    if (
+        len(identifiers) != len(scopes)
+        or len(by_id) != len(transactions.rows)
+        or identifiers != set(by_id)
+    ):
+        raise ValueError("Invalid status scope evidence.")
+    ordered = replace(
+        transactions,
+        rows=tuple(by_id[scope.transaction_id] for scope in scopes if scope.included),
+    )
     return _decode_tag_columns(transaction_frame(ordered))
 
 
@@ -109,20 +117,20 @@ def _metadata(snapshot: StatusReadSnapshot, frame: pl.DataFrame) -> dict[str, An
     }
 
 
-def _repository(snapshot: StatusReadSnapshot, full: pl.DataFrame) -> dict[str, Any]:
+def _repository(snapshot: StatusReadSnapshot, primary: pl.DataFrame) -> dict[str, Any]:
     occurrences = snapshot.source_occurrences
     last_import = _last_import(snapshot)
     scopes = snapshot.transactions.scopes
     return {
-        "metadata": _metadata(snapshot, full),
+        "metadata": _metadata(snapshot, primary),
         "schema_version": snapshot.info.schema_version,
         "rules_head": _head(snapshot.rules),
         "goals_head": _head(snapshot.goals),
         "source_counts": {
-            "total_rows": full.height,
+            "total_rows": len(snapshot.transactions.rows),
             "primary_scope_rows": sum(s.included for s in scopes),
             "out_of_scope_rows": sum(not s.included for s in scopes),
-            "unknown_month_rows": sum(s.month is None for s in scopes),
+            "unknown_month_rows": sum(s.included and s.month is None for s in scopes),
         },
         "last_import": last_import,
         "legacy_import_history_count": len(snapshot.legacy_import_history),
@@ -169,10 +177,10 @@ def _last_import(snapshot: StatusReadSnapshot) -> dict[str, Any]:
 
 def _collect(snapshot: StatusReadSnapshot, options: StatusOptions) -> StatusFacts:
     filters = _filters(snapshot, options)
-    full = _frame(snapshot)
-    matched = len(matched_report_filter_rule_indexes(full, filters))
+    primary = _frame(snapshot)
+    matched = len(matched_report_filter_rule_indexes(primary, filters))
     expression = build_report_filter_polars_expr(filters)
-    frame = full.filter(~expression) if expression is not None else full
+    frame = primary.filter(~expression) if expression is not None else primary
     counts = _count_tagging_rows(frame)
     merchants: dict[str, int] = {}
     _add_untagged_merchants(merchants, counts.pop("untagged"))
@@ -181,8 +189,8 @@ def _collect(snapshot: StatusReadSnapshot, options: StatusOptions) -> StatusFact
     tagged = total - counts["untagged_count"]
     suggestable = total - counts["transfer_excluded_count"]
     suggestable_tagged = suggestable - counts["suggestable_untagged_count"]
-    repository = _repository(snapshot, full)
-    detailed, warning = _detailed(snapshot, options, full, filters)
+    repository = _repository(snapshot, primary)
+    detailed, warning = _detailed(snapshot, options, primary, filters)
     return StatusFacts(
         data_dir=options.config.data_dir,
         data_dir_resolved=str(options.config.data_dir.resolve()),

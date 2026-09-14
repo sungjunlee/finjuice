@@ -287,3 +287,102 @@ def test_empty_repository_honors_require_transactions(empty_root: _ActiveRoot) -
         empty_root.root, evidence_provider=empty_root.provider, require_transactions=False
     ) as analytics:
         assert analytics.query_readonly("SELECT count(*) FROM transactions").fetchone() == (0,)
+
+
+def test_query_excludes_preserved_historical_transactions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import tests.cli.commands.test_repository_query as module
+
+    original_backup = module.create_backup
+
+    def backup_with_history(request):
+        partition = request.source / "transactions/2026/09/transactions.csv"
+        historical = request.source / "backups/transactions/2026/09/transactions.csv"
+        historical.parent.mkdir(parents=True)
+        shutil.copyfile(partition, historical)
+        return original_backup(request)
+
+    monkeypatch.setattr(module, "create_backup", backup_with_history)
+    root = query_root.__wrapped__(tmp_path)
+    snapshot = read_transaction_snapshot(root.root, root.provider)
+    assert snapshot is not None
+    assert len(snapshot.rows) == 4
+    assert sum(scope.included for scope in snapshot.scopes) == 2
+    for no_filter in (False, True):
+        sql = "SELECT row_hash, amount FROM transactions ORDER BY row_hash"
+        baseline = _query(root, sql, legacy=True, no_filter=no_filter)
+        result = _query(root, sql, no_filter=no_filter)
+        assert baseline.exit_code == result.exit_code == 0, result.output
+        assert json.loads(result.output)["rows"] == json.loads(baseline.output)["rows"]
+    with DuckDBAnalytics(root.root, evidence_provider=root.provider) as analytics:
+        assert analytics.read_partitions().height == 2
+        assert len(analytics.repository_snapshot.rows) == 4
+
+
+@pytest.mark.parametrize("damage", ["missing", "duplicate", "extra"])
+def test_query_rejects_invalid_scope_evidence(
+    query_root: QueryRoot, monkeypatch: pytest.MonkeyPatch, damage: str
+) -> None:
+    from dataclasses import replace
+
+    from finjuice.pipeline.storage.sqlite.errors import RepositoryIntegrityError
+
+    snapshot = read_transaction_snapshot(query_root.root, query_root.provider)
+    assert snapshot is not None
+    scopes = snapshot.scopes
+    if damage == "missing":
+        scopes = scopes[1:]
+    elif damage == "duplicate":
+        scopes = (*scopes, scopes[0])
+    else:
+        scopes = (*scopes, replace(scopes[0], transaction_id="unknown"))
+    monkeypatch.setattr(
+        "finjuice.pipeline.analytics.duckdb_view.read_transaction_snapshot",
+        lambda *_: replace(snapshot, scopes=scopes),
+    )
+    with pytest.raises(RepositoryIntegrityError, match="scope evidence"):
+        DuckDBAnalytics(query_root.root, evidence_provider=query_root.provider)
+
+
+def test_query_keeps_native_scope_without_legacy_partition(
+    query_root: QueryRoot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from dataclasses import replace
+
+    from finjuice.pipeline.storage.sqlite.transaction_scopes import TransactionScope
+
+    snapshot = read_transaction_snapshot(query_root.root, query_root.provider)
+    assert snapshot is not None
+    native = {**snapshot.rows[0], "transaction_id": "native", "row_hash": "native"}
+    detached = replace(
+        snapshot,
+        rows=(*snapshot.rows, native),
+        scopes=(*snapshot.scopes, TransactionScope("native", None, True)),
+    )
+    monkeypatch.setattr(
+        "finjuice.pipeline.analytics.duckdb_view.read_transaction_snapshot", lambda *_: detached
+    )
+    with DuckDBAnalytics(query_root.root, evidence_provider=query_root.provider) as analytics:
+        assert analytics.query_readonly(
+            "SELECT transaction_id FROM transactions WHERE transaction_id = 'native'"
+        ).fetchall() == [("native",)]
+
+
+def test_query_outside_only_repository_requires_primary_transactions(query_root, monkeypatch):
+    from dataclasses import replace
+
+    snapshot = read_transaction_snapshot(query_root.root, query_root.provider)
+    assert snapshot is not None
+    outside = replace(
+        snapshot, scopes=tuple(replace(scope, included=False) for scope in snapshot.scopes)
+    )
+    monkeypatch.setattr(
+        "finjuice.pipeline.analytics.duckdb_view.read_transaction_snapshot", lambda *_: outside
+    )
+    with pytest.raises(FileNotFoundError, match="No transaction data"):
+        DuckDBAnalytics(query_root.root, evidence_provider=query_root.provider)
+    with DuckDBAnalytics(
+        query_root.root, evidence_provider=query_root.provider, require_transactions=False
+    ) as analytics:
+        assert analytics.query_readonly("SELECT count(*) FROM transactions").fetchone() == (0,)

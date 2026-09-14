@@ -11,6 +11,15 @@ from typing import Any, TypeVar, cast
 import click
 import typer
 
+try:
+    from typer._click import Context as _RuntimeContext  # type: ignore[import-not-found]
+    from typer._click.globals import (
+        get_current_context as _current_context,  # type: ignore[import-not-found]
+    )
+except ImportError:
+    from click import Context as _RuntimeContext
+    from click import get_current_context as _current_context
+
 _Command = TypeVar("_Command", bound=Callable[..., Any])
 _CONTEXT_KEY = "finjuice_mutation_options"
 
@@ -71,9 +80,9 @@ def with_mutation_options(command: _Command) -> _Command:
             expected_revision=kwargs.pop("expected_revision", None),
         )
         candidate = kwargs.get("ctx") or (args[0] if args else None)
-        context = candidate if isinstance(candidate, click.Context) else None
+        context = candidate if isinstance(candidate, (click.Context, _RuntimeContext)) else None
         if context is None:
-            context = click.get_current_context(silent=True)
+            context = _current_context(silent=True) or click.get_current_context(silent=True)
         if context is None:
             raise RuntimeError("Mutation command context is unavailable.")
         context.meta[_CONTEXT_KEY] = options

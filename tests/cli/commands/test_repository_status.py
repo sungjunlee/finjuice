@@ -292,3 +292,84 @@ def test_status_detailed_uses_valid_canonical_goals_bytes(query_root):
     assert result["detailed_stats"]["recurring_savings_monthly_amount"] == 100
     assert result["_meta"]["dataset_revision"] == receipt.committed_revision
     assert result["repository"]["goals_head"]["parsed_status"] == "parsed"
+
+
+@pytest.mark.parametrize("no_filter", [False, True])
+def test_status_primary_totals_preserve_historical_diagnostics(tmp_path, monkeypatch, no_filter):
+    import shutil
+
+    import tests.cli.commands.test_repository_query as module
+
+    original_backup = module.create_backup
+
+    def backup_with_history(request):
+        partition = request.source / "transactions/2026/09/transactions.csv"
+        historical = request.source / "backups/transactions/2026/09/transactions.csv"
+        historical.parent.mkdir(parents=True)
+        shutil.copyfile(partition, historical)
+        return original_backup(request)
+
+    monkeypatch.setattr(module, "create_backup", backup_with_history)
+    root = module.query_root.__wrapped__(tmp_path)
+    baseline = _payload(_status(root, legacy=True, detailed=True, no_filter=no_filter))
+    actual = _payload(_status(root, detailed=True, no_filter=no_filter))
+    for key in ("transactions", "tagging", "detailed_stats"):
+        assert {field: actual[key][field] for field in baseline[key]} == baseline[key], key
+    counts = actual["repository"]["source_counts"]
+    assert counts["total_rows"] == 4
+    assert counts["primary_scope_rows"] == counts["out_of_scope_rows"] == 2
+    assert counts["unknown_month_rows"] == 0
+    assert _status(root, detailed=True, human=True, no_filter=no_filter).exit_code == 0
+    snapshot = read_status_snapshot(root.root, root.provider)
+    assert snapshot is not None and len(snapshot.transactions.rows) == 4
+
+
+@pytest.mark.parametrize("damage", ["missing", "duplicate", "extra"])
+def test_status_rejects_invalid_scope_evidence(query_root, monkeypatch, damage):
+    from dataclasses import replace
+
+    snapshot = read_status_snapshot(query_root.root, query_root.provider)
+    assert snapshot is not None
+    scopes = snapshot.transactions.scopes
+    if damage == "missing":
+        scopes = scopes[1:]
+    elif damage == "duplicate":
+        scopes = (*scopes, scopes[0])
+    else:
+        scopes = (*scopes, replace(scopes[0], transaction_id="unknown"))
+    damaged = replace(snapshot, transactions=replace(snapshot.transactions, scopes=scopes))
+    monkeypatch.setattr(
+        "finjuice.pipeline.cli.commands.status.repository_facts.read_status_snapshot",
+        lambda *_: damaged,
+    )
+    result = _status(query_root)
+    assert result.exit_code != 0
+    assert "validated source data" in json.loads(result.output)["error"]["message"]
+
+
+@pytest.mark.parametrize("invalid", [{"amount": float("inf")}, {"tags_final": "{invalid"}])
+def test_status_does_not_project_outside_display_values(query_root, monkeypatch, invalid):
+    from dataclasses import replace
+
+    from finjuice.pipeline.storage.sqlite.transaction_scopes import TransactionScope
+
+    before = _payload(_status(query_root, detailed=True))
+    snapshot = read_status_snapshot(query_root.root, query_root.provider)
+    assert snapshot is not None
+    outside = {**snapshot.transactions.rows[0], **invalid, "transaction_id": "outside"}
+    transactions = replace(
+        snapshot.transactions,
+        rows=(*snapshot.transactions.rows, outside),
+        scopes=(*snapshot.transactions.scopes, TransactionScope("outside", None, False)),
+    )
+    monkeypatch.setattr(
+        "finjuice.pipeline.cli.commands.status.repository_facts.read_status_snapshot",
+        lambda *_: replace(snapshot, transactions=transactions),
+    )
+    actual = _payload(_status(query_root, detailed=True))
+    for key in ("transactions", "tagging", "detailed_stats"):
+        assert {k: v for k, v in actual[key].items() if k != "source_counts"} == {
+            k: v for k, v in before[key].items() if k != "source_counts"
+        }
+    assert actual["repository"]["source_counts"]["total_rows"] == 3
+    assert actual["repository"]["source_counts"]["out_of_scope_rows"] == 1

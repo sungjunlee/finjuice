@@ -4,14 +4,17 @@ GitHub 이슈가 명세·AC·상태의 정본이다. 전체 목표는 `goals/fin
 
 ## 현재 재개점 — 2026-09-14
 
-- PR #520은 사용자 승인 후 squash merge됐고 main `77dfc1a1550b2641373aba32e0148d27e8606a80`의 CI 34845498624는 SUCCESS다. 아래 과거 로그의 #463 승인 대기와 이전 실행 중 표시는 역사 기록이며 현재 상태가 아니다.
-- 머지된 소스와 일치하는 wheel의 격리 설치·CLI smoke를 운영 호스트에서 통과했다. 기본 운영 설치본은 같은 0.8.3 표기라도 다른 기존 소스이므로 버전 문자열만으로 배포 완료를 판단하지 않는다. 실제 기본 경로 전환은 남아 있다.
-- 실제 writer를 정지해 새 캡처를 취득했고 원본 변경 없음, 기존 조회 4개 성공, 서비스 재개를 확인했다. 새 캡처와 release artifact는 장비 밖 백업 후 격리 복원하여 hash 일치를 확인했다. 별도 장비의 키 저장소로 복원했으며 해당 키 저장소까지 잃는 재해 복구는 증명하지 않았다.
-- 새 캡처의 별도 보존 마이그레이션이 실행 중이다. 이는 최종 cutover 기준선 완료가 아니며 실제 전환 시 writer 통제와 최신성 확인이 필요하다. 실행 handle과 상세 결과는 비공개 운영 기록에 보존한다.
-- `codex/ssot-consumer-bundle`은 main `77dfc1a` 기반이다. Cursor Grok 4.6 high 구현 후 GPT 통합 검토로 실제 외부 수동 설정 root와 읽은 bytes의 digest 검증을 보완했다. 관련 10개 테스트와 변경 Ruff/mypy PASS. 새 변경의 전체 pytest를 한 번 실행 중이며 완료된 이전 CI는 재실행하지 않는다.
-- 소비자 bundle은 같은 SQLite revision의 원본 capture bytes를 파생한다. 이것만으로 실제 소비자 전환·구 writer 차단·첫 실제 사용 또는 M4/M5 수용을 완료 처리하지 않는다. 다음 단계는 새 후보 보존 비교, 실제 소비자 연결, 설치 artifact 검증과 최종 전환이다.
+- 2026-09-15: 실제 설치본 소비자 비교에서 보존된 historical 행이 기본 조회에 혼입되는 차이를 발견했다. query/status/explain/export의 primary 범위를 수정하고 합성 실제 migration·native 유지·scope 오류 회귀를 추가했다. 원본 및 전체 진단은 보존한다. Opus 교차 리뷰 두 차례의 지적과 경계 조건 회귀를 반영했고, 수정된 최종 wheel의 실제 소비자 재비교 전에는 전환 수용을 완료하지 않는다. 호스트 설치에는 analytics extra와 object 읽기 전용 권한 보존이 필요함을 실제 실패·복구로 확인했다.
 
-## 현재 코드와 PR
+- PR #521 `ceae05d`의 CI 34852394131은 전체 PASS다. 사용자 승인으로 관리자 squash merge를 완료했다(main `16e4f82`).
+- 새 실제 마이그레이션은 종료 코드 0: 980 inputs, DB integrity/FK/object hash/capture 재구성/adapter 재생성 의미 비교 PASS. 독립 비교 1,652,643개·consumer 비교 640,024개에서 차이 0이다. 미지원 CSV는 보존된 backups/exports/metadata이고 quarantine은 0이지만 원본 참조·소유권/환율·운영 수용의 불확실성을 숨기지 않는다.
+- 설치된 #521 wheel이 만든 실제 입력과 수동 설정을 운영 분석 함수에 전달한 격리 비교는 원본 캡처와 일치했다. 원래 schema5 DB를 보존한 별도 schema9 upgrade도 53개 기존 테이블·1,045,729행/원래 컬럼 비교에서 차이 0, integrity/FK PASS다. 합성 Linux 사본에서 구 설치본이 새 marker를 무시하고 쓰는 경우와 OS 읽기 전용 경계의 차단(errno30)을 검증했다. 실제 서비스 적용·전환은 남아 있다.
+- `codex/ssot-host-runtime`은 #521 위의 단독 작업 브랜치다. Cursor 구현 후 GPT 교차 검토로 compact root 옵션, host 옵션 종료, 숨김 패키지 리소스, Typer 내장 Click context 호환을 수정했다. 관련21 PASS, 최종 context 회귀3 PASS, 전체 Ruff/mypy608/complexity/security PASS. 실제 built wheel 설치6개 흐름과 별도 module subprocess PASS, 532개 로드 모듈 모두 설치본, package741개 소스/wheel/설치본 bytes 일치.
+- 로컬 #521 전체 pytest는 4,807 PASS/1 FAIL/1 SKIP(2,818.20초)로 종료했다. 유일한 실패는 긴 human export 경로 줄바꿈에 대한 단언이며 host-runtime 브랜치에서 보완 후 해당 human/JSON 회귀가 통과했다. 실패한 full을 성공으로 재표시하거나 재시작하지 않는다. 현재 코드의 CI 결과를 별도로 확인한다.
+
+- 앞선 main 기준은 #520 merge `77dfc1a`이며 해당 CI도 PASS다. 새 캡처와 release의 장비 밖 백업·격리 복원 hash 일치 및 별도 장비 키 저장소 이용을 확인했다. 키 저장소 자체까지 잃는 재해 복구는 증명하지 않았다.
+
+## 이전 코드 통합 기록
 
 - main 진입 PR #463: `codex/ssot-m2-mutations`. 월 마감 통합 소스 `6da728f`는 PR #519 최종 검증 소스 `9e945e8`과 전체 파일 tree가 같다. 사용자의 개인 프로젝트 관리자 머지 승인에 따라 PR #463을 squash merge했다(main `4ced76d`, 2026-09-14 17:34 KST). 이전 비작성자 승인 대기는 해소됐다.
 - 작업 브랜치 PR #517 → #516 → #481은 CI 확인 후 순서대로 squash merge했다. 계좌·자산·증빙 입력·보존 이전·정본 소비·managed recovery/delivery가 이제 #463에 함께 있다. 저장소가 허용하지 않는 merge commit 대신 허용된 squash 방식으로 통합했다.
