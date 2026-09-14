@@ -6,20 +6,47 @@ import json
 import uuid
 from collections.abc import Mapping, Sequence
 from contextlib import AbstractContextManager, contextmanager
+from copy import deepcopy
 from functools import wraps
 from pathlib import Path
 from types import TracebackType
 from typing import Any, BinaryIO, Callable, Final, Iterator, TypeVar, cast
 
+from finjuice.pipeline.storage.sqlite.analysis_reads import (
+    AnalysisReadSnapshot,
+    analysis_snapshot,
+)
+from finjuice.pipeline.storage.sqlite.asset_reports import AssetReportQuery
+from finjuice.pipeline.storage.sqlite.checkup_reads import (
+    CheckupReadSnapshot,
+    import_preview_snapshot,
+    rules_config_snapshot,
+)
 from finjuice.pipeline.storage.sqlite.errors import RepositoryPathError
 from finjuice.pipeline.storage.sqlite.exact import ExactValue
+from finjuice.pipeline.storage.sqlite.history_reads import HistoryReadSnapshot, history_snapshot
 from finjuice.pipeline.storage.sqlite.ids import (
     canonical_locator,
     migration_entity_id,
     validate_entity_id,
 )
+from finjuice.pipeline.storage.sqlite.legacy_overview import (
+    LegacyOverviewBalanceRecord,
+    LegacyOverviewCandidateRecord,
+    LegacyOverviewCashflowRecord,
+    LegacyOverviewInsuranceRecord,
+    LegacyOverviewInvestmentRecord,
+    LegacyOverviewLoanRecord,
+    LegacyOverviewReferenceRecord,
+    LegacyOverviewReportRecord,
+    LegacyOverviewWriter,
+)
 from finjuice.pipeline.storage.sqlite.objects import SourceArtifact, SourceObjectStore
 from finjuice.pipeline.storage.sqlite.paths import GenerationPaths
+from finjuice.pipeline.storage.sqlite.portfolio_reads import (
+    PortfolioReadSnapshot,
+    portfolio_snapshot,
+)
 from finjuice.pipeline.storage.sqlite.records import (
     AccountRecord,
     AssetSnapshotRecord,
@@ -43,17 +70,28 @@ from finjuice.pipeline.storage.sqlite.records import (
 )
 from finjuice.pipeline.storage.sqlite.schema import (
     RepositoryInfo,
-    _apply_schema_v1,
     _cleanup_staging,
     _connect_builder,
     _connect_snapshot,
+    _initialize_schema,
     _prepare_generation_layout,
     _publish_database,
+    _resolve_schema_version,
     _validate_connection,
 )
+from finjuice.pipeline.storage.sqlite.schema_v5 import LEGACY_OVERVIEW_TABLES
 from finjuice.pipeline.storage.sqlite.snapshot import inspection_snapshot
+from finjuice.pipeline.storage.sqlite.status_reads import StatusReadSnapshot, status_snapshot
+from finjuice.pipeline.storage.sqlite.transaction_reads import (
+    TransactionReadSnapshot,
+    transaction_snapshot,
+)
+from finjuice.pipeline.storage.sqlite.writes import (
+    _EXACT_SUBTYPE_INSERT_SQL as _WRITER_EXACT_SUBTYPE_INSERT_SQL,
+)
+from finjuice.pipeline.storage.sqlite.writes import TypedRowWriter
 
-_READ_TABLE_SQL: Final = {
+_READ_TABLE_SQL_V4: Final = {
     "repository_meta": "SELECT * FROM repository_meta",
     "schema_migrations": "SELECT * FROM schema_migrations",
     "entities": "SELECT * FROM entities",
@@ -71,12 +109,14 @@ _READ_TABLE_SQL: Final = {
     "resources": "SELECT * FROM resources",
     "observations": "SELECT * FROM observations",
     "config_revisions": "SELECT * FROM config_revisions",
+    "config_heads": "SELECT * FROM config_heads",
     "legacy_payloads": "SELECT * FROM legacy_payloads",
     "preservation_issues": "SELECT * FROM preservation_issues",
     "migration_dispositions": "SELECT * FROM migration_dispositions",
     "legacy_identifiers": "SELECT * FROM legacy_identifiers",
     "legacy_identifier_supersessions": "SELECT * FROM legacy_identifier_supersessions",
     "transactions": "SELECT * FROM transactions",
+    "transaction_source_links": "SELECT * FROM transaction_source_links",
     "overview_facts": "SELECT * FROM overview_facts",
     "overview_balances": "SELECT * FROM overview_balances",
     "overview_cashflows": "SELECT * FROM overview_cashflows",
@@ -84,13 +124,59 @@ _READ_TABLE_SQL: Final = {
     "overview_investments": "SELECT * FROM overview_investments",
     "overview_loans": "SELECT * FROM overview_loans",
     "asset_snapshots": "SELECT * FROM asset_snapshots",
+    "changesets": "SELECT * FROM changesets",
+    "changeset_entries": "SELECT * FROM changeset_entries",
+    "audit_events": "SELECT * FROM audit_events",
+    "idempotency_requests": "SELECT * FROM idempotency_requests",
+    "ownership_assertion_sets": "SELECT * FROM ownership_assertion_sets",
+    "ownership_assertion_shares": "SELECT * FROM ownership_assertion_shares",
+    "entity_relation_assertions": "SELECT * FROM entity_relation_assertions",
+    "agent_intake_artifacts": "SELECT * FROM agent_intake_artifacts",
+    "agent_intake_occurrences": "SELECT * FROM agent_intake_occurrences",
+    "agent_intake_extractions": "SELECT * FROM agent_intake_extractions",
+    "agent_intake_proposals": "SELECT * FROM agent_intake_proposals",
+    "agent_intake_confirmations": "SELECT * FROM agent_intake_confirmations",
+    "agent_intake_applications": "SELECT * FROM agent_intake_applications",
 }
 
-_EXACT_SUBTYPE_INSERT_SQL: Final = {
-    "quantity": "INSERT INTO quantity_values (value_id, unit) VALUES (?, ?)",
-    "rate": "INSERT INTO rate_values (value_id, unit) VALUES (?, ?)",
-    "number": "INSERT INTO number_values (value_id, unit) VALUES (?, ?)",
+
+_READ_TABLE_SQL_V5: Final = {
+    **_READ_TABLE_SQL_V4,
+    **{table: f"SELECT * FROM {table}" for table in LEGACY_OVERVIEW_TABLES},
 }
+
+
+def _read_table_sql(schema_version: int) -> Mapping[str, str]:
+    """Return exactly the authoritative table surface of the selected schema."""
+    _resolve_schema_version(schema_version)
+    if schema_version == 9:
+        from finjuice.pipeline.storage.sqlite.schema_v9 import TABLE_KEYS as V9_TABLE_KEYS
+
+        return {
+            **_read_table_sql(8),
+            **{table: f"SELECT * FROM {table}" for table in V9_TABLE_KEYS},
+        }
+    if schema_version == 8:
+        from finjuice.pipeline.storage.sqlite.schema_v8 import TABLE_KEYS
+
+        return {**_read_table_sql(7), **{table: f"SELECT * FROM {table}" for table in TABLE_KEYS}}
+    return {
+        4: _READ_TABLE_SQL_V4,
+        5: _READ_TABLE_SQL_V5,
+        6: {
+            **_READ_TABLE_SQL_V5,
+            "account_source_bindings": "SELECT * FROM account_source_bindings",
+        },
+        7: {
+            **_READ_TABLE_SQL_V5,
+            "account_source_bindings": "SELECT * FROM account_source_bindings",
+            "asset_meaning_assertions": "SELECT * FROM asset_meaning_assertions",
+        },
+    }[schema_version]
+
+
+# Shared with TypedRowWriter so builder exact-value SQL has exactly one definition.
+_EXACT_SUBTYPE_INSERT_SQL: Final = _WRITER_EXACT_SUBTYPE_INSERT_SQL
 
 _Method = TypeVar("_Method", bound=Callable[..., Any])
 
@@ -119,7 +205,10 @@ class RepositoryBuilder:
         paths: GenerationPaths,
         dataset_generation: str,
         dataset_revision: int = 0,
+        *,
+        expected_schema_version: int | None = None,
     ) -> None:
+        self._schema_version = _resolve_schema_version(expected_schema_version)
         validate_entity_id(dataset_generation)
         if isinstance(dataset_revision, bool) or not isinstance(dataset_revision, int):
             raise ValueError("Dataset revision must be the integer zero for a new repository.")
@@ -136,13 +225,15 @@ class RepositoryBuilder:
         self.dataset_revision = dataset_revision
         self._staging = paths.root / f".finjuice-sqlite-staging-{uuid.uuid4().hex}"
         self._connection = _connect_builder(self._staging)
+        self._writer = TypedRowWriter(self._connection)
         self._closed = False
         self._published_artifacts: list[SourceArtifact] = []
         try:
-            _apply_schema_v1(
+            _initialize_schema(
                 self._connection,
                 dataset_generation,
                 dataset_revision=dataset_revision,
+                schema_version=self._schema_version,
             )
         except Exception:
             self._connection.close()
@@ -209,43 +300,12 @@ class RepositoryBuilder:
     @_atomic_add
     def add_source_occurrence(self, record: SourceOccurrenceRecord) -> None:
         """Add a distinct source occurrence, even when source bytes are reused."""
-        self._insert_entity(record.occurrence_id, "source_occurrence")
-        self._connection.execute(
-            "INSERT INTO source_occurrences "
-            "(entity_id, source_artifact_id, occurrence_kind, original_filename, imported_at, "
-            "parser_version, source_schema_version, legacy_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                record.occurrence_id,
-                record.artifact_id,
-                record.occurrence_kind,
-                record.original_filename,
-                record.imported_at,
-                record.parser_version,
-                record.source_schema_version,
-                record.legacy_path,
-            ),
-        )
+        self._writer.add_source_occurrence(record)
 
+    @_atomic_add
     def add_provenance(self, record: ProvenanceRecord) -> None:
         """Add canonical source coordinates and a non-collapsing legacy locator."""
-        validate_entity_id(record.provenance_id)
-        validate_entity_id(record.occurrence_id)
-        source_coordinate_json = _canonical_json(record.source_coordinate)
-        legacy_locator_json = canonical_locator(record.legacy_locator)
-        self._connection.execute(
-            "INSERT INTO record_provenance "
-            "(provenance_id, source_occurrence_id, source_coordinate_json, "
-            "legacy_locator_json, parser_version, source_schema_version) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (
-                record.provenance_id,
-                record.occurrence_id,
-                source_coordinate_json,
-                legacy_locator_json,
-                record.parser_version,
-                record.source_schema_version,
-            ),
-        )
+        self._writer.add_provenance(record)
 
     @_atomic_add
     def add_exact_value(
@@ -256,90 +316,67 @@ class RepositoryBuilder:
         provenance_id: str | None = None,
     ) -> None:
         """Add a canonical exact value and its required semantic subtype."""
-        validate_entity_id(value_id)
-        if provenance_id is not None:
-            validate_entity_id(provenance_id)
-        self._connection.execute(
-            "INSERT INTO exact_values "
-            "(value_id, value_kind, coefficient, scale, lexical, origin_kind, provenance_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (
-                value_id,
-                value.value_kind,
-                value.coefficient,
-                value.scale,
-                value.lexical,
-                value.origin_kind,
-                provenance_id,
-            ),
-        )
-        if value.value_kind == "money":
-            self._connection.execute(
-                "INSERT INTO money_values (value_id, currency_code, currency_unknown) "
-                "VALUES (?, ?, ?)",
-                (value_id, value.currency, int(value.currency_unknown)),
-            )
-        else:
-            self._connection.execute(
-                _EXACT_SUBTYPE_INSERT_SQL[value.value_kind],
-                (value_id, value.unit),
-            )
+        self._writer.add_exact_value(value_id, value, provenance_id=provenance_id)
+
+    @_atomic_add
+    def add_legacy_overview_report(self, record: LegacyOverviewReportRecord) -> None:
+        """Preserve legacy report evidence in schema v5."""
+        LegacyOverviewWriter(self._connection).add_report(record)
+
+    @_atomic_add
+    def add_legacy_overview_balance(self, record: LegacyOverviewBalanceRecord) -> None:
+        """Preserve legacy balance evidence in schema v5."""
+        LegacyOverviewWriter(self._connection).add_balance(record)
+
+    @_atomic_add
+    def add_legacy_overview_cashflow(self, record: LegacyOverviewCashflowRecord) -> None:
+        """Preserve legacy cashflow evidence in schema v5."""
+        LegacyOverviewWriter(self._connection).add_cashflow(record)
+
+    @_atomic_add
+    def add_legacy_overview_insurance(self, record: LegacyOverviewInsuranceRecord) -> None:
+        """Preserve legacy insurance evidence in schema v5."""
+        LegacyOverviewWriter(self._connection).add_insurance(record)
+
+    @_atomic_add
+    def add_legacy_overview_investment(self, record: LegacyOverviewInvestmentRecord) -> None:
+        """Preserve legacy investment evidence in schema v5."""
+        LegacyOverviewWriter(self._connection).add_investment(record)
+
+    @_atomic_add
+    def add_legacy_overview_loan(self, record: LegacyOverviewLoanRecord) -> None:
+        """Preserve legacy loan evidence in schema v5."""
+        LegacyOverviewWriter(self._connection).add_loan(record)
+
+    @_atomic_add
+    def add_legacy_overview_reference(self, record: LegacyOverviewReferenceRecord) -> None:
+        """Preserve legacy reference evidence in schema v5."""
+        LegacyOverviewWriter(self._connection).add_reference(record)
+
+    @_atomic_add
+    def add_legacy_overview_candidate(self, record: LegacyOverviewCandidateRecord) -> None:
+        """Preserve legacy candidate evidence in schema v5."""
+        LegacyOverviewWriter(self._connection).add_candidate(record)
 
     @_atomic_add
     def add_party(self, record: PartyRecord) -> None:
         """Add a party foundation row."""
-        self._insert_entity(record.party_id, "party")
-        self._connection.execute(
-            "INSERT INTO parties (entity_id, party_kind, display_name) VALUES (?, ?, ?)",
-            (record.party_id, record.party_kind, record.display_name),
-        )
+        self._writer.add_party(record)
 
     @_atomic_add
     def add_account(self, record: AccountRecord) -> None:
         """Add an account with explicit ownership state."""
-        self._insert_entity(record.account_id, "account")
-        self._connection.execute(
-            "INSERT INTO accounts "
-            "(entity_id, account_kind, display_name, ownership_state, owner_party_id) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (
-                record.account_id,
-                record.account_kind,
-                record.display_name,
-                record.ownership_state,
-                record.owner_party_id,
-            ),
-        )
+        self._writer.add_account(record)
 
     @_atomic_add
     def add_resource(self, record: ResourceRecord) -> None:
         """Add a resource or instrument foundation row."""
-        self._insert_entity(record.resource_id, "resource")
-        self._connection.execute(
-            "INSERT INTO resources (entity_id, resource_kind, display_name) VALUES (?, ?, ?)",
-            (record.resource_id, record.resource_kind, record.display_name),
-        )
+        self._writer.add_resource(record)
 
     @_atomic_add
     def add_observation(self, record: ObservationRecord) -> None:
         """Add source-backed temporal and scope context."""
-        self._insert_entity(record.observation_id, "observation")
-        self._connection.execute(
-            "INSERT INTO observations "
-            "(entity_id, source_occurrence_id, observed_at, effective_at, collected_at, "
-            "scope_state, confirmation_state, supersedes_observation_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                record.observation_id,
-                record.occurrence_id,
-                record.observed_at,
-                record.effective_at,
-                record.collected_at,
-                record.scope_state,
-                record.confirmation_state,
-                record.supersedes_observation_id,
-            ),
-        )
+        self._writer.add_observation(record)
 
     @_atomic_add
     def add_config_revision(self, record: ConfigRevisionRecord) -> None:
@@ -363,6 +400,23 @@ class RepositoryBuilder:
             ),
         )
 
+    def set_config_head(self, config_kind: str, revision_id: str, *, updated_at: str) -> None:
+        """Select the canonical baseline revision for one configuration domain."""
+        validate_entity_id(revision_id)
+        row = self._connection.execute(
+            "SELECT config_kind FROM config_revisions WHERE entity_id = ?",
+            (revision_id,),
+        ).fetchone()
+        if row is None or str(row[0]) != config_kind:
+            raise ValueError("Config head must reference a revision of the same kind.")
+        self._connection.execute(
+            "INSERT INTO config_heads "
+            "(config_kind, revision_id, updated_changeset_id, updated_at) "
+            "VALUES (?, ?, NULL, ?)",
+            (config_kind, revision_id, updated_at),
+        )
+
+    @_atomic_add
     def add_legacy_payload(
         self,
         provenance_id: str,
@@ -371,35 +425,12 @@ class RepositoryBuilder:
         payload_id: str | None = None,
     ) -> str:
         """Preserve the full legacy payload alongside typed rows."""
-        payload_id = payload_id or str(uuid.uuid4())
-        validate_entity_id(payload_id)
-        validate_entity_id(provenance_id)
-        self._connection.execute(
-            "INSERT INTO legacy_payloads "
-            "(payload_id, provenance_id, payload_json) VALUES (?, ?, ?)",
-            (payload_id, provenance_id, _canonical_json(payload)),
-        )
-        return payload_id
+        return self._writer.add_legacy_payload(provenance_id, payload, payload_id=payload_id)
 
+    @_atomic_add
     def add_preservation_issue(self, record: PreservationIssueRecord) -> str:
         """Record a lossless typing or preservation problem without discarding evidence."""
-        issue_id = record.issue_id or str(uuid.uuid4())
-        validate_entity_id(issue_id)
-        validate_entity_id(record.provenance_id)
-        self._connection.execute(
-            "INSERT INTO preservation_issues "
-            "(issue_id, provenance_id, field_name, issue_kind, lexical_value, detail_json) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (
-                issue_id,
-                record.provenance_id,
-                record.field_name,
-                record.issue_kind,
-                record.lexical_value,
-                _canonical_json(record.detail),
-            ),
-        )
-        return issue_id
+        return self._writer.add_preservation_issue(record)
 
     def add_migration_disposition(
         self,
@@ -484,215 +515,42 @@ class RepositoryBuilder:
     @_atomic_add
     def add_transaction(self, record: TransactionRecord) -> None:
         """Add a typed transaction without collapsing equal row hashes."""
-        self._insert_entity(record.transaction_id, "transaction")
-        self._connection.execute(
-            "INSERT INTO transactions "
-            "(entity_id, observation_id, provenance_id, account_id, amount_value_id, date_raw, "
-            "time_raw, datetime_raw, timezone_state, type_raw, type_norm, major_raw, minor_raw, "
-            "merchant_raw, memo_raw, notes_manual, account_text, counterparty, category_rule, "
-            "category_manual, category_final, tags_rule_json, tags_ai_json, tags_manual_json, "
-            "tags_final_json, confidence_value_id, needs_review, is_transfer_candidate, "
-            "is_transfer, transfer_group_id) VALUES "
-            "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
-            "?, ?, ?, ?)",
-            (
-                record.transaction_id,
-                record.observation_id,
-                record.provenance_id,
-                record.account_id,
-                record.amount_value_id,
-                record.date_raw,
-                record.time_raw,
-                record.datetime_raw,
-                record.timezone_state,
-                record.type_raw,
-                record.type_norm,
-                record.major_raw,
-                record.minor_raw,
-                record.merchant_raw,
-                record.memo_raw,
-                record.notes_manual,
-                record.account_text,
-                record.counterparty,
-                record.category_rule,
-                record.category_manual,
-                record.category_final,
-                _canonical_array_text(record.tags_rule_json),
-                _canonical_array_text(record.tags_ai_json),
-                _canonical_array_text(record.tags_manual_json),
-                _canonical_array_text(record.tags_final_json),
-                record.confidence_value_id,
-                _optional_bool(record.needs_review),
-                _optional_bool(record.is_transfer_candidate),
-                _optional_bool(record.is_transfer),
-                record.transfer_group_id,
-            ),
-        )
+        self._writer.add_transaction(record)
 
     @_atomic_add
     def add_overview_fact(self, record: OverviewFactRecord) -> None:
         """Add one typed overview fact."""
-        self._insert_entity(record.fact_id, "overview_fact")
-        self._connection.execute(
-            "INSERT INTO overview_facts "
-            "(entity_id, observation_id, provenance_id, snapshot_date, sheet_name, block_id, "
-            "block_title, fact_kind, row_label, column_label, numeric_value_id, value_text, "
-            "value_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                record.fact_id,
-                record.observation_id,
-                record.provenance_id,
-                record.snapshot_date,
-                record.sheet_name,
-                record.block_id,
-                record.block_title,
-                record.fact_kind,
-                record.row_label,
-                record.column_label,
-                record.numeric_value_id,
-                record.value_text,
-                record.value_type,
-            ),
-        )
+        self._writer.add_overview_fact(record)
 
     @_atomic_add
     def add_overview_balance(self, record: OverviewBalanceRecord) -> None:
         """Add a typed overview balance."""
-        self._insert_entity(record.balance_id, "overview_balance")
-        self._connection.execute(
-            "INSERT INTO overview_balances "
-            "(entity_id, observation_id, provenance_id, source_fact_id, amount_value_id, "
-            "snapshot_date, side, category, item_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                record.balance_id,
-                record.observation_id,
-                record.provenance_id,
-                record.source_fact_id,
-                record.amount_value_id,
-                record.snapshot_date,
-                record.side,
-                record.category,
-                record.item_name,
-            ),
-        )
+        self._writer.add_overview_balance(record)
 
     @_atomic_add
     def add_overview_cashflow(self, record: OverviewCashflowRecord) -> None:
         """Add a typed overview cashflow."""
-        self._insert_entity(record.cashflow_id, "overview_cashflow")
-        self._connection.execute(
-            "INSERT INTO overview_cashflows "
-            "(entity_id, observation_id, provenance_id, source_fact_id, amount_value_id, "
-            "snapshot_date, period_month, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                record.cashflow_id,
-                record.observation_id,
-                record.provenance_id,
-                record.source_fact_id,
-                record.amount_value_id,
-                record.snapshot_date,
-                record.period_month,
-                record.category,
-            ),
-        )
+        self._writer.add_overview_cashflow(record)
 
     @_atomic_add
     def add_overview_insurance(self, record: OverviewInsuranceRecord) -> None:
         """Add a typed overview insurance row."""
-        self._insert_entity(record.insurance_id, "overview_insurance")
-        self._connection.execute(
-            "INSERT INTO overview_insurance "
-            "(entity_id, observation_id, provenance_id, source_fact_id, paid_amount_value_id, "
-            "snapshot_date, institution, policy_name, contract_status, contract_date, "
-            "maturity_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                record.insurance_id,
-                record.observation_id,
-                record.provenance_id,
-                record.source_fact_id,
-                record.paid_amount_value_id,
-                record.snapshot_date,
-                record.institution,
-                record.policy_name,
-                record.contract_status,
-                record.contract_date,
-                record.maturity_date,
-            ),
-        )
+        self._writer.add_overview_insurance(record)
 
     @_atomic_add
     def add_overview_investment(self, record: OverviewInvestmentRecord) -> None:
         """Add a typed overview investment row."""
-        self._insert_entity(record.investment_id, "overview_investment")
-        self._connection.execute(
-            "INSERT INTO overview_investments "
-            "(entity_id, observation_id, provenance_id, source_fact_id, principal_value_id, "
-            "valuation_value_id, return_rate_value_id, snapshot_date, product_type, institution, "
-            "product_name, start_date, maturity_date) VALUES "
-            "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                record.investment_id,
-                record.observation_id,
-                record.provenance_id,
-                record.source_fact_id,
-                record.principal_value_id,
-                record.valuation_value_id,
-                record.return_rate_value_id,
-                record.snapshot_date,
-                record.product_type,
-                record.institution,
-                record.product_name,
-                record.start_date,
-                record.maturity_date,
-            ),
-        )
+        self._writer.add_overview_investment(record)
 
     @_atomic_add
     def add_overview_loan(self, record: OverviewLoanRecord) -> None:
         """Add a typed overview loan row."""
-        self._insert_entity(record.loan_id, "overview_loan")
-        self._connection.execute(
-            "INSERT INTO overview_loans "
-            "(entity_id, observation_id, provenance_id, source_fact_id, principal_value_id, "
-            "balance_value_id, interest_rate_value_id, snapshot_date, loan_type, institution, "
-            "product_name, start_date, maturity_date) VALUES "
-            "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                record.loan_id,
-                record.observation_id,
-                record.provenance_id,
-                record.source_fact_id,
-                record.principal_value_id,
-                record.balance_value_id,
-                record.interest_rate_value_id,
-                record.snapshot_date,
-                record.loan_type,
-                record.institution,
-                record.product_name,
-                record.start_date,
-                record.maturity_date,
-            ),
-        )
+        self._writer.add_overview_loan(record)
 
     @_atomic_add
     def add_asset_snapshot(self, record: AssetSnapshotRecord) -> None:
         """Add a typed asset position snapshot."""
-        self._insert_entity(record.snapshot_id, "asset_snapshot")
-        self._connection.execute(
-            "INSERT INTO asset_snapshots "
-            "(entity_id, observation_id, provenance_id, account_id, resource_id, "
-            "quantity_value_id, market_value_id, snapshot_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                record.snapshot_id,
-                record.observation_id,
-                record.provenance_id,
-                record.account_id,
-                record.resource_id,
-                record.quantity_value_id,
-                record.market_value_id,
-                record.snapshot_date,
-            ),
-        )
+        self._writer.add_asset_snapshot(record)
 
     def finalize(self) -> RepositoryInfo:
         """Validate, close, and atomically publish the complete candidate database."""
@@ -702,6 +560,7 @@ class RepositoryBuilder:
                 self._connection,
                 expected_generation=self.dataset_generation,
                 object_paths=self.paths,
+                expected_schema_version=self._schema_version,
             )
         except Exception:
             self.abort()
@@ -749,15 +608,25 @@ class RepositoryBuilder:
 class RepositoryReader(AbstractContextManager["RepositoryReader"]):
     """Read a stable DB/WAL snapshot without touching source SQLite sidecars."""
 
-    def __init__(self, database: Path, *, scratch_root: Path | None = None) -> None:
+    def __init__(
+        self,
+        database: Path,
+        *,
+        scratch_root: Path | None = None,
+        expected_schema_version: int | None = None,
+    ) -> None:
+        schema_version = _resolve_schema_version(expected_schema_version)
+        self._read_table_sql = _read_table_sql(schema_version)
         self._snapshot_context = inspection_snapshot(database, scratch_root=scratch_root)
         snapshot = self._snapshot_context.__enter__()
         try:
             self._connection = _connect_snapshot(snapshot)
             repository_paths = GenerationPaths(database.expanduser().absolute().parent)
+            self._repository_paths = repository_paths
             self.info = _validate_connection(
                 self._connection,
                 object_paths=repository_paths,
+                expected_schema_version=schema_version,
             )
         except Exception:
             self._snapshot_context.__exit__(None, None, None)
@@ -775,16 +644,150 @@ class RepositoryReader(AbstractContextManager["RepositoryReader"]):
     ) -> None:
         self.close()
 
+    @property
+    def table_names(self) -> tuple[str, ...]:
+        """Return the authoritative tables for this reader's exact schema."""
+        return tuple(self._read_table_sql)
+
     def rows(self, table: str) -> list[dict[str, Any]]:
         """Return rows from one fixed schema table as dictionaries."""
         if self._closed:
             raise RuntimeError("Repository reader is already closed.")
-        query = _READ_TABLE_SQL.get(table)
+        query = self._read_table_sql.get(table)
         if query is None:
             raise ValueError("Table is not part of the authoritative repository read surface.")
         cursor = self._connection.execute(query)
         names = [description[0] for description in cursor.description]
         return [dict(zip(names, row, strict=True)) for row in cursor.fetchall()]
+
+    def account_ownership(self, account_id: str, *, as_of: str) -> dict[str, Any]:
+        """Project existing exact ownership assertions from this validated snapshot."""
+        from finjuice.pipeline.storage.sqlite.ownership_projection import ownership_projection
+
+        return {
+            "dataset_revision": self.info.dataset_revision,
+            **ownership_projection(self._connection, account_id, as_of=as_of),
+        }
+
+    def reconcile_evidence(self, *, window_days: int = 14) -> dict[str, Any]:
+        """Read settlement candidates and immutable decisions from one snapshot."""
+        from finjuice.pipeline.reconcile.canonical import reconcile_view
+
+        owns_snapshot = not self._connection.in_transaction
+        if owns_snapshot:
+            self._connection.execute("BEGIN")
+        try:
+            return reconcile_view(self._connection, self._repository_paths, window_days=window_days)
+        finally:
+            if owns_snapshot:
+                self._connection.execute("ROLLBACK")
+
+    def statement_evidence(self, *, source_identity: str | None = None) -> dict[str, Any]:
+        """Read canonical JSON statement evidence from this pinned snapshot."""
+        from finjuice.pipeline.statements.canonical import statement_evidence
+
+        owns_snapshot = not self._connection.in_transaction
+        if owns_snapshot:
+            self._connection.execute("BEGIN")
+        try:
+            return statement_evidence(self._connection, source_identity=source_identity)
+        finally:
+            if owns_snapshot:
+                self._connection.execute("ROLLBACK")
+
+    def close_history(self, *, period: str | None = None) -> dict[str, Any]:
+        """Read immutable close revisions and period state from this pinned snapshot."""
+        from finjuice.pipeline.close.canonical import close_view
+
+        owns_snapshot = not self._connection.in_transaction
+        if owns_snapshot:
+            self._connection.execute("BEGIN")
+        try:
+            return close_view(self._connection, period=period)
+        finally:
+            if owns_snapshot:
+                self._connection.execute("ROLLBACK")
+
+    def intake_decisions(self) -> dict[str, Any]:
+        """Read all canonical intake decision evidence from this pinned snapshot."""
+        from finjuice.pipeline.storage.sqlite.intake_queries import intake_decision_view
+
+        owns_snapshot = not self._connection.in_transaction
+        if owns_snapshot:
+            self._connection.execute("BEGIN")
+        try:
+            return dict(intake_decision_view(self._connection))
+        finally:
+            if owns_snapshot:
+                self._connection.execute("ROLLBACK")
+
+    def canonical_assets(self, query: AssetReportQuery | None = None) -> dict[str, Any]:
+        """Read source evidence and its confirmed meaning at this validated revision."""
+        from finjuice.pipeline.storage.sqlite.asset_reports import asset_candidates, asset_report
+
+        payload = (
+            asset_candidates(self._connection)
+            if query is None
+            else asset_report(self._connection, query)
+        )
+        return {
+            "dataset_revision": self.info.dataset_revision,
+            "dataset_generation": self.info.dataset_generation,
+            **payload,
+        }
+
+    def account_binding_snapshot(self) -> dict[str, Any]:
+        """Read the account registry and binding candidates at this reader revision."""
+        from finjuice.pipeline.storage.sqlite.account_bindings import account_binding_snapshot
+
+        return {
+            "dataset_revision": self.info.dataset_revision,
+            **account_binding_snapshot(self._connection),
+        }
+
+    def transaction_snapshot(self) -> TransactionReadSnapshot:
+        """Return exact transaction rows and rules pinned to this reader snapshot."""
+        if self._closed:
+            raise RuntimeError("Repository reader is already closed.")
+        return transaction_snapshot(self._connection, self.info, self._repository_paths)
+
+    def analysis_snapshot(self) -> AnalysisReadSnapshot:
+        """Return transactions and canonical config selections from this revision."""
+        transactions = self.transaction_snapshot()
+        return analysis_snapshot(self._connection, self._repository_paths, transactions)
+
+    def checkup_snapshot(self, digests: tuple[str, ...] = ()) -> CheckupReadSnapshot:
+        """Read all checkup domains and requested import evidence from this revision."""
+        if self._closed:
+            raise RuntimeError("Repository reader is already closed.")
+        status = self.status_snapshot()
+        return deepcopy(
+            CheckupReadSnapshot(
+                self.info,
+                status,
+                self.portfolio_snapshot(),
+                import_preview_snapshot(self._connection, self.info, digests),
+                rules_config_snapshot(self._connection, self._repository_paths),
+                status.transactions.unmaterialized_months,
+            )
+        )
+
+    def portfolio_snapshot(self) -> PortfolioReadSnapshot:
+        """Return portfolio values and evidence pinned to this reader."""
+        if self._closed:
+            raise RuntimeError("Repository reader is already closed.")
+        return portfolio_snapshot(self._connection, self.info, self._repository_paths)
+
+    def history_snapshot(self) -> HistoryReadSnapshot:
+        """Return complete legacy/native history evidence from this pinned revision."""
+        if self._closed:
+            raise RuntimeError("Repository reader is already closed.")
+        return history_snapshot(self._connection, self._repository_paths, self.info)
+
+    def status_snapshot(self) -> StatusReadSnapshot:
+        """Return status evidence from the same validated transaction snapshot."""
+        transactions = self.transaction_snapshot()
+        return status_snapshot(self._connection, self._repository_paths, transactions)
 
     def close(self) -> None:
         """Close the scratch connection and delete its temporary snapshot."""
@@ -806,21 +809,3 @@ def _canonical_json(value: Any) -> str:
         )
     except (TypeError, ValueError) as exc:
         raise ValueError("Preserved JSON values must have a canonical finite encoding.") from exc
-
-
-def _canonical_array_text(value: str) -> str:
-    try:
-        parsed = json.loads(value)
-    except (TypeError, json.JSONDecodeError) as exc:
-        raise ValueError("Transaction tag fields must contain JSON arrays.") from exc
-    if not isinstance(parsed, list):
-        raise ValueError("Transaction tag fields must contain JSON arrays.")
-    return _canonical_json(parsed)
-
-
-def _optional_bool(value: bool | None) -> int | None:
-    if value is None:
-        return None
-    if not isinstance(value, bool):
-        raise ValueError("Optional flags must be booleans or null.")
-    return int(value)

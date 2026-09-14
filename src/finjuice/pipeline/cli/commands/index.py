@@ -18,9 +18,11 @@ from finjuice.pipeline.cli.commands.index_collections import (
     _templates_collection,
     _transactions_collection,
 )
+from finjuice.pipeline.cli.commands.index_repository import build_repository_index
 from finjuice.pipeline.cli.privacy import PrivacyProfile, privacy_meta
-from finjuice.pipeline.cli.utils import get_config
+from finjuice.pipeline.cli.utils import get_activation_evidence_provider, get_config
 from finjuice.pipeline.config import Config
+from finjuice.pipeline.index_repository import collect_repository_index_inputs
 
 INDEX_SCHEMA_REF = "schemas/index.schema.json"
 
@@ -129,6 +131,9 @@ def _render_index(result: dict[str, Any]) -> None:
     """Render a compact human-readable catalog."""
     workspace = result["workspace"]
     output.section("Workspace Index")
+    repository = result.get("_meta", {}).get("repository")
+    if repository:
+        output.info(f"Repository revision: {repository['dataset_revision']}")
     output.table_summary(
         "Workspace",
         [
@@ -180,12 +185,33 @@ def register_index_command(app: typer.Typer) -> None:
     ) -> None:
         """List workspace collections and safe next inspection commands."""
         config = get_config(ctx)
-        result = _build_index(config, include_paths=include_paths)
+        metadata = privacy_meta(privacy)
+        try:
+            inputs = collect_repository_index_inputs(
+                config, evidence_provider=get_activation_evidence_provider(ctx)
+            )
+            if inputs is None:
+                result = _build_index(config, include_paths=include_paths)
+            else:
+                result, repository_meta = build_repository_index(
+                    config, inputs, include_paths=include_paths
+                )
+                metadata.update(repository_meta)
+        except (OSError, ValueError):
+            output.emit_error(
+                "Index could not read verified collection evidence.",
+                error_code=output.ErrorCode.VALIDATION_FAILED,
+                json_output=json_output,
+                command="index",
+                meta_extras=metadata,
+            )
+            raise AssertionError("emit_error must exit") from None
         output_result = _apply_index_privacy(result, privacy)
+        output_result["_meta"] = output._build_meta("index", extras=metadata)
         output.emit(
             output_result,
             json_output,
             _render_index,
             command="index",
-            meta_extras=privacy_meta(privacy),
+            meta_extras=metadata,
         )

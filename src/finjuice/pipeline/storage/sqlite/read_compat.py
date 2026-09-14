@@ -5,17 +5,14 @@ projects typed repository rows into the legacy CSV transaction frame contract
 (:data:`~finjuice.pipeline.storage.csv_schema.CSV_COLUMNS`) so existing read
 commands keep their human and JSON output contracts while reading from SQLite.
 
-The generation root is runtime configuration (``FINJUICE_SQLITE_GENERATION``);
-its location is never hard-coded here, per the migration/recovery contract.
-Reads are deterministic for one dataset revision: rows are projected from a
-validated snapshot and sorted by ``datetime`` with a stable sort.
+Explicit helper calls may select a generation with ``FINJUICE_SQLITE_GENERATION``.
+That variable is not activation evidence and does not select runtime CLI authority.
+CLI consumers use the provider-validated snapshot facade; these helpers support
+standalone projection and explicit detached-frame compatibility checks.
 
-``query``/``explain`` pass :func:`configured_transactions_frame` into the
-DuckDB view as ``source_frame``. CSV partitions remain a derived, stale-
-identifiable read when the generation env var is unset.
-
-TODO(#436 follow-up): wire the detailed status insights snapshot to the
-same SQLite read path.
+Rows are projected from one validated snapshot and sorted by ``datetime`` with a
+stable sort. Passing a projected frame to DuckDB does not confer a canonical
+revision or permission to replace an active repository snapshot.
 """
 
 from __future__ import annotations
@@ -98,8 +95,13 @@ def read_transactions_frame(database: Path) -> pl.DataFrame:
         to ``List(Utf8)``, sorted ascending by ``datetime`` (stable).
     """
     with RepositoryReader(database) as reader:
-        transactions = reader.rows("transactions")
-        context = _ReadContext.build(reader)
+        return frame_from_reader(reader)
+
+
+def frame_from_reader(reader: RepositoryReader) -> pl.DataFrame:
+    """Project rows while the caller retains the same identity-bearing read snapshot."""
+    transactions = reader.rows("transactions")
+    context = _ReadContext.build(reader)
     rows = [_project_row(transaction, context) for transaction in transactions]
     return _build_frame(rows).sort("datetime")
 

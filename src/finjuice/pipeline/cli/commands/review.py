@@ -11,11 +11,12 @@ next-step cues live in :mod:`finjuice.pipeline.cli.commands.review_helpers`.
 """
 
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 import polars as pl
 import typer
 
+from finjuice.pipeline.analysis_source import AnalysisReadError, read_analysis_source
 from finjuice.pipeline.cli import output as cli_output
 from finjuice.pipeline.cli.commands.export_helpers import validate_period
 from finjuice.pipeline.cli.commands.review_filters import (
@@ -41,6 +42,11 @@ from finjuice.pipeline.cli.commands.review_rendering import (
     _format_confidence,  # noqa: F401 — re-exported for existing review imports
     _render_review,
 )
+from finjuice.pipeline.cli.commands.review_repository import (
+    render_repository_review_identity,
+    repository_review_frame,
+    repository_review_notes,
+)
 from finjuice.pipeline.cli.commands.review_serialize import (
     _compact_review_result,
     _serialize_transaction,
@@ -51,7 +57,7 @@ from finjuice.pipeline.cli.privacy import (
     apply_privacy_profile,
     privacy_meta,
 )
-from finjuice.pipeline.cli.utils import get_config
+from finjuice.pipeline.cli.utils import get_activation_evidence_provider, get_config
 
 logger = logging.getLogger(__name__)
 
@@ -87,8 +93,6 @@ def review_command(
     ),
 ) -> None:
     """Show transactions that need manual review."""
-    from finjuice.pipeline.storage.csv_transactions import read_month
-
     command_name = "review"
     config = get_config(ctx)
     validate_period(month, json_output, command=command_name, privacy=privacy)
@@ -121,40 +125,33 @@ def review_command(
         command=command_name,
     )
 
+    repository_snapshot = None
+    repository_meta: dict[str, Any] = {}
     try:
+        repository_snapshot = read_analysis_source(
+            config.data_dir, get_activation_evidence_provider(ctx)
+        )
         df: Optional[pl.DataFrame]
         month_label: Optional[str] = month
 
-        if all_history:
-            df = _load_all_history(config.csv_base_dir)
-            month_label = None
+        if repository_snapshot is not None:
+            df, month_label, repository_meta = repository_review_frame(
+                repository_snapshot, month=month, all_history=all_history
+            )
             if df is None:
                 emit_error(
-                    "No transaction data found",
+                    f"No data for {month}" if month else "No transaction data found",
                     error_code=ErrorCode.NO_DATA,
                     exit_code=ExitCode.NO_DATA,
                     json_output=json_output,
                     command=command_name,
                     privacy=privacy,
                 )
-        elif month:
-            year_str, mon_str = month.split("-")
-            csv_path = config.csv_base_dir / year_str / mon_str / "transactions.csv"
-            if not csv_path.exists():
-                emit_error(
-                    f"No data for {month}",
-                    error_code=ErrorCode.NO_DATA,
-                    exit_code=ExitCode.NO_DATA,
-                    json_output=json_output,
-                    command=command_name,
-                    privacy=privacy,
-                )
-            df = read_month(config.csv_base_dir, int(year_str), int(mon_str))
         else:
-            df, month_label = _load_latest_month(config.csv_base_dir)
+            df, month_label = _legacy_review_frame(config, month, all_history)
             if df is None:
                 emit_error(
-                    "No transaction data found",
+                    f"No data for {month}" if month else "No transaction data found",
                     error_code=ErrorCode.NO_DATA,
                     exit_code=ExitCode.NO_DATA,
                     json_output=json_output,
@@ -217,6 +214,13 @@ def review_command(
         pagination_dict = pagination.to_dict()
         truncated = pagination.has_more
         health_reasons = ["review_queue"] if matched_count > 0 else []
+        notes = []
+        if matched_count > 0:
+            notes = (
+                repository_review_notes(repository_snapshot, repository_meta)
+                if repository_snapshot is not None
+                else _load_review_rule_notes(config.rules_file)
+            )
         result = {
             "transactions": transactions,
             "total_count": returned_count,
@@ -247,7 +251,7 @@ def review_command(
                 "low_confidence_count": low_confidence_count,
                 "low_confidence_threshold": low_confidence,
             },
-            "rule_notes": _load_review_rule_notes(config.rules_file) if matched_count > 0 else [],
+            "rule_notes": notes,
             "next_steps": _build_review_next_steps(
                 month_label=month_label,
                 all_history=all_history,
@@ -268,7 +272,7 @@ def review_command(
                 pagination=pagination,
                 max_bytes=max_bytes,
                 command=command_name,
-                meta_extras=privacy_meta(privacy),
+                meta_extras={**privacy_meta(privacy), **repository_meta},
                 rows_key="transactions",
             )
             _sync_review_page_counts(output_result)
@@ -286,22 +290,41 @@ def review_command(
                 )
         else:
             output_result = result
+        if not json_output:
+            render_repository_review_identity(repository_meta)
         emit(
             output_result,
             json_output,
             _render_review,
             command="review",
-            meta_extras=privacy_meta(privacy),
+            meta_extras={**privacy_meta(privacy), **repository_meta},
         )
 
     except typer.Exit:
         raise
     except Exception as exc:  # intended catch-all for CLI robustness
-        logger.error(f"Failed to review transactions: {exc}", exc_info=True)
+        logger.error("Failed to review transactions (%s)", type(exc).__name__)
         emit_error(
-            f"Failed to review transactions: {exc}",
+            "Repository review could not be read."
+            if repository_snapshot is not None or isinstance(exc, AnalysisReadError)
+            else f"Failed to review transactions: {exc}",
             error_code=ErrorCode.GENERAL_ERROR,
             json_output=json_output,
             command=command_name,
             privacy=privacy,
         )
+
+
+def _legacy_review_frame(
+    config: Any, month: str | None, all_history: bool
+) -> tuple[pl.DataFrame | None, str | None]:
+    from finjuice.pipeline.storage.csv_transactions import read_month
+
+    if all_history:
+        return _load_all_history(config.csv_base_dir), None
+    if month:
+        year, mon = month.split("-")
+        if not (config.csv_base_dir / year / mon / "transactions.csv").exists():
+            return None, month
+        return read_month(config.csv_base_dir, int(year), int(mon)), month
+    return _load_latest_month(config.csv_base_dir)

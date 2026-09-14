@@ -19,6 +19,11 @@ from pathlib import Path
 from typing import Any, Callable, Literal
 
 from finjuice.pipeline.cli import output as cli_output
+from finjuice.pipeline.cli.report_filters import no_filter_requested
+from finjuice.pipeline.cli.utils import get_activation_evidence_provider
+from finjuice.pipeline.storage.read_facade import snapshot_metadata
+from finjuice.pipeline.tagging.rules import ReportFilters
+from finjuice.pipeline.tagging.rules_yaml_io import load_report_filters_bytes
 
 from .execution_helpers import (
     PIVOT_COL_AXIS_EXPRESSIONS,  # noqa: F401 — re-exported pivot SQL builder
@@ -188,6 +193,31 @@ def write_template_run_event(
             warn("Audit logging failed due to invalid payload; run was not recorded.")
 
 
+def _template_read_context(
+    options: TemplateRunOptions,
+    dependencies: TemplateExecutionDependencies,
+    analytics: Any,
+) -> tuple[ReportFilters, dict[str, Any]]:
+    """Resolve filters from the same authority snapshot as the template rows."""
+    snapshot = analytics.repository_snapshot
+    if snapshot is None:
+        return dependencies.load_cli_report_filters(
+            options.ctx,
+            options.config,
+            command="template run",
+            json_output=options.machine_output,
+        ), {}
+    if no_filter_requested(options.ctx):
+        filters = ReportFilters()
+    else:
+        if snapshot.rules_content is not None and snapshot.rules_parsed_status != "parsed":
+            raise ValueError(
+                "Canonical rules head is not parsed; report filters cannot be applied."
+            )
+        filters = load_report_filters_bytes(snapshot.rules_content)
+    return filters, snapshot_metadata(snapshot)
+
+
 def execute_template_run(
     options: TemplateRunOptions,
     *,
@@ -215,16 +245,15 @@ def execute_template_run(
         sql = _render_sql(sql_template, resolved_params)
         dependencies.validate_readonly_sql(sql)
 
-    report_filters = dependencies.load_cli_report_filters(
-        options.ctx,
-        options.config,
-        command="template run",
-        json_output=options.machine_output,
-    )
-
     with dependencies.duckdb_analytics(
-        options.config.data_dir, report_filters=report_filters
+        options.config.data_dir,
+        evidence_provider=get_activation_evidence_provider(options.ctx),
     ) as analytics:
+        report_filters, read_metadata = _template_read_context(options, dependencies, analytics)
+        template_meta_extras.update(read_metadata)
+        if not report_filters.is_empty():
+            analytics.report_filters = report_filters
+            analytics.register_transactions_view()
         filters_applied = 0
         if not report_filters.is_empty():
             source_df = analytics.query_readonly(

@@ -25,7 +25,9 @@ from finjuice.pipeline.context_helpers import (
     _serialize_journal_entry,  # noqa: F401 — re-exported for existing context imports
     _split_front_matter,  # noqa: F401 — re-exported for existing context imports
 )
+from finjuice.pipeline.context_repository import collect_repository_context_inputs
 from finjuice.pipeline.insights import collect_status_snapshot
+from finjuice.pipeline.storage.authority import ActivationEvidenceProvider
 
 logger = logging.getLogger(__name__)
 
@@ -85,8 +87,32 @@ def collect_context_bundle(
     *,
     journal_limit: int = DEFAULT_JOURNAL_LIMIT,
     budget: int = DEFAULT_CONTEXT_BUDGET,
+    evidence_provider: ActivationEvidenceProvider | None = None,
 ) -> dict[str, Any]:
     """Collect and truncate the AI-agent context bundle for the given config."""
+    source = collect_repository_context_inputs(config, evidence_provider=evidence_provider)
+    if source is not None:
+        status_snapshot = dict(source.status_snapshot)
+        status_snapshot["active_goals"] = source.active_goals
+        status_snapshot["financial_metadata"] = source.financial_metadata
+        repository_bundle = _finish_context_bundle(
+            {
+                "journals": _load_journal_context(config.journal_dir, limit=journal_limit),
+                "status_snapshot": status_snapshot,
+                "active_goals": source.active_goals,
+                "financial_metadata": source.financial_metadata,
+                "rule_notes": source.rule_notes,
+                "top_patterns": source.top_patterns,
+            },
+            budget=budget,
+        )
+        repository_bundle["_meta"].update(
+            repository=source.metadata,
+            warnings=list(source.warnings),
+            journals_basis="external_historical_observations",
+            token_estimate_policy="content_characters_divided_by_four_soft_budget.v1",
+        )
+        return repository_bundle
     snapshot_result = collect_status_snapshot(config)
     goals_context = _load_goals_context(config.data_dir)
     active_goals = goals_context["active_goals"]
@@ -104,6 +130,11 @@ def collect_context_bundle(
         "top_patterns": _load_top_patterns(config),
     }
 
+    return _finish_context_bundle(bundle, budget=budget)
+
+
+def _finish_context_bundle(bundle: dict[str, Any], *, budget: int) -> dict[str, Any]:
+    """Apply the existing content pruning order and attach runtime metadata."""
     dropped_sections: list[str] = []
     sections, total_tokens = _measure_sections(bundle)
 

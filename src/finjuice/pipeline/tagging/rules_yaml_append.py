@@ -21,13 +21,19 @@ from finjuice.pipeline.tagging.validator import _validate_rule
 logger = logging.getLogger(__name__)
 
 
-def append_rule(new_rule_dict: Dict[str, Any], rules_path: Path) -> TagRule:
+def append_rule(
+    new_rule_dict: Dict[str, Any],
+    rules_path: Path,
+    *,
+    authority_data_dir: Path,
+) -> TagRule:
     """
     Append new rule to rules.yaml.
 
     Args:
         new_rule_dict: Dict with rule fields (name, match, fields, tags, priority, etc.)
         rules_path: Path to rules.yaml file
+        authority_data_dir: Authoritative data directory used to fence legacy writers.
 
     Returns:
         The newly created TagRule object
@@ -43,7 +49,11 @@ def append_rule(new_rule_dict: Dict[str, Any], rules_path: Path) -> TagRule:
         ...     "tags": ["카페", "식비"],
         ...     "priority": 85,
         ... }
-        >>> rule = append_rule(new_rule, Path("data/rules/rules.yaml"))
+        >>> rule = append_rule(
+        ...     new_rule,
+        ...     Path("data/rules/rules.yaml"),
+        ...     authority_data_dir=Path("data"),
+        ... )
     """
     existing_rules = load_rules(rules_path)
 
@@ -51,7 +61,11 @@ def append_rule(new_rule_dict: Dict[str, Any], rules_path: Path) -> TagRule:
     validated_dict = _validate_rule(new_rule_dict, len(existing_rules))
     new_rule = TagRule(**validated_dict)
 
-    add_rule_roundtrip(validated_dict, rules_path)
+    add_rule_roundtrip(
+        validated_dict,
+        rules_path,
+        authority_data_dir=authority_data_dir,
+    )
 
     logger.info(f"Appended rule '{new_rule.name}' to {rules_path}")
     return new_rule

@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
+from contextvars import ContextVar
 from decimal import Decimal
 from itertools import combinations
+from math import gcd
+from typing import TypeVar
 
 from finjuice.pipeline.reconcile.models import EvidenceItem, MatchGroup, PaymentItem
-from finjuice.pipeline.reconcile.money import money_abs
+from finjuice.pipeline.reconcile.money import money_abs as _exact_money_abs
 
 _MAX_COMBO = 5
 _MAX_CANDIDATES = 16
@@ -15,7 +19,49 @@ _MIN_PARTIAL_COVERAGE = Decimal("0.5")
 _ZERO = Decimal("0")
 
 
+_WorkItem = TypeVar("_WorkItem")
+_WORK_METER: ContextVar[Callable[[int], None] | None] = ContextVar(
+    "reconcile_work_meter", default=None
+)
+
+
+_EXACT_BOUNDS: ContextVar[bool] = ContextVar("reconcile_exact_bounds", default=False)
+
+
+@contextmanager
+def reconciliation_work_meter(
+    charge: Callable[[int], None], *, exact_bounds: bool = False
+) -> Iterator[None]:
+    """Scope an optional actual-work meter without changing legacy matching."""
+    token = _WORK_METER.set(charge)
+    bounds_token = _EXACT_BOUNDS.set(exact_bounds)
+    try:
+        yield
+    finally:
+        _EXACT_BOUNDS.reset(bounds_token)
+        _WORK_METER.reset(token)
+
+
+def _charge_work(units: int = 1) -> None:
+    meter = _WORK_METER.get()
+    if meter is not None:
+        meter(units)
+
+
+def money_abs(value: Decimal) -> Decimal:
+    """Meter actual amount comparisons while retaining the existing arithmetic."""
+    _charge_work()
+    return _exact_money_abs(value)
+
+
+def _metered_combinations(items: Sequence[_WorkItem], size: int) -> Iterator[tuple[_WorkItem, ...]]:
+    for combo in combinations(items, size):
+        _charge_work(size)
+        yield combo
+
+
 def _in_window(left: EvidenceItem, right: PaymentItem, window_days: int) -> bool:
+    _charge_work()
     return (
         left.currency == right.currency
         and abs((left.occurred_on - right.occurred_on).days) <= window_days
@@ -187,8 +233,8 @@ def _combo_summing_to(
 ) -> tuple[PaymentItem, ...] | None:
     ordered = sorted(payments, key=lambda payment: (payment.occurred_on, payment.payment_id))
     limit = min(len(ordered), _MAX_COMBO)
-    for size in range(2, limit + 1):
-        for combo in combinations(ordered, size):
+    for size in _possible_payment_sizes(ordered, target, limit, partial=False):
+        for combo in _metered_combinations(ordered, size):
             total = sum((money_abs(payment.amount) for payment in combo), _ZERO)
             if total == target:
                 return combo
@@ -199,13 +245,72 @@ def _evidence_summing_to(
     items: Sequence[EvidenceItem], target: Decimal
 ) -> tuple[EvidenceItem, ...] | None:
     ordered = sorted(items, key=lambda item: (item.occurred_on, item.evidence_id))
+    if _EXACT_BOUNDS.get():
+        ordered = _eligible_exact_evidence(ordered, target)
     limit = min(len(ordered), _MAX_COMBO)
-    for size in range(2, limit + 1):
-        for combo in combinations(ordered, size):
+    sizes = _possible_evidence_sizes(ordered, target, limit)
+    for size in sizes:
+        for combo in _metered_combinations(ordered, size):
             total = sum((money_abs(item.amount) for item in combo), _ZERO)
             if total == target:
                 return combo
     return None
+
+
+def _eligible_exact_evidence(items: Sequence[EvidenceItem], target: Decimal) -> list[EvidenceItem]:
+    eligible = [item for item in items if money_abs(item.amount) <= target]
+    amounts = [item.amount.copy_abs() for item in eligible]
+    exponents = [value.as_tuple().exponent for value in [*amounts, target]]
+    scale = max(0, *(-exponent for exponent in exponents if isinstance(exponent, int)))
+    unit = 10**scale
+    divisor = 0
+    for amount in amounts:
+        _charge_work()
+        numerator, denominator = amount.as_integer_ratio()
+        divisor = gcd(divisor, numerator * (unit // denominator))
+        if divisor == 1:
+            return eligible
+    _charge_work()
+    numerator, denominator = target.as_integer_ratio()
+    target_units = numerator * (unit // denominator)
+    possible = target_units == 0 if divisor == 0 else target_units % divisor == 0
+    return eligible if possible else []
+
+
+def _possible_evidence_sizes(
+    items: Sequence[EvidenceItem], target: Decimal, limit: int
+) -> list[int]:
+    sizes = list(range(2, limit + 1))
+    if not _EXACT_BOUNDS.get():
+        return sizes
+    amounts = sorted(money_abs(item.amount) for item in items)
+    possible = []
+    for size in sizes:
+        _charge_work(2 * size)
+        if sum(amounts[:size], _ZERO) <= target <= sum(amounts[-size:], _ZERO):
+            possible.append(size)
+    return possible
+
+
+def _possible_payment_sizes(
+    payments: Sequence[PaymentItem], target: Decimal, limit: int, *, partial: bool
+) -> list[int]:
+    sizes = list(range(1 if partial else 2, limit + 1))
+    if not _EXACT_BOUNDS.get():
+        return sizes
+    amounts = sorted(money_abs(payment.amount) for payment in payments)
+    threshold = _MIN_PARTIAL_COVERAGE * target if partial else target
+    possible = []
+    for size in sizes:
+        _charge_work(2 * size)
+        minimum = sum(amounts[:size], _ZERO)
+        maximum = sum(amounts[-size:], _ZERO)
+        if partial:
+            if maximum >= threshold and minimum < target:
+                possible.append(size)
+        elif minimum <= target <= maximum:
+            possible.append(size)
+    return possible
 
 
 def _best_partial(
@@ -215,8 +320,8 @@ def _best_partial(
     best: tuple[PaymentItem, ...] | None = None
     best_total = _ZERO
     limit = min(len(ordered), _MAX_COMBO)
-    for size in range(1, limit + 1):
-        for combo in combinations(ordered, size):
+    for size in _possible_payment_sizes(ordered, target, limit, partial=True):
+        for combo in _metered_combinations(ordered, size):
             total = sum((money_abs(payment.amount) for payment in combo), _ZERO)
             if best_total < total < target:
                 best = combo

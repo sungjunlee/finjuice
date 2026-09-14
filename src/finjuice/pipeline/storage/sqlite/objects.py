@@ -144,30 +144,23 @@ class SourceObjectStore:
         digest_hex: str,
         byte_length: int,
     ) -> bool:
+        reused = False
         try:
             os.link(temp_path, target, follow_symlinks=False)
         except FileExistsError:
-            temp_path.unlink(missing_ok=True)
             self.verify(f"sha256:{digest_hex}", byte_length)
-            return True
+            reused = True
         except OSError as exc:
-            temp_path.unlink(missing_ok=True)
             raise ObjectStoreError("Source object could not be published atomically.") from exc
         try:
+            # A visible object may belong to a publisher whose directory fsync failed.
+            # Reuse must establish durability too, and failure must retain the object.
             _fsync_directory(target.parent)
-        except OSError as exc:
-            try:
-                target.unlink(missing_ok=True)
-                _fsync_directory(target.parent)
-            except OSError:
-                pass
-            raise ObjectStoreError("Source object could not be published durably.") from exc
-        try:
             temp_path.unlink()
-            _fsync_directory(target.parent)
+            _fsync_directory(temp_path.parent)
         except OSError as exc:
             raise ObjectStoreError("Source object could not be published durably.") from exc
-        return False
+        return reused
 
 
 def _parse_artifact_id(artifact_id: str) -> str:
@@ -234,8 +227,15 @@ def _read_directory_entry(path: Path) -> os.stat_result:
         raise RepositoryPathError("Repository object directory could not be created.") from exc
 
 
+def _is_link_or_reparse_point(entry: os.stat_result) -> bool:
+    """Return whether an entry redirects path traversal on this platform."""
+    file_attributes = getattr(entry, "st_file_attributes", 0)
+    reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    return stat.S_ISLNK(entry.st_mode) or bool(file_attributes & reparse_flag)
+
+
 def _validate_directory_entry(entry: os.stat_result, *, require_private: bool) -> None:
-    if stat.S_ISLNK(entry.st_mode) or not stat.S_ISDIR(entry.st_mode):
+    if _is_link_or_reparse_point(entry) or not stat.S_ISDIR(entry.st_mode):
         raise RepositoryPathError("Repository object path must be a real directory.")
     if require_private and stat.S_IMODE(entry.st_mode) & 0o077:
         raise RepositoryPathError("Repository object directory must be private.")
@@ -256,7 +256,7 @@ def _assert_real_directory_chain(boundary: Path, path: Path) -> None:
             entry = candidate.lstat()
         except OSError as exc:
             raise RepositoryPathError("Repository object path is missing or unsafe.") from exc
-        if stat.S_ISLNK(entry.st_mode) or not stat.S_ISDIR(entry.st_mode):
+        if _is_link_or_reparse_point(entry) or not stat.S_ISDIR(entry.st_mode):
             raise RepositoryPathError("Repository object path must use real directories.")
 
 
@@ -273,8 +273,10 @@ def _assert_no_symlink_ancestors(path: Path, *, allow_missing: bool = False) -> 
             raise RepositoryPathError("Repository path is missing or unsafe.") from None
         except OSError as exc:
             raise RepositoryPathError("Repository path could not be inspected safely.") from exc
-        if stat.S_ISLNK(entry.st_mode):
-            raise RepositoryPathError("Repository path must not traverse symlinks.")
+        if _is_link_or_reparse_point(entry):
+            raise RepositoryPathError(
+                "Repository path must not traverse symlinks or reparse points."
+            )
         if component != path and not stat.S_ISDIR(entry.st_mode):
             raise RepositoryPathError("Repository path ancestor must be a directory.")
 

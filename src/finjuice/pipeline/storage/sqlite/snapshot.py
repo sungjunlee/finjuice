@@ -192,7 +192,7 @@ def _prepare_scratch_root(path: Path) -> Path:
 
 
 def _assert_no_symlink_ancestors(path: Path, *, allow_missing: bool = False) -> None:
-    """Reject a database path reached through any symlink component."""
+    """Reject a database path reached through any redirecting path component."""
     for component in (*path.parents[::-1], path):
         try:
             entry = component.lstat()
@@ -202,7 +202,11 @@ def _assert_no_symlink_ancestors(path: Path, *, allow_missing: bool = False) -> 
             raise RepositorySnapshotError("Database input is missing or unsafe.") from None
         except OSError as exc:
             raise RepositorySnapshotError("Database input is missing or unsafe.") from exc
-        if stat.S_ISLNK(entry.st_mode):
-            raise RepositorySnapshotError("Database input path must not traverse symlinks.")
+        file_attributes = getattr(entry, "st_file_attributes", 0)
+        reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+        if stat.S_ISLNK(entry.st_mode) or file_attributes & reparse_flag:
+            raise RepositorySnapshotError(
+                "Database input path must not traverse symlinks or reparse points."
+            )
         if component != path and not stat.S_ISDIR(entry.st_mode):
             raise RepositorySnapshotError("Database input ancestor must be a directory.")

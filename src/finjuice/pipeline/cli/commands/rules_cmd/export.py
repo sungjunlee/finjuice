@@ -17,7 +17,13 @@ from finjuice.pipeline.cli.utils import get_config
 
 from .export_json import (
     _compute_rules_export_json,
+    _rules_export_payload,
     _serialize_rule_export,  # noqa: F401 — re-exported for existing export imports
+)
+from .export_repository import (
+    load_repository_rules_export,
+    render_repository_rules_export,
+    show_repository_rules_revision,
 )
 
 logger = logging.getLogger(__name__)
@@ -92,6 +98,23 @@ def export_rules_command(
 
     # Get config from context
     config = get_config(ctx)
+    canonical = load_repository_rules_export(
+        ctx, config, command="rules export", json_output=json_output
+    )
+    if canonical is not None:
+        if json_output:
+            emit(
+                _rules_export_payload(canonical.rules),
+                True,
+                lambda _: None,
+                command="rules export",
+                meta_extras=canonical.metadata,
+            )
+        else:
+            render_repository_rules_export(
+                canonical, config, format_type=format_type, output=output, stats=stats
+            )
+        return
 
     try:
         if json_output:
@@ -128,17 +151,7 @@ def export_rules_command(
             typer.echo("Supported formats: yaml, banksalad, markdown", err=True)
             raise typer.Exit(code=1)
 
-        # Save or display
-        if output:
-            try:
-                output.parent.mkdir(parents=True, exist_ok=True)
-                output.write_text(formatted_output, encoding="utf-8")
-                typer.echo(f"✅ {output}에 저장되었습니다.")
-            except OSError as e:
-                typer.echo(f"❌ 파일 저장 실패: {e}", err=True)
-                raise typer.Exit(code=1)
-        else:
-            typer.echo(formatted_output)
+        _save_legacy_rule_output(output, formatted_output)
 
     except typer.Exit:
         raise
@@ -184,5 +197,34 @@ def list_rules_command(
 ) -> None:
     """List tagging rules as structured JSON or a compact table."""
     config = get_config(ctx)
-    result = _compute_rules_export_json(config, json_output)
-    emit(result, json_output, _render_rules_list, command="rules list")
+    canonical = load_repository_rules_export(
+        ctx, config, command="rules list", json_output=json_output
+    )
+    result = (
+        _compute_rules_export_json(config, json_output)
+        if canonical is None
+        else _rules_export_payload(canonical.rules)
+    )
+    if canonical is not None and not json_output:
+        show_repository_rules_revision(canonical)
+    emit(
+        result,
+        json_output,
+        _render_rules_list,
+        command="rules list",
+        meta_extras=canonical.metadata if canonical is not None else None,
+    )
+
+
+def _save_legacy_rule_output(output: Path | None, formatted_output: str) -> None:
+    """Preserve the existing legacy file/display behavior."""
+    if output:
+        try:
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(formatted_output, encoding="utf-8")
+            typer.echo(f"✅ {output}에 저장되었습니다.")
+        except OSError as error:
+            typer.echo(f"❌ 파일 저장 실패: {error}", err=True)
+            raise typer.Exit(code=1)
+    else:
+        typer.echo(formatted_output)

@@ -231,7 +231,12 @@ def write_csv_mirror(data_dir: Path, rows: list[dict[str, Any]] | None = None) -
         year, month = (int(part) for part in str(row["date"])[:7].split("-"))
         by_month.setdefault((year, month), []).append(row)
     for (year, month), month_rows in sorted(by_month.items()):
-        write_month(data_dir / "transactions", pl.DataFrame(month_rows), year, month)
+        write_month(
+            pl.DataFrame(month_rows),
+            year,
+            month,
+            authority_data_dir=data_dir,
+        )
 
 
 def build_generation(root: Path, rows: list[dict[str, Any]] | None = None) -> Path:

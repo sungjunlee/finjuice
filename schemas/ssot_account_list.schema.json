@@ -1,0 +1,43 @@
+{
+  "$id": "ssot_account_list.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "accounts": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "bindings": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "candidates": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "dataset_revision": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "_meta",
+    "dataset_revision",
+    "accounts",
+    "bindings",
+    "candidates"
+  ],
+  "title": "ssot account list output",
+  "type": "object"
+}

@@ -4,6 +4,7 @@ Runs the complete pipeline: ingest → tag → transfer → export.
 """
 
 import logging
+from pathlib import Path
 from typing import Any
 
 import typer
@@ -15,10 +16,17 @@ from finjuice.pipeline.cli.commands.full_pipeline_orchestrator import (
     run_full_pipeline_orchestrator,
 )
 from finjuice.pipeline.cli.export_runtime import configure_cli_export_result_runtime
+from finjuice.pipeline.cli.mutation_options import with_mutation_options
 from finjuice.pipeline.cli.output import ErrorCode, ExitCode, emit, emit_error
-from finjuice.pipeline.cli.utils import get_config, warn_on_schema_mismatch
+from finjuice.pipeline.cli.pipeline_failure import FullPipelineError
+from finjuice.pipeline.cli.utils import get_config, get_mutation_facade, warn_on_schema_mismatch
 from finjuice.pipeline.constants import SCHEMA_VERSION
 from finjuice.pipeline.metadata import write_schema_version
+from finjuice.pipeline.storage.authority import RepositoryAuthority
+from finjuice.pipeline.storage.sqlite.errors import (
+    MutationConflictError,
+    MutationValidationError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -77,10 +85,7 @@ def _compute_full_pipeline_result(
 
             if step_name == "tag":
                 if step_result.get("skipped"):
-                    output.warning("   ⚠️  건너뜀: rules.yaml 파일 없음")
-                    output.info(
-                        f"   'finjuice init' 실행하여 {config.data_dir / 'rules.yaml'} 생성"
-                    )
+                    _render_missing_rules(step_result, config)
                 else:
                     output.info(
                         f"   ✓ tag: {step_result['tagged']}건 태깅, "
@@ -97,7 +102,7 @@ def _compute_full_pipeline_result(
                 return
 
             if step_name == "export":
-                output.info("   ✓ export: master + reports 생성")
+                _render_export_step(step_result)
 
         return run_full_pipeline_orchestrator(
             ctx,
@@ -109,6 +114,21 @@ def _compute_full_pipeline_result(
                 on_step_complete=_on_step_complete,
             ),
         )
+
+
+def _render_export_step(step_result: dict[str, Any]) -> None:
+    if step_result.get("manifest_path"):
+        output.info(f"   ✓ export: {len(step_result['output_files'])}개 산출물 생성")
+    else:
+        output.info("   ✓ export: master + reports 생성")
+
+
+def _render_missing_rules(result: dict[str, Any], config: Any) -> None:
+    if result.get("authority") == "repository":
+        output.warning("   ⚠️  건너뜀: SQLite 정본에 규칙이 없음")
+        return
+    output.warning("   ⚠️  건너뜀: rules.yaml 파일 없음")
+    output.info(f"   'finjuice init' 실행하여 {config.data_dir / 'rules.yaml'} 생성")
 
 
 def _render_full_pipeline_result(result: dict[str, Any], config: Any) -> None:
@@ -123,8 +143,14 @@ def _render_full_pipeline_result(result: dict[str, Any], config: Any) -> None:
     output.info(f"   새 거래: {ingest_summary['new_transactions']}건 처리됨")
     output.info(f"   태깅: {tag_result.get('tagged', 0)}건")
     output.info(f"   이체: {transfer_result['pairs_found']}개 쌍 감지")
-    output.info(f"   리포트: {REPORTS_COUNT}개 파일 생성")
-    output.success(f"📁 결과 확인: {config.data_dir / 'exports'}")
+    export = result["steps"].get("export", {})
+    if export.get("manifest_path"):
+        output.info(f"   산출물: {len(export['output_files'])}개 파일 생성")
+        output.success(f"📁 결과 확인: {Path(export['manifest_path']).parent}")
+        output.info(f"   Manifest: {export['manifest_path']}")
+    else:
+        output.info(f"   리포트: {REPORTS_COUNT}개 파일 생성")
+        output.success(f"📁 결과 확인: {config.data_dir / 'exports'}")
 
 
 def run_full_pipeline_command(
@@ -138,7 +164,10 @@ def run_full_pipeline_command(
     configure_cli_export_result_runtime()
 
     try:
-        warn_on_schema_mismatch(config.data_dir)
+        authority = get_mutation_facade(ctx, config).dispatch().authority
+        repository_active = isinstance(authority, RepositoryAuthority)
+        if not repository_active:
+            warn_on_schema_mismatch(config.data_dir)
 
         if not json_output:
             output.section("전체 파이프라인")
@@ -149,7 +178,8 @@ def run_full_pipeline_command(
             json_output,
             command_name=command_name,
         )
-        write_schema_version(config.data_dir, SCHEMA_VERSION)
+        if not repository_active:
+            write_schema_version(config.data_dir, SCHEMA_VERSION)
         emit(
             result,
             json_output,
@@ -159,6 +189,31 @@ def run_full_pipeline_command(
 
     except typer.Exit:
         raise
+    except MutationValidationError as exc:
+        emit_error(
+            str(exc),
+            error_code=ErrorCode.INVALID_ARGS,
+            exit_code=ExitCode.USAGE_ERROR,
+            json_output=json_output,
+            command=command_name,
+        )
+    except MutationConflictError as exc:
+        emit_error(
+            str(exc),
+            error_code=ErrorCode.VALIDATION_FAILED,
+            exit_code=ExitCode.VALIDATION_ERROR,
+            json_output=json_output,
+            command=command_name,
+        )
+    except FullPipelineError as exc:
+        emit_error(
+            str(exc),
+            error_code=exc.error_code,
+            exit_code=exc.exit_code,
+            json_output=json_output,
+            command=command_name,
+            meta_extras=exc.metadata(),
+        )
     except KeyboardInterrupt:
         emit_error(
             "사용자가 파이프라인을 취소했습니다.",
@@ -177,6 +232,7 @@ def run_full_pipeline_command(
         )
 
 
+@with_mutation_options
 def refresh_command(
     ctx: typer.Context,
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),

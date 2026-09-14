@@ -60,7 +60,11 @@ template_app = typer.Typer(
 
 def _sqlite_aware_analytics(*args: Any, **kwargs: Any) -> DuckDBAnalytics:
     """Construct DuckDB analytics, injecting the SQLite frame when located."""
-    kwargs.setdefault("source_frame", configured_source_frame())
+    if "source_frame" not in kwargs:
+        data_dir = args[0] if args else kwargs.get("data_dir")
+        frame = configured_source_frame(data_dir, kwargs.get("evidence_provider"))
+        if frame is not None:
+            kwargs["source_frame"] = frame
     if kwargs.get("source_frame") is not None:
         kwargs.setdefault("require_transactions", False)
     return DuckDBAnalytics(*args, **kwargs)
@@ -279,7 +283,7 @@ def run_template(
         )
     except Exception as e:  # intended catch-all for CLI robustness
         _log_template_failure(options, audit_state, error_type=type(e).__name__)
-        logger.error(f"Template execution failed: {e}", exc_info=True)
+        logger.error("Template execution failed (%s)", type(e).__name__)
         cli_output.emit_error(
             f"Template execution failed: {e}",
             error_code=ErrorCode.QUERY_ERROR,

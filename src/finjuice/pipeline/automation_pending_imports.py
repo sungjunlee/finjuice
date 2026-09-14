@@ -23,17 +23,17 @@ SignalStatus = Literal["present", "clear", "unavailable"]
 class PendingImportFile:
     """Preview summary for one actionable file in imports/."""
 
-    source_file: str
+    source_file: str | None
     estimated_new_rows: int
     estimated_new_asset_rows: int
-    validation_skips: int
+    validation_skips: int | None
 
 
 @dataclass(frozen=True)
 class PendingImportFailure:
     """File that could not be previewed cleanly."""
 
-    source_file: str
+    source_file: str | None
     error: str
 
 

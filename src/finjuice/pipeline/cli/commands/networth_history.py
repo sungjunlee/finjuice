@@ -15,15 +15,18 @@ from typing import Any
 import typer
 
 from finjuice.pipeline.asset_config import AssetsConfig, load_assets_config
+from finjuice.pipeline.cli.commands.assets_reads import load_portfolio_display
 from finjuice.pipeline.cli.commands.networth_errors import _handle_networth_exception
 from finjuice.pipeline.cli.commands.networth_payload import _emit_networth_json
 from finjuice.pipeline.cli.commands.networth_rendering import _render_history
+from finjuice.pipeline.cli.output import info
 from finjuice.pipeline.cli.utils import get_config
 from finjuice.pipeline.networth import (
     list_history_snapshots,
     merge_asset_sources,
     snapshot_assets_from_selection,
 )
+from finjuice.pipeline.portfolio_history import build_repository_history
 
 logger = logging.getLogger(__name__)
 
@@ -67,12 +70,15 @@ def _run_history_command(
     command = "networth history"
     try:
         config = get_config(ctx)
-        assets_config = load_assets_config(config.assets_file, allow_missing_file=True)
-        rows = _build_history_rows(
-            config.data_dir / "assets" / "snapshots",
-            assets_config,
-            months=months,
-        )
+        display = load_portfolio_display(ctx, config.data_dir)
+        metadata: dict[str, object] | None = None
+        if display is None:
+            assets_config = load_assets_config(config.assets_file, allow_missing_file=True)
+            rows = _build_history_rows(
+                config.data_dir / "assets" / "snapshots", assets_config, months=months
+            )
+        else:
+            rows, metadata = build_repository_history(display, months=months)
         as_of = _history_as_of(rows)
         payload = {"history": rows}
         if json_output:
@@ -81,11 +87,18 @@ def _run_history_command(
                 command=command,
                 as_of=as_of,
                 filters_applied=0,
+                extras=metadata,
             )
             return
+        if metadata is not None:
+            info(
+                f"Repository revision {metadata['dataset_revision']} "
+                f"({metadata['dataset_generation']}); policy {metadata['calculation_policy']}; "
+                f"as of {as_of or 'undated'}"
+            )
         _render_history(rows)
     except typer.Exit:
         raise
     except Exception as exc:  # intended catch-all for CLI robustness
-        logger.error("Failed to compute net worth history: %s", exc, exc_info=True)
+        logger.error("Failed to compute net worth history (%s)", type(exc).__name__)
         _handle_networth_exception(exc, json_output=json_output, command=command)

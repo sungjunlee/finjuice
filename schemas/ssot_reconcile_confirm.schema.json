@@ -1,0 +1,35 @@
+{
+  "$id": "ssot_reconcile_confirm.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "allocation_id": {
+      "type": "string"
+    },
+    "currency": {
+      "type": "string"
+    },
+    "replayed": {
+      "type": "boolean"
+    },
+    "residual": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "allocation_id",
+    "status",
+    "residual",
+    "currency",
+    "replayed"
+  ],
+  "title": "ssot reconcile confirm output",
+  "type": "object"
+}

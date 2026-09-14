@@ -1,0 +1,47 @@
+{
+  "$id": "ssot_backup_status.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "byte_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "complete": {
+      "type": "boolean"
+    },
+    "file_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "manifest_digest": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "reason": {
+      "type": "string"
+    },
+    "source_generation": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "_meta",
+    "byte_count",
+    "file_count",
+    "complete",
+    "reason",
+    "manifest_digest",
+    "source_generation"
+  ],
+  "title": "ssot backup status --json output",
+  "type": "object"
+}

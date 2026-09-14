@@ -105,6 +105,13 @@ def _check_configuration(config: Config) -> list[CheckResult]:
             )
         )
 
+    results.extend(_check_configuration_environment())
+    return results
+
+
+def _check_configuration_environment() -> list[CheckResult]:
+    """Observe runtime environment independently of configuration authority."""
+    results = []
     # Check environment variables
     env_var = os.getenv("FINJUICE_DATA_DIR")
     if env_var:

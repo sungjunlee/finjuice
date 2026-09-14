@@ -179,11 +179,227 @@
     {
       "test_id": "B608",
       "filename": "src/finjuice/pipeline/tagging/suggestion_queries.py",
-      "function": "get_suggestion_coverage_stats",
+      "function": "coverage_stats_from_connection",
       "issue_severity": "MEDIUM",
       "issue_confidence": "LOW",
       "test_name": "hardcoded_sql_expressions",
-      "rationale": "DuckDB coverage query assembles only static SQL fragments and internal transfer predicates; no user input is concatenated; see src/finjuice/pipeline/tagging/suggestions.py:get_suggestion_coverage_stats."
+      "rationale": "Unchanged coverage SQL moved to a caller-owned connection helper on 2026-09-14. Only static SQL and internal transfer predicates are assembled; file_id remains a parameter placeholder. Re-review if SQL input boundaries change."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/analytics/duckdb_layer.py",
+      "function": "DuckDBAnalytics.read_partitions",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Additional repository SELECT quotes every requested column with quote_duckdb_identifier and uses the fixed transactions_raw relation; no caller SQL fragment is interpolated. Reviewed 2026-09-13. Re-review if these identifier/value boundaries change; remove this entry when the dynamic expression or finding is removed."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/analytics/transaction_frame_registration.py",
+      "function": "register_transaction_frame",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Unchanged projection moved to detached-frame registration on 2026-09-14: exactly * or * REPLACE (CAST(date AS DATE) AS date), selected by an internal boolean. Arrow relation name is fixed. Re-review if identifier/value boundaries change."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/cli/commands/explain_reads.py",
+      "function": "_search",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "WHERE concatenates only fixed ILIKE ? and optional date = ? clauses; query and date values are passed separately to execute as bound parameters. Reviewed 2026-09-13. Re-review if these identifier/value boundaries change; remove this entry when the dynamic expression or finding is removed."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/cli/commands/query.py",
+      "function": "_filter_prefix",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "The report-filter builder emits a fixed predicate structure and escapes every pattern/category/date through quote_duckdb_string_literal; it never accepts a raw SQL fragment. Reviewed 2026-09-13. Re-review if these identifier/value boundaries change; remove this entry when the dynamic expression or finding is removed."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/portfolio_reads.py",
+      "function": "_rows",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "The table identifier must belong to the module-level fixed _TABLES allowlist before interpolation; SELECT and ORDER BY are constants. Reviewed 2026-09-13. Re-review if these identifier/value boundaries change; remove this entry when the dynamic expression or finding is removed."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/portfolio_reads.py",
+      "function": "_selected",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Table and column identifiers are checked against fixed allowlists; placeholder text contains only question marks and commas, and all selected IDs are bound separately. Reviewed 2026-09-13. Re-review if these identifier/value boundaries change; remove this entry when the dynamic expression or finding is removed."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/repository.py",
+      "function": "<module>",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "The schema-v5 SELECT map is built only from the source-defined LEGACY_OVERVIEW_TABLES tuple; public reads select an existing map key rather than interpolate a caller table name. Reviewed 2026-09-13. Re-review if these identifier/value boundaries change; remove this entry when the dynamic expression or finding is removed."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/schema_v5.py",
+      "function": "_immutable_guards",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Trigger SQL uses only source-defined LEGACY_OVERVIEW_TABLES, fixed UPDATE/DELETE operations, and fixed conflict predicates; no runtime data enters the DDL. Reviewed 2026-09-13. Re-review if these identifier/value boundaries change; remove this entry when the dynamic expression or finding is removed."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/schema_v5.py",
+      "function": "validate_v5_invariants",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "SELECT identifiers come only from the source-defined five-entry _DETAIL_TABLES mapping; no caller-provided identifier or value is interpolated. Reviewed 2026-09-13. Re-review if these identifier/value boundaries change; remove this entry when the dynamic expression or finding is removed."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/close/canonical.py",
+      "function": "_insert",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Table names are checked against fixed schema TABLE_KEYS before execution; record column names must exist in pragma_table_info queried with a bound table parameter. All record values use placeholders."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/close/canonical.py",
+      "function": "_rows",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Table names are rejected unless present in the fixed schema TABLE_KEYS map; ORDER BY columns come from that same map. No supplied values are interpolated."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/reconcile/canonical.py",
+      "function": "_insert",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Table names are checked against fixed schema TABLE_KEYS before execution; record column names must exist in pragma_table_info queried with a bound table parameter. All record values use placeholders."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/reconcile/canonical.py",
+      "function": "_rows",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Table names are rejected unless present in the fixed schema TABLE_KEYS map; ORDER BY columns come from that same map. No supplied values are interpolated."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/reconcile/canonical.py",
+      "function": "confirm_allocation",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Table and key identifiers come only from two literal internal tuples. Evidence/payment IDs are bound placeholders."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/asset_meanings.py",
+      "function": "rows",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "A closed literal allowlist rejects unsupported table names before interpolation; no external value becomes SQL."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/backup_coverage.py",
+      "function": "_domain_facts",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Tables and ordering keys are enumerated exclusively from schema_v8/schema_v9 TABLE_KEYS constants. Allocation IDs use placeholders."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/intake_lifecycle.py",
+      "function": "_current_head",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Operation indexes a closed literal map of table/column identifiers. Optional confirmation filter is a fixed literal; all external assertion IDs use placeholders."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/repository.py",
+      "function": "_read_table_sql",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Table names are enumerated from code-owned versioned schema TABLE_KEYS constants after supported-version validation."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/schema_v8.py",
+      "function": "apply_schema_v8",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Migration trigger identifiers and predicates are generated solely from schema-owned TABLE_KEYS and fixed UPDATE/DELETE actions; no request inputs."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/schema_v9.py",
+      "function": "apply_schema_v9",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Migration trigger identifiers and predicates are generated solely from schema-owned TABLE_KEYS and fixed UPDATE/DELETE actions; no request inputs."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/backup_coverage.py",
+      "function": "_domain_facts",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Tables and ordering keys are enumerated exclusively from schema_v8/schema_v9 TABLE_KEYS constants. Allocation IDs use placeholders."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/intake_lifecycle.py",
+      "function": "_current_head",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Operation indexes a closed literal map of table/column identifiers. Optional confirmation filter is a fixed literal; all external assertion IDs use placeholders."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/intake_lifecycle.py",
+      "function": "_current_head",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Operation indexes a closed literal map of table/column identifiers. Optional confirmation filter is a fixed literal; all external assertion IDs use placeholders."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/repository.py",
+      "function": "_read_table_sql",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Table names are enumerated from code-owned versioned schema TABLE_KEYS constants after supported-version validation."
     }
   ]
 }

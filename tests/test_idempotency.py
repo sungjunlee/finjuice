@@ -278,7 +278,11 @@ def test_tagging_idempotency(temp_csv_base_dir, sample_rules_file, tmp_path):
         }
     ]
     df = pl.DataFrame(transactions)
-    csv_partition.append_transactions(temp_csv_base_dir, df, deduplicate=False)
+    csv_partition.append_transactions(
+        df,
+        deduplicate=False,
+        authority_data_dir=temp_csv_base_dir.parent,
+    )
 
     # Act - Tag run 1
     run_tagging(temp_csv_base_dir, sample_rules_file)
@@ -332,7 +336,11 @@ def test_tagging_rule_change_idempotency(temp_csv_base_dir, tmp_path):
         }
     ]
     df = pl.DataFrame(transactions)
-    csv_partition.append_transactions(temp_csv_base_dir, df, deduplicate=False)
+    csv_partition.append_transactions(
+        df,
+        deduplicate=False,
+        authority_data_dir=temp_csv_base_dir.parent,
+    )
 
     # Create rules version 1
     rules1 = tmp_path / "rules1.yaml"
@@ -445,7 +453,11 @@ def test_tagging_preserves_manual_category_override_and_binary_confidence(
         },
     ]
     df = pl.DataFrame(transactions)
-    csv_partition.append_transactions(temp_csv_base_dir, df, deduplicate=False)
+    csv_partition.append_transactions(
+        df,
+        deduplicate=False,
+        authority_data_dir=temp_csv_base_dir.parent,
+    )
 
     rules_file = tmp_path / "rules.yaml"
     rules_file.write_text(
@@ -538,7 +550,11 @@ def test_transfer_detection_idempotency(temp_csv_base_dir):
         },
     ]
     df = pl.DataFrame(transactions)
-    csv_partition.append_transactions(temp_csv_base_dir, df, deduplicate=False)
+    csv_partition.append_transactions(
+        df,
+        deduplicate=False,
+        authority_data_dir=temp_csv_base_dir.parent,
+    )
 
     # Act - Run detection 1
     summary1 = run_transfer_detection(temp_csv_base_dir)
@@ -602,7 +618,11 @@ def test_transfer_detection_incremental_idempotency(temp_csv_base_dir):
         },
     ]
     df1 = pl.DataFrame(transactions1)
-    csv_partition.append_transactions(temp_csv_base_dir, df1, deduplicate=False)
+    csv_partition.append_transactions(
+        df1,
+        deduplicate=False,
+        authority_data_dir=temp_csv_base_dir.parent,
+    )
 
     # Act - Detect first pair
     run_transfer_detection(temp_csv_base_dir)
@@ -650,7 +670,11 @@ def test_transfer_detection_incremental_idempotency(temp_csv_base_dir):
         },
     ]
     df2 = pl.DataFrame(transactions2)
-    csv_partition.append_transactions(temp_csv_base_dir, df2, deduplicate=False)
+    csv_partition.append_transactions(
+        df2,
+        deduplicate=False,
+        authority_data_dir=temp_csv_base_dir.parent,
+    )
 
     # Act - Detect again (should pair second transfer)
     run_transfer_detection(temp_csv_base_dir)
@@ -676,7 +700,11 @@ def test_export_idempotency(temp_csv_base_dir, sample_transactions, tmp_path):
     """Test that exporting twice produces identical files."""
     # Arrange - Insert sample data
     df = pl.DataFrame(sample_transactions)
-    csv_partition.append_transactions(temp_csv_base_dir, df, deduplicate=False)
+    csv_partition.append_transactions(
+        df,
+        deduplicate=False,
+        authority_data_dir=temp_csv_base_dir.parent,
+    )
 
     # Act - Export 1
     output1 = tmp_path / "master1.xlsx"

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import polars as pl
+
 from finjuice.pipeline.checkup.models import (
     DEFAULT_LARGE_RECURRING_OBLIGATION_THRESHOLD,
     ObligationConfirmationSummary,
@@ -9,7 +11,7 @@ from finjuice.pipeline.checkup.models import (
 from finjuice.pipeline.checkup.partitions import read_all_partitions
 from finjuice.pipeline.checkup.recurring import _detect_large_recurring_outflow_candidates
 from finjuice.pipeline.config import Config
-from finjuice.pipeline.goals import known_obligation_labels, load_goals_file
+from finjuice.pipeline.goals import GoalsLoadResult, known_obligation_labels, load_goals_file
 
 
 def collect_obligation_confirmation(
@@ -19,10 +21,25 @@ def collect_obligation_confirmation(
 ) -> ObligationConfirmationSummary:
     """Collect high-level recurring outflow candidates without raw row details."""
     goals_result = load_goals_file(config.goals_file)
+    source_df = read_all_partitions(config.csv_base_dir)
+    return build_obligation_confirmation(
+        source_df,
+        goals_result,
+        threshold_monthly_krw=threshold_monthly_krw,
+    )
+
+
+def build_obligation_confirmation(
+    frame: pl.DataFrame | None,
+    goals_result: GoalsLoadResult,
+    *,
+    threshold_monthly_krw: int = DEFAULT_LARGE_RECURRING_OBLIGATION_THRESHOLD,
+) -> ObligationConfirmationSummary:
+    """Summarize recurring outflows from detached transactions and goals."""
     known_labels = known_obligation_labels(goals_result.document)
     known_count = len(goals_result.document.known_obligations or []) if goals_result.document else 0
 
-    source_df = read_all_partitions(config.csv_base_dir)
+    source_df = frame
     if source_df is None or source_df.is_empty():
         return ObligationConfirmationSummary(
             status="empty",

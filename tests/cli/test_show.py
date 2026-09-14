@@ -40,7 +40,12 @@ def _transaction(
 
 def _write_partition(data_dir: Path, year: int, month: int, rows: list[dict[str, object]]) -> None:
     """Write one transaction partition for a CLI test."""
-    write_month(data_dir / "transactions", pl.DataFrame(rows), year, month)
+    write_month(
+        pl.DataFrame(rows),
+        year,
+        month,
+        authority_data_dir=data_dir,
+    )
 
 
 @pytest.fixture

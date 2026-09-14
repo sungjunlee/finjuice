@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import polars as pl
+import pytest
 
 from finjuice.pipeline.ingest.adapter import (
     JSON_STATEMENT_PARSER_VERSION,
@@ -24,6 +25,8 @@ from finjuice.pipeline.ingest.adapter import (
 )
 from finjuice.pipeline.ingest.deduplication import calculate_row_hash
 from finjuice.pipeline.storage import csv_partition
+from finjuice.pipeline.storage.authority import AuthorityEvidenceUnavailableError, AuthorityPaths
+from finjuice.pipeline.storage.sqlite.errors import RepositoryPathError
 
 INGEST_DIR = Path("src/finjuice/pipeline/ingest")
 ADAPTER_MODULE = "finjuice.pipeline.ingest.adapter"
@@ -342,5 +345,65 @@ def _seed_confirmed_row(csv_base_dir: Path, *, notes: str) -> str:
             }
         ]
     )
-    csv_partition.append_transactions(csv_base_dir, frame, deduplicate=True)
+    csv_partition.append_transactions(
+        frame, deduplicate=True, authority_data_dir=csv_base_dir.parent
+    )
     return row_hash
+
+
+@pytest.mark.parametrize("malformed", [False, True])
+def test_activated_authority_refuses_adapter_before_collection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, malformed: bool
+) -> None:
+    """Neither successful collection nor failure reporting may bypass activation."""
+    csv_base_dir = tmp_path / "data" / "transactions"
+    _seed_confirmed_row(csv_base_dir, notes="preserved")
+    source = _write_statement(tmp_path / "imports" / "statement.json", records=[SAMPLE_ROW])
+    if malformed:
+        source.write_text("{", encoding="utf-8")
+    activation = AuthorityPaths.for_data_dir(csv_base_dir.parent).activation
+    activation.write_text("{}", encoding="utf-8")
+    before = {path: path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()}
+    adapter = importlib.import_module(ADAPTER_MODULE)
+
+    def unexpected_parse(_path: Path) -> None:
+        pytest.fail("An activated legacy adapter must reject before parsing its input.")
+
+    monkeypatch.setattr(adapter, "parse_json_statement", unexpected_parse)
+    with pytest.raises(AuthorityEvidenceUnavailableError):
+        ingest_json_statement(source, csv_base_dir)
+
+    after = {path: path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()}
+    assert after == before
+
+
+@pytest.mark.parametrize("target_kind", ["other", "dotdot", "leaf_link", "parent_link"])
+def test_adapter_refuses_redirected_or_nontransaction_roots(
+    tmp_path: Path, target_kind: str
+) -> None:
+    """A target cannot redirect the CSV root away from its explicit authority."""
+    data_dir = tmp_path / "data"
+    transaction_root = data_dir / "transactions"
+    transaction_root.mkdir(parents=True)
+    source = _write_statement(tmp_path / "statement.json", records=[SAMPLE_ROW])
+    if target_kind == "other":
+        target = data_dir / "other"
+    elif target_kind == "dotdot":
+        target = data_dir / "other" / ".." / "transactions"
+    elif target_kind == "leaf_link":
+        alias = tmp_path / "alias"
+        alias.mkdir()
+        target = alias / "transactions"
+        target.symlink_to(transaction_root, target_is_directory=True)
+    else:
+        alias = tmp_path / "alias"
+        alias.symlink_to(data_dir, target_is_directory=True)
+        target = alias / "transactions"
+    before = {path: path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()}
+
+    with pytest.raises((ValueError, RepositoryPathError)):
+        ingest_json_statement(source, target)
+
+    assert {path: path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()} == before
+    assert not (data_dir / ".finjuice").exists()
+    assert not (data_dir / "metadata").exists()

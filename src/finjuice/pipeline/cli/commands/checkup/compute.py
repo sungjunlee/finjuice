@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from finjuice.pipeline.checkup import CheckupBundle
 from finjuice.pipeline.config import Config
+from finjuice.pipeline.storage.authority import ActivationEvidenceProvider
 
 # CLI boundary: compute collects facts, detector decides diagnoses, rendering
 # serializes payloads. The Python bundle engine stays in pipeline.checkup.
@@ -19,6 +20,7 @@ class CheckupOptions:
     config: Config
     stale_after_days: int = 35
     fast: bool = False
+    evidence_provider: ActivationEvidenceProvider | None = None
 
 
 @dataclass(frozen=True)
@@ -46,5 +48,10 @@ def collect_checkup_facts(
             options.config,
             stale_after_days=options.stale_after_days,
             fast=options.fast,
+            **(
+                {"evidence_provider": options.evidence_provider}
+                if options.evidence_provider is not None
+                else {}
+            ),
         )
     )

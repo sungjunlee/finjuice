@@ -31,7 +31,6 @@ from finjuice.pipeline.storage.sqlite import (
     ResourceRecord,
     SourceOccurrenceRecord,
     TransactionRecord,
-    initialize_repository,
     inspect_repository,
     migration_entity_id,
     new_entity_id,
@@ -171,10 +170,14 @@ def test_repository_metadata_allows_forward_progress_but_rejects_identity_rewrit
     try:
         connection.execute("UPDATE repository_meta SET dataset_revision = 2 WHERE singleton = 1")
         connection.commit()
-        connection.execute("UPDATE repository_meta SET schema_version = 2 WHERE singleton = 1")
+        next_schema_version = sqlite_schema.SQLITE_SCHEMA_VERSION + 1
+        connection.execute(
+            "UPDATE repository_meta SET schema_version = ? WHERE singleton = 1",
+            (next_schema_version,),
+        )
         assert connection.execute(
             "SELECT schema_version FROM repository_meta WHERE singleton = 1"
-        ).fetchone() == (2,)
+        ).fetchone() == (next_schema_version,)
         connection.rollback()
 
         guarded_statements = (
@@ -241,11 +244,16 @@ def test_schema_migration_ledger_is_immutable_and_must_match_current_version(
         validate_repository(paths.database, scratch_root=tmp_path / "scratch")
 
 
-def test_source_binding_query_reads_every_observation_backed_typed_table(
+@pytest.mark.parametrize("schema_version", [4, 5])
+def test_source_validation_reads_every_observation_backed_typed_table(
     tmp_path: Path,
+    schema_version: int,
 ) -> None:
     paths = GenerationPaths(tmp_path / "source-binding-query-coverage")
-    initialize_repository(paths, new_entity_id())
+    with RepositoryBuilder(
+        paths, new_entity_id(), expected_schema_version=schema_version
+    ) as builder:
+        builder.finalize()
     required_columns = {"observation_id", "provenance_id"}
     connection = sqlite3.connect(paths.database)
     try:
@@ -286,7 +294,9 @@ def test_source_binding_query_reads_every_observation_backed_typed_table(
 
         connection.set_authorizer(track_reads)
         try:
-            connection.execute(sqlite_schema._SOURCE_BINDING_CHECKS[0][0]).fetchall()
+            sqlite_schema._validate_application_invariants(
+                connection, schema_version=schema_version
+            )
         finally:
             connection.set_authorizer(None)
     finally:
@@ -1123,10 +1133,16 @@ def test_private_scratch_override_connects_all_read_and_upgrade_apis(tmp_path: P
         builder.finalize()
     scratch = tmp_path / "private-scratch"
 
-    assert inspect_repository(paths.database, scratch_root=scratch).schema_version == 1
-    assert validate_repository(paths.database, scratch_root=scratch).schema_version == 1
+    assert (
+        inspect_repository(paths.database, scratch_root=scratch).schema_version
+        == sqlite_schema.SQLITE_SCHEMA_VERSION
+    )
+    assert (
+        validate_repository(paths.database, scratch_root=scratch).schema_version
+        == sqlite_schema.SQLITE_SCHEMA_VERSION
+    )
     with RepositoryReader(paths.database, scratch_root=scratch) as reader:
-        assert reader.info.schema_version == 1
+        assert reader.info.schema_version == sqlite_schema.SQLITE_SCHEMA_VERSION
     destination = GenerationPaths(tmp_path / "scratch-destination")
     upgrade_repository(paths.database, destination, scratch_root=scratch)
 
@@ -1168,6 +1184,7 @@ def test_scratch_root_rejects_symlink_and_non_private_permissions(tmp_path: Path
 
     permissive = tmp_path / "permissive"
     permissive.mkdir(mode=0o755)
+    permissive.chmod(0o755)
     with pytest.raises(RepositorySnapshotError, match="private"):
         inspect_repository(paths.database, scratch_root=permissive)
 

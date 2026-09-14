@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 from pathlib import Path
 from typing import Any
 
 from finjuice.pipeline.close.errors import CloseNotFoundError, ClosePathError
 from finjuice.pipeline.close.models import CloseEvent, CloseRevisionRecord
+from finjuice.pipeline.storage.atomic_files import replace_with_owned_temp
 
 LEDGER_FILENAME = "close-ledger.json"
 LEDGER_SCHEMA_VERSION = 1
@@ -150,9 +150,4 @@ class CloseStore:
 
 
 def _atomic_write(path: Path, payload: bytes) -> None:
-    staged = path.with_name(f".{path.name}.tmp")
-    with open(staged, "wb") as handle:
-        handle.write(payload)
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(staged, path)
+    replace_with_owned_temp(path, payload)

@@ -16,6 +16,7 @@ from finjuice.pipeline.constants import (
     SUBPROCESS_TIMEOUT_MEDIUM,
     SUBPROCESS_TIMEOUT_SHORT,
 )
+from finjuice.pipeline.storage.authority import legacy_write_lease
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,16 @@ def initialize_data_directory(
         PermissionError: If cannot create directories
         Exception: For other initialization errors
     """
+    with legacy_write_lease(config.data_dir):
+        return _initialize_data_directory_unleased(config, with_git, with_agents)
+
+
+def _initialize_data_directory_unleased(
+    config: Config,
+    with_git: bool,
+    with_agents: bool,
+) -> dict[str, Any]:
+    """Create the legacy data tree while the caller holds its authority lease."""
     created_dirs: list[str] = []
     copied_files: list[str] = []
     skipped_files: list[str] = []

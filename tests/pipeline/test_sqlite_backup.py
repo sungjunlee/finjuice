@@ -13,7 +13,6 @@ from finjuice.pipeline.storage.sqlite import GenerationPaths, RepositoryBuilder
 from finjuice.pipeline.storage.sqlite import backup as backup_module
 from finjuice.pipeline.storage.sqlite.backup import (
     DATABASE_BASENAME,
-    MANIFEST_FILENAME,
     BackupManifest,
     backup_status,
     create_backup,
@@ -90,8 +89,8 @@ def test_transfer_failure_reports_failure_and_keeps_previous_backup(
     # Arrange
     generation = _build_generation(tmp_path / "generation")
     backup_root = tmp_path / "backup"
-    create_backup(generation.database, backup_root)
-    previous_manifest = (backup_root / MANIFEST_FILENAME).read_bytes()
+    created = create_backup(generation.database, backup_root)
+    previous_manifest = created.manifest_path.read_bytes()
     previous = read_backup_manifest(backup_root)
 
     def _fail_transfer(*args: Any, **kwargs: Any) -> None:
@@ -104,7 +103,7 @@ def test_transfer_failure_reports_failure_and_keeps_previous_backup(
         create_backup(generation.database, backup_root)
 
     # Assert
-    assert (backup_root / MANIFEST_FILENAME).read_bytes() == previous_manifest
+    assert created.manifest_path.read_bytes() == previous_manifest
     status = backup_status(backup_root)
     assert status.complete
     assert status.manifest is not None
@@ -129,8 +128,8 @@ def test_truncated_manifest_reports_not_complete(tmp_path: Path) -> None:
     # Arrange
     generation = _build_generation(tmp_path / "generation")
     backup_root = tmp_path / "backup"
-    create_backup(generation.database, backup_root)
-    manifest_path = backup_root / MANIFEST_FILENAME
+    created = create_backup(generation.database, backup_root)
+    manifest_path = created.manifest_path
     manifest_path.write_bytes(manifest_path.read_bytes()[:20])
 
     # Act
@@ -145,8 +144,8 @@ def test_truncated_snapshot_reports_not_complete(tmp_path: Path) -> None:
     # Arrange
     generation = _build_generation(tmp_path / "generation")
     backup_root = tmp_path / "backup"
-    create_backup(generation.database, backup_root)
-    snapshot = backup_root / DATABASE_BASENAME
+    created = create_backup(generation.database, backup_root)
+    snapshot = created.manifest_path.parent / DATABASE_BASENAME
     original = snapshot.read_bytes()
     snapshot.write_bytes(original[: len(original) // 2])
 
@@ -162,8 +161,8 @@ def test_removed_payload_file_reports_not_complete(tmp_path: Path) -> None:
     # Arrange
     generation = _build_generation(tmp_path / "generation")
     backup_root = tmp_path / "backup"
-    create_backup(generation.database, backup_root)
-    removed = backup_root / _object_entry(read_backup_manifest(backup_root))
+    created = create_backup(generation.database, backup_root)
+    removed = created.manifest_path.parent / _object_entry(read_backup_manifest(backup_root))
     removed.unlink()
 
     # Act
@@ -174,12 +173,12 @@ def test_removed_payload_file_reports_not_complete(tmp_path: Path) -> None:
     assert status.reason == "payload_missing"
 
 
-def test_orphan_payload_is_pruned_by_create_and_restore_succeeds(tmp_path: Path) -> None:
+def test_old_attempt_orphan_is_retained_while_new_attempt_restores(tmp_path: Path) -> None:
     # Arrange
     generation = _build_generation(tmp_path / "generation")
     backup_root = tmp_path / "backup"
-    create_backup(generation.database, backup_root)
-    orphan = backup_root / "orphan-payload.bin"
+    created = create_backup(generation.database, backup_root)
+    orphan = created.manifest_path.parent / "orphan-payload.bin"
     orphan.write_bytes(b"orphan left behind by an earlier failed backup")
 
     # Act: the poisoned destination refuses a restore until re-backed-up
@@ -189,6 +188,7 @@ def test_orphan_payload_is_pruned_by_create_and_restore_succeeds(tmp_path: Path)
     result = restore_backup(backup_root, tmp_path / "restored")
 
     # Assert
-    assert not orphan.exists()
+    assert orphan.read_bytes() == b"orphan left behind by an earlier failed backup"
+    assert not backup_status(created.manifest_path.parent).complete
     assert result.verified
     assert backup_status(backup_root).complete

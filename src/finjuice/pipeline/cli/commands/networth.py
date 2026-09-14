@@ -137,7 +137,7 @@ def init_command(
     ctx: typer.Context,
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
-    """Create a starter assets.yaml from the built-in template."""
+    """Initialize assets settings; repositories receive an empty configuration."""
     _run_init_command(ctx, json_output=json_output)
 
 
@@ -146,5 +146,5 @@ def validate_command(
     ctx: typer.Context,
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
-    """Validate assets.yaml and report line-numbered errors."""
+    """Validate the selected assets configuration and report issues."""
     _run_validate_command(ctx, json_output=json_output)

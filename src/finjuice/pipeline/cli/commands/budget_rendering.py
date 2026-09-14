@@ -25,8 +25,9 @@ def _render_budget_status(result: dict[str, Any]) -> None:
     console.print(f"[dim]{BUDGET_SPEND_INCLUSION}[/dim]\n")
 
     goals_file = result["goals_file"]
+    goals_label = goals_file["path"] or "Canonical goals"
     if not goals_file["exists"]:
-        console.print(f"[yellow]⚠️  No goals.yaml found at {goals_file['path']}[/yellow]")
+        console.print(f"[yellow]⚠️  No goals.yaml found at {goals_label}[/yellow]")
         console.print("[dim]Start from templates/goals.yaml.example or use budget edit.[/dim]\n")
         return
 
@@ -36,7 +37,7 @@ def _render_budget_status(result: dict[str, Any]) -> None:
     summary_table = Table(show_header=False, box=None, padding=(0, 2))
     summary_table.add_column("Field", style="bold cyan")
     summary_table.add_column("Value")
-    summary_table.add_row("Goals file", goals_file["path"])
+    summary_table.add_row("Goals file", goals_label)
     if goals_file.get("updated"):
         summary_table.add_row("Updated", goals_file["updated"])
     if goals_file.get("notes"):
@@ -85,7 +86,13 @@ def _render_budget_status(result: dict[str, Any]) -> None:
 
 def _render_budget_edit(result: dict[str, Any]) -> None:
     """Render budget-edit confirmation text."""
-    console.print(f"[green]✅ Updated {result['path']}[/green]")
+    if result.get("authority") == "repository":
+        console.print(
+            "[green]✅ Updated active goals config "
+            f"(revision {result['committed_revision']})[/green]"
+        )
+    else:
+        console.print(f"[green]✅ Updated {result['path']}[/green]")
     for change in result["changes"]:
         console.print(
             f"  [cyan]{change['path']}[/cyan]: "
@@ -96,11 +103,12 @@ def _render_budget_edit(result: dict[str, Any]) -> None:
 
 def _render_budget_validate(result: dict[str, Any]) -> None:
     """Render goals.yaml validation results."""
+    source_label = result["path"] or "Canonical goals"
     if not result["_has_errors"]:
-        console.print(f"[green]✅ goals.yaml is valid[/green]\n[dim]{result['path']}[/dim]")
+        console.print(f"[green]✅ goals.yaml is valid[/green]\n[dim]{source_label}[/dim]")
         return
 
-    console.print(f"[red]❌ goals.yaml validation failed[/red]\n[dim]{result['path']}[/dim]")
+    console.print(f"[red]❌ goals.yaml validation failed[/red]\n[dim]{source_label}[/dim]")
     for index, problem in enumerate(result["_problems"], start=1):
         console.print(f"  {index}. {problem.format()}")
 

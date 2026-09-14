@@ -74,6 +74,8 @@ def build_export_plan(
     csv_base_dir: Path,
     format_lower: str,
     period: str | None,
+    *,
+    transaction_count: int | None = None,
 ) -> dict[str, Any]:
     """Build a read-only export manifest for text and JSON dry-run output."""
     from finjuice.pipeline.storage import csv_partition
@@ -81,7 +83,10 @@ def build_export_plan(
     export_dir = data_dir / "exports"
     reports_dir = export_dir / "reports"
     today = datetime.now().strftime("%Y%m%d")
-    transaction_count = len(csv_partition.get_all_transactions(csv_base_dir, columns=["row_hash"]))
+    if transaction_count is None:
+        transaction_count = len(
+            csv_partition.get_all_transactions(csv_base_dir, columns=["row_hash"])
+        )
     output_files: list[dict[str, Any]] = []
     skipped_outputs: list[dict[str, Any]] = []
 

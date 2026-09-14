@@ -31,6 +31,7 @@ from finjuice.pipeline.cli.commands.automation_helpers import (  # noqa: F401
     _compact_automation_run_payload,
     _serialize_automation_run_payload,
 )
+from finjuice.pipeline.cli.commands.automation_repository import try_repository_automation
 from finjuice.pipeline.cli.output import (
     ErrorCode,
     ExitCode,
@@ -156,7 +157,7 @@ def _render_automation_run(result: dict[str, Any]) -> None:
         sample = pending_imports["sample_files"][0]
         details.append(
             "Pending import sample: "
-            f"{sample['source_file']} (+{sample['estimated_new_rows']} tx rows, "
+            f"{sample['source_file'] or 'Unknown file'} (+{sample['estimated_new_rows']} tx rows, "
             f"+{sample['estimated_new_asset_rows']} asset rows)"
         )
     if tagging_pressure["merchant_pressure"]:
@@ -201,6 +202,8 @@ def automation_run_command(
 ) -> None:
     """Run one one-shot automation pass using config-backed thresholds."""
     try:
+        if try_repository_automation(ctx, json_output=json_output, privacy=privacy):
+            return
         result = _build_automation_run_result(ctx)
         output_result = (
             apply_privacy_profile(result, privacy, compact=_compact_automation_run_result)

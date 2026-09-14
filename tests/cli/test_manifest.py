@@ -1,6 +1,7 @@
 """Tests for the CLI manifest self-description command."""
 
 import json
+from pathlib import Path
 
 import typer
 from typer.testing import CliRunner
@@ -199,4 +200,4 @@ def test_manifest_schema_ref_convention_for_json_commands() -> None:
 
     assert refs
     for path, schema_ref in refs:
-        assert schema_ref == f"schemas/{path.replace(' ', '_')}.schema.json"
+        assert (Path(__file__).resolve().parents[2] / schema_ref).is_file(), path

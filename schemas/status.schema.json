@@ -148,7 +148,10 @@
           ]
         },
         "path": {
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [

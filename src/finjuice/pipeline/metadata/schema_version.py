@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Final
 
 from finjuice.pipeline.constants import SCHEMA_VERSION
+from finjuice.pipeline.storage.authority import legacy_write_lease
 from finjuice.pipeline.storage.schema_registry import get_compatible_read_versions
 
 SCHEMA_VERSION_FILENAME: Final = "schema_version"
@@ -35,10 +36,12 @@ def _get_schema_version_path(data_dir: Path) -> Path:
 
 
 def write_schema_version(data_dir: Path, version: int) -> None:
-    """Persist the schema version for a data directory."""
-    schema_version_path = _get_schema_version_path(data_dir)
-    schema_version_path.parent.mkdir(parents=True, exist_ok=True)
-    schema_version_path.write_text(f"{version}\n", encoding="utf-8")
+    """Persist the schema version under the legacy authority fence."""
+    normalized_data_dir = data_dir.expanduser().absolute()
+    with legacy_write_lease(normalized_data_dir):
+        schema_version_path = _get_schema_version_path(normalized_data_dir)
+        schema_version_path.parent.mkdir(parents=True, exist_ok=True)
+        schema_version_path.write_text(f"{version}\n", encoding="utf-8")
 
 
 def read_schema_version(data_dir: Path) -> int | None:

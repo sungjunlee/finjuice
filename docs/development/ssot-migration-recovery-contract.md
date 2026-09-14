@@ -169,9 +169,12 @@ cutover gate.
 The hidden category marker is migrated as follows:
 
 1. retain the original `tags_manual` sequence in legacy payload;
-2. split visible tags from values beginning with
-   `__finjuice_category_override__:`;
-3. reproduce the current selection rule (the last non-empty marker wins);
+2. recognize markers beginning with `__finjuice_category_override__:` after
+   stripping surrounding whitespace, while retaining every non-marker tag in its
+   original spelling, order, and multiplicity in the typed visible sequence;
+3. reproduce the existing legacy category selection: strip full tag strings,
+   ignore empty strings, deduplicate the normalized full strings in first-seen
+   order, then select the last marker with a non-empty stripped suffix;
 4. store the selected value in explicit `category_manual` and store all marker
    occurrences for evidence; and
 5. recompute nothing: persisted `category_final` remains the baseline result.
@@ -197,13 +200,22 @@ currency defaulting, category/rule recalculation, account renaming/merging,
 owner inference, duplicate resolution, or changed totals are semantic changes
 and fail baseline parity.
 
-The additional representation code `hidden_category_sentinel_extracted.v1`
-permits only the typed-field split described above: legacy payload retains the
-entire original sequence, typed `tags_manual` is its ordered visible
-subsequence, and `category_manual` is the last non-empty marker. Parity checks
-all three separately; it never compares a typed visible-tag field directly to
-the legacy encoded CSV string. This is not permission to discard a marker or
-change the effective category.
+The additional representation allowance `hidden_category_sentinel_extracted.v1`
+permits the typed-field split with the entire original sequence retained in
+legacy payload and the original visible subsequence retained in typed
+`tags_manual`. The implemented audit discriminator is the candidate's sealed
+`migration_policy`, not a per-row representation-code column: no per-row
+sentinel extraction code is currently emitted. New adapter policy
+`legacy_preservation.manual_state.v3` applies the normalized legacy selection
+rule above, without normalizing or deduplicating the retained visible
+subsequence. For example, markers A, B, A select B because the repeated full
+marker A was already seen; a whitespace-only suffix never overrides a prior
+category. Previously sealed v1/v2 adapter plans retain their original literal
+marker extraction on replay; verifying such a candidate does not certify
+corrected manual-category parity. A new v3 plan is required for that parity gate.
+Parity checks all three separately; it never compares a typed visible-tag field
+directly to the legacy encoded CSV string. This is not permission to discard a
+marker or change the effective category.
 
 ## 4. Atomic mutation and audit contract
 
@@ -244,6 +256,18 @@ all inventoried writers are stopped, the legacy tree is made unwritable through
 the verified runtime mechanism, and stale installations fail closed. A lock
 file alone is insufficient because old versions may not understand it.
 
+Current-runtime authoritative CSV writers receive the data root explicitly and
+check its activation fence under a coordination lease before filesystem effects
+or early no-op success. Data-root and partition paths must reject directory
+aliases, including Windows junction/reparse paths, so an inactive alias cannot
+write through to an active repository. POSIX writers use shared leases; Windows coordination
+may serialize all leases exclusively. Both thread-local and OS-lock waits are
+bounded. Separate nested leases in the same thread may reuse the held lease,
+while a shared-to-exclusive upgrade is rejected. Cancellation must release local
+and OS resources so later operations remain usable. Platform-specific SQLite
+object-store, activation, and backup acceptance remains a separate gate from
+legacy CSV coordination acceptance.
+
 M1 backup capture is different: it uses only a stopped-writer capture or a
 snapshot taken under stopped writers as defined in section 5.2, then releases
 that temporary control while CSV remains authoritative. It must not turn on
@@ -280,7 +304,7 @@ and POSIX directory file descriptors are not a compatible fallback.
 #435 implements the frozen migration command names and JSON concepts:
 
 ```text
-finjuice ssot migrate plan --manifest <capture-manifest> --json
+finjuice ssot migrate plan --manifest <capture-manifest> --output <new-plan> --json
 finjuice ssot migrate build --plan <plan> --staging <new-path> --json
 finjuice ssot migrate verify --candidate <migration-manifest> --json
 ```
@@ -303,6 +327,18 @@ Migration follows `inventoried -> frozen -> captured -> planned -> built ->
 verified -> activated`. Each transition writes an immutable manifest. Failure
 is terminal for that candidate; retry creates a new attempt linked to it unless
 the operation is explicitly proven resumable.
+
+The implemented build protocol keeps immutable sealed phase records in the
+private sibling `.finjuice-migration-attempts/<attempt-id>/` journal. A linked
+retry requires a different target under the same staging parent and validates
+the retained parent's plan/capture binding and phase chain. It must acquire the
+parent's nonblocking OS lock; stale PID/time/lockfile presence is insufficient.
+Missing terminal evidence may mean an interrupted process or storage failure,
+not success. A lock-free, unpublished parent can be recorded as interrupted in
+the child while preserving its original records. A published candidate must be
+verified through the completed-retry path instead of being treated as failed.
+New migration manifest v2 requires portable parent evidence; legacy manifest v1
+continues to replay its original policy. Raw phase records remain private.
 
 ### 5.2 Capture manifest
 
@@ -500,6 +536,71 @@ Migration may create unknown parties and unconfirmed aliases. It must not infer
 household membership, account ownership, summary/holding inclusion, or semantic
 supersession from names or amounts. Those facts are confirmed by later
 changesets.
+
+### 9.1 Schema v2 assertion and intake boundaries
+
+The #434 schema v2 gate applies these minimal domain constraints before #435:
+
+* Ownership shares reference exact rates with the unit `ownership_share.v1`.
+  A rate in another unit, including an FX rate, is not an ownership share.
+  Complete confirmed ownership totals exactly one; partial ownership retains
+  an explicit unknown remainder. Share validation uses exact arithmetic.
+* Ownership and inclusion/overlap assertions use inclusive calendar-date
+  intervals. Each effective boundary is either canonical `YYYY-MM-DD` or null
+  for an open boundary. Invalid dates, noncanonical spellings, timestamps, and
+  reversed intervals are rejected; no timezone is inferred.
+* Active confirmed ownership intervals must not overlap for one account.
+  A correction explicitly supersedes an assertion for that account. For one
+  ordered entity pair, overlapping active confirmed `excludes` assertions
+  cannot coexist with `includes` or `overlaps`. Explicit supersession permits
+  corrections, while unknown and unconfirmed evidence remains distinct.
+* Intake evidence, receipt occurrences, extraction, interpretation proposal,
+  confirmation, and application have separate identities. Proposal deduplication
+  includes extraction, command scope, policy version, payload digest, expected
+  generation, and expected revision. A stale proposal can be re-proposed against
+  a newer revision without inventing a different extraction or policy version;
+  the new proposal requires its own confirmation.
+* Applying a proposal verifies its confirmation, payload, command identity,
+  generation, and expected revision within the mutation transaction. Invalid
+  relationships roll back state, audit, revision, and the idempotency reservation
+  together. Successful identical retries retain their original result.
+
+### 9.2 Configuration heads and schema evolution
+
+Schema v3 adds canonical rules/goals heads on top of the v2 assertion and intake
+contract. Existing v2 databases must use an explicit v2-to-v3 upgrade; changing
+the v2 DDL in place is insufficient. Fresh creation and upgrade must converge
+on the same validated shape while preserving existing identities, values,
+source references, audit, and mutation receipts. The first #435 preservation
+candidate targets the latest schema that has passed the #434 gate.
+
+Configuration changes preserve the original document bytes and append a
+revision before selecting its canonical head in the same mutation transaction.
+A failed change leaves the old head, state, audit, revision, and idempotency
+reservation unchanged. Equal document bytes are a no-op only when parsed status,
+parser version, and canonical interpretation are also equal. A changed
+interpretation retains a new revision even when the source bytes are unchanged.
+A no-op receipt identifies the existing canonical head, never an uninserted
+revision identifier. The request digest includes the canonical interpretation.
+
+A caller-supplied replay key requires its original generation and revision.
+With an automatically generated key, explicit generation or revision values
+are independent one-shot concurrency preconditions. Repeating a normal command
+uses a new key and domain no-op detection, so A-to-B-to-A remains possible.
+CLI transformations such as rule upsert/removal or budget edits bind their
+stable operation inputs to the request identity. Replay must precede checks
+that depend on the current config, so a successfully removed rule remains
+replayable. Read-transform-write preparation must retain the revision it read,
+or run inside the mutation transaction; capturing a newer revision after
+preparing an older document must never authorize overwriting a concurrent edit.
+Manual transaction changes resolve one stable entity;
+legacy identifiers may be used only when they resolve without ambiguity.
+
+Mutation results must satisfy the same receipt envelope contract before commit
+and during replay. Invalid result/artifact shapes roll back the entire mutation.
+Interpretation proposals use object payloads matching the mutation request
+contract; extraction evidence may retain an array without making it an
+applicable command.
 
 ## 10. Synthetic acceptance scenario matrix
 

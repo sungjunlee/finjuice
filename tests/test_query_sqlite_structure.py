@@ -50,7 +50,8 @@ CLI_ADAPTERS = (
     Path("src/finjuice/pipeline/cli/commands/status/compute.py"),
     Path("src/finjuice/pipeline/cli/commands/status/compute_sqlite.py"),
     Path("src/finjuice/pipeline/cli/commands/template_cmd/__init__.py"),
-    Path("src/finjuice/pipeline/cli/commands/export_cmd.py"),
+    # The CLI delegates source selection after the authority guard to this implementation.
+    Path("src/finjuice/pipeline/export/result.py"),
 )
 
 REPRESENTATIVE_SQL = (
@@ -129,6 +130,8 @@ def test_query_helpers_live_in_dedicated_modules() -> None:
 
 def test_cli_read_adapters_import_query_package_not_storage_read_compat() -> None:
     """Named CLI adapters read through the query package, not storage.read_compat."""
+    export_cli = Path("src/finjuice/pipeline/cli/commands/export_cmd.py").read_text()
+    assert "export_result._compute_export_result" in export_cli
     for path in CLI_ADAPTERS:
         text = path.read_text(encoding="utf-8")
         assert "finjuice.pipeline.query" in text

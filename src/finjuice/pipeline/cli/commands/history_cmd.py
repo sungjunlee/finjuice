@@ -12,6 +12,7 @@ import typer
 from rich.table import Table
 
 from finjuice.pipeline.cli import output
+from finjuice.pipeline.cli.commands.history_repository import try_repository_history
 from finjuice.pipeline.cli.output import _build_meta, console
 from finjuice.pipeline.cli.utils import get_config
 
@@ -64,20 +65,22 @@ def history_command(
 ) -> None:
     """Display import history log.
 
-    Shows all imported files with:
-    - File ID (YYMMDD_N format)
-    - Original filename
-    - Number of rows imported
-    - Archive status
-    - Import timestamp
+    Shows preserved history and verified native import receipts with:
+    - Legacy file ID and original filename when available
+    - Known source-row count and archive status, or Unknown
+    - Original import timestamp
+
+    Canonical JSON also includes source evidence IDs and native import counts.
 
     Examples:
         finjuice history
     """
+    if try_repository_history(ctx, json_output=json_output):
+        return
     config = get_config(ctx)
     entries = _load_history_entries(config)
 
-    # History uses list schema for backward compatibility (not dict)
+    # Preserve the legacy records/count envelope.
     emit_history(entries, json_output)
 
 

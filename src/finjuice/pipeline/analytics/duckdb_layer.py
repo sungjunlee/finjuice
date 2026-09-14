@@ -56,6 +56,7 @@ from finjuice.pipeline.sql_utils import (
     quote_duckdb_identifier,
     quote_duckdb_path_pattern,
 )
+from finjuice.pipeline.storage.authority import ActivationEvidenceProvider
 from finjuice.pipeline.tagging.rules import ReportFilters
 
 DUCKDB_AVAILABLE, duckdb, pl = detect_analytics_dependencies()
@@ -96,13 +97,15 @@ class DuckDBAnalytics(DuckDBTransactionsView):
         ImportError: If duckdb package is not installed
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - preserve frame and authority constructor APIs.
         self,
         data_dir: Path,
         memory_limit: Optional[str] = None,
         report_filters: ReportFilters | None = None,
         require_transactions: bool = True,
         source_frame: Any | None = None,
+        *,
+        evidence_provider: ActivationEvidenceProvider | None = None,
     ) -> None:
         if not DUCKDB_AVAILABLE:
             raise ImportError(DUCKDB_INSTALL_HINT)
@@ -111,6 +114,7 @@ class DuckDBAnalytics(DuckDBTransactionsView):
             memory_limit=memory_limit,
             report_filters=report_filters,
             require_transactions=require_transactions,
+            evidence_provider=evidence_provider,
             source_frame=source_frame,
         )
 
@@ -142,6 +146,19 @@ class DuckDBAnalytics(DuckDBTransactionsView):
             ...     columns=["date", "amount", "merchant_raw"]
             ... )
         """
+        if self.repository_snapshot is not None:
+            if pattern != "*/*/*.csv":
+                raise ValueError(
+                    "Partition-pattern reads are not yet supported for SQLite authority."
+                )
+            projection = (
+                ", ".join(quote_duckdb_identifier(col) for col in columns) if columns else "*"
+            )
+            frame: "pl.DataFrame" = self.conn.execute(
+                f"SELECT {projection} FROM transactions_raw"
+            ).pl()
+            return frame
+
         csv_path = quote_duckdb_path_pattern(self.partitions_path, pattern)
 
         # Build SELECT clause

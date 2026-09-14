@@ -192,7 +192,12 @@ def run_transfer_detection(csv_base_dir: Path) -> Dict[str, int]:
     for (year, month), group_df in df.group_by(["_year", "_month"]):
         # Remove temporary columns
         partition_df = group_df.drop(["_year", "_month"])
-        csv_transactions.write_month(csv_base_dir, partition_df, year, month)
+        csv_transactions.write_month(
+            partition_df,
+            year,
+            month,
+            authority_data_dir=csv_base_dir.parent,
+        )
 
     paired_count = sum(len(ids) for ids in transfer_groups.values())
     unpaired_count = len(candidates) - paired_count

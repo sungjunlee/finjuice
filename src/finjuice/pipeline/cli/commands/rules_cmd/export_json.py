@@ -42,6 +42,11 @@ def _compute_rules_export_json(config: Config, json_output: bool) -> dict[str, A
         )
 
     rules = load_rules(config.rules_file)
+    return _rules_export_payload(rules)
+
+
+def _rules_export_payload(rules: list[Any]) -> dict[str, Any]:
+    """Project the existing six-field list/export contract from loaded rules."""
     return {
         "rule_count": len(rules),
         "rules": [_serialize_rule_export(rule) for rule in rules],

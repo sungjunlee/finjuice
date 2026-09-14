@@ -1,0 +1,53 @@
+{
+  "$id": "ssot_account_ownership_correct.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "account_id": {
+      "type": "string"
+    },
+    "assertion_id": {
+      "type": "string"
+    },
+    "committed_revision": {
+      "type": "integer"
+    },
+    "confirmation_state": {
+      "const": "confirmed"
+    },
+    "evidence": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "replayed": {
+      "type": "boolean"
+    },
+    "shares": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "supersedes_assertion_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "assertion_id",
+    "account_id",
+    "supersedes_assertion_id",
+    "confirmation_state",
+    "evidence",
+    "shares",
+    "committed_revision",
+    "replayed"
+  ],
+  "title": "ssot account ownership-correct output",
+  "type": "object",
+  "x-command": "ssot.account.ownership-correct"
+}

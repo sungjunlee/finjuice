@@ -6,10 +6,33 @@ import typer
 
 from finjuice.pipeline.cli import output
 from finjuice.pipeline.cli.commands.init_helpers import initialize_data_directory
-from finjuice.pipeline.cli.output import console, emit
+from finjuice.pipeline.cli.output import ErrorCode, ExitCode, console, emit, emit_error
 from finjuice.pipeline.cli.utils import get_config
+from finjuice.pipeline.config import Config
+from finjuice.pipeline.storage.authority import legacy_write_lease
+from finjuice.pipeline.storage.sqlite.errors import AuthorityError
 
 logger = logging.getLogger(__name__)
+
+
+def _is_already_initialized(config: Config, json_output: bool) -> bool:
+    """Check the idempotent init condition while holding the legacy fence."""
+    try:
+        with legacy_write_lease(config.data_dir):
+            return (
+                config.data_dir.exists()
+                and (config.data_dir / "imports").exists()
+                and (config.data_dir / "transactions").exists()
+                and (config.data_dir / "rules.yaml").exists()
+            )
+    except AuthorityError as exc:
+        emit_error(
+            str(exc),
+            error_code=ErrorCode.VALIDATION_FAILED,
+            exit_code=ExitCode.VALIDATION_ERROR,
+            json_output=json_output,
+            command="init",
+        )
 
 
 def init_command(
@@ -61,12 +84,7 @@ def init_command(
     config = get_config(ctx)
 
     # Check if already initialized
-    already_initialized = (
-        config.data_dir.exists()
-        and (config.data_dir / "imports").exists()
-        and (config.data_dir / "transactions").exists()
-        and (config.data_dir / "rules.yaml").exists()
-    )
+    already_initialized = _is_already_initialized(config, json_output)
 
     if already_initialized:
         if json_output:

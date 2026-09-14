@@ -174,7 +174,12 @@ def edit_transaction_by_hash(base_dir: Path, row_hash: str, edit_number: int) ->
         ],
         how="diagonal_relaxed",
     )
-    write_result = write_month(base_dir, updated_partition_df, year, month)
+    write_result = write_month(
+        updated_partition_df,
+        year,
+        month,
+        authority_data_dir=base_dir.parent,
+    )
 
     return {
         "row_hash": row_hash,
@@ -265,7 +270,7 @@ def run_scenario(
     logger.info("%s", "=" * 72)
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        data_root = Path(tmpdir)
+        data_root = Path(tmpdir).resolve()
         transactions_dir, dataset_metadata = generate_csv_partitions(
             data_root,
             scenario,

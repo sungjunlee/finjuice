@@ -26,6 +26,8 @@ from .generate_schemas_helpers import (
     schema_from_structured_model,  # noqa: F401 — re-exported for existing generate_schemas imports
     schema_from_typed_dict_type,  # noqa: F401 — re-exported for existing generate_schemas imports
 )
+from .migration_schemas import migration_schemas
+from .sqlite_backup_schemas import sqlite_backup_schemas
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = ROOT / "src"
@@ -196,7 +198,7 @@ status_schema = command_schema(
         ),
         "next_steps": array_of(next_step_schema),
         "rules_file": object_schema(
-            {"exists": boolean, "modified_at": string_or_null, "path": string},
+            {"exists": boolean, "modified_at": string_or_null, "path": string_or_null},
             required=["path", "exists", "modified_at"],
         ),
         "terminology": tagging_terminology_schema,
@@ -383,8 +385,8 @@ context_schema = command_schema(
     "context.schema.json",
     "context --json output",
     {
-        "active_goals": array_of(any_value),
-        "financial_metadata": object_any,
+        "active_goals": {**array_of(any_value), **nullable("array")},
+        "financial_metadata": {**object_any, **nullable("object")},
         "journals": array_of(
             object_schema(
                 {
@@ -393,6 +395,8 @@ context_schema = command_schema(
                     "filename": string,
                     "path": string,
                     "snapshot": object_any,
+                    "snapshot_metadata": object_any,
+                    "snapshot_metadata_basis": {"enum": ["historical_journal_observation"]},
                     "summary_200": string,
                     "topic": string,
                 },
@@ -419,16 +423,17 @@ context_schema = command_schema(
             )
         ),
         "status_snapshot": object_any,
-        "top_patterns": array_of(
-            object_schema(
+        "top_patterns": {
+            **nullable("array"),
+            "items": object_schema(
                 {
                     "delta_krw": integer,
                     "direction": string,
                     "label": string,
                 },
                 required=["label", "delta_krw", "direction"],
-            )
-        ),
+            ),
+        },
     },
     [
         "journals",
@@ -447,6 +452,10 @@ doctor_schema = command_schema(
         "checks": array_of(
             object_schema(
                 {
+                    "basis": {
+                        "type": "string",
+                        "enum": ["repository", "runtime_observation", "staged_observation"],
+                    },
                     "detail": string_or_null,
                     "message": string,
                     "name": string,
@@ -476,16 +485,35 @@ history_schema = command_schema(
     "history --json output",
     {
         "count": integer,
+        "summary": object_schema(
+            {
+                "known_source_rows": integer,
+                "unknown_source_rows_records": integer,
+                "archived_files": integer,
+                "unknown_archive_records": integer,
+            }
+        ),
         "records": array_of(
             object_schema(
                 {
                     "archived": {"type": ["boolean", "string", "null"]},
                     "archived_path": string_or_null,
-                    "file_id": string,
-                    "imported_at": string,
+                    "file_id": string_or_null,
+                    "imported_at": string_or_null,
                     "imported_from": string_or_null,
                     "original_filename": string_or_null,
                     "source_rows": integer_or_null,
+                    "origin": string,
+                    "occurrence_id": string,
+                    "artifact_id": string,
+                    "provenance_id": string,
+                    "source_row": integer,
+                    "source_fields": object_any,
+                    "source_cells": array_of(object_any),
+                    "field_issues": array_of(string),
+                    "legacy_file_ids": array_of(string),
+                    "import_counts": object_any,
+                    "source_artifact_preserved": boolean,
                 },
                 required=["file_id", "imported_at"],
             )
@@ -616,6 +644,20 @@ problem_schema = object_schema(
     required=["severity", "type", "path", "message", "line", "column", "formatted"],
 )
 
+networth_init_schema = command_schema(
+    "networth_init.schema.json",
+    "networth init --json output",
+    {
+        "path": string_or_null,
+        "created": boolean,
+        "message": string,
+        "authority": string,
+        "selection_state": string,
+        "revision_id": string_or_null,
+    },
+    ["path", "created", "message"],
+)
+
 networth_validate_schema = command_schema(
     "networth_validate.schema.json",
     "networth validate --json output",
@@ -624,7 +666,10 @@ networth_validate_schema = command_schema(
         "exists": boolean,
         "liabilities": integer,
         "manual_assets": integer,
-        "path": string,
+        "path": string_or_null,
+        "authority": string,
+        "selection_state": string,
+        "revision_id": string_or_null,
         "problems": array_of(problem_schema),
         "status": {"enum": ["valid", "issues"], "type": "string"},
         "valid": boolean,
@@ -815,7 +860,15 @@ budget_status_schema = command_schema(
         "actionable": boolean,
         "categories": array_of(budget_row_schema),
         "goals_file": object_schema(
-            {"exists": boolean, "notes": string_or_null, "path": string, "updated": string_or_null},
+            {
+                "exists": boolean,
+                "notes": string_or_null,
+                "path": string_or_null,
+                "updated": string_or_null,
+                "authority": string,
+                "selection_state": string,
+                "revision_id": string_or_null,
+            },
             required=["path", "exists"],
         ),
         "health": object_schema(
@@ -883,7 +936,10 @@ budget_validate_schema = command_schema(
     "budget_validate.schema.json",
     "budget validate --json output",
     {
-        "path": string,
+        "path": string_or_null,
+        "authority": string,
+        "selection_state": string,
+        "revision_id": string_or_null,
         "problems": array_of(object_any),
         "status": {"enum": ["valid", "invalid"], "type": "string"},
     },
@@ -966,10 +1022,10 @@ networth_forecast_schema = command_schema(
 
 automation_merchant_pressure_schema = object_schema(
     {
-        "avg_amount": number,
+        "avg_amount": number_or_null,
         "merchant": string,
         "sample_memos": array_of(string),
-        "total_amount": number,
+        "total_amount": number_or_null,
         "transaction_count": integer,
     },
     required=["merchant", "transaction_count", "total_amount", "avg_amount", "sample_memos"],
@@ -1004,6 +1060,29 @@ automation_tagging_pressure_schema = object_schema(
     ],
 )
 
+automation_pending_imports_schema = object_schema(
+    {
+        "status": string,
+        "files_found": integer,
+        "pending_files": integer,
+        "estimated_new_rows": integer,
+        "estimated_new_asset_rows": integer,
+        "failed_files": array_of(object_schema({"source_file": string_or_null, "error": string})),
+        "sample_files": array_of(
+            object_schema(
+                {
+                    "source_file": string_or_null,
+                    "estimated_new_rows": integer,
+                    "estimated_new_asset_rows": integer,
+                    "validation_skips": integer_or_null,
+                }
+            )
+        ),
+        "failed_file_count": integer,
+        "sample_file_count": integer,
+    }
+)
+
 automation_run_schema = command_schema(
     "automation_run.schema.json",
     "automation run --json output",
@@ -1013,7 +1092,7 @@ automation_run_schema = command_schema(
         "enabled": boolean,
         "large_transactions": object_any,
         "next_steps": array_of(next_step_schema),
-        "pending_imports": object_any,
+        "pending_imports": automation_pending_imports_schema,
         "tagging_pressure": automation_tagging_pressure_schema,
         "thresholds": object_schema(
             {"large_transaction": number, "untagged_count": integer},
@@ -1034,7 +1113,9 @@ automation_run_schema = command_schema(
 )
 automation_run_schema["description"] = (
     "automation run --json output. The raw and redacted privacy profiles include "
-    "data_dir and merchant_pressure samples; compact replaces those samples with counts."
+    "data_dir and merchant_pressure samples; compact replaces those samples with counts. "
+    "Canonical pending samples have validation_skips:null because exact-import dispositions "
+    "are distinct from legacy validation skips; independent preview totals are identified in _meta."
 )
 automation_run_schema["allOf"] = [
     {
@@ -1220,7 +1301,7 @@ rules_suggest_schema = command_schema(
         "coverage_before_pct": number,
         "dry_run": boolean,
         "message": string,
-        "rules_file": string,
+        "rules_file": {"type": ["string", "null"]},
         "rules_file_modified": boolean,
         "skipped": integer,
         "suggestable_coverage_before_pct": number,
@@ -1343,10 +1424,11 @@ tag_schema = command_schema(
     "tag.schema.json",
     "tag --json output",
     {
+        "backup_delivery": {"$ref": "ssot_backup_deliver_run.schema.json#/$defs/projection"},
         "coverage_pct": number,
         "dry_run": boolean,
         "operation": string,
-        "partition": object_any,
+        "partition": {"type": ["object", "null"]},
         "row_hash": string,
         "status": string,
         "tagged": integer,
@@ -1520,6 +1602,33 @@ export_schema = command_schema(
     [],
 )
 
+export_verify_schema = command_schema(
+    "export_verify.schema.json",
+    "export-verify --json output",
+    {
+        "command": {"const": "export-verify"},
+        "manifest_path": string,
+        "manifest_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "source": object_any,
+        "current": object_any,
+        "stale": boolean,
+        "integrity": {"enum": ["intact", "mismatch"]},
+        "files": array_of(
+            object_schema(
+                {
+                    "path": string,
+                    "status": {"enum": ["intact", "modified", "missing"]},
+                },
+                required=["path", "status"],
+            )
+        ),
+        "verification_policy": {"const": "local_export_receipt.v1"},
+    },
+    ["command", "manifest_path", "source", "current", "stale", "integrity", "files"],
+)
+
+export_verify_schema["x-command"] = "export-verify"
+
 review_schema = command_schema(
     "review.schema.json",
     "review --json output",
@@ -1660,7 +1769,13 @@ index_collection_schema = object_schema(
     {
         "count": integer_or_null,
         "count_label": string,
-        "exists": boolean,
+        "exists": nullable("boolean"),
+        "basis": {"enum": ["repository", "filesystem_observation", "runtime_inventory"]},
+        "count_basis": string,
+        "count_state": {"enum": ["known", "absent", "unavailable"]},
+        "selection_state": string_or_null,
+        "revision_id": string_or_null,
+        "unavailable_reason": string_or_null,
         "latest_modified": string_or_null,
         "name": string,
         "notes": array_of(string),
@@ -1710,7 +1825,10 @@ index_schema["description"] = (
     "index --json output. The raw privacy profile preserves the full catalog shape and "
     "only includes paths when --include-paths is requested. Redacted and compact profiles "
     "suppress resolved workspace and collection paths; compact also drops operational "
-    "command and note detail."
+    "command and note detail. Canonical financial collections retain repository/count/selection "
+    "provenance with no filesystem paths or mtimes. External file observations and runtime "
+    "inventory remain distinct. An unavailable external observation has null exists and count; "
+    "canonical logical existence remains boolean. Unknown counts are never partial totals."
 )
 index_schema["allOf"] = [
     {
@@ -1947,6 +2065,8 @@ backup_restore_schema = command_schema(
 )
 
 SCHEMAS: dict[str, JsonSchema] = {
+    **migration_schemas(),
+    **sqlite_backup_schemas(),
     "_error.schema.json": error_schema,
     "_meta.schema.json": meta_schema,
     "_pagination.schema.json": pagination_schema,
@@ -1969,6 +2089,7 @@ SCHEMAS: dict[str, JsonSchema] = {
     "doctor.schema.json": doctor_schema,
     "explain.schema.json": explain_schema,
     "export.schema.json": export_schema,
+    "export_verify.schema.json": export_verify_schema,
     "history.schema.json": history_schema,
     "import.schema.json": import_schema,
     "inspect_xlsx.schema.json": inspect_xlsx_schema,
@@ -1982,6 +2103,7 @@ SCHEMAS: dict[str, JsonSchema] = {
     "networth_forecast.schema.json": networth_forecast_schema,
     "networth_history.schema.json": networth_history_schema,
     "networth_validate.schema.json": networth_validate_schema,
+    "networth_init.schema.json": networth_init_schema,
     "query.schema.json": query_schema,
     "refresh.schema.json": refresh_schema,
     "review.schema.json": review_schema,
@@ -1995,12 +2117,388 @@ SCHEMAS: dict[str, JsonSchema] = {
     "rules_validate.schema.json": rules_validate_schema,
     "show.schema.json": show_schema,
     "status.schema.json": status_schema,
+    "ssot_assets_list.schema.json": command_schema(
+        "ssot_assets_list.schema.json",
+        "ssot assets list output",
+        {
+            "sources": array_of(object_any),
+            "pending": array_of(object_any),
+            "dataset_revision": integer,
+        },
+        ["sources", "pending", "dataset_revision"],
+    ),
+    "ssot_assets_confirm.schema.json": command_schema(
+        "ssot_assets_confirm.schema.json",
+        "ssot assets confirm output",
+        {"assertion_id": string, "committed_revision": integer, "replayed": boolean},
+        ["assertion_id", "committed_revision", "replayed"],
+    ),
+    "ssot_assets_correct.schema.json": command_schema(
+        "ssot_assets_correct.schema.json",
+        "ssot assets correct output",
+        {"assertion_id": string, "committed_revision": integer, "replayed": boolean},
+        ["assertion_id", "committed_revision", "replayed"],
+    ),
+    "ssot_assets_relation_confirm.schema.json": command_schema(
+        "ssot_assets_relation_confirm.schema.json",
+        "ssot assets relation-confirm output",
+        {"assertion_id": string, "committed_revision": integer, "replayed": boolean},
+        ["assertion_id", "committed_revision", "replayed"],
+    ),
+    "ssot_assets_relation_correct.schema.json": command_schema(
+        "ssot_assets_relation_correct.schema.json",
+        "ssot assets relation-correct output",
+        {"assertion_id": string, "committed_revision": integer, "replayed": boolean},
+        ["assertion_id", "committed_revision", "replayed"],
+    ),
+    "ssot_assets_report.schema.json": command_schema(
+        "ssot_assets_report.schema.json",
+        "ssot assets report output",
+        {
+            "completeness": string,
+            "net_worth_total": {"anyOf": [object_any, {"type": "null"}]},
+            "known_net_worth_subtotal": {"anyOf": [object_any, {"type": "null"}]},
+            "lines": array_of(object_any),
+            "issues": array_of(object_any),
+            "dataset_revision": integer,
+        },
+        [
+            "completeness",
+            "net_worth_total",
+            "known_net_worth_subtotal",
+            "lines",
+            "issues",
+            "dataset_revision",
+        ],
+    ),
+    "ssot_intake_revise.schema.json": command_schema(
+        "ssot_intake_revise.schema.json",
+        "ssot intake revise output",
+        {
+            "proposal_id": string,
+            "parent_proposal_id": string,
+            "parent_status": string,
+            "application_key": string,
+            "expected_generation": string,
+            "expected_revision": integer,
+            "committed_revision": integer,
+            "replayed": boolean,
+        },
+        [
+            "proposal_id",
+            "parent_proposal_id",
+            "parent_status",
+            "application_key",
+            "expected_generation",
+            "expected_revision",
+            "committed_revision",
+            "replayed",
+        ],
+    ),
+    "ssot_intake_withdraw.schema.json": command_schema(
+        "ssot_intake_withdraw.schema.json",
+        "ssot intake withdraw output",
+        {
+            "proposal_id": string,
+            "confirmation_id": string,
+            "status": {"const": "rejected"},
+            "committed_revision": integer,
+            "replayed": boolean,
+        },
+        ["proposal_id", "confirmation_id", "status", "committed_revision", "replayed"],
+    ),
+    "ssot_reconcile_submit.schema.json": command_schema(
+        "ssot_reconcile_submit.schema.json",
+        "ssot reconcile submit output",
+        {
+            "evidence_ids": array_of(string),
+            "source_artifact_id": string,
+            "inserted_count": integer,
+            "replayed": boolean,
+        },
+        ["evidence_ids", "source_artifact_id", "inserted_count", "replayed"],
+    ),
+    "ssot_reconcile_candidates.schema.json": command_schema(
+        "ssot_reconcile_candidates.schema.json",
+        "ssot reconcile candidates output",
+        {
+            "dataset_generation": string,
+            "dataset_revision": integer,
+            "candidates": array_of(object_any),
+            "evidence": array_of(object_any),
+            "allocations": array_of(object_any),
+            "withdrawals": array_of(object_any),
+            "ledger_cash_totals": object_any,
+            "payments": array_of(object_any),
+        },
+        [
+            "dataset_generation",
+            "dataset_revision",
+            "candidates",
+            "evidence",
+            "allocations",
+            "withdrawals",
+            "ledger_cash_totals",
+            "payments",
+        ],
+    ),
+    "ssot_reconcile_confirm.schema.json": command_schema(
+        "ssot_reconcile_confirm.schema.json",
+        "ssot reconcile confirm output",
+        {
+            "allocation_id": string,
+            "status": string,
+            "residual": string,
+            "currency": string,
+            "replayed": boolean,
+        },
+        ["allocation_id", "status", "residual", "currency", "replayed"],
+    ),
+    "ssot_reconcile_withdraw.schema.json": command_schema(
+        "ssot_reconcile_withdraw.schema.json",
+        "ssot reconcile withdraw output",
+        {"allocation_id": string, "withdrawal_id": string, "status": string, "replayed": boolean},
+        ["allocation_id", "withdrawal_id", "status", "replayed"],
+    ),
+    "ssot_close_run.schema.json": command_schema(
+        "ssot_close_run.schema.json",
+        "ssot close run output",
+        {
+            "close": object_any,
+            "close_id": string,
+            "report_digest": string,
+            "diff": array_of(object_any),
+            "reclosed": boolean,
+            "committed_revision": integer,
+            "replayed": boolean,
+        },
+        ["close", "close_id", "report_digest", "diff", "reclosed", "replayed"],
+    ),
+    "ssot_close_reopen.schema.json": command_schema(
+        "ssot_close_reopen.schema.json",
+        "ssot close reopen output",
+        {
+            "close_id": string,
+            "period": string,
+            "close_revision": integer,
+            "committed_revision": integer,
+            "replayed": boolean,
+        },
+        ["close_id", "period", "close_revision", "replayed"],
+    ),
+    "ssot_close_history.schema.json": command_schema(
+        "ssot_close_history.schema.json",
+        "ssot close history output",
+        {"revisions": array_of(object_any), "periods": object_any},
+        ["revisions", "periods"],
+    ),
+    "ssot_import_json.schema.json": command_schema(
+        "ssot_import_json.schema.json",
+        "ssot import-json output",
+        {
+            "artifact_id": string,
+            "original_artifact_id": string_or_null,
+            "occurrence_id": string,
+            "source_identity": string,
+            "coverage": string,
+            "as_of": string,
+            "collected_at": string,
+            "currency": string,
+            "record_count": integer,
+            "counts": object_any,
+            "created_transaction_ids": array_of(string),
+            "linked_transaction_ids": array_of(string),
+            "reused_external_ids": array_of(string),
+            "pending_external_ids": array_of(string),
+            "noop": boolean,
+            "committed_revision": integer,
+            "replayed": boolean,
+        },
+        [
+            "artifact_id",
+            "occurrence_id",
+            "source_identity",
+            "coverage",
+            "record_count",
+            "counts",
+            "noop",
+            "replayed",
+        ],
+    ),
+    "ssot_statement_evidence.schema.json": command_schema(
+        "ssot_statement_evidence.schema.json",
+        "ssot statement-evidence output",
+        {
+            "records": array_of(object_any),
+            "occurrence_ids": array_of(string),
+            "pending_external_ids": array_of(string),
+            "record_count": integer,
+        },
+        ["records", "occurrence_ids", "pending_external_ids", "record_count"],
+    ),
+    "ssot_intake_list.schema.json": command_schema(
+        "ssot_intake_list.schema.json",
+        "ssot intake list output",
+        {
+            "dataset_generation": string,
+            "dataset_revision": integer,
+            "decisions": array_of(object_any),
+        },
+        ["dataset_generation", "dataset_revision", "decisions"],
+    ),
+    "ssot_intake_submit.schema.json": command_schema(
+        "ssot_intake_submit.schema.json",
+        "ssot intake submit output",
+        {
+            "proposal_id": string,
+            "source_artifact_id": string,
+            "occurrence_id": string,
+            "committed_revision": integer,
+            "replayed": boolean,
+        },
+        ["proposal_id", "source_artifact_id", "occurrence_id", "committed_revision", "replayed"],
+    ),
+    "ssot_intake_confirm.schema.json": command_schema(
+        "ssot_intake_confirm.schema.json",
+        "ssot intake confirm output",
+        {
+            "proposal_id": string,
+            "confirmation_id": string,
+            "applied": object_any,
+            "committed_revision": integer,
+            "replayed": boolean,
+        },
+        ["proposal_id", "confirmation_id", "applied", "committed_revision", "replayed"],
+    ),
+    "ssot_account_list.schema.json": command_schema(
+        "ssot_account_list.schema.json",
+        "ssot account list output",
+        {
+            "dataset_revision": integer,
+            "accounts": array_of(object_any),
+            "bindings": array_of(object_any),
+            "candidates": array_of(object_any),
+        },
+        ["dataset_revision", "accounts", "bindings", "candidates"],
+    ),
+    "ssot_account_confirm.schema.json": command_schema(
+        "ssot_account_confirm.schema.json",
+        "ssot account confirm output",
+        {
+            "binding_id": string,
+            "account_id": string,
+            "source_namespace": string,
+            "external_key": string,
+            "committed_revision": integer,
+            "replayed": boolean,
+        },
+        ["binding_id", "account_id", "committed_revision", "replayed"],
+    ),
+    "ssot_account_correct.schema.json": command_schema(
+        "ssot_account_correct.schema.json",
+        "ssot account correct output",
+        {
+            "binding_id": string,
+            "account_id": string,
+            "supersedes_binding_id": string,
+            "committed_revision": integer,
+            "replayed": boolean,
+        },
+        ["binding_id", "account_id", "supersedes_binding_id", "committed_revision", "replayed"],
+    ),
+    "ssot_account_preview.schema.json": command_schema(
+        "ssot_account_preview.schema.json",
+        "ssot account preview output",
+        {
+            "expected_generation": string,
+            "expected_revision": integer,
+            "before": object_any,
+            "after": object_any,
+            "observed_scope": array_of(object_any),
+            "historical_rows_rewritten": integer,
+            "importer_supported": boolean,
+        },
+        [
+            "expected_generation",
+            "expected_revision",
+            "before",
+            "after",
+            "observed_scope",
+            "historical_rows_rewritten",
+            "importer_supported",
+        ],
+    ),
+    "ssot_account_ownership_confirm.schema.json": command_schema(
+        "ssot_account_ownership_confirm.schema.json",
+        "ssot account ownership-confirm output",
+        {
+            "assertion_id": string,
+            "account_id": string,
+            "confirmation_state": {"const": "confirmed"},
+            "evidence": object_any,
+            "shares": array_of(object_any),
+            "committed_revision": integer,
+            "replayed": boolean,
+        },
+        [
+            "assertion_id",
+            "account_id",
+            "confirmation_state",
+            "evidence",
+            "shares",
+            "committed_revision",
+            "replayed",
+        ],
+    ),
+    "ssot_account_ownership_correct.schema.json": command_schema(
+        "ssot_account_ownership_correct.schema.json",
+        "ssot account ownership-correct output",
+        {
+            "assertion_id": string,
+            "account_id": string,
+            "supersedes_assertion_id": string,
+            "confirmation_state": {"const": "confirmed"},
+            "evidence": object_any,
+            "shares": array_of(object_any),
+            "committed_revision": integer,
+            "replayed": boolean,
+        },
+        [
+            "assertion_id",
+            "account_id",
+            "supersedes_assertion_id",
+            "confirmation_state",
+            "evidence",
+            "shares",
+            "committed_revision",
+            "replayed",
+        ],
+    ),
+    "ssot_account_ownership.schema.json": command_schema(
+        "ssot_account_ownership.schema.json",
+        "ssot account ownership output",
+        {"dataset_revision": integer, "account_id": string, "as_of": string},
+        ["dataset_revision", "account_id", "as_of"],
+    ),
     "tag.schema.json": tag_schema,
     "template_list.schema.json": template_list_schema,
     "template_run.schema.json": template_run_schema,
     "template_show.schema.json": template_show_schema,
     "transfer.schema.json": transfer_schema,
 }
+
+
+# Underscores in artifact names cannot distinguish command nesting from hyphens.
+for _command in (
+    "ssot.account.ownership-confirm",
+    "ssot.account.ownership-correct",
+    "ssot.assets.relation-confirm",
+    "ssot.assets.relation-correct",
+    "ssot.import-json",
+    "ssot.statement-evidence",
+):
+    _filename = _command.replace(".", "_").replace("-", "_") + ".schema.json"
+    SCHEMAS[_filename]["x-command"] = _command
 
 
 def write_schema(path: Path, schema: JsonSchema) -> None:

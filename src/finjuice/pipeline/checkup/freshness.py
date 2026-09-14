@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date
 
 from finjuice.pipeline.checkup.models import PipelineFreshnessSummary
 from finjuice.pipeline.config import Config
 from finjuice.pipeline.ingest.pipeline import preview_ingest_all_files
-from finjuice.pipeline.insights import collect_status_snapshot
+from finjuice.pipeline.insights import StatusSnapshotResult, collect_status_snapshot
 
 
 def collect_pipeline_freshness(
@@ -19,12 +20,46 @@ def collect_pipeline_freshness(
 ) -> PipelineFreshnessSummary:
     """Summarize transaction freshness from the shared status snapshot surface."""
     snapshot_result = collect_status_snapshot(config)
-    snapshot = snapshot_result.snapshot
     partition_count = len(list(config.csv_base_dir.glob("*/*/transactions.csv")))
     pending_import_files, failed_import_files = _collect_import_preview_counts(
         config,
         preview_imports=preview_imports,
     )
+    return build_pipeline_freshness(
+        snapshot_result,
+        PipelineFreshnessInputs(
+            partition_count=partition_count,
+            pending_import_files=pending_import_files,
+            failed_import_files=failed_import_files,
+            today=today,
+            stale_after_days=stale_after_days,
+        ),
+    )
+
+
+@dataclass(frozen=True)
+class PipelineFreshnessInputs:
+    """Detached observation counts and freshness policy."""
+
+    partition_count: int
+    pending_import_files: int
+    failed_import_files: int
+    today: date
+    stale_after_days: int
+    has_transactions: bool = False
+
+
+def build_pipeline_freshness(
+    snapshot_result: StatusSnapshotResult, inputs: PipelineFreshnessInputs
+) -> PipelineFreshnessSummary:
+    """Calculate freshness from detached insights and explicit staged observations."""
+    partition_count = inputs.partition_count
+    pending_import_files = inputs.pending_import_files
+    failed_import_files = inputs.failed_import_files
+    today = inputs.today
+    stale_after_days = inputs.stale_after_days
+    has_transactions = inputs.has_transactions
+    snapshot = snapshot_result.snapshot
     pending_import_status = "present" if pending_import_files > 0 else "clear"
     latest_date = _extract_latest_date(snapshot.data_range)
     days_since_latest = (today - latest_date).days if latest_date is not None else None
@@ -72,7 +107,7 @@ def collect_pipeline_freshness(
             warning=f"{pending_import_files} staged import file(s) are waiting in imports/.",
         )
 
-    if partition_count == 0:
+    if partition_count == 0 and not has_transactions:
         return PipelineFreshnessSummary(
             status="empty",
             actionable=True,

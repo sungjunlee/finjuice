@@ -1,0 +1,47 @@
+{
+  "$id": "ssot_close_run.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "close": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "close_id": {
+      "type": "string"
+    },
+    "committed_revision": {
+      "type": "integer"
+    },
+    "diff": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "reclosed": {
+      "type": "boolean"
+    },
+    "replayed": {
+      "type": "boolean"
+    },
+    "report_digest": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "close",
+    "close_id",
+    "report_digest",
+    "diff",
+    "reclosed",
+    "replayed"
+  ],
+  "title": "ssot close run output",
+  "type": "object"
+}

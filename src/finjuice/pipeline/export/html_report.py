@@ -12,8 +12,9 @@ Template and fallback HTML rendering live in
 """
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from finjuice.pipeline.export.html_report_render import (
     _get_template_content,
@@ -61,6 +62,27 @@ def generate_html_report(
     source_df: "pl.DataFrame | None" = None,
     offline: bool = True,
 ) -> Path:
+    """Generate a legacy HTML report with the existing argument contract."""
+    return render_html_report(
+        HTMLReportOptions(csv_base_dir, output_path, period, include_charts, source_df, offline)
+    )
+
+
+@dataclass(frozen=True)
+class HTMLReportOptions:
+    """Output inputs and optional deterministic rendering policy."""
+
+    csv_base_dir: Path
+    output_path: Path
+    period: str | None = None
+    include_charts: bool = True
+    source_df: "pl.DataFrame | None" = None
+    offline: bool = True
+    generated_at: str | None = None
+    deterministic: bool = False
+
+
+def render_html_report(options: HTMLReportOptions) -> Path:
     """
     Generate interactive HTML report with Plotly charts.
 
@@ -83,6 +105,9 @@ def generate_html_report(
         ImportError: If required dependencies are not installed
         RuntimeError: If report generation fails
     """
+    csv_base_dir, output_path, period = options.csv_base_dir, options.output_path, options.period
+    include_charts, source_df, offline = options.include_charts, options.source_df, options.offline
+    generated_at, deterministic = options.generated_at, options.deterministic
     _check_dependencies()
 
     from finjuice.pipeline.export.aggregations import (
@@ -102,6 +127,8 @@ def generate_html_report(
         tag_breakdown = calculate_tag_breakdown(df, top_n=10)
         top_merchants = calculate_top_merchants(df, limit=20)
         summary = calculate_summary_stats(df, period)
+        if generated_at is not None:
+            summary["generated_at"] = generated_at
 
         monthly_spend_rows = monthly_spend.to_dicts()
         tag_breakdown_rows = tag_breakdown.to_dicts()
@@ -114,12 +141,18 @@ def generate_html_report(
         )
 
         charts: dict[str, Optional[str]] = {}
+        tag_options: dict[str, Any] = {"div_id": "finjuice-tag-pie"} if deterministic else {}
+        merchant_options: dict[str, Any] = (
+            {"div_id": "finjuice-merchants-bar"} if deterministic else {}
+        )
         if include_charts:
             charts["monthly_trend"] = create_monthly_trend_chart(
-                monthly_spend, include_plotlyjs=offline
+                monthly_spend,
+                include_plotlyjs=offline,
+                **({"div_id": "finjuice-monthly-trend"} if deterministic else {}),
             )
-            charts["tag_pie"] = create_tag_pie_chart(tag_breakdown)
-            charts["merchants_bar"] = create_merchants_bar_chart(top_merchants)
+            charts["tag_pie"] = create_tag_pie_chart(tag_breakdown, **tag_options)
+            charts["merchants_bar"] = create_merchants_bar_chart(top_merchants, **merchant_options)
         else:
             charts["monthly_trend"] = None
             charts["tag_pie"] = None
@@ -158,4 +191,6 @@ def generate_html_report(
 
     except (OSError, pl.exceptions.PolarsError, RuntimeError) as e:
         logger.error("Failed to generate HTML report (%s)", type(e).__name__)
-        raise RuntimeError(f"HTML report generation failed: {e}") from e
+        raise RuntimeError(
+            f"HTML report generation failed: {type(e).__name__ if generated_at is not None else e}"
+        ) from e

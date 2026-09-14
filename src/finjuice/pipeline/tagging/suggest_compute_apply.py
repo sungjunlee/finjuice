@@ -24,6 +24,7 @@ def _apply_auto_apply_suggestions(
     suggestions: Sequence[dict[str, Any]],
     *,
     rules_file: Path,
+    authority_data_dir: Path,
     audit_applied: Callable[[str], None],
 ) -> tuple[int, int]:
     """Apply auto-apply eligible suggestions headlessly.
@@ -45,7 +46,11 @@ def _apply_auto_apply_suggestions(
             skipped_count += 1
             continue
         try:
-            applied_rule = apply_suggestion_to_rules(suggestion, rules_file)
+            applied_rule = apply_suggestion_to_rules(
+                suggestion,
+                rules_file,
+                authority_data_dir=authority_data_dir,
+            )
             audit_applied(applied_rule.name)
             applied_count += 1
         except (OSError, ValueError) as exc:

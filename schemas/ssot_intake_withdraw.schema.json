@@ -1,0 +1,35 @@
+{
+  "$id": "ssot_intake_withdraw.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "committed_revision": {
+      "type": "integer"
+    },
+    "confirmation_id": {
+      "type": "string"
+    },
+    "proposal_id": {
+      "type": "string"
+    },
+    "replayed": {
+      "type": "boolean"
+    },
+    "status": {
+      "const": "rejected"
+    }
+  },
+  "required": [
+    "_meta",
+    "proposal_id",
+    "confirmation_id",
+    "status",
+    "committed_revision",
+    "replayed"
+  ],
+  "title": "ssot intake withdraw output",
+  "type": "object"
+}

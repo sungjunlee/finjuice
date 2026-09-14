@@ -16,7 +16,7 @@ from finjuice.pipeline.assets.models import (
     Observation,
     ObservationIssue,
 )
-from finjuice.pipeline.assets.money import valued_amount
+from finjuice.pipeline.assets.money import exact_add, exact_subtract, valued_amount
 
 
 def build_lines(
@@ -43,7 +43,7 @@ def sum_contribution(
             continue
         if line.valued is None:
             return None
-        total += line.valued.amount
+        total = exact_add(total, line.valued.amount)
         matched = True
     return total if matched else Decimal("0")
 
@@ -87,7 +87,7 @@ def valuation_change_total(
         previous_value = valued_amount(previous.measure, query.valuation_currency)
         if previous_value is None:
             return None
-        total += current_value.amount - previous_value.amount
+        total = exact_add(total, exact_subtract(current_value.amount, previous_value.amount))
     return total
 
 

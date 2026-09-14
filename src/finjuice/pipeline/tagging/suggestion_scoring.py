@@ -37,6 +37,7 @@ surface from :mod:`finjuice.pipeline.tagging.suggestions`.
 from __future__ import annotations
 
 import logging
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Optional
 
@@ -46,10 +47,11 @@ from finjuice.pipeline.tagging.suggestion_existing_rules import (
     _should_skip_existing_rule,
 )
 from finjuice.pipeline.tagging.suggestion_queries import (
-    _merchant_context_query,
+    _merchant_context_query,  # noqa: F401 — compatibility re-export.
     _normalize_suggest_data_dir,
-    _similar_merchants_query,
+    _similar_merchants_query,  # noqa: F401 — compatibility re-export.
     get_suggestion_coverage_stats,  # noqa: F401 — re-exported for suggestions callers.
+    merchant_context_from_connection,
 )
 from finjuice.pipeline.tagging.suggestion_scoring_classify import (
     GENERIC_LABEL_AMBIGUOUS_REASON as GENERIC_LABEL_AMBIGUOUS_REASON,
@@ -197,35 +199,30 @@ def generate_merchant_context(
     normalized_data_dir = _normalize_suggest_data_dir(data_dir)
     existing_patterns = _load_existing_patterns(rules_file)
     existing_names = _load_existing_rule_names(rules_file)
-    # Track names assigned during this batch to prevent collisions
-    used_names: set[str] = set(existing_names)
-    query_limit = max(top_n * 20, top_n)
-
     try:
         with DuckDBAnalytics(normalized_data_dir) as analytics:
-            params = (
-                [file_id, min_count, query_limit]
-                if file_id is not None
-                else [min_count, query_limit]
-            )
-            merchant_contexts = (
-                analytics.conn.execute(
-                    _merchant_context_query(file_id),
-                    params,
-                )
-                .pl()
-                .to_dicts()
-            )
-            tagged_params = [file_id] if file_id is not None else []
-            tagged_merchants = (
-                analytics.conn.execute(_similar_merchants_query(file_id), tagged_params)
-                .pl()
-                .to_dicts()
+            merchant_contexts, tagged_merchants = merchant_context_from_connection(
+                analytics.conn, top_n, min_count, file_id
             )
     except FileNotFoundError:
         logger.info("No transaction data found for merchant context generation")
         return []
+    return score_merchant_contexts(
+        merchant_contexts, tagged_merchants, existing_patterns, existing_names, top_n
+    )
 
+
+def score_merchant_contexts(
+    contexts: list[dict[str, Any]],
+    tagged_merchants: list[dict[str, Any]],
+    existing_patterns: set[str],
+    existing_names: set[str],
+    top_n: int = 10,
+) -> list[dict[str, Any]]:
+    """Score detached query rows without loading files or mutating caller inputs."""
+    merchant_contexts = deepcopy(contexts)
+    tagged_merchants = deepcopy(tagged_merchants)
+    used_names = set(existing_names)
     merchant_contexts = _collapse_truncated_store_contexts(merchant_contexts)
     merchant_clusters = _build_fuzzy_merchant_clusters(merchant_contexts)
     suggestions: list[dict[str, Any]] = []

@@ -1,0 +1,68 @@
+{
+  "$id": "ssot_reconcile_candidates.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "allocations": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "candidates": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "dataset_generation": {
+      "type": "string"
+    },
+    "dataset_revision": {
+      "type": "integer"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "ledger_cash_totals": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "payments": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "withdrawals": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "dataset_generation",
+    "dataset_revision",
+    "candidates",
+    "evidence",
+    "allocations",
+    "withdrawals",
+    "ledger_cash_totals",
+    "payments"
+  ],
+  "title": "ssot reconcile candidates output",
+  "type": "object"
+}

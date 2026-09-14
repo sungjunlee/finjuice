@@ -3,14 +3,29 @@
 import json
 import re
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import patch
 
 import polars as pl
 from typer.testing import CliRunner
 
 from finjuice.pipeline.cli.main import app
+from finjuice.pipeline.storage.authority import RepositoryAuthority
 
 runner = CliRunner()
+
+
+class _RepositoryFacadeStub:
+    """Minimal active-authority facade used to prove suggest apply fails early."""
+
+    def dispatch(self) -> SimpleNamespace:
+        return SimpleNamespace(
+            authority=RepositoryAuthority(
+                activation=cast(Any, None),
+                paths=cast(Any, None),
+            )
+        )
 
 
 def strip_ansi(text: str) -> str:
@@ -460,6 +475,30 @@ class TestSuggestRulesCommand:
 
         assert result.exit_code == 0
         assert "제안" in result.output and "없습니다" in result.output
+
+    def test_apply_fails_before_legacy_reads_when_repository_is_active(
+        self,
+        monkeypatch,
+        tmp_path: Path,
+    ) -> None:
+        """Active authority must reject the legacy-backed suggestion apply flow."""
+        rules_path = tmp_path / "rules.yaml"
+        rules_path.write_text("version: 1\nrules: []\n", encoding="utf-8")
+        original = rules_path.read_bytes()
+        monkeypatch.setattr(
+            "finjuice.pipeline.cli.commands.rules_cmd.suggest.get_mutation_facade",
+            lambda ctx, config: _RepositoryFacadeStub(),
+        )
+
+        result = runner.invoke(
+            app,
+            ["--data-dir", str(tmp_path), "rules", "suggest", "--apply", "--yes"],
+        )
+
+        assert result.exit_code == 3
+        assert "SQLite repository is active" in result.output
+        assert "finjuice rules add" in result.output
+        assert rules_path.read_bytes() == original
 
     @patch("finjuice.pipeline.tagging.pipeline.run_tagging")
     @patch("finjuice.pipeline.tagging.suggestions.apply_suggestion_to_rules")

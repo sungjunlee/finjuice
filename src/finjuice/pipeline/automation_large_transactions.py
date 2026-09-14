@@ -10,8 +10,12 @@ names so existing callers can keep importing from that module.
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from duckdb import DuckDBPyConnection
 
 try:
     import duckdb
@@ -53,34 +57,10 @@ def _collect_large_transactions(
     sample_limit: int,
 ) -> tuple[LargeTransactionSignal, str | None]:
     """Collect large-expense counts and samples using explicit threshold input."""
-    count_sql = """
-        SELECT COUNT(*) AS anomaly_count
-        FROM transactions
-        WHERE amount < 0
-          AND is_transfer_bool = FALSE
-          AND abs(amount) >= ?
-    """
-    sample_sql = """
-        SELECT
-            CAST(date AS VARCHAR) AS date,
-            merchant_raw,
-            account,
-            category_final,
-            abs(amount) AS amount_krw
-        FROM transactions
-        WHERE amount < 0
-          AND is_transfer_bool = FALSE
-          AND abs(amount) >= ?
-        ORDER BY amount_krw DESC, date DESC, merchant_raw
-        LIMIT ?
-    """
 
     try:
         with DuckDBAnalytics(config.data_dir) as analytics:
-            count_row = analytics.conn.execute(count_sql, [threshold]).fetchone()
-            sample_rows = (
-                analytics.conn.execute(sample_sql, [threshold, sample_limit]).pl().to_dicts()
-            )
+            return large_transactions_from_connection(analytics.conn, threshold, sample_limit), None
     except FileNotFoundError:
         return (
             LargeTransactionSignal(
@@ -114,6 +94,35 @@ def _collect_large_transactions(
             "Large-transaction signal unavailable; check transaction data and analytics setup.",
         )
 
+
+def large_transactions_from_connection(
+    conn: DuckDBPyConnection, threshold: int, sample_limit: int
+) -> LargeTransactionSignal:
+    """Query an existing transaction view without owning or closing its connection."""
+    count_sql = """
+        SELECT COUNT(*) AS anomaly_count
+        FROM transactions
+        WHERE amount < 0
+          AND is_transfer_bool = FALSE
+          AND abs(amount) >= ?
+    """
+    sample_sql = """
+        SELECT
+            CAST(date AS VARCHAR) AS date,
+            merchant_raw,
+            account,
+            category_final,
+            abs(amount) AS amount_krw
+        FROM transactions
+        WHERE amount < 0
+          AND is_transfer_bool = FALSE
+          AND abs(amount) >= ?
+        ORDER BY amount_krw DESC, date DESC, merchant_raw
+        LIMIT ?
+    """
+
+    count_row = conn.execute(count_sql, [threshold]).fetchone()
+    sample_rows = conn.execute(sample_sql, [threshold, sample_limit]).pl().to_dicts()
     count = int((count_row or [0])[0] or 0)
     samples = [
         LargeTransactionSample(
@@ -121,20 +130,12 @@ def _collect_large_transactions(
             merchant=_optional_text(row.get("merchant_raw")),
             account=_optional_text(row.get("account")),
             category=_optional_text(row.get("category_final")),
-            amount_krw=float(row.get("amount_krw") or 0.0),
+            amount_krw=_finite_amount(row.get("amount_krw")),
         )
         for row in sample_rows
     ]
     status: SignalStatus = "present" if count > 0 else "clear"
-    return (
-        LargeTransactionSignal(
-            status=status,
-            threshold=threshold,
-            count=count,
-            samples=samples,
-        ),
-        None,
-    )
+    return LargeTransactionSignal(status=status, threshold=threshold, count=count, samples=samples)
 
 
 def _optional_text(value: Any) -> str | None:
@@ -143,3 +144,11 @@ def _optional_text(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _finite_amount(value: Any) -> float:
+    """Retain nullable display conversion while rejecting non-finite query amounts."""
+    amount = float(value or 0.0)
+    if not math.isfinite(amount):
+        raise ValueError("Large-transaction amounts must be finite.")
+    return amount

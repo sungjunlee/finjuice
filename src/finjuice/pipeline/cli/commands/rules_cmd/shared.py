@@ -39,6 +39,11 @@ def _serialize_rule_payload(rule: Any) -> dict[str, Any]:
         "name": rule.name,
         "match": rule.match,
         "fields": list(rule.fields),
+        "conditions": [
+            {"field": condition.field, "op": condition.op, "value": condition.value}
+            for condition in rule.conditions
+        ],
+        "logic": rule.logic,
         "tags": list(rule.tags),
         "priority": rule.priority,
         "enabled": bool(rule.enabled),

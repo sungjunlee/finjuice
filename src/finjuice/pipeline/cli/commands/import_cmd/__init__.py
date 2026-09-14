@@ -5,6 +5,7 @@ from typing import Annotated, Optional
 
 import typer
 
+from finjuice.pipeline.cli.mutation_options import with_mutation_options
 from finjuice.pipeline.cli.output import ErrorCode
 from finjuice.pipeline.config import Config
 
@@ -62,6 +63,7 @@ def register_import_command(app: typer.Typer) -> None:
     """Register the import command with the Typer app."""
 
     @app.command(name="import", rich_help_panel="Commands")
+    @with_mutation_options
     def import_files(  # noqa: PLR0913 - Typer command signature mirrors public CLI flags.
         ctx: typer.Context,
         files: Annotated[

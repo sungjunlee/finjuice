@@ -1,0 +1,37 @@
+{
+  "$id": "ssot_account_confirm.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "account_id": {
+      "type": "string"
+    },
+    "binding_id": {
+      "type": "string"
+    },
+    "committed_revision": {
+      "type": "integer"
+    },
+    "external_key": {
+      "type": "string"
+    },
+    "replayed": {
+      "type": "boolean"
+    },
+    "source_namespace": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "binding_id",
+    "account_id",
+    "committed_revision",
+    "replayed"
+  ],
+  "title": "ssot account confirm output",
+  "type": "object"
+}

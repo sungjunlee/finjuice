@@ -21,6 +21,52 @@ SCHEMAS_DIR = REPO_ROOT / "schemas"
 runner = CliRunner()
 
 CATALOGUED_COMMANDS = [
+    ("ssot reconcile submit", [], "ssot_reconcile_submit.schema.json"),
+    ("ssot reconcile candidates", [], "ssot_reconcile_candidates.schema.json"),
+    ("ssot reconcile confirm", [], "ssot_reconcile_confirm.schema.json"),
+    ("ssot reconcile withdraw", [], "ssot_reconcile_withdraw.schema.json"),
+    ("ssot import-json", [], "ssot_import_json.schema.json"),
+    ("ssot statement-evidence", [], "ssot_statement_evidence.schema.json"),
+    ("ssot close run", [], "ssot_close_run.schema.json"),
+    ("ssot close reopen", [], "ssot_close_reopen.schema.json"),
+    ("ssot close history", [], "ssot_close_history.schema.json"),
+    ("ssot intake list", [], "ssot_intake_list.schema.json"),
+    ("ssot intake submit", [], "ssot_intake_submit.schema.json"),
+    ("ssot intake confirm", [], "ssot_intake_confirm.schema.json"),
+    ("ssot intake revise", [], "ssot_intake_revise.schema.json"),
+    ("ssot intake withdraw", [], "ssot_intake_withdraw.schema.json"),
+    ("ssot assets list", [], "ssot_assets_list.schema.json"),
+    ("ssot assets confirm", [], "ssot_assets_confirm.schema.json"),
+    ("ssot assets correct", [], "ssot_assets_correct.schema.json"),
+    ("ssot assets relation-confirm", [], "ssot_assets_relation_confirm.schema.json"),
+    ("ssot assets relation-correct", [], "ssot_assets_relation_correct.schema.json"),
+    ("ssot assets report", [], "ssot_assets_report.schema.json"),
+    ("ssot account preview", [], "ssot_account_preview.schema.json"),
+    ("ssot account ownership-confirm", [], "ssot_account_ownership_confirm.schema.json"),
+    ("ssot account ownership-correct", [], "ssot_account_ownership_correct.schema.json"),
+    ("ssot account list", [], "ssot_account_list.schema.json"),
+    ("ssot account confirm", [], "ssot_account_confirm.schema.json"),
+    ("ssot account correct", [], "ssot_account_correct.schema.json"),
+    ("ssot account ownership", [], "ssot_account_ownership.schema.json"),
+    ("ssot backup create", [], "ssot_backup_create.schema.json"),
+    ("ssot backup capture-bundle", [], "ssot_backup_capture_bundle.schema.json"),
+    ("ssot backup verify-bundle", [], "ssot_backup_verify_bundle.schema.json"),
+    ("ssot backup restore", [], "ssot_backup_restore.schema.json"),
+    ("ssot backup restore-bundle", [], "ssot_backup_restore_bundle.schema.json"),
+    ("ssot backup status", [], "ssot_backup_status.schema.json"),
+    ("ssot backup store init", [], "ssot_backup_store_init.schema.json"),
+    ("ssot backup store capture", [], "ssot_backup_store_capture.schema.json"),
+    ("ssot backup store list", [], "ssot_backup_store_list.schema.json"),
+    ("ssot backup store verify", [], "ssot_backup_store_verify.schema.json"),
+    ("ssot backup store restore", [], "ssot_backup_store_restore.schema.json"),
+    ("ssot backup store protect", [], "ssot_backup_store_protect.schema.json"),
+    ("ssot backup store plan", [], "ssot_backup_store_plan.schema.json"),
+    ("ssot backup store prune", [], "ssot_backup_store_prune.schema.json"),
+    ("ssot backup deliver status", [], "ssot_backup_deliver_status.schema.json"),
+    ("ssot backup deliver run", [], "ssot_backup_deliver_run.schema.json"),
+    ("ssot migrate plan", [], "ssot_migrate_plan.schema.json"),
+    ("ssot migrate build", [], "ssot_migrate_build.schema.json"),
+    ("ssot migrate verify", [], "ssot_migrate_verify.schema.json"),
     ("assets show", ["assets", "show", "--json"], "assets_show.schema.json"),
     ("assets status", ["assets", "status", "--json"], "assets_status.schema.json"),
     ("assets balance", ["assets", "balance", "--json"], "assets_balance.schema.json"),
@@ -93,6 +139,7 @@ CATALOGUED_COMMANDS = [
     ("template show", ["template", "show", "monthly_spend", "--json"], "template_show.schema.json"),
     ("journal list", ["journal", "list", "--json"], "journal_list.schema.json"),
     ("export", ["export", "--dry-run", "--json"], "export.schema.json"),
+    ("export-verify", [], "export_verify.schema.json"),
     ("networth", ["networth", "--json"], "networth.schema.json"),
     (
         "networth breakdown",
@@ -452,6 +499,306 @@ def _materialize_backup_catalog_args(schema_data_dir: Path, label: str) -> list[
     ]
 
 
+def _materialize_migration_catalog_args(schema_data_dir: Path, label: str) -> list[str]:
+    """Prepare real frozen synthetic evidence for each migration command schema."""
+    from finjuice.pipeline.migration import build_migration, plan_migration
+
+    _materialize_backup_catalog_args(schema_data_dir, "backup verify")
+    capture = schema_data_dir.parent / "schema-backup"
+    plan = schema_data_dir.parent / "migration-plan.json"
+    candidate = schema_data_dir.parent / "migration-candidate"
+    if label == "ssot migrate plan":
+        return ["ssot", "migrate", "plan", "--manifest", str(capture), "--json"]
+    plan_migration(capture, output=plan, active_data_dir=schema_data_dir)
+    if label == "ssot migrate build":
+        return [
+            "ssot",
+            "migrate",
+            "build",
+            "--plan",
+            str(plan),
+            "--staging",
+            str(candidate),
+            "--json",
+        ]
+    build_migration(plan, candidate, active_data_dir=schema_data_dir)
+    return ["ssot", "migrate", "verify", "--candidate", str(candidate), "--json"]
+
+
+def _materialize_sqlite_backup_catalog_args(schema_data_dir: Path, label: str) -> list[str]:
+    """Prepare an actual snapshot for the SQLite backup command catalog."""
+    if label in {
+        "ssot backup capture-bundle",
+        "ssot backup verify-bundle",
+        "ssot backup restore-bundle",
+    }:
+        return _materialize_recovery_bundle_catalog_args(schema_data_dir, label)
+    if label.startswith("ssot backup store "):
+        return _materialize_recovery_store_catalog_args(schema_data_dir, label)
+    if label.startswith("ssot backup deliver "):
+        return _materialize_backup_deliver_catalog_args(schema_data_dir, label)
+    from finjuice.pipeline.storage.sqlite.backup import create_backup
+    from tests.pipeline.test_sqlite_backup import _build_generation
+
+    source = _build_generation(schema_data_dir.parent / "schema-generation")
+    backup = schema_data_dir.parent / "sqlite-backup"
+    if label == "ssot backup create":
+        return [
+            "ssot",
+            "backup",
+            "create",
+            "--source",
+            str(source.database),
+            "--output",
+            str(backup),
+            "--json",
+        ]
+    create_backup(source.database, backup)
+    if label == "ssot backup status":
+        return ["ssot", "backup", "status", str(backup), "--json"]
+    return [
+        "ssot",
+        "backup",
+        "restore",
+        str(backup),
+        "--target",
+        str(schema_data_dir.parent / "sqlite-restored"),
+        "--json",
+    ]
+
+
+def _materialize_recovery_bundle_catalog_args(schema_data_dir: Path, label: str) -> list[str]:
+    """Prepare a real synthetic graph for recovery-bundle command catalog cases."""
+    from finjuice.pipeline.storage.sqlite.recovery_bundle import capture_recovery_bundle
+    from tests.cli.test_sqlite_recovery_bundle import _capture_args, _write_expected
+    from tests.pipeline.test_recovery_bundle import _live
+
+    root = schema_data_dir.parent / "recovery-bundle-live"
+    source, expected, *_ = _live(root)
+    expected_path = _write_expected(root / "enrolled.json", expected)
+    if label == "ssot backup capture-bundle":
+        return ["ssot", "backup", *_capture_args(source, expected_path), "--json"]
+    capture_recovery_bundle(source, expected)
+    if label == "ssot backup verify-bundle":
+        return [
+            "ssot",
+            "backup",
+            "verify-bundle",
+            str(source.destination),
+            "--expected",
+            str(expected_path),
+            "--json",
+        ]
+    return [
+        "ssot",
+        "backup",
+        "restore-bundle",
+        str(source.destination),
+        "--target",
+        str(schema_data_dir.parent / "recovery-restored"),
+        "--expected",
+        str(expected_path),
+        "--json",
+    ]
+
+
+def _materialize_recovery_store_catalog_args(schema_data_dir: Path, label: str) -> list[str]:
+    """Prepare an initialized store and one verified graph for store command catalog cases."""
+    from finjuice.pipeline.storage.sqlite.recovery_store import (
+        capture_into_store,
+        initialize_recovery_store,
+    )
+    from tests.cli.test_sqlite_recovery_bundle import _write_expected
+    from tests.pipeline.test_recovery_bundle import _live
+
+    root = schema_data_dir.parent / "recovery-store-live"
+    source, expected, *_ = _live(root)
+    expected_path = _write_expected(root / "enrolled.json", expected)
+    store = root / "store"
+    prefix = ["ssot", "backup", "store"]
+    shared = ["--store", str(store), "--expected", str(expected_path), "--json"]
+    if label == "ssot backup store init":
+        return [*prefix, "init", "--store", str(store), "--expected", str(expected_path), "--json"]
+    initialize_recovery_store(store, expected)
+    if label == "ssot backup store capture":
+        paths = source.release_paths
+        return [
+            *prefix,
+            "capture",
+            "--store",
+            str(store),
+            "--source-data-dir",
+            str(source.data_dir),
+            "--expected",
+            str(expected_path),
+            "--wheel",
+            str(paths.wheel),
+            "--dependency-lock",
+            str(paths.dependency_lock),
+            "--binding",
+            str(paths.binding),
+            "--migration-candidate",
+            str(source.migration_candidate),
+            "--json",
+        ]
+    captured = capture_into_store(store, source, expected)
+    action = {
+        "ssot backup store list": ["list"],
+        "ssot backup store verify": ["verify", "--copy-id", captured.copy_id],
+        "ssot backup store restore": [
+            "restore",
+            "--copy-id",
+            captured.copy_id,
+            "--target",
+            str(schema_data_dir.parent / "recovery-store-restored"),
+        ],
+        "ssot backup store protect": ["protect", "--copy-id", captured.copy_id],
+        "ssot backup store plan": ["plan"],
+        "ssot backup store prune": ["prune"],
+    }[label]
+    return [*prefix, *action, *shared]
+
+
+def _materialize_backup_deliver_catalog_args(schema_data_dir: Path, label: str) -> list[str]:
+    """Prepare sender/destination stores for delivery status and run catalog cases."""
+    from finjuice.pipeline.storage.sqlite.recovery_store import (
+        capture_into_store,
+        initialize_recovery_store,
+    )
+    from tests.cli.test_sqlite_recovery_bundle import _write_expected
+    from tests.pipeline.test_recovery_bundle import _live
+
+    root = schema_data_dir.parent / "backup-deliver-live"
+    source, expected, *_ = _live(root)
+    expected_path = _write_expected(root / "enrolled.json", expected)
+    sender = root / "sender"
+    destination = root / "destination"
+    control = root / "control"
+    initialize_recovery_store(sender, expected)
+    initialize_recovery_store(destination, expected)
+    capture_into_store(sender, source, expected)
+    paths = source.release_paths
+    shared = [
+        "ssot",
+        "backup",
+        "deliver",
+        "status" if label.endswith("status") else "run",
+        "--source-data-dir",
+        str(source.data_dir),
+        "--expected",
+        str(expected_path),
+        "--sender-store",
+        str(sender),
+        "--destination-store",
+        str(destination),
+        "--control-dir",
+        str(control),
+        "--json",
+    ]
+    if label.endswith("run"):
+        shared.extend(
+            [
+                "--wheel",
+                str(paths.wheel),
+                "--dependency-lock",
+                str(paths.dependency_lock),
+                "--binding",
+                str(paths.binding),
+                "--migration-candidate",
+                str(source.migration_candidate),
+            ]
+        )
+    return shared
+
+
+def _account_catalog_result(schema_data_dir: Path, label: str):
+    if label.split()[-1] in {"preview", "ownership-confirm", "ownership-correct"}:
+        from tests.pipeline.test_account_decisions import _catalog_command_result
+
+        return _catalog_command_result(
+            schema_data_dir.parent / "account-decision", label.split()[-1]
+        )
+
+    from finjuice.pipeline.storage.mutation_facade import StorageMutationFacade
+    from finjuice.pipeline.storage.sqlite.account_bindings import AccountBindingConfirmation
+    from finjuice.pipeline.storage.sqlite.schema import inspect_repository
+    from tests.pipeline.test_recovery_bundle import _live
+
+    source, _expected, paths, generation, _transactions, account = _live(
+        schema_data_dir.parent / "account-live"
+    )
+    request = schema_data_dir.parent / "account-binding.json"
+    body = {
+        "source_namespace": "catalog.account.v1",
+        "external_key": "synthetic",
+        "account_id": account,
+        "evidence": {"reason": "explicit synthetic confirmation"},
+    }
+    request.write_text(json.dumps(body))
+    command = label.split()[-1]
+    args = ["ssot", "account", command]
+    if command == "correct":
+        facade = StorageMutationFacade(source.data_dir, evidence_provider=source.evidence_provider)
+        first = facade.confirm_account_binding(AccountBindingConfirmation(**body))
+        args.append(first.result["binding_id"])
+    if command in {"correct", "confirm"}:
+        revision = inspect_repository(paths.generation(generation).database).dataset_revision
+        args += [
+            str(request),
+            "--idempotency-key",
+            "catalog",
+            "--expected-generation",
+            generation,
+            "--expected-revision",
+            str(revision),
+        ]
+    elif command == "ownership":
+        args += [account, "--as-of", "2026-09-14"]
+    return runner.invoke(
+        app,
+        ["--data-dir", str(source.data_dir), *args, "--json"],
+        obj={"activation_evidence_provider": source.evidence_provider},
+    )
+
+
+def _validate_canonical_catalog(schema_data_dir: Path, label: str, schema_file: str) -> bool:
+    if label.startswith("ssot reconcile "):
+        from tests.pipeline.test_canonical_reconcile import reconcile_catalog_outputs
+
+        payload = reconcile_catalog_outputs(schema_data_dir.parent / "canonical-reconcile")[
+            label.split()[-1]
+        ]
+        _validator_for(_load_schema(schema_file)).validate(payload)
+        return True
+    if label in {"ssot import-json", "ssot statement-evidence"}:
+        from tests.pipeline.test_canonical_statement_json import statement_catalog_outputs
+
+        outputs = statement_catalog_outputs(schema_data_dir.parent / "canonical-statement")
+        _validator_for(_load_schema(schema_file)).validate(
+            outputs[label.replace(" ", "_").replace("-", "_")]
+        )
+        return True
+    if label.startswith("ssot close "):
+        from tests.pipeline.test_canonical_close import close_catalog_outputs
+
+        outputs = close_catalog_outputs(schema_data_dir.parent / "canonical-close")
+        _validator_for(_load_schema(schema_file)).validate(outputs[label.replace(" ", "_")])
+        return True
+    if label.startswith("ssot intake "):
+        from tests.pipeline.test_canonical_intake_cli import intake_catalog_outputs
+
+        if label.endswith((" revise", " withdraw")):
+            from tests.pipeline.test_intake_lifecycle import intake_lifecycle_catalog_outputs
+
+            outputs = intake_lifecycle_catalog_outputs(schema_data_dir.parent / "intake")
+        else:
+            outputs = intake_catalog_outputs(schema_data_dir.parent / "intake")
+        payload = outputs[label.replace(" ", "_")]
+        _validator_for(_load_schema(schema_file)).validate(payload)
+        return True
+    return False
+
+
 @pytest.mark.parametrize(("label", "cmd_args", "schema_file"), CATALOGUED_COMMANDS)
 def test_command_output_validates_against_schema(
     schema_data_dir: Path,
@@ -462,7 +809,29 @@ def test_command_output_validates_against_schema(
     """Actual Typer CLI --json output should validate against its artifact."""
     if label.startswith("backup "):
         cmd_args = _materialize_backup_catalog_args(schema_data_dir, label)
-    result = runner.invoke(app, ["--data-dir", str(schema_data_dir), *cmd_args])
+    if label.startswith("ssot backup "):
+        cmd_args = _materialize_sqlite_backup_catalog_args(schema_data_dir, label)
+    if label.startswith("ssot migrate "):
+        cmd_args = _materialize_migration_catalog_args(schema_data_dir, label)
+    if _validate_canonical_catalog(schema_data_dir, label, schema_file):
+        return
+    if label.startswith("ssot assets "):
+        from tests.pipeline.test_canonical_assets import _catalog_asset_result
+
+        result = _catalog_asset_result(
+            schema_data_dir.parent / "canonical-assets", label.split()[-1]
+        )
+    elif label.startswith("ssot account "):
+        result = _account_catalog_result(schema_data_dir, label)
+    elif label == "export-verify":
+        from tests.cli.commands.test_repository_export import _export, _payload, _verify
+        from tests.cli.commands.test_repository_query import query_root
+
+        root = query_root.__wrapped__(schema_data_dir / "export-verification")
+        generated = _payload(_export(root))
+        result = _verify(root, Path(generated["manifest_path"]))
+    else:
+        result = runner.invoke(app, ["--data-dir", str(schema_data_dir), *cmd_args])
 
     assert result.exit_code == 0, f"{label} failed: {result.output[:500]}"
     payload = json.loads(result.output)

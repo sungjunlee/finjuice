@@ -11,8 +11,10 @@ import typer
 
 from finjuice.pipeline.cli import output
 from finjuice.pipeline.cli.output import ErrorCode, ExitCode, emit, emit_error
+from finjuice.pipeline.cli.utils import get_activation_evidence_provider
 from finjuice.pipeline.config import Config
-from finjuice.pipeline.tagging.models import RuleValidationError
+from finjuice.pipeline.rules_validation_repository import load_repository_rules_validation
+from finjuice.pipeline.tagging.models import RuleValidationError, TagRule
 from finjuice.pipeline.tagging.rules_yaml_io import (
     load_report_filters,
     load_rules,
@@ -120,8 +122,16 @@ def _compute_validate_rules(config: Config, json_output: bool, strict: bool) -> 
             command="rules validate",
         )
 
-    total_rules = len(rules) + len(collected_issues)
-    if total_rules == 0:
+    return _validation_result(rules, collected_issues)
+
+
+def _validation_result(
+    rules: list[TagRule], collected_issues: list[ValidationIssue], *, total_rules: int | None = None
+) -> dict[str, Any]:
+    """Apply common warnings/conflicts after strict or collecting rule loading."""
+    if total_rules is None:
+        total_rules = len(rules) + sum(issue.rule_index != -1 for issue in collected_issues)
+    if total_rules == 0 and not collected_issues:
         return {
             "status": "valid",
             "total_rules": 0,
@@ -226,13 +236,47 @@ def validate_rules_command(
         finjuice rules validate
     """
     config: Config = ctx.obj["config"]
-    result = _compute_validate_rules(config, json_output, strict)
+    try:
+        canonical = load_repository_rules_validation(
+            config.data_dir, get_activation_evidence_provider(ctx), strict=strict
+        )
+    except Exception:
+        emit_error(
+            "Canonical rules validation could not read selected configuration.",
+            error_code=ErrorCode.VALIDATION_FAILED,
+            exit_code=ExitCode.VALIDATION_ERROR,
+            json_output=json_output,
+            command="rules validate",
+        )
+    if canonical is not None and canonical.metadata["rules_selection_state"] == "absent":
+        emit_error(
+            "Canonical rules are absent.",
+            error_code=ErrorCode.RULES_FILE_NOT_FOUND,
+            exit_code=ExitCode.USAGE_ERROR,
+            json_output=json_output,
+            command="rules validate",
+            meta_extras=canonical.metadata,
+        )
+    result = (
+        _compute_validate_rules(config, json_output, strict)
+        if canonical is None
+        else _validation_result(
+            canonical.rules,
+            [_collected_error_to_issue(error) for error in canonical.errors],
+            total_rules=canonical.total_rules,
+        )
+    )
+    if canonical is not None and not json_output:
+        output.info(
+            f"Canonical rules; repository revision {canonical.metadata['dataset_revision']}"
+        )
     json_result = {k: v for k, v in result.items() if not k.startswith("_")}
     emit(
         json_result,
         json_output,
         lambda _: _render_validate_rules(result),
         command="rules validate",
+        meta_extras=canonical.metadata if canonical is not None else None,
     )
 
     if result["_has_errors"]:

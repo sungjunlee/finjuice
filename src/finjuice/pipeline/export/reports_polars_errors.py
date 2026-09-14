@@ -45,10 +45,8 @@ def _translate_export_errors(report_name: str) -> Iterator[None]:
         logger.error("Cannot write %s report (%s)", report_name, type(e).__name__)
         raise RuntimeError(f"Failed to export {report_name} report: {e}") from e
     except (ValueError, KeyError) as e:
-        logger.error(f"Invalid data for {report_name} aggregation: {e}", exc_info=True)
+        logger.error("Invalid data for %s aggregation (%s)", report_name, type(e).__name__)
         raise RuntimeError(f"Data validation failed for {report_name}: {e}") from e
     except pl.exceptions.PolarsError as e:
-        logger.error(
-            f"Polars error in {report_name} export: {type(e).__name__}: {e}", exc_info=True
-        )
+        logger.error("Polars error in %s export (%s)", report_name, type(e).__name__)
         raise RuntimeError(f"Polars computation failed for {report_name}: {e}") from e

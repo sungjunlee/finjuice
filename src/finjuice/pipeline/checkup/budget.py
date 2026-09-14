@@ -17,7 +17,7 @@ from finjuice.pipeline.checkup.partitions import (
 )
 from finjuice.pipeline.checkup.values import merge_warning
 from finjuice.pipeline.config import Config
-from finjuice.pipeline.goals import MonthlyBudget, load_goals_file
+from finjuice.pipeline.goals import GoalsLoadResult, MonthlyBudget, load_goals_file
 from finjuice.pipeline.report_filters import apply_report_filters
 from finjuice.pipeline.tagging.models import ReportFilters
 from finjuice.pipeline.tagging.rules_yaml_io import load_report_filters
@@ -33,6 +33,43 @@ def collect_budget_posture(
     goals_result = load_goals_file(config.goals_file)
     actuals, filters_applied, filter_warning = _load_budget_actuals(config, month=month)
 
+    return _assemble_budget_posture(
+        goals_result,
+        actuals,
+        month=month,
+        filters_applied=filters_applied,
+        filter_warning=filter_warning,
+    )
+
+
+def build_budget_posture(
+    goals_result: GoalsLoadResult,
+    frame: pl.DataFrame | None,
+    *,
+    month: str,
+    report_filters: ReportFilters,
+    filter_warning: str | None = None,
+) -> BudgetPostureSummary:
+    """Summarize an already selected month's budget without reading files."""
+    actuals, filters_applied = _budget_actuals(frame, report_filters)
+    return _assemble_budget_posture(
+        goals_result,
+        actuals,
+        month=month,
+        filters_applied=filters_applied,
+        filter_warning=filter_warning,
+    )
+
+
+def _assemble_budget_posture(
+    goals_result: GoalsLoadResult,
+    actuals: dict[str, int],
+    *,
+    month: str,
+    filters_applied: int,
+    filter_warning: str | None,
+) -> BudgetPostureSummary:
+    """Assemble shared budget diagnostics from calculated actuals."""
     if not goals_result.exists:
         warning = "goals.yaml not found. Budget posture is unconfigured."
         return BudgetPostureSummary(
@@ -98,10 +135,21 @@ def _load_budget_actuals(
         return {}, 0, None
 
     report_filters, warning = _load_budget_report_filters(config)
+    actuals, filters_applied = _budget_actuals(df, report_filters)
+    return actuals, filters_applied, warning
+
+
+def _budget_actuals(
+    df: pl.DataFrame | None,
+    report_filters: ReportFilters,
+) -> tuple[dict[str, int], int]:
+    """Calculate category actuals from a detached monthly transaction frame."""
+    if df is None or df.is_empty():
+        return {}, 0
     filtered_df, filters_applied = apply_report_filters(df, report_filters)
     expense_df = expense_rows(filtered_df)
     if expense_df.is_empty():
-        return {}, filters_applied, warning
+        return {}, filters_applied
 
     grouped = (
         expense_df.with_columns(_budget_category_expr(expense_df).alias("budget_category"))
@@ -110,7 +158,7 @@ def _load_budget_actuals(
         .sort("actual_amount", descending=True)
     )
     actuals = {str(row[0]): int(round(float(row[1]))) for row in grouped.iter_rows()}
-    return actuals, filters_applied, warning
+    return actuals, filters_applied
 
 
 def _load_budget_report_filters(config: Config) -> tuple[ReportFilters, str | None]:

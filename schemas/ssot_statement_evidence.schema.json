@@ -1,0 +1,42 @@
+{
+  "$id": "ssot_statement_evidence.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "occurrence_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "pending_external_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "record_count": {
+      "type": "integer"
+    },
+    "records": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "records",
+    "occurrence_ids",
+    "pending_external_ids",
+    "record_count"
+  ],
+  "title": "ssot statement-evidence output",
+  "type": "object",
+  "x-command": "ssot.statement-evidence"
+}

@@ -168,7 +168,26 @@ def _build_next_actions(
             )
         )
 
-    if obligations.actionable:
+    actions.extend(_obligation_actions(obligations))
+
+    return sorted(
+        actions,
+        key=lambda action: (_PRIORITY_ORDER[action.priority], action.domain, action.command),
+    )
+
+
+def _obligation_actions(obligations: ObligationConfirmationSummary) -> list[NextAction]:
+    actions: list[NextAction] = []
+    if obligations.status == "unavailable":
+        actions.append(
+            NextAction(
+                domain="obligations",
+                priority="high",
+                reason="목표 설정이 유효하지 않아 기록된 반복 지출을 확인할 수 없습니다.",
+                command="finjuice budget validate",
+            )
+        )
+    elif obligations.actionable:
         actions.append(
             NextAction(
                 domain="obligations",
@@ -181,7 +200,4 @@ def _build_next_actions(
             )
         )
 
-    return sorted(
-        actions,
-        key=lambda action: (_PRIORITY_ORDER[action.priority], action.domain, action.command),
-    )
+    return actions

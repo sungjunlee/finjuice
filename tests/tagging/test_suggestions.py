@@ -30,9 +30,9 @@ from finjuice.pipeline.tagging.suggestions import (
 def create_test_transactions(data_dir: Path, transactions: list[dict[str, object]]) -> None:
     """Write transactions into CSV partitions under a test data directory."""
     csv_partition.append_transactions(
-        data_dir / "transactions",
         pl.DataFrame(transactions),
         deduplicate=False,
+        authority_data_dir=data_dir,
     )
 
 
@@ -661,7 +661,11 @@ class TestRuleApplication:
         rules_path = tmp_path / "rules.yaml"
         rules_path.write_text("version: 1\nrules: []\n", encoding="utf-8")
 
-        result = apply_suggestion_to_rules(_sample_suggestion(), rules_path)
+        result = apply_suggestion_to_rules(
+            _sample_suggestion(),
+            rules_path,
+            authority_data_dir=tmp_path,
+        )
 
         assert result.name == "suggested_netflix"
         assert result.match == "Netflix"
@@ -681,6 +685,7 @@ class TestRuleApplication:
             _sample_suggestion(),
             rules_path,
             modified_tags=["구독", "디지털서비스"],
+            authority_data_dir=tmp_path,
         )
 
         assert result.tags == ["구독", "디지털서비스"]
@@ -942,6 +947,7 @@ class TestNewModuleKoreanRoundTrip:
             suggestion,
             rules_path,
             modified_tags=["카페", "커피"],
+            authority_data_dir=tmp_path,
         )
         assert result.tags == ["카페", "커피"]
         assert result.match == "스타벅스|스타벅스 강남점"

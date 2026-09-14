@@ -258,8 +258,12 @@ def test_csv_partition_append_read_is_idempotent_across_month_boundaries(
             ]
         )
 
-        first_append = append_transactions(storage_dir, batch, deduplicate=True)
-        second_append = append_transactions(storage_dir, batch, deduplicate=True)
+        first_append = append_transactions(
+            batch, deduplicate=True, authority_data_dir=storage_dir.parent
+        )
+        second_append = append_transactions(
+            batch, deduplicate=True, authority_data_dir=storage_dir.parent
+        )
 
         assert first_append["partitions_updated"] == 2
         assert first_append["rows_inserted"] == 2
@@ -463,7 +467,11 @@ rules:
             ),
         ]
     )
-    append_transactions(transactions_dir, transactions, deduplicate=True)
+    append_transactions(
+        transactions,
+        deduplicate=True,
+        authority_data_dir=transactions_dir.parent,
+    )
 
     first_summary = run_tagging(transactions_dir, rules_path)
     first_rows = (
@@ -525,7 +533,6 @@ def test_compact_privacy_profile_omits_raw_amounts(tmp_path: Path) -> None:
         (data_dir / child).mkdir(parents=True, exist_ok=True)
     (data_dir / "rules.yaml").write_text("version: 1\nrules: []\n", encoding="utf-8")
     append_transactions(
-        data_dir / "transactions",
         pl.DataFrame(
             [
                 _transaction(
@@ -555,6 +562,7 @@ def test_compact_privacy_profile_omits_raw_amounts(tmp_path: Path) -> None:
             ]
         ),
         deduplicate=True,
+        authority_data_dir=data_dir,
     )
 
     result = runner.invoke(

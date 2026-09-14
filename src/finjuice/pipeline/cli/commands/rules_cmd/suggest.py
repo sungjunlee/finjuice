@@ -19,7 +19,10 @@ import typer
 
 from finjuice.pipeline.cli.output import ErrorCode, ExitCode, emit, emit_error
 from finjuice.pipeline.cli.privacy import PrivacyProfile, apply_privacy_profile, privacy_meta
-from finjuice.pipeline.cli.utils import get_config
+from finjuice.pipeline.cli.utils import get_config, get_mutation_facade
+from finjuice.pipeline.config import Config
+from finjuice.pipeline.storage.authority import RepositoryAuthority, legacy_write_lease
+from finjuice.pipeline.storage.sqlite.errors import AuthorityError
 from finjuice.pipeline.tagging.suggest_compute import (
     _augment_suggestion_stats,
     _compact_rules_suggest_result,
@@ -34,8 +37,60 @@ from .suggest_json import (
     _rules_suggest_json_payload,
 )
 from .suggest_rendering import _render_apply_dry_run, _render_suggestion_context_table
+from .suggest_repository import (
+    RepositorySuggestOptions,
+    SuggestionReadOptions,
+    try_repository_suggest,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _preflight_suggest_apply(
+    ctx: typer.Context,
+    config: Config,
+    mutation_requested: bool,
+    json_output: bool,
+    privacy: PrivacyProfile,
+) -> None:
+    """Fence the legacy suggestion writer or reject an active repository early."""
+    if not mutation_requested:
+        return
+    try:
+        facade = get_mutation_facade(ctx, config)
+        if isinstance(facade.dispatch().authority, RepositoryAuthority):
+            emit_error(
+                "Applying generated suggestions is unavailable while the SQLite "
+                "repository is active; use `finjuice rules add` for an authoritative edit.",
+                error_code=ErrorCode.VALIDATION_FAILED,
+                exit_code=ExitCode.VALIDATION_ERROR,
+                json_output=json_output,
+                command="rules suggest",
+                privacy=privacy,
+            )
+        with legacy_write_lease(config.data_dir):
+            pass
+    except AuthorityError as exc:
+        emit_error(
+            str(exc),
+            error_code=ErrorCode.VALIDATION_FAILED,
+            exit_code=ExitCode.VALIDATION_ERROR,
+            json_output=json_output,
+            command="rules suggest",
+            privacy=privacy,
+        )
+
+
+def _prepare_suggest_config(
+    ctx: typer.Context,
+    mutation_requested: bool,
+    json_output: bool,
+    privacy: PrivacyProfile,
+) -> Config:
+    """Load CLI config and run the mutation-only authority preflight."""
+    config = get_config(ctx)
+    _preflight_suggest_apply(ctx, config, mutation_requested, json_output, privacy)
+    return config
 
 
 def suggest_rules_command(
@@ -118,9 +173,28 @@ def suggest_rules_command(
     )
 
     # Get config from context
-    config = get_config(ctx)
+    config = _prepare_suggest_config(
+        ctx,
+        apply and not dry_run,
+        json_output,
+        privacy,
+    )
 
     try:
+        if try_repository_suggest(
+            ctx,
+            config,
+            RepositorySuggestOptions(
+                SuggestionReadOptions(top_n, min_count, file_id),
+                output,
+                apply,
+                dry_run,
+                preview,
+                json_output,
+                privacy,
+            ),
+        ):
+            return
         if json_output:
             result = _rules_suggest_json_payload(
                 config,
@@ -150,9 +224,7 @@ def suggest_rules_command(
             )
             return
 
-        if dry_run and not apply:
-            typer.echo("Cannot use --dry-run without --apply.", err=True)
-            raise typer.Exit(code=2)
+        _require_dry_run_apply(dry_run, apply)
 
         # Check if data directory structure exists
         if not config.csv_base_dir.exists():
@@ -285,3 +357,9 @@ def suggest_rules_command(
             command="rules suggest",
             privacy=privacy,
         )
+
+
+def _require_dry_run_apply(dry_run: bool, apply: bool) -> None:
+    if dry_run and not apply:
+        typer.echo("Cannot use --dry-run without --apply.", err=True)
+        raise typer.Exit(code=2)

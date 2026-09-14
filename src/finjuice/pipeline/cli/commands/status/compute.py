@@ -21,6 +21,7 @@ import polars as pl
 from finjuice.pipeline.cli.output import ErrorCode, ExitCode
 from finjuice.pipeline.config import Config
 from finjuice.pipeline.insights import collect_status_snapshot
+from finjuice.pipeline.storage.authority import ActivationEvidenceProvider
 from finjuice.pipeline.storage.report_filter_exprs import build_report_filter_polars_expr
 from finjuice.pipeline.storage.schema_registry import (
     PartitionSchemaSummary,
@@ -53,6 +54,7 @@ class StatusOptions:
     top_n: int
     no_filter: bool
     report_filters: ReportFilters | None
+    evidence_provider: ActivationEvidenceProvider | None = None
 
 
 @dataclass(frozen=True)
@@ -66,7 +68,7 @@ class StatusFacts:
     min_date: Any | None
     max_date: Any | None
     partition_count: int
-    schema_summary: PartitionSchemaSummary
+    schema_summary: PartitionSchemaSummary | None
     last_import_date: Any | None
     last_import_file: Any | None
     rules_path: Path
@@ -90,6 +92,7 @@ class StatusFacts:
     top_n: int
     detailed_stats: dict[str, Any] | None = None
     detailed_stats_warning: str | None = None
+    repository: dict[str, Any] | None = None
 
 
 class StatusCommandError(Exception):
@@ -112,7 +115,16 @@ class StatusCommandError(Exception):
 
 def collect_status_facts(options: StatusOptions) -> StatusFacts:
     """Collect status facts without deciding severity or rendering output."""
-    database = _resolve_sqlite_database_or_raise()
+    from .repository_facts import collect_repository_status_facts
+
+    repository_facts = collect_repository_status_facts(options)
+    if repository_facts is not None:
+        return repository_facts
+    database = (
+        None
+        if any(options.config.csv_base_dir.glob("*/*/transactions.csv"))
+        else _resolve_sqlite_database_or_raise()
+    )
     if database is not None:
         return _collect_sqlite_status_facts(options, database)
 

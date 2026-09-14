@@ -1,0 +1,34 @@
+{
+  "$id": "ssot_close_reopen.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "close_id": {
+      "type": "string"
+    },
+    "close_revision": {
+      "type": "integer"
+    },
+    "committed_revision": {
+      "type": "integer"
+    },
+    "period": {
+      "type": "string"
+    },
+    "replayed": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "_meta",
+    "close_id",
+    "period",
+    "close_revision",
+    "replayed"
+  ],
+  "title": "ssot close reopen output",
+  "type": "object"
+}

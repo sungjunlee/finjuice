@@ -34,7 +34,7 @@ from tests.integration.helpers import (
 def temp_data_dir():
     """Create temporary data directory for testing."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        data_dir = Path(tmpdir) / "data"
+        data_dir = Path(tmpdir).resolve() / "data"
         data_dir.mkdir()
 
         # Create subdirectories
@@ -501,8 +501,8 @@ def test_incremental_pipeline_idempotency(temp_data_dir, sample_xlsx_file, sampl
     """
     # Arrange
     imports_dir = temp_data_dir / "imports"
-    csv_dir1 = temp_data_dir / "transactions_run1"
-    csv_dir2 = temp_data_dir / "transactions_run2"
+    csv_dir1 = temp_data_dir / "run1" / "transactions"
+    csv_dir2 = temp_data_dir / "run2" / "transactions"
     csv_dir1.mkdir(parents=True, exist_ok=True)
     csv_dir2.mkdir(parents=True, exist_ok=True)
 

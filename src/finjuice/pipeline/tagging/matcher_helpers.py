@@ -7,24 +7,46 @@ the matcher. The matcher re-exports these names for backwards compatibility.
 from __future__ import annotations
 
 import logging
+import math
 import re
+from decimal import Decimal
 from typing import Any
 
 from finjuice.pipeline.tagging.models import (
     Condition as _Condition,
 )
 from finjuice.pipeline.tagging.validator import _parse_between_range
+from finjuice.pipeline.tagging.validator_schema import _parse_exact_decimal
 
 logger = logging.getLogger(__name__)
 
 
+def _to_exact_decimal(value: object) -> Decimal | None:
+    """Normalize a field or threshold to a finite Decimal, or None."""
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, Decimal):
+        return value if value.is_finite() else None
+    if isinstance(value, int):
+        return Decimal(value)
+    if isinstance(value, float):
+        return _decimal_from_finite_float(value)
+    if isinstance(value, str):
+        return _parse_exact_decimal(value)
+    return None
+
+
+def _decimal_from_finite_float(value: float) -> Decimal | None:
+    """Interpret a legacy float through its visible str representation."""
+    if not math.isfinite(value):
+        return None
+    return _parse_exact_decimal(str(value))
+
+
 def _check_numeric_condition(field_value: Any, condition: _Condition) -> bool:
     """Evaluate numeric conditions against amount-like values."""
-    if field_value is None:
-        return False
-    try:
-        num = float(field_value)
-    except (TypeError, ValueError):
+    num = _to_exact_decimal(field_value)
+    if num is None:
         return False
     if condition.op == "less_than":
         return _check_less_than(num, condition.value)
@@ -34,20 +56,18 @@ def _check_numeric_condition(field_value: Any, condition: _Condition) -> bool:
     return minimum is not None and maximum is not None and minimum <= num <= maximum
 
 
-def _check_less_than(num: float, value: str) -> bool:
+def _check_less_than(num: object, value: object) -> bool:
     """Evaluate a less-than condition safely."""
-    try:
-        return num < float(value)
-    except (TypeError, ValueError):
-        return False
+    left = _to_exact_decimal(num)
+    right = _to_exact_decimal(value)
+    return left is not None and right is not None and left < right
 
 
-def _check_greater_than(num: float, value: str) -> bool:
+def _check_greater_than(num: object, value: object) -> bool:
     """Evaluate a greater-than condition safely."""
-    try:
-        return num > float(value)
-    except (TypeError, ValueError):
-        return False
+    left = _to_exact_decimal(num)
+    right = _to_exact_decimal(value)
+    return left is not None and right is not None and left > right
 
 
 def _check_regex(pattern: str, text: str, field: str) -> bool:

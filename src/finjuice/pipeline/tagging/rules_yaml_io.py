@@ -13,8 +13,8 @@ Report-filters schema parsing lives in
 :mod:`finjuice.pipeline.tagging.rules_yaml_filters`; the public
 :func:`load_report_filters` entrypoint stays here.
 
-* **Loaders** — :func:`load_rules`, :func:`load_rules_collecting`, and
-  :func:`load_report_filters` parse YAML into validated
+* **Loaders** — :func:`load_rules`, :func:`load_rules_collecting`,
+  :func:`load_rules_bytes`, and :func:`load_report_filters` parse YAML into validated
   :class:`~finjuice.pipeline.tagging.models.TagRule` /
   :class:`~finjuice.pipeline.tagging.models.ReportFilters` objects.
 * **Round-trip helpers** — :func:`save_rule_dicts_roundtrip`,
@@ -28,10 +28,13 @@ Per-rule schema validation lives in
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from finjuice.pipeline.tagging.models import ReportFilters
+import yaml
+
+from finjuice.pipeline.tagging.models import ReportFilters, TagRule
 from finjuice.pipeline.tagging.rules_yaml_append import (
     append_rule,  # noqa: F401 — re-exported public YAML API
 )
@@ -39,7 +42,9 @@ from finjuice.pipeline.tagging.rules_yaml_filters import _parse_report_filters
 from finjuice.pipeline.tagging.rules_yaml_load import (
     _load_yaml_document,
     load_rules,
+    load_rules_bytes,  # noqa: F401 — re-exported public YAML API
     load_rules_collecting,  # noqa: F401 — re-exported public YAML API
+    load_rules_collecting_bytes,  # noqa: F401 — re-exported public YAML API
 )
 from finjuice.pipeline.tagging.rules_yaml_roundtrip import (
     add_rule_roundtrip,  # noqa: F401 — re-exported public dump API
@@ -57,8 +62,16 @@ def summarize_rule_notes(rules_path: Path, *, limit: int = 10) -> list[dict[str,
     if limit <= 0:
         return []
 
+    return rule_notes_from_rules(load_rules(rules_path), limit=limit)
+
+
+def rule_notes_from_rules(rules: Iterable[TagRule], *, limit: int = 10) -> list[dict[str, Any]]:
+    """Project enabled nonempty notes in the supplied rules' existing order."""
+    if limit <= 0:
+        return []
+
     summaries: list[dict[str, Any]] = []
-    for rule in load_rules(rules_path):
+    for rule in rules:
         notes = rule.notes.strip()
         if not rule.enabled or not notes:
             continue
@@ -82,3 +95,14 @@ def load_report_filters(rules_path: Path) -> ReportFilters:
     """Load declarative report_filters from rules.yaml."""
     data = _load_yaml_document(rules_path, allow_missing_file=True)
     return _parse_report_filters(data, rules_path)
+
+
+def load_report_filters_bytes(content: bytes | None) -> ReportFilters:
+    """Load report filters from pinned authoritative bytes without live-file fallback."""
+    if content is None:
+        return ReportFilters()
+    try:
+        data = yaml.safe_load(content.decode("utf-8"))
+    except (UnicodeDecodeError, yaml.YAMLError) as exc:
+        raise ValueError("Invalid YAML syntax in authoritative report filters.") from exc
+    return _parse_report_filters(data, Path("authoritative rules"))

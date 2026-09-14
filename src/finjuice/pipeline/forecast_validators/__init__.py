@@ -15,7 +15,10 @@ from finjuice.pipeline.forecast_validators.models import (
     ScenariosConfigValidationResult,
     ScenarioValidationIssues,
 )
-from finjuice.pipeline.forecast_validators.validate import validate_scenarios_config_file
+from finjuice.pipeline.forecast_validators.validate import (
+    validate_scenarios_config_bytes,
+    validate_scenarios_config_file,
+)
 
 __all__ = [
     "SCENARIO_NAMES",
@@ -31,5 +34,6 @@ __all__ = [
     "ScenariosConfigIssue",
     "ScenariosConfigValidationError",
     "ScenariosConfigValidationResult",
+    "validate_scenarios_config_bytes",
     "validate_scenarios_config_file",
 ]

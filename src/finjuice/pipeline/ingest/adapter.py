@@ -21,6 +21,8 @@ import polars as pl
 
 from ..constants import HASH_LENGTH_CHARS
 from ..storage import csv_partition
+from ..storage.authority import legacy_write_lease
+from ..storage.csv_transactions_write import _authority_transaction_root
 from ._transaction_processor import _build_transaction_dataframe
 from .pipeline_cluster import _record_ingest_import
 
@@ -182,6 +184,8 @@ def ingest_json_statement(file_path: Path, csv_base_dir: Path) -> dict[str, Any]
     hash and ``append_transactions`` dedup path. Collection failures return a
     retryable result without writing confirmed partitions. Duplicate row hashes
     keep the existing row (including manual corrections) and append evidence.
+    The legacy authority lease covers collection and every write; activated
+    repositories are rejected before parsing or recording collection failures.
 
     Args:
         file_path: Local JSON statement. Originals stay at the source path.
@@ -191,6 +195,15 @@ def ingest_json_statement(file_path: Path, csv_base_dir: Path) -> dict[str, Any]
         Summary with status, contract, transaction counts, evidence, and a
         privacy-safe verification record.
     """
+    if ".." in csv_base_dir.parts or csv_base_dir.name != "transactions":
+        raise ValueError("JSON statement target must be the authority transaction root.")
+    transaction_root, data_dir = _authority_transaction_root(csv_base_dir.parent)
+    with legacy_write_lease(data_dir):
+        return _ingest_json_statement_unleased(file_path, transaction_root)
+
+
+def _ingest_json_statement_unleased(file_path: Path, csv_base_dir: Path) -> dict[str, Any]:
+    """Collect and write only while the caller holds the legacy authority lease."""
     try:
         contract, records = parse_json_statement(file_path)
     except AdapterCollectionError as exc:
@@ -220,9 +233,9 @@ def ingest_json_statement(file_path: Path, csv_base_dir: Path) -> dict[str, Any]
     )
     transactions_df, skipped_rows = _build_transaction_dataframe(file_path, mapped_df, file_id)
     write_result = csv_partition.append_transactions(
-        csv_base_dir,
         transactions_df,
         deduplicate=True,
+        authority_data_dir=csv_base_dir.parent,
     )
     evidence_appended = _append_evidence(csv_base_dir, contract, transactions_df, file_id)
     inserted = int(write_result["rows_inserted"])

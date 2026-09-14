@@ -13,12 +13,18 @@ from pathlib import Path
 import polars as pl
 
 from finjuice.pipeline.query.errors import QuerySourceError
-from finjuice.pipeline.storage.sqlite import inspect_repository
+from finjuice.pipeline.storage.authority import (
+    ActivationEvidenceProvider,
+    LegacyAuthority,
+    resolve_storage_authority,
+)
+from finjuice.pipeline.storage.sqlite import RepositoryReader
 from finjuice.pipeline.storage.sqlite.read_compat import (
     GENERATION_ENV_VAR,
     SqliteReadSourceError,
     distinct_month_count,
     filter_month_frame,
+    frame_from_reader,
     latest_month_label,
     read_month_frame,
     read_transactions_frame,
@@ -73,12 +79,13 @@ def load_query_snapshot(database: Path) -> QuerySnapshot:
     Raises:
         QuerySourceError: Repository identity is missing from the database.
     """
-    info = inspect_repository(database)
+    with RepositoryReader(database) as reader:
+        info = reader.info
+        frame = frame_from_reader(reader)
     generation = info.dataset_generation
     revision = info.dataset_revision
     if generation is None or revision is None:
         raise QuerySourceError("Published repository is missing generation or revision.")
-    frame = read_transactions_frame(database)
     return QuerySnapshot(
         database=database,
         dataset_generation=generation,
@@ -90,20 +97,31 @@ def load_query_snapshot(database: Path) -> QuerySnapshot:
     )
 
 
-def configured_snapshot() -> QuerySnapshot | None:
+def configured_snapshot(data_dir: Path | None = None) -> QuerySnapshot | None:
     """Return the configured snapshot, or ``None`` when CSV mode is active."""
+    if data_dir is not None and any((data_dir / "transactions").glob("*/*/transactions.csv")):
+        return None
     database = resolve_generation_database()
     if database is None:
         return None
     return load_query_snapshot(database)
 
 
-def configured_source_frame() -> pl.DataFrame | None:
+def configured_source_frame(
+    data_dir: Path | None = None,
+    evidence_provider: ActivationEvidenceProvider | None = None,
+) -> pl.DataFrame | None:
     """Return the SQLite transaction frame for DuckDB ``source_frame``.
 
     Returns:
         Decoded CSV-contract frame, or ``None`` so callers keep using CSV.
     """
+    if data_dir is not None:
+        authority = resolve_storage_authority(data_dir, evidence_provider).authority
+        if not isinstance(authority, LegacyAuthority):
+            return None
+        if any((data_dir / "transactions").glob("*/*/transactions.csv")):
+            return None
     database = resolve_generation_database()
     if database is None:
         return None

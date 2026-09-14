@@ -87,7 +87,11 @@ def analyze_tag_category_gaps(
     Returns:
         Dictionary mapping GapType to list of GapAnalysis
     """
-    df = csv_partition.get_all_transactions(csv_base_dir)
+    return analyze_tag_category_gaps_frame(csv_partition.get_all_transactions(csv_base_dir))
+
+
+def analyze_tag_category_gaps_frame(df: pl.DataFrame) -> dict[GapType, list[GapAnalysis]]:
+    """Analyze a detached ordered frame using the existing merchant grouping semantics."""
 
     if len(df) == 0:
         return {gap_type: [] for gap_type in GapType}
