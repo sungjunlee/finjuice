@@ -4,10 +4,10 @@ GitHub 이슈가 명세·AC·상태의 정본이다. 전체 목표는 `goals/fin
 
 ## 현재 코드와 PR
 
-- 기반 PR #463: `codex/ssot-m2-mutations`, `7708df2`. 기존 `f7421c7`에 main `75e64cc`의 38개 additive 파일을 무충돌 병합했다. 필수 non-author approving review가 남았으며 저장소는 auto-merge를 허용하지 않는다. 보호 규칙을 우회하지 않는다.
+- 기반 PR #463: `codex/ssot-m2-mutations`, `c2864aa`. 기존 main75e의 38개 additive 파일에 이어 main `cf109f5`(#515)의 3개 추가 파일을 무충돌 병합했다. 필수 non-author approving review가 남았으며 저장소는 auto-merge를 허용하지 않는다. 보호 규칙을 우회하지 않는다.
 - 통합 PR #481: `codex/ssot-m2-migrate`, 최신 기능 검증 소스 `c6b509b`, 기반 동기화 `bacf7bd`는 같은 파일 tree다. draft를 해제했다. 보존 이전·정본 소비·managed recovery store·immutable commit coverage·실제 postcommit filesystem delivery를 포함한다.
-- 계좌 기능: `codex/ssot-account-binding`, `8c046e9`(기능 commit `15e98a6`), #481 위 별도 PR. schema6의 명시 source binding 확인/교정, 서로 다른 XLSX의 stable account 유지, `ssot account list|confirm|correct|ownership`과 exact as-of 지분/근거 조회를 구현했다. Grok read-only 교차 리뷰 진행 중이며 그 결과를 회수한다.
-- 다음 writer: `codex/ssot-account-decisions`, 위 `8c046e9` 기반 별도 worktree. native `pr512_integration_map`가 영향 preview와 기존 canonical ownership assertion 확정/교정 CLI를 작성한다. 다른 작업 공간은 수정하지 않는다.
+- 계좌 기능: `codex/ssot-account-binding`, `8c046e9`(기능 commit `15e98a6`), #481 위 PR #516. schema6의 명시 source binding 확인/교정, 서로 다른 XLSX의 stable account 유지, `ssot account list|confirm|correct|ownership`과 exact as-of 지분/근거 조회를 구현했다. Grok read-only 교차 리뷰 exit0/P1·P2 없음으로 ready for review다.
+- 다음 writer: `codex/ssot-account-decisions`, 위 `8c046e9` 기반 별도 worktree. native `pr512_integration_map`가 영향 preview와 기존 canonical ownership assertion 확정/교정 CLI를 구현·동결했다. root가 최종 인계를 회수한다. 다른 작업 공간은 수정하지 않는다.
 - 작업 공간의 정확한 절대 경로는 `git worktree list`로 확인한다. 기본 active checkout을 writer로 가정하지 않는다.
 
 ## 완료된 검사 — 재실행하지 않을 것
@@ -27,7 +27,7 @@ GitHub 이슈가 명세·AC·상태의 정본이다. 전체 목표는 `goals/fin
 - 장비 밖 destination 배치·키 복구·정기 실행의 첫 결과·용량·측정 RPO/RTO·새 기록 포함 복원이 남는다. 로컬 전달 성공으로 닫지 않는다.
 - 보존된 과거 M1 사본의 실제 이전과 independent v4 검사는 완료했다: 1605234 checks/0 diff/41752 unresolved/6 notchecked. installed consumer-v3는 627953 checks/0 diff/3 unresolved/6 notchecked. 이는 새 stopped-writer 기준선이나 full family/FX/forecast 운영 증거가 아니다. 반복 이전/진단 확장을 하지 말고 남은 실제 기능·운영 연결을 수행한다.
 - #436/#437 및 #435/#442/#443/#444/#446–448의 자동/근거 없는 종료는 원래 AC가 남아 있어 재개했다. 모듈 존재나 병합만으로 이슈를 닫지 않는다.
-- PR #513은 caller pin harness, #514는 locator/분리 snapshot 경로, #515는 직접 SQL correction 경로라 현재 authority/MutationService 정본 계약의 대체로 통합하지 않았다. 실제 main에 새로 머지되면 현재 코드와 재대조한다.
+- PR #513은 caller pin harness, #514는 locator/분리 snapshot 경로라 정본 경로의 대체로 사용하지 않는다. #515는 maincf109f5에 머지되어 추가2모듈/1테스트파일을 반영했고 관련7PASS/0.38초 및 Ruff/mypy2 PASS다. 기존 정본 경로는 바뀌지 않았으며 그 직접 SQL correction 보조 함수는 canonical mutation/복구 완료 근거가 아니다. 이 추가분에 full을 반복하지 않았다.
 
 ## 실행 원칙
 
