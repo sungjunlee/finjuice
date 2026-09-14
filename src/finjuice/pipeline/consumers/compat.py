@@ -647,9 +647,15 @@ class IsolatedCutover:
             return
         if self.overlay.applied_correction_id is None:
             self.overlay = OverlayBinding(
-                digest=self.overlay.digest,
-                baseline_revision=self.overlay.baseline_revision,
-                dataset_generation=self.overlay.dataset_generation,
+                digest=digest or self.overlay.digest,
+                baseline_revision=baseline
+                if isinstance(baseline, int)
+                else self.overlay.baseline_revision,
+                dataset_generation=(
+                    generation
+                    if isinstance(generation, str) and generation
+                    else self.overlay.dataset_generation
+                ),
                 applied_correction_id=str(disk_id),
             )
 

@@ -565,3 +565,23 @@ def test_owner_persist_does_not_revive_cleared_fence(tmp_path: Path) -> None:
     payload = json.loads((target / "cutover-state.json").read_text(encoding="utf-8"))
     assert payload["fence_enabled"] is False
     owner.close()
+
+
+def test_stale_handle_cannot_rebind_applied_overlay_generation(tmp_path: Path) -> None:
+    """A handle opened before apply cannot claim already_applied for another pin."""
+    target = tmp_path / "target"
+    pin = _pin()
+    other = DatasetPin(dataset_generation=str(uuid4()), dataset_revision=pin.dataset_revision)
+    first = IsolatedCutover(target, pin, overlay_bytes=SYNTHETIC_OVERLAY)
+    stale = IsolatedCutover(target, other, overlay_bytes=SYNTHETIC_OVERLAY)
+    applied = first.apply_overlay_corrections("overlay-baseline-v1")
+    with pytest.raises(ConsumerCutoverError, match="dataset pin"):
+        stale.apply_overlay_corrections("overlay-baseline-v1")
+    first.close()
+    stale.close()
+    resumed = IsolatedCutover.resume(target)
+    retry = resumed.apply_overlay_corrections("overlay-baseline-v1")
+    assert applied.status == "applied"
+    assert retry.status == "already_applied"
+    assert resumed.overlay is not None
+    assert resumed.overlay.dataset_generation == pin.dataset_generation
