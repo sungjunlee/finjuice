@@ -15,8 +15,17 @@ from finjuice.pipeline.cli.export_runtime import configure_cli_export_result_run
 from finjuice.pipeline.cli.output import ErrorCode, ExitCode, _build_meta, emit, emit_error
 from finjuice.pipeline.cli.utils import get_config
 from finjuice.pipeline.export import result as export_result
+from finjuice.pipeline.query import configured_snapshot, write_derived_outputs
 
 logger = logging.getLogger(__name__)
+
+
+def _write_sqlite_derived_if_configured() -> None:
+    """Regenerate revision-pinned compatibility CSV when SQLite is located."""
+    snapshot = configured_snapshot()
+    if snapshot is None:
+        return
+    write_derived_outputs(snapshot)
 
 
 def _render_export_result(result: dict[str, Any]) -> None:
@@ -98,6 +107,7 @@ def export_command(
     validate_period(period, json_output)
 
     try:
+        _write_sqlite_derived_if_configured()
         result = export_result._compute_export_result(
             ctx,
             config,

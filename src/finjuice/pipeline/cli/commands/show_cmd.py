@@ -70,7 +70,7 @@ def _load_sqlite_month(database: Path, year: int, month: int) -> Optional[pl.Dat
     exists but is empty still renders an empty table; the repository has no
     empty-month equivalent.)
     """
-    from finjuice.pipeline.storage.sqlite.read_compat import read_month_frame
+    from finjuice.pipeline.query import read_month_frame
 
     df = read_month_frame(database, year, month)
     return None if df.is_empty() else df
@@ -78,10 +78,7 @@ def _load_sqlite_month(database: Path, year: int, month: int) -> Optional[pl.Dat
 
 def _load_sqlite_all(database: Path) -> tuple[Optional[pl.DataFrame], int]:
     """Load every transaction from the SQLite repository read adapter."""
-    from finjuice.pipeline.storage.sqlite.read_compat import (
-        distinct_month_count,
-        read_transactions_frame,
-    )
+    from finjuice.pipeline.query import distinct_month_count, read_transactions_frame
 
     df = read_transactions_frame(database)
     if df.is_empty():
@@ -91,7 +88,7 @@ def _load_sqlite_all(database: Path) -> tuple[Optional[pl.DataFrame], int]:
 
 def _load_sqlite_latest_month(database: Path) -> tuple[Optional[pl.DataFrame], Optional[str]]:
     """Load the newest month from the SQLite repository read adapter."""
-    from finjuice.pipeline.storage.sqlite.read_compat import (
+    from finjuice.pipeline.query import (
         filter_month_frame,
         latest_month_label,
         read_transactions_frame,
@@ -251,10 +248,9 @@ def show_command(
     )
 
     try:
-        # Load data. When FINJUICE_SQLITE_GENERATION configures a published
-        # repository, reads go through the SQLite read adapter (#436); the
-        # frame contract is identical to the CSV partition read path.
-        from finjuice.pipeline.storage.sqlite.read_compat import resolve_generation_database
+        # Load data. When a published generation is located, reads go through
+        # the query package adapter (#436); the frame contract matches CSV.
+        from finjuice.pipeline.query import resolve_generation_database
 
         sqlite_database = resolve_generation_database()
         filters_applied = 0

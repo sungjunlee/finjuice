@@ -141,14 +141,11 @@ def collect_status_facts(options: StatusOptions) -> StatusFacts:
 
 def _resolve_sqlite_database_or_raise() -> Path | None:
     """Return the configured SQLite read source as a consistent status error."""
-    from finjuice.pipeline.storage.sqlite.read_compat import (
-        SqliteReadSourceError,
-        resolve_generation_database,
-    )
+    from finjuice.pipeline.query import QuerySourceError, resolve_generation_database
 
     try:
         return resolve_generation_database()
-    except SqliteReadSourceError as exc:
+    except QuerySourceError as exc:
         raise StatusCommandError(
             str(exc),
             error_code=ErrorCode.GENERAL_ERROR,

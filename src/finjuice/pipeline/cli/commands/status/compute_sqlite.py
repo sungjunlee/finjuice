@@ -7,8 +7,7 @@ diagnosis, and rendering stay in the existing status modules so human and
 JSON output contracts are unchanged.
 
 TODO(#436 follow-up): the ``--detailed`` insights snapshot still reads CSV
-partitions through :mod:`finjuice.pipeline.insights`; wiring it (and
-``query``/``explain``) to SQLite reads is a later slice.
+partitions through :mod:`finjuice.pipeline.insights`.
 """
 
 from __future__ import annotations
@@ -18,13 +17,10 @@ from pathlib import Path
 
 import polars as pl
 
+from finjuice.pipeline.query import distinct_month_count, read_transactions_frame
 from finjuice.pipeline.storage.schema_registry import (
     PartitionSchemaSummary,
     summarize_partition_schema_versions,
-)
-from finjuice.pipeline.storage.sqlite.read_compat import (
-    distinct_month_count,
-    read_transactions_frame,
 )
 
 from .compute_helpers import _normalize_status_partition_schema
