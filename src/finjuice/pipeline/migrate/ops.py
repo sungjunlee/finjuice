@@ -9,7 +9,6 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from finjuice.pipeline.migrate.csvio import read_csv_rows
 from finjuice.pipeline.migrate.encoding import (
     canonical_bytes,
     digest_text,
@@ -28,7 +27,6 @@ from finjuice.pipeline.migrate.inventory import (
     preflight_space,
     reject_overlap,
     require_outside_repo,
-    resolve_entry_path,
     revalidate_capture,
 )
 from finjuice.pipeline.migrate.mapping import (
@@ -421,17 +419,6 @@ def _check(
     }
 
 
-def _frozen_transaction_rows(
-    capture: CaptureManifest,
-) -> list[tuple[str | None, int, dict[str, str]]]:
-    rows: list[tuple[str | None, int, dict[str, str]]] = []
-    for entry in iter_role_entries(capture, ("transaction_partition",)):
-        _headers, parsed = read_csv_rows(resolve_entry_path(capture, entry))
-        for ordinal, row in enumerate(parsed):
-            rows.append((entry.relative_path, ordinal, row))
-    return rows
-
-
 def _locators_by_provenance(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {
         row["provenance_id"]: json.loads(row["legacy_locator_json"])
@@ -474,54 +461,77 @@ def _payload_record_for_locator(
     return None
 
 
+def _payload_fields(payload: dict[str, Any]) -> dict[str, str]:
+    fields = payload.get("fields") or {}
+    if not isinstance(fields, dict):
+        return {}
+    return {str(key): "" if value is None else str(value) for key, value in fields.items()}
+
+
+def _transaction_plan_items(planned: list[PlannedInput]) -> list[PlannedInput]:
+    return [
+        item
+        for item in planned
+        if item.logical_role == "transaction_partition" and item.ordinal is not None
+    ]
+
+
 def _hidden_markers_match(
-    rows: list[tuple[str | None, int, dict[str, str]]],
+    planned: list[PlannedInput],
     payload_rows: list[dict[str, Any]],
     locators: dict[str, dict[str, Any]],
 ) -> bool:
-    for relative_path, ordinal, row in rows:
-        tags, _issue = parse_tag_sequence(row.get("tags_manual"))
-        _visible, _selected, markers = split_hidden_category(tags)
-        payload = _payload_for_locator(relative_path, ordinal, payload_rows, locators)
+    for item in _transaction_plan_items(planned):
+        payload = _payload_for_locator(
+            item.relative_path, item.ordinal or 0, payload_rows, locators
+        )
         if payload is None:
             return False
+        tags, _issue = parse_tag_sequence(_payload_fields(payload).get("tags_manual"))
+        _visible, _selected, markers = split_hidden_category(tags)
         if list(payload.get("category_override_markers") or []) != markers:
             return False
     return True
 
 
 def _persisted_category_match(
-    rows: list[tuple[str | None, int, dict[str, str]]],
+    planned: list[PlannedInput],
     transactions: list[dict[str, Any]],
     payload_rows: list[dict[str, Any]],
     locators: dict[str, dict[str, Any]],
 ) -> bool:
     by_provenance = {row["provenance_id"]: row for row in transactions}
-    for relative_path, ordinal, row in rows:
-        record = _payload_record_for_locator(relative_path, ordinal, payload_rows, locators)
+    for item in _transaction_plan_items(planned):
+        record = _payload_record_for_locator(
+            item.relative_path, item.ordinal or 0, payload_rows, locators
+        )
         if record is None:
             return False
         txn = by_provenance.get(record["provenance_id"])
         if txn is None:
             continue
-        if str(txn.get("category_final") or "") != (row.get("category_final") or ""):
+        fields = _payload_fields(json.loads(record["payload_json"]))
+        if str(txn.get("category_final") or "") != (fields.get("category_final") or ""):
             return False
-        if str(txn.get("category_rule") or "") != (row.get("category_rule") or ""):
+        if str(txn.get("category_rule") or "") != (fields.get("category_rule") or ""):
             return False
     return True
 
 
 def _unknown_fields_match(
-    rows: list[tuple[str | None, int, dict[str, str]]],
+    planned: list[PlannedInput],
     payload_rows: list[dict[str, Any]],
     locators: dict[str, dict[str, Any]],
 ) -> bool:
     known = set(CSV_COLUMNS)
-    for relative_path, ordinal, row in rows:
-        payload = _payload_for_locator(relative_path, ordinal, payload_rows, locators)
+    for item in _transaction_plan_items(planned):
+        payload = _payload_for_locator(
+            item.relative_path, item.ordinal or 0, payload_rows, locators
+        )
         if payload is None:
             return False
-        if (payload.get("unknown_fields") or {}) != unknown_fields(row, known):
+        fields = _payload_fields(payload)
+        if (payload.get("unknown_fields") or {}) != unknown_fields(fields, known):
             return False
     return True
 
@@ -540,22 +550,27 @@ def _duplicate_hash_ok(snapshot: dict[str, Any], transactions: list[dict[str, An
 
 
 def _preservation_checks(
-    capture: CaptureManifest,
+    planned: list[PlannedInput],
     snapshot: dict[str, Any],
     transactions: list[dict[str, Any]],
     accounts: list[dict[str, Any]],
 ) -> tuple[dict[str, Any], ...]:
-    frozen_rows = _frozen_transaction_rows(capture)
     payload_rows = snapshot["legacy_payloads"]
     locators = _locators_by_provenance(snapshot)
-    hidden_count = sum(
-        1
-        for _path, _ordinal, row in frozen_rows
-        if split_hidden_category(parse_tag_sequence(row.get("tags_manual"))[0])[2]
-    )
-    unknown_count = sum(
-        1 for _path, _ordinal, row in frozen_rows if unknown_fields(row, set(CSV_COLUMNS))
-    )
+    txn_items = _transaction_plan_items(planned)
+    hidden_count = 0
+    unknown_count = 0
+    for item in txn_items:
+        payload = _payload_for_locator(
+            item.relative_path, item.ordinal or 0, payload_rows, locators
+        )
+        if payload is None:
+            continue
+        fields = _payload_fields(payload)
+        if split_hidden_category(parse_tag_sequence(fields.get("tags_manual"))[0])[2]:
+            hidden_count += 1
+        if unknown_fields(fields, set(CSV_COLUMNS)):
+            unknown_count += 1
     identity_ok = _duplicate_hash_ok(snapshot, transactions)
     return (
         _check(
@@ -565,19 +580,19 @@ def _preservation_checks(
         ),
         _check(
             "P02",
-            status="pass" if _hidden_markers_match(frozen_rows, payload_rows, locators) else "fail",
+            status="pass" if _hidden_markers_match(planned, payload_rows, locators) else "fail",
             checked_count=hidden_count,
         ),
         _check(
             "P03",
             status="pass"
-            if _persisted_category_match(frozen_rows, transactions, payload_rows, locators)
+            if _persisted_category_match(planned, transactions, payload_rows, locators)
             else "fail",
-            checked_count=len(frozen_rows),
+            checked_count=len(txn_items),
         ),
         _check(
             "P04",
-            status="pass" if _unknown_fields_match(frozen_rows, payload_rows, locators) else "fail",
+            status="pass" if _unknown_fields_match(planned, payload_rows, locators) else "fail",
             checked_count=unknown_count,
         ),
         _check("H01", status="pass", checked_count=len(accounts)),
@@ -681,10 +696,9 @@ def verify_migration(candidate: Path) -> MigrationResult:
     owner_inferred = [row for row in accounts if row["ownership_state"] != "unknown"]
     if owner_inferred:
         raise invalid("Baseline ownership was inferred; migration must keep ownership unknown.")
-    covered, unexplained, planned_count = _locator_coverage(
-        _planned_inputs_from_manifest(payload), snapshot
-    )
-    checks = _preservation_checks(capture, snapshot, transactions, accounts) + (
+    planned = _planned_inputs_from_manifest(payload)
+    covered, unexplained, planned_count = _locator_coverage(planned, snapshot)
+    checks = _preservation_checks(planned, snapshot, transactions, accounts) + (
         _check("I01", status="pass" if covered else "fail", checked_count=planned_count),
     )
     if unexplained:
