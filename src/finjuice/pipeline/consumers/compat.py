@@ -343,6 +343,7 @@ class IsolatedCutover:
 
     def persist(self) -> Path:
         """Write restartable session state without financial row payloads."""
+        self._adopt_disk_overlay()
         payload = {
             "schema_version": SCHEMA_VERSION,
             "mode": self.mode,
@@ -350,6 +351,10 @@ class IsolatedCutover:
             "manual_state": self.manual_state.to_public_dict(),
             "fence_enabled": self.fence_enabled,
             "overlay": None if self.overlay is None else self.overlay.to_public_dict(),
+            "remembered_modes": {
+                path.relative_to(self.data_dir).as_posix(): mode
+                for path, mode in self._remembered_modes.items()
+            },
         }
         encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2)
         self.state_path.write_text(f"{encoded}\n", encoding="utf-8")
@@ -380,6 +385,10 @@ class IsolatedCutover:
                 baseline_revision=int(overlay_payload["baseline_revision"]),
                 applied_correction_id=overlay_payload.get("applied_correction_id"),
             )
+        remembered: dict[Path, int] = {}
+        for relative, mode in (payload.get("remembered_modes") or {}).items():
+            remembered[session.data_dir / str(relative)] = int(mode)
+        session._remembered_modes = remembered
         return session
 
     def read_consumer(self, consumer_id: str) -> ConsumerRead:
@@ -527,23 +536,45 @@ class IsolatedCutover:
         )
 
     def close(self) -> None:
-        """Restore chmod'd trees so isolated fixtures can be deleted."""
+        """Restore chmod'd trees so isolated fixtures can be deleted.
+
+        Resumed sessions restore the modes persisted with the fence. They must
+        not fall back to 0o755/0o644, which would widen a fenced tree.
+        """
         if self._remembered_modes:
             _restore_modes(self._remembered_modes)
             self._remembered_modes = {}
+
+    def _adopt_disk_overlay(self) -> None:
+        """Keep a newer apply-once overlay if a stale handle writes state."""
+        if not self.state_path.is_file():
             return
-        if not self.fence_enabled:
+        try:
+            existing = json.loads(self.state_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, TypeError):
             return
-        for name in CSV_TREE_NAMES:
-            tree = self.data_dir / name
-            if not tree.exists():
-                continue
-            paths = sorted((tree, *tree.rglob("*")), key=lambda item: len(item.parts), reverse=True)
-            for path in paths:
-                if path.is_dir():
-                    os.chmod(path, 0o755)
-                elif path.is_file():
-                    os.chmod(path, 0o644)
+        overlay_payload = existing.get("overlay")
+        if not isinstance(overlay_payload, dict):
+            return
+        disk_id = overlay_payload.get("applied_correction_id")
+        if not disk_id:
+            return
+        digest = str(overlay_payload.get("digest") or "")
+        baseline = overlay_payload.get("baseline_revision")
+        if self.overlay is None:
+            if digest and isinstance(baseline, int):
+                self.overlay = OverlayBinding(
+                    digest=digest,
+                    baseline_revision=baseline,
+                    applied_correction_id=str(disk_id),
+                )
+            return
+        if self.overlay.applied_correction_id is None:
+            self.overlay = OverlayBinding(
+                digest=self.overlay.digest,
+                baseline_revision=self.overlay.baseline_revision,
+                applied_correction_id=str(disk_id),
+            )
 
 
 def _chmod_tree_readonly(root: Path) -> dict[Path, int]:

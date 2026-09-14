@@ -323,3 +323,38 @@ def test_cutover_does_not_change_out_of_scope_profiles(tmp_path: Path) -> None:
     assert not (other / "data" / LOCK_FILENAME).exists()
     assert (tmp_path / "target-profile" / "overlay.yaml").read_bytes() == SYNTHETIC_OVERLAY
     assert not (other / "overlay.yaml").exists()
+
+
+def test_resumed_close_restores_remembered_modes_without_widening(tmp_path: Path) -> None:
+    """A resumed fenced session must not chmod trees to 0o755/0o644."""
+    csv_relative = "transactions/2024/01/transactions.csv"
+    target = tmp_path / "target"
+    with IsolatedCutover(target, _pin()) as session:
+        seed = session.data_dir / csv_relative
+        seed.parent.mkdir(parents=True, exist_ok=True)
+        seed.write_text("row_hash,amount\nsynthetic,0\n", encoding="utf-8")
+        original_file_mode = stat.S_IMODE(seed.stat().st_mode)
+        original_dir_mode = stat.S_IMODE(seed.parent.stat().st_mode)
+        session.activate_legacy_csv_fence()
+        resumed = IsolatedCutover.resume(target)
+        resumed.close()
+        assert stat.S_IMODE(seed.stat().st_mode) == original_file_mode
+        assert stat.S_IMODE(seed.parent.stat().st_mode) == original_dir_mode
+
+
+def test_stale_session_persist_does_not_drop_applied_overlay(tmp_path: Path) -> None:
+    """A stale handle must not clobber apply-once overlay state on disk."""
+    target = tmp_path / "target"
+    pin = _pin()
+    with IsolatedCutover(target, pin, overlay_bytes=SYNTHETIC_OVERLAY) as session:
+        applied = session.apply_overlay_corrections("overlay-baseline-v1")
+        stale = IsolatedCutover(target, pin, overlay_bytes=SYNTHETIC_OVERLAY)
+        stale.persist()
+        stale.close()
+        resumed = IsolatedCutover.resume(target)
+        retry = resumed.apply_overlay_corrections("overlay-baseline-v1")
+
+    assert applied.status == "applied"
+    assert retry.status == "already_applied"
+    assert resumed.overlay is not None
+    assert resumed.overlay.applied_correction_id == "overlay-baseline-v1"
