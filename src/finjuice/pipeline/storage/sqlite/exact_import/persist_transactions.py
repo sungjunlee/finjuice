@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from finjuice.pipeline.ingest.exact_transactions import ExactMappedRow, ExactTransactionMapping
+from finjuice.pipeline.storage.sqlite.account_bindings import TRANSACTION_ACCOUNT_NAMESPACE
 from finjuice.pipeline.storage.sqlite.exact import ExactValue
 from finjuice.pipeline.storage.sqlite.exact_import.constants import UNRESOLVED_ACCOUNT_KIND
 from finjuice.pipeline.storage.sqlite.exact_import.evidence import (
@@ -63,6 +64,10 @@ def _persist_transaction_row(
     decision: RowDecision,
 ) -> str | None:
     extra = _row_payload(mapping, row, decision)
+    resolution = session.context.resolve_account_binding(
+        TRANSACTION_ACCOUNT_NAMESPACE, row.account_text or ""
+    )
+    extra["account_binding"] = resolution.to_dict()
     place = SourcePlace("transaction", row.sheet_name, row.source_row)
     provenance_id = add_row_provenance(session, place, row.cells, extra)
     issues = [as_issue(item) for item in row.issues]
@@ -107,6 +112,11 @@ def _insert_supported_transaction(
 
 
 def _add_unresolved_account(session: PersistSession, display_name: str) -> str:
+    resolution = session.context.resolve_account_binding(
+        TRANSACTION_ACCOUNT_NAMESPACE, display_name
+    )
+    if resolution.account_id is not None:
+        return resolution.account_id
     account_id = new_entity_id()
     session.context.add_account(
         AccountRecord(

@@ -85,7 +85,6 @@ def validate_assets_config_file(
         AssetsConfigIssue,
         AssetsConfigValidationResult,
     )
-    from finjuice.pipeline.asset_config_validate import _validate_assets_payload
 
     if not assets_file.exists():
         return AssetsConfigValidationResult(
@@ -99,20 +98,36 @@ def validate_assets_config_file(
             ),
         )
 
-    raw_text = assets_file.read_text(encoding="utf-8")
+    return validate_assets_config_bytes(assets_file.read_bytes(), source_label=assets_file)
+
+
+def validate_assets_config_bytes(
+    content: bytes, *, source_label: Path = Path("assets.yaml")
+) -> AssetsConfigValidationResult:
+    """Validate detached UTF-8 YAML without reading a file or exposing parser input."""
+    from finjuice.pipeline.asset_config import (
+        AssetsConfig,
+        AssetsConfigIssue,
+        AssetsConfigValidationResult,
+    )
+    from finjuice.pipeline.asset_config_validate import _validate_assets_payload
+
     try:
+        raw_text = content.decode("utf-8")
         document = yaml.compose(raw_text)
         payload = yaml.safe_load(raw_text)
-    except yaml.YAMLError as exc:
+    except (yaml.YAMLError, UnicodeError) as exc:
         mark = getattr(exc, "problem_mark", None)
         issue = AssetsConfigIssue(
             path="assets.yaml",
-            message="invalid YAML syntax",
+            message="invalid UTF-8 encoding"
+            if isinstance(exc, UnicodeError)
+            else "invalid YAML syntax",
             line=(mark.line + 1) if mark is not None else None,
             column=(mark.column + 1) if mark is not None else None,
         )
         return AssetsConfigValidationResult(
-            path=assets_file,
+            path=source_label,
             exists=True,
             config=AssetsConfig(),
             issues=[issue],
@@ -126,7 +141,7 @@ def validate_assets_config_file(
     config = _validate_assets_payload(payload, locations, issues)
 
     return AssetsConfigValidationResult(
-        path=assets_file,
+        path=source_label,
         exists=True,
         config=config,
         issues=issues,

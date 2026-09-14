@@ -16,12 +16,24 @@ from finjuice.pipeline.reconcile.models import (
     PaymentItem,
     ReconcileReport,
 )
-from finjuice.pipeline.reconcile.nm import (
+from finjuice.pipeline.reconcile.nm import (  # noqa: F401
+    _best_partial,
+    _charge_work,
+    _combo_candidates,
+    _combo_summing_to,
+    _eligible_exact_evidence,
+    _evidence_summing_to,
+    _in_window,
     _match_many_to_one,
     _match_one_to_many,
     _match_one_to_one,
+    _metered_combinations,
+    _possible_evidence_sizes,
+    _possible_payment_sizes,
     _unmatched_evidence,
 )
+from finjuice.pipeline.reconcile.nm import money_abs as money_abs
+from finjuice.pipeline.reconcile.nm import reconciliation_work_meter as reconciliation_work_meter
 
 DEFAULT_WINDOW_DAYS = 14
 

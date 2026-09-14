@@ -1,0 +1,27 @@
+{
+  "$id": "ssot_assets_relation_confirm.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "assertion_id": {
+      "type": "string"
+    },
+    "committed_revision": {
+      "type": "integer"
+    },
+    "replayed": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "_meta",
+    "assertion_id",
+    "committed_revision",
+    "replayed"
+  ],
+  "title": "ssot assets relation-confirm output",
+  "type": "object"
+}

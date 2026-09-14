@@ -24,7 +24,13 @@ MASTER_EXPORT_COLUMNS = tuple(csv_partition.CSV_COLUMNS)
 TAG_EXPORT_COLUMNS = ("tags_rule", "tags_ai", "tags_manual", "tags_final")
 
 
-def export_master_xlsx(csv_base_dir: Path, output_path: Path) -> int:
+def export_master_xlsx(
+    csv_base_dir: Path,
+    output_path: Path,
+    *,
+    source_df: pl.DataFrame | None = None,
+    deterministic: bool = False,
+) -> int:
     """
     Export all transactions to master XLSX file.
 
@@ -36,6 +42,8 @@ def export_master_xlsx(csv_base_dir: Path, output_path: Path) -> int:
     Args:
         csv_base_dir: Base directory for CSV partitions (e.g., data/transactions/)
         output_path: Path to output XLSX file (e.g., master_20251031.xlsx)
+        source_df: Explicit full dataset; even an empty frame bypasses CSV reads.
+        deterministic: Fix workbook metadata and ZIP packaging for repeatable bytes.
 
     Returns:
         int: Number of transactions exported
@@ -50,14 +58,16 @@ def export_master_xlsx(csv_base_dir: Path, output_path: Path) -> int:
     """
     try:
         # Load all transactions from CSV partitions
-        df = csv_partition.get_all_transactions(csv_base_dir)
+        df = (
+            source_df if source_df is not None else csv_partition.get_all_transactions(csv_base_dir)
+        )
         row_count = len(df)
 
         if row_count == 0:
             logger.warning("No transactions to export")
             return 0
 
-        df = _align_to_master_schema(df)
+        df = _align_to_master_schema(df, preserve_extra=source_df is not None)
 
         # Convert list/JSON tag columns to comma-separated strings for Excel readability
         for col in TAG_EXPORT_COLUMNS:
@@ -67,14 +77,19 @@ def export_master_xlsx(csv_base_dir: Path, output_path: Path) -> int:
                 )
 
         # Sort by date and time descending (most recent first)
-        df = df.sort(["date", "time"], descending=True)
+        df = df.sort(["date", "time"], descending=True, maintain_order=deterministic)
 
         # Ensure parent directory exists
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Export to XLSX (Polars write_excel, uses xlsxwriter)
         export_df = neutralize_spreadsheet_strings(df)
-        export_df.write_excel(output_path, worksheet="Transactions")
+        if deterministic:
+            from finjuice.pipeline.export.deterministic_outputs import write_deterministic_xlsx
+
+            write_deterministic_xlsx(export_df, output_path)
+        else:
+            export_df.write_excel(output_path, worksheet="Transactions")
 
         logger.info("Exported master XLSX: %s transactions", row_count)
         return row_count
@@ -82,26 +97,34 @@ def export_master_xlsx(csv_base_dir: Path, output_path: Path) -> int:
     except (PermissionError, OSError, IOError) as e:
         # File system errors - expected during export
         logger.error("Cannot write master XLSX (%s)", type(e).__name__)
-        raise RuntimeError(f"Failed to export master XLSX: {e}") from e
+        raise RuntimeError(
+            f"Failed to export master XLSX: {type(e).__name__ if source_df is not None else e}"
+        ) from e
     except (ValueError, KeyError) as e:
         # Data validation errors - expected from invalid DataFrame
-        logger.error(f"Invalid data structure for export: {e}", exc_info=True)
-        raise RuntimeError(f"Data validation failed during export: {e}") from e
+        logger.error("Invalid data structure for export (%s)", type(e).__name__)
+        raise RuntimeError(
+            "Data validation failed during export: "
+            f"{type(e).__name__ if source_df is not None else e}"
+        ) from e
     except pl.exceptions.PolarsError as e:
-        logger.error(f"Polars error during master export: {type(e).__name__}: {e}", exc_info=True)
-        raise RuntimeError(f"Data processing failed during export: {e}") from e
+        logger.error("Polars error during master export (%s)", type(e).__name__)
+        raise RuntimeError(
+            "Data processing failed during export: "
+            f"{type(e).__name__ if source_df is not None else e}"
+        ) from e
     except Exception as e:
         if "Permission denied" in str(e) or "FileCreateError" in type(e).__name__:
             logger.error("Cannot write master XLSX (%s)", type(e).__name__)
-            raise RuntimeError(f"Failed to export master XLSX: {e}") from e
-        logger.error(
-            f"Unexpected error during master export: {type(e).__name__}: {e}", exc_info=True
-        )
+            raise RuntimeError(
+                f"Failed to export master XLSX: {type(e).__name__ if source_df is not None else e}"
+            ) from e
+        logger.error("Unexpected error during master export (%s)", type(e).__name__)
         raise
 
 
-def _align_to_master_schema(df: pl.DataFrame) -> pl.DataFrame:
-    """Return ``df`` with exactly the transaction CSV schema columns."""
+def _align_to_master_schema(df: pl.DataFrame, *, preserve_extra: bool = False) -> pl.DataFrame:
+    """Keep CSV column order and optionally append explicit repository audit fields."""
     missing_columns = [col for col in MASTER_EXPORT_COLUMNS if col not in df.columns]
     if missing_columns:
         df = df.with_columns(
@@ -111,7 +134,10 @@ def _align_to_master_schema(df: pl.DataFrame) -> pl.DataFrame:
             ]
         )
 
-    return df.select(list(MASTER_EXPORT_COLUMNS))
+    extra = (
+        [name for name in df.columns if name not in MASTER_EXPORT_COLUMNS] if preserve_extra else []
+    )
+    return df.select([*MASTER_EXPORT_COLUMNS, *extra])
 
 
 def _convert_list_to_csv(tag_value: list[str] | str | pl.Series | None) -> str:

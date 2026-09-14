@@ -8,11 +8,17 @@
     },
     "active_goals": {
       "items": {},
-      "type": "array"
+      "type": [
+        "array",
+        "null"
+      ]
     },
     "financial_metadata": {
       "additionalProperties": true,
-      "type": "object"
+      "type": [
+        "object",
+        "null"
+      ]
     },
     "journals": {
       "items": {
@@ -39,6 +45,15 @@
           "snapshot": {
             "additionalProperties": true,
             "type": "object"
+          },
+          "snapshot_metadata": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "snapshot_metadata_basis": {
+            "enum": [
+              "historical_journal_observation"
+            ]
           },
           "summary_200": {
             "type": "string"
@@ -114,7 +129,10 @@
         ],
         "type": "object"
       },
-      "type": "array"
+      "type": [
+        "array",
+        "null"
+      ]
     }
   },
   "required": [

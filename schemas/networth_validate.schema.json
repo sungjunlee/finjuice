@@ -6,6 +6,9 @@
     "_meta": {
       "$ref": "_meta.schema.json"
     },
+    "authority": {
+      "type": "string"
+    },
     "errors": {
       "type": "integer"
     },
@@ -19,7 +22,10 @@
       "type": "integer"
     },
     "path": {
-      "type": "string"
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "problems": {
       "items": {
@@ -65,6 +71,15 @@
         "type": "object"
       },
       "type": "array"
+    },
+    "revision_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "selection_state": {
+      "type": "string"
     },
     "status": {
       "enum": [

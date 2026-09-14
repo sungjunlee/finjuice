@@ -101,3 +101,30 @@ def _check_data_directory(config: Config) -> list[CheckResult]:
         )
 
     return results
+
+
+def _observe_data_directory(config: Config) -> list[CheckResult]:
+    """Observe the runtime directory without probing writes or legacy layout."""
+    try:
+        present = config.data_dir.is_dir()
+    except OSError:
+        return [
+            CheckResult(
+                status="warning",
+                message="외부 데이터 디렉토리 상태 확인 불가",
+                name="data_directory_observed",
+            )
+        ]
+    return [
+        CheckResult(
+            status="ok" if present else "warning",
+            message="외부 데이터 디렉토리 존재" if present else "외부 데이터 디렉토리 부재",
+            name="data_directory_observed",
+        ),
+        CheckResult(
+            status="warning",
+            message="쓰기 기능 검사하지 않음",
+            detail="읽기 전용 관측이며 쓰기 권한을 입증하지 않습니다.",
+            name="data_directory_write_not_tested",
+        ),
+    ]

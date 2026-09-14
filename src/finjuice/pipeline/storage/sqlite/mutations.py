@@ -22,6 +22,15 @@ from finjuice.pipeline.storage.authority import (
     require_repository_binding,
     shared_write_lease,
 )
+from finjuice.pipeline.storage.sqlite.account_bindings import (
+    AccountBindingConfirmation,
+    AccountBindingResolution,
+    insert_account_binding,
+    resolve_account_binding,
+)
+from finjuice.pipeline.storage.sqlite.account_decisions import OwnershipDecision
+from finjuice.pipeline.storage.sqlite.asset_meanings import AssetMeaningDecision
+from finjuice.pipeline.storage.sqlite.asset_reports import AssetRelationDecision
 from finjuice.pipeline.storage.sqlite.errors import (
     MutationAbortedError,
     MutationBusyError,
@@ -33,6 +42,10 @@ from finjuice.pipeline.storage.sqlite.exact import ExactValue
 from finjuice.pipeline.storage.sqlite.exact_import.lookup import (
     load_completed_exact_imports,
     load_transaction_identity_snapshot,
+)
+from finjuice.pipeline.storage.sqlite.generation_binding import (
+    GenerationBinding,
+    as_generation_binding,
 )
 from finjuice.pipeline.storage.sqlite.ids import new_entity_id, validate_entity_id
 from finjuice.pipeline.storage.sqlite.objects import (
@@ -79,6 +92,8 @@ from finjuice.pipeline.storage.sqlite.schema import (
     _validate_v3_invariants,
     _validate_v4_invariants,
 )
+from finjuice.pipeline.storage.sqlite.schema_v6 import validate_v6_invariants
+from finjuice.pipeline.storage.sqlite.schema_v7 import validate_v7_invariants
 from finjuice.pipeline.storage.sqlite.writes import TypedRowWriter
 
 JSONValue: TypeAlias = Any
@@ -199,7 +214,7 @@ class _AttemptState:
 
 @dataclass(frozen=True)
 class _TransactionInputs:
-    authority: RepositoryAuthority
+    authority: RepositoryAuthority | GenerationBinding
     request: MutationRequest
     request_digest: str
     current_revision: int
@@ -212,7 +227,7 @@ class MutationContext:
     def __init__(
         self,
         connection: sqlite3.Connection,
-        authority: RepositoryAuthority,
+        authority: RepositoryAuthority | GenerationBinding,
         changeset_id: str,
     ) -> None:
         self.__connection = connection
@@ -410,7 +425,8 @@ class MutationContext:
         current = self._load_manual_transaction(transaction_id)
         remove_tags = set(edit.remove_tags)
         next_manual = [tag for tag in current["tags_manual"] if tag not in remove_tags]
-        next_manual = merge_final_tags(next_manual, edit.add_tags)
+        if edit.add_tags or edit.remove_tags or edit.category_supplied:
+            next_manual = merge_final_tags(next_manual, edit.add_tags)
         next_category = edit.category if edit.category_supplied else current["category_manual"]
         next_note = edit.note if edit.note_supplied else current["notes_manual"]
         classification_requested = bool(edit.add_tags or edit.remove_tags or edit.category_supplied)
@@ -512,7 +528,7 @@ class MutationContext:
         return {
             "transaction_id": transaction_id,
             **_manual_transaction_view(current),
-            **result_state,
+            **after,
         }
 
     def _resolve_transaction_id(self, identifier: str) -> str:
@@ -563,6 +579,11 @@ class MutationContext:
         ).fetchone()
         if row is None:
             raise MutationValidationError("Transaction identifier was not found.")
+        parse_tags = (
+            _parse_preserved_string_array
+            if _has_migrated_transaction_source(self.__connection, transaction_id)
+            else _parse_string_array
+        )
         coefficient = None if row[21] is None else str(row[21])
         scale = None if row[22] is None else int(row[22])
         return {
@@ -581,12 +602,12 @@ class MutationContext:
             "category_rule": row[12],
             "category_manual": row[13],
             "category_final": row[14],
-            "tags_rule": _parse_string_array(row[15]),
-            "tags_ai": _parse_string_array(row[16]),
-            "tags_manual": _parse_string_array(row[17]),
-            "tags_final": _parse_string_array(row[18]),
-            "tags_manual_audit": None if row[17] is None else _parse_string_array(row[17]),
-            "tags_final_audit": None if row[18] is None else _parse_string_array(row[18]),
+            "tags_rule": parse_tags(row[15]),
+            "tags_ai": parse_tags(row[16]),
+            "tags_manual": parse_tags(row[17]),
+            "tags_final": parse_tags(row[18]),
+            "tags_manual_audit": None if row[17] is None else parse_tags(row[17]),
+            "tags_final_audit": None if row[18] is None else parse_tags(row[18]),
             "confidence_value_id": row[19],
             "needs_review": None if row[20] is None else bool(row[20]),
             "confidence_coefficient": coefficient,
@@ -921,6 +942,121 @@ class MutationContext:
         write()
         self._record(entity_kind, entity_id, "insert", None, after)
 
+    def confirm_account_binding(self, command: AccountBindingConfirmation) -> dict[str, Any]:
+        """Confirm or explicitly supersede a runtime source binding with audited evidence."""
+        _canonical_request_json(asdict(command))
+        result = insert_account_binding(self.__connection, command, self.changeset_id)
+        self._record("account_source_binding", result["binding_id"], "assert", None, result)
+        return result
+
+    def resolve_account_binding(
+        self, namespace: str, external_key: str
+    ) -> AccountBindingResolution:
+        """Resolve explicit current bindings in the same transaction as an import."""
+        return resolve_account_binding(self.__connection, namespace, external_key)
+
+    def find_intake_artifact(self, source_artifact_id: str) -> Mapping[str, Any] | None:
+        """Find existing canonical intake evidence for one immutable source artifact."""
+        from finjuice.pipeline.storage.sqlite.intake_queries import find_intake_artifact
+
+        return find_intake_artifact(self.__connection, source_artifact_id)
+
+    def apply_intake_decision(
+        self, proposal_id: str, request: MutationRequest, confirmed_at: str
+    ) -> Mapping[str, JSONValue]:
+        """Apply a confirmed proposal through the shared canonical mutation context."""
+        from finjuice.pipeline.storage.sqlite.intake_application import apply_intake_decision
+
+        return apply_intake_decision(self.__connection, self, proposal_id, request, confirmed_at)
+
+    def confirm_asset_meaning(self, command: AssetMeaningDecision) -> dict[str, Any]:
+        """Persist an explicit asset interpretation and FX basis as one audited decision."""
+        from finjuice.pipeline.storage.sqlite.asset_meanings import (
+            insert_asset_meaning,
+            validate_decision,
+        )
+        from finjuice.pipeline.storage.sqlite.exact import ExactValue
+
+        validate_decision(self.__connection, command)
+        fx_id = None
+        if command.fx is not None:
+            fx_id = new_entity_id()
+            value = ExactValue(
+                command.fx["coefficient"],
+                command.fx["scale"],
+                None,
+                "rate",
+                "calculated",
+                unit="fx_rate.v1",
+            )
+            if value.coefficient == "0" or value.coefficient.startswith("-"):
+                raise MutationValidationError("FX rate must be positive.")
+            self.add_exact_value(fx_id, value)
+        result = insert_asset_meaning(self.__connection, command, self.changeset_id, fx_id)
+        self._record("asset_meaning", result["assertion_id"], "assert", None, result)
+        return result
+
+    def confirm_asset_relation(self, command: AssetRelationDecision) -> dict[str, Any]:
+        """Use canonical relation assertions for explicit source inclusion/overlap."""
+        from finjuice.pipeline.storage.sqlite.asset_reports import validate_asset_relation
+
+        validate_asset_relation(self.__connection, command)
+        record = EntityRelationAssertionRecord(
+            assertion_id=new_entity_id(),
+            subject_entity_id=command.container_id,
+            object_entity_id=command.member_id,
+            relation_kind=command.relation_kind,
+            confirmation_state=command.confirmation_state,
+            evidence=command.evidence,
+            effective_from=command.effective_from,
+            effective_to=command.effective_to,
+            confirmed_at=datetime.now(timezone.utc).isoformat()
+            if command.confirmation_state == "confirmed"
+            else None,
+            supersedes_assertion_id=command.supersedes_assertion_id,
+        )
+        self.add_relation_assertion(record)
+        return asdict(record)
+
+    def preview_account_binding(self, command: AccountBindingConfirmation) -> dict[str, Any]:
+        """Read one binding impact under the mutation preview snapshot."""
+        from finjuice.pipeline.storage.sqlite.account_decisions import binding_impact
+
+        revision = self.__connection.execute(
+            "SELECT dataset_revision FROM repository_meta WHERE singleton = 1"
+        ).fetchone()[0]
+        return {
+            "expected_generation": as_generation_binding(self.authority).dataset_generation,
+            "expected_revision": revision,
+            **binding_impact(self.__connection, command),
+        }
+
+    def confirm_ownership(self, command: OwnershipDecision) -> dict[str, Any]:
+        """Append exact shares and one evidenced assertion in the current transaction."""
+        from finjuice.pipeline.storage.sqlite.account_decisions import validate_ownership_decision
+
+        validate_ownership_decision(self.__connection, command)
+        assertion_id = new_entity_id()
+        shares = []
+        for decision in command.shares:
+            value_id = new_entity_id()
+            self.add_exact_value(value_id, decision.exact_value())
+            shares.append(OwnershipShareRecord(assertion_id, decision.party_id, value_id))
+        record = OwnershipAssertionRecord(
+            assertion_id=assertion_id,
+            account_id=command.account_id,
+            completeness=command.completeness,
+            confirmation_state="confirmed",
+            evidence=command.evidence,
+            effective_from=command.effective_from,
+            effective_to=command.effective_to,
+            unknown_remainder=command.completeness != "complete",
+            confirmed_at=datetime.now(timezone.utc).isoformat(),
+            supersedes_assertion_id=command.supersedes_assertion_id,
+        )
+        self.add_ownership_assertion(record, shares)
+        return {**asdict(record), "shares": [asdict(share) for share in shares]}
+
     def add_ownership_assertion(
         self,
         record: OwnershipAssertionRecord,
@@ -1155,6 +1291,40 @@ def _config_audit_state(revision: ConfigRevisionRecord) -> dict[str, JSONValue]:
     }
 
 
+_MIGRATED_TRANSACTION_SOURCE_SQL = (
+    "SELECT txn.entity_id FROM transactions AS txn "
+    "JOIN migration_identities AS identity ON identity.entity_id = txn.entity_id "
+    "AND identity.record_kind = 'transaction' "
+    "JOIN legacy_payloads AS payload ON payload.provenance_id = txn.provenance_id "
+    "JOIN record_provenance AS provenance ON provenance.provenance_id = txn.provenance_id "
+    "JOIN observations AS observation ON observation.entity_id = txn.observation_id "
+    "AND observation.source_occurrence_id = provenance.source_occurrence_id "
+)
+
+
+def _has_migrated_transaction_source(connection: sqlite3.Connection, transaction_id: str) -> bool:
+    """Recognize captured legacy rows whose tag spelling and duplicates were preserved."""
+    return (
+        connection.execute(
+            _MIGRATED_TRANSACTION_SOURCE_SQL + "WHERE txn.entity_id = ?", (transaction_id,)
+        ).fetchone()
+        is not None
+    )
+
+
+def _parse_preserved_string_array(value: Any) -> list[str]:
+    """Decode source-backed legacy arrays without silently normalizing their members."""
+    if value is None:
+        return []
+    try:
+        parsed = json.loads(str(value), parse_constant=_reject_json_constant)
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise RepositoryIntegrityError("Stored transaction tags are invalid JSON.") from exc
+    if not isinstance(parsed, list) or any(not isinstance(item, str) for item in parsed):
+        raise RepositoryIntegrityError("Stored legacy transaction tags are not a string array.")
+    return parsed
+
+
 def _parse_string_array(value: Any) -> list[str]:
     if value is None:
         return []
@@ -1281,7 +1451,8 @@ def _load_bulk_transaction_rows(
     rows = connection.execute(sql, parameters).fetchall()
     if transaction_ids is not None and len(rows) != len(set(transaction_ids)):
         raise MutationValidationError("Transaction identifier was not found.")
-    return tuple(_bulk_transaction_mapping(row) for row in rows)
+    migrated = {row[0] for row in connection.execute(_MIGRATED_TRANSACTION_SOURCE_SQL)}
+    return tuple(_bulk_transaction_mapping(row, preserved=row[0] in migrated) for row in rows)
 
 
 def _bulk_transaction_query(
@@ -1303,12 +1474,12 @@ def _bulk_transaction_query(
     return sql, identifiers
 
 
-def _bulk_transaction_mapping(row: Sequence[Any]) -> dict[str, Any]:
+def _bulk_transaction_mapping(row: Sequence[Any], *, preserved: bool = False) -> dict[str, Any]:
     coefficient = None if row[37] is None else str(row[37])
     scale = None if row[38] is None else int(row[38])
     amount_coefficient = str(row[30])
     amount_scale = int(row[31])
-    mapping = _bulk_transaction_core(row)
+    mapping = _bulk_transaction_core(row, preserved=preserved)
     mapping.update(_bulk_transaction_amount(row, amount_coefficient, amount_scale))
     mapping.update(
         {
@@ -1324,9 +1495,9 @@ def _bulk_transaction_mapping(row: Sequence[Any]) -> dict[str, Any]:
     return mapping
 
 
-def _bulk_transaction_core(row: Sequence[Any]) -> dict[str, Any]:
+def _bulk_transaction_core(row: Sequence[Any], *, preserved: bool = False) -> dict[str, Any]:
     mapping = _bulk_transaction_identity(row)
-    mapping.update(_bulk_transaction_classification(row))
+    mapping.update(_bulk_transaction_classification(row, preserved=preserved))
     return mapping
 
 
@@ -1347,7 +1518,10 @@ def _bulk_transaction_identity(row: Sequence[Any]) -> dict[str, Any]:
     }
 
 
-def _bulk_transaction_classification(row: Sequence[Any]) -> dict[str, Any]:
+def _bulk_transaction_classification(
+    row: Sequence[Any], *, preserved: bool = False
+) -> dict[str, Any]:
+    parse_tags = _parse_preserved_string_array if preserved else _parse_string_array
     return {
         "category_final": row[16],
         "category_manual": row[15],
@@ -1361,10 +1535,10 @@ def _bulk_transaction_classification(row: Sequence[Any]) -> dict[str, Any]:
         "minor_raw": row[8],
         "needs_review": None if row[22] is None else bool(row[22]),
         "notes_manual": row[11],
-        "tags_ai": _parse_string_array(row[18]),
-        "tags_final": _parse_string_array(row[20]),
-        "tags_manual": _parse_string_array(row[19]),
-        "tags_rule": _parse_string_array(row[17]),
+        "tags_ai": parse_tags(row[18]),
+        "tags_final": parse_tags(row[20]),
+        "tags_manual": parse_tags(row[19]),
+        "tags_rule": parse_tags(row[17]),
         "transfer_group_id": row[25],
     }
 
@@ -1400,10 +1574,13 @@ def _load_stored_derived_state(
     ).fetchone()
     if row is None:
         raise MutationValidationError("Transaction identifier was not found.")
-    return _stored_derived_mapping(row)
+    return _stored_derived_mapping(
+        row, preserved=_has_migrated_transaction_source(connection, transaction_id)
+    )
 
 
-def _stored_derived_mapping(row: Sequence[Any]) -> dict[str, JSONValue]:
+def _stored_derived_mapping(row: Sequence[Any], *, preserved: bool = False) -> dict[str, JSONValue]:
+    parse_tags = _parse_preserved_string_array if preserved else _parse_string_array
     return {
         "category_final": row[0],
         "category_rule": row[1],
@@ -1411,8 +1588,8 @@ def _stored_derived_mapping(row: Sequence[Any]) -> dict[str, JSONValue]:
         "is_transfer": None if row[6] is None else bool(row[6]),
         "is_transfer_candidate": None if row[7] is None else bool(row[7]),
         "needs_review": None if row[3] is None else bool(row[3]),
-        "tags_final": _parse_string_array(row[4]),
-        "tags_rule": _parse_string_array(row[5]),
+        "tags_final": parse_tags(row[4]),
+        "tags_rule": parse_tags(row[5]),
         "transfer_group_id": row[8],
     }
 
@@ -1441,7 +1618,10 @@ def _reject_mismatched_derived_field(
 ) -> None:
     if key not in _DERIVED_COLUMNS:
         raise MutationValidationError("Unsupported derived field.")
-    _derived_sql_value(key, claimed)
+    # Before-state is evidence, not a proposed canonical write. The stored tags
+    # have already passed the native or source-backed preservation parser.
+    if key not in _JSON_DERIVED_KEYS:
+        _derived_sql_value(key, claimed)
     actual = _derived_audit_value(key, stored[key])
     if _derived_audit_value(key, claimed) != actual:
         raise MutationValidationError("Derived before-state does not match stored state.")
@@ -1582,9 +1762,9 @@ class MutationService:
             )
             connection = _connect_reader(authority.paths.database, self._busy_timeout_ms)
             try:
-                _validate_locked_repository(connection, authority)
-                request_digest = _digest(_canonical_request(request))
-                return _lookup_idempotency(connection, request, request_digest)
+                return find_generation_replay(
+                    connection, authority, request, revalidate=lambda: None
+                )
             finally:
                 connection.close()
 
@@ -1615,80 +1795,108 @@ class MutationService:
         request: MutationRequest,
         handler: MutationHandler,
     ) -> MutationReceipt:
-        attempt = _AttemptState()
-        _begin_writer_transaction(connection)
-        try:
-            return self._run_started_transaction(
-                connection,
-                authority,
-                request,
-                handler,
-                attempt,
-            )
-        except BaseException as exc:
-            if connection.in_transaction:
-                connection.execute("ROLLBACK")
-            retained = _attempt_retained_artifacts(attempt)
-            if retained:
-                raise MutationAbortedError(
-                    "Mutation rolled back; immutable source objects were retained.",
-                    retained,
-                ) from exc
-            raise
+        def revalidate() -> None:
+            if (
+                read_activation(self._authority_paths, self._activation_evidence)
+                != authority.activation
+            ):
+                raise RepositoryIntegrityError(
+                    "Activation changed before the repository write lock."
+                )
 
-    def _run_started_transaction(
-        self,
-        connection: sqlite3.Connection,
-        authority: RepositoryAuthority,
-        request: MutationRequest,
-        handler: MutationHandler,
-        attempt: _AttemptState,
-    ) -> MutationReceipt:
-        if (
-            read_activation(self._authority_paths, self._activation_evidence)
-            != authority.activation
-        ):
-            raise RepositoryIntegrityError("Activation changed before the repository write lock.")
-        current_revision = _validate_locked_repository(connection, authority)
+        return execute_generation_mutation(
+            connection, authority, request, handler, revalidate=revalidate
+        )
+
+
+def execute_generation_mutation(
+    connection: sqlite3.Connection,
+    binding: RepositoryAuthority | GenerationBinding,
+    request: MutationRequest,
+    handler: MutationHandler,
+    *,
+    revalidate: Callable[[], None],
+) -> MutationReceipt:
+    """Execute the single typed engine after caller admission/lease, rechecking under BEGIN.
+
+    The caller owns and closes the idle connection and holds its generation lease
+    throughout this call. Revalidation must reject a revoked or replaced binding.
+    """
+    attempt = _AttemptState()
+    _begin_writer_transaction(connection)
+    try:
+        revalidate()
+        current_revision = _validate_locked_repository(connection, binding)
         request_digest = _digest(_canonical_request(request))
         replay = _lookup_idempotency(connection, request, request_digest)
         if replay is not None:
             connection.execute("ROLLBACK")
             return replay
-        _validate_new_request(request, authority, current_revision)
+        _validate_new_request(request, binding, current_revision)
         return _execute_new_request(
             connection,
-            _TransactionInputs(
-                authority=authority,
-                request=request,
-                request_digest=request_digest,
-                current_revision=current_revision,
-                handler=handler,
-            ),
+            _TransactionInputs(binding, request, request_digest, current_revision, handler),
             attempt,
         )
+    except BaseException as exc:
+        if connection.in_transaction:
+            connection.execute("ROLLBACK")
+        retained = _attempt_retained_artifacts(attempt)
+        if retained:
+            raise MutationAbortedError(
+                "Mutation rolled back; immutable source objects were retained.", retained
+            ) from exc
+        raise
 
 
-def _preview_locked(
+def find_generation_replay(
     connection: sqlite3.Connection,
-    authority: RepositoryAuthority,
+    binding: RepositoryAuthority | GenerationBinding,
+    request: MutationRequest,
+    *,
+    revalidate: Callable[[], None],
+) -> MutationReceipt | None:
+    """Look up an exact receipt using a caller-admitted and leased generation."""
+    revalidate()
+    _validate_locked_repository(connection, binding)
+    return _lookup_idempotency(connection, request, _digest(_canonical_request(request)))
+
+
+def preview_generation_mutation(
+    connection: sqlite3.Connection,
+    binding: RepositoryAuthority | GenerationBinding,
     request: MutationRequest,
     handler: MutationHandler,
+    *,
+    revalidate: Callable[[], None],
 ) -> Mapping[str, JSONValue]:
+    """Preview using the same typed context after revalidation in a read transaction."""
     _validate_request_shape(request)
     connection.execute("BEGIN")
     try:
-        current_revision = _validate_locked_repository(connection, authority)
-        _validate_new_request(request, authority, current_revision)
-        return _run_preview_handler(connection, authority, handler)
+        revalidate()
+        current_revision = _validate_locked_repository(connection, binding)
+        _validate_new_request(request, binding, current_revision)
+        return _run_preview_handler(connection, binding, handler)
     finally:
         if connection.in_transaction:
             connection.execute("ROLLBACK")
 
 
+def _preview_locked(
+    connection: sqlite3.Connection,
+    authority: RepositoryAuthority | GenerationBinding,
+    request: MutationRequest,
+    handler: MutationHandler,
+) -> Mapping[str, JSONValue]:
+    return preview_generation_mutation(
+        connection, authority, request, handler, revalidate=lambda: None
+    )
+
+
 def _run_preview_handler(
     connection: sqlite3.Connection,
-    authority: RepositoryAuthority,
+    authority: RepositoryAuthority | GenerationBinding,
     handler: MutationHandler,
 ) -> Mapping[str, JSONValue]:
     context = MutationContext(connection, authority, _PREVIEW_CHANGESET_ID)
@@ -1756,6 +1964,8 @@ def _execute_new_request(
     _validate_intake_applications(connection)
     _validate_v3_invariants(connection)
     _validate_v4_invariants(connection)
+    validate_v6_invariants(connection)
+    validate_v7_invariants(connection)
     _advance_revision(connection, commit)
     retained = _attempt_retained_artifacts(attempt)
     _store_receipt(connection, request, commit, result_json, retained)
@@ -1825,8 +2035,9 @@ def _connect_reader(database: Path, busy_timeout_ms: int) -> sqlite3.Connection:
 
 def _validate_locked_repository(
     connection: sqlite3.Connection,
-    authority: RepositoryAuthority,
+    authority: RepositoryAuthority | GenerationBinding,
 ) -> int:
+    binding = as_generation_binding(authority)
     application_id = int(connection.execute("PRAGMA application_id").fetchone()[0])
     schema_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
     row = connection.execute(
@@ -1835,15 +2046,20 @@ def _validate_locked_repository(
     ).fetchone()
     if row is None or application_id != SQLITE_APPLICATION_ID:
         raise RepositoryIntegrityError("Repository identity is invalid under the writer lock.")
-    if schema_version != SQLITE_SCHEMA_VERSION or tuple(row[:2]) != (
-        application_id,
-        schema_version,
+    if (
+        schema_version != binding.sqlite_schema_version
+        or schema_version != SQLITE_SCHEMA_VERSION
+        or tuple(row[:2])
+        != (
+            application_id,
+            schema_version,
+        )
     ):
         raise RepositoryIntegrityError("Repository schema is invalid under the writer lock.")
-    if str(row[2]) != authority.activation.dataset_generation:
+    if str(row[2]) != binding.dataset_generation:
         raise RepositoryIntegrityError("Active generation changed before the mutation.")
     revision = int(row[3])
-    if revision < authority.activation.dataset_revision:
+    if revision < binding.baseline_revision:
         raise RepositoryIntegrityError("Repository revision precedes activation baseline.")
     return revision
 
@@ -1886,10 +2102,10 @@ def _validate_request_shape(request: MutationRequest) -> None:
 
 def _validate_new_request(
     request: MutationRequest,
-    authority: RepositoryAuthority,
+    authority: RepositoryAuthority | GenerationBinding,
     current_revision: int,
 ) -> None:
-    if request.expected_generation != authority.activation.dataset_generation:
+    if request.expected_generation != as_generation_binding(authority).dataset_generation:
         raise MutationConflictError("Expected dataset generation is stale.")
     if request.expected_revision != current_revision:
         raise MutationConflictError("Expected dataset revision is stale.")

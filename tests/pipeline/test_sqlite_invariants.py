@@ -31,7 +31,6 @@ from finjuice.pipeline.storage.sqlite import (
     ResourceRecord,
     SourceOccurrenceRecord,
     TransactionRecord,
-    initialize_repository,
     inspect_repository,
     migration_entity_id,
     new_entity_id,
@@ -245,11 +244,16 @@ def test_schema_migration_ledger_is_immutable_and_must_match_current_version(
         validate_repository(paths.database, scratch_root=tmp_path / "scratch")
 
 
-def test_source_binding_query_reads_every_observation_backed_typed_table(
+@pytest.mark.parametrize("schema_version", [4, 5])
+def test_source_validation_reads_every_observation_backed_typed_table(
     tmp_path: Path,
+    schema_version: int,
 ) -> None:
     paths = GenerationPaths(tmp_path / "source-binding-query-coverage")
-    initialize_repository(paths, new_entity_id())
+    with RepositoryBuilder(
+        paths, new_entity_id(), expected_schema_version=schema_version
+    ) as builder:
+        builder.finalize()
     required_columns = {"observation_id", "provenance_id"}
     connection = sqlite3.connect(paths.database)
     try:
@@ -290,7 +294,9 @@ def test_source_binding_query_reads_every_observation_backed_typed_table(
 
         connection.set_authorizer(track_reads)
         try:
-            connection.execute(sqlite_schema._SOURCE_BINDING_CHECKS[0][0]).fetchall()
+            sqlite_schema._validate_application_invariants(
+                connection, schema_version=schema_version
+            )
         finally:
             connection.set_authorizer(None)
     finally:

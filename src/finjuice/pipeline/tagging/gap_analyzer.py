@@ -30,6 +30,7 @@ from finjuice.pipeline.tagging.gap_analyzer_cluster import (
     GapAnalysis,
     GapType,
     analyze_tag_category_gaps,  # noqa: F401 — re-exported for existing callers.
+    analyze_tag_category_gaps_frame,  # noqa: F401 — re-exported frame API.
     filter_actionable_gaps,  # noqa: F401 — re-exported for existing callers.
     sort_mismatch_gaps,
 )
@@ -71,10 +72,19 @@ def simulate_coverage_improvement(
     Returns:
         List of CoverageSimulation results
     """
+    return simulate_coverage_improvement_frame(
+        csv_partition.get_all_transactions(csv_base_dir),
+        top_n_values,
+    )
+
+
+def simulate_coverage_improvement_frame(
+    df: pl.DataFrame,
+    top_n_values: Optional[list[int]] = None,
+) -> list[CoverageSimulation]:
+    """Simulate merchant coverage from the same detached frame used for gap analysis."""
     if top_n_values is None:
         top_n_values = [5, 10, 20]
-
-    df = csv_partition.get_all_transactions(csv_base_dir)
     total = len(df)
 
     if total == 0:

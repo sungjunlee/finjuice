@@ -8,10 +8,12 @@ import typer
 
 from finjuice.pipeline.cli.commands.doctor_rendering import _render_doctor_result
 from finjuice.pipeline.cli.output import emit
+from finjuice.pipeline.cli.utils import get_activation_evidence_provider
 from finjuice.pipeline.config import Config
 from finjuice.pipeline.doctor import _build_doctor_result
 from finjuice.pipeline.doctor import checks as doctor_checks
 from finjuice.pipeline.doctor import skill_runtime as doctor_skill_runtime
+from finjuice.pipeline.doctor.repository import collect_repository_doctor
 
 
 def _probe_cli_capabilities() -> dict[str, bool]:
@@ -33,20 +35,29 @@ def doctor(
 
     Performs comprehensive checks on:
     - System (Python version, finjuice version, OS)
-    - Data directory (existence, permissions, structure)
-    - Configuration (rules.yaml, environment variables)
+    - Data directory (observed access; legacy structure before activation)
+    - Configuration (selected repository rules after activation, environment variables)
     - Data (transactions, imports, processing status)
     - Dependencies (required and optional packages)
+
+    Canonical checks identify their dataset revision. Environment and staged-file
+    checks are separate observations. Diagnostic failures appear in the summary.
     """
     config: Config = ctx.obj["config"]
     doctor_checks._probe_cli_capabilities = _probe_cli_capabilities
     doctor_skill_runtime._probe_cli_capabilities = _probe_cli_capabilities
-    result = _build_doctor_result(config)
+    repository = collect_repository_doctor(config, get_activation_evidence_provider(ctx))
+    result = (
+        _build_doctor_result(config)
+        if repository is None
+        else _build_doctor_result(config, repository=repository)
+    )
     emit(
         result.payload,
         json_output,
         lambda _: _render_doctor_result(result),
         command="doctor",
+        meta_extras=result.metadata,
     )
 
 

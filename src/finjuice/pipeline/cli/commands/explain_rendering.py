@@ -28,7 +28,15 @@ def render_explain(result: dict[str, Any]) -> None:
     console.print(f"Memo: {target_row['memo_raw']}")
     console.print("-" * 40)
 
-    console.print("[bold]🏷️  Classification Result:[/bold]")
+    if "stored_classification" in result:
+        stored = result["stored_classification"]
+        console.print(f"Stored category: {stored['category_final']}")
+        console.print(f"Manual category: {stored['category_manual']}")
+        console.print(f"Stored tags: {', '.join(stored['tags_final'])}")
+        console.print(f"Manual notes: {stored['notes_manual'] or ''}")
+        console.print("[bold]🏷️  Current Rules Simulation:[/bold]")
+    else:
+        console.print("[bold]🏷️  Classification Result:[/bold]")
 
     if classification["matched_rules"]:
         success(f"Matched Rules: {', '.join(classification['matched_rules'])}")
@@ -58,4 +66,7 @@ def render_explain(result: dict[str, Any]) -> None:
         console.print(table)
     else:
         error("No rules matched this transaction.")
-        console.print("It will be classified as 'Unclassified' or use its raw category.")
+        if "stored_classification" in result:
+            console.print("The stored classification is unchanged.")
+        else:
+            console.print("It will be classified as 'Unclassified' or use its raw category.")

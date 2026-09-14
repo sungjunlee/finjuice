@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from finjuice.pipeline.asset_config import (
+    AssetsConfig,
     Liability,
     load_assets_config,
 )
@@ -71,6 +72,19 @@ def build_networth_position(
     snapshot_selection = select_snapshot_as_of(snapshots_dir, as_of)
     assets_config = load_assets_config(assets_file, allow_missing_file=True)
 
+    return build_networth_position_from_selections(
+        snapshot_selection, assets_config, as_of=as_of, balance_selection=balance_selection
+    )
+
+
+def build_networth_position_from_selections(
+    snapshot_selection: SnapshotSelection | None,
+    assets_config: AssetsConfig,
+    *,
+    as_of: date | None = None,
+    balance_selection: BalanceSelection | None = None,
+) -> NetWorthPosition:
+    """Aggregate selected source slices and manual configuration without filesystem reads."""
     source_assets = (
         balance_assets_from_selection(balance_selection)
         if balance_selection is not None

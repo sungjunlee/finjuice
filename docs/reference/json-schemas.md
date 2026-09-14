@@ -52,6 +52,7 @@ command/code/exit-code combinations against this schema.
 | `schemas/doctor.schema.json` | doctor --json output | `checks`, `summary`, `missing_extras`, `install_hint` |
 | `schemas/explain.schema.json` | explain --json output | `query`, `date_filter` |
 | `schemas/export.schema.json` | export --json output | - |
+| `schemas/export_verify.schema.json` | export-verify --json output | `command`, `manifest_path`, `source`, `current`, `stale`, `integrity`, `files` |
 | `schemas/history.schema.json` | history --json output | `records`, `count` |
 | `schemas/import.schema.json` | import --json output | `files_processed`, `files_skipped`, `errors` |
 | `schemas/index.schema.json` | index --json output | `workspace`, `collections`, `recommended_next`, `schema_ref` |
@@ -79,6 +80,41 @@ command/code/exit-code combinations against this schema.
 | `schemas/rules_test.schema.json` | rules test --json output | `rule_name`, `scope`, `match_count`, `sample`, `monthly_distribution`, `cross_tags_top` |
 | `schemas/rules_validate.schema.json` | rules validate --json output | `status`, `total_rules`, `errors`, `warnings`, `passed`, `problems` |
 | `schemas/show.schema.json` | show --json output | `rows`, `row_count`, `total_matches`, `pagination` |
+| `schemas/ssot_account_confirm.schema.json` | ssot account confirm output | `binding_id`, `account_id`, `committed_revision`, `replayed` |
+| `schemas/ssot_account_correct.schema.json` | ssot account correct output | `binding_id`, `account_id`, `supersedes_binding_id`, `committed_revision`, `replayed` |
+| `schemas/ssot_account_list.schema.json` | ssot account list output | `dataset_revision`, `accounts`, `bindings`, `candidates` |
+| `schemas/ssot_account_ownership.schema.json` | ssot account ownership output | `dataset_revision`, `account_id`, `as_of` |
+| `schemas/ssot_account_ownership_confirm.schema.json` | ssot account ownership-confirm output | `assertion_id`, `account_id`, `confirmation_state`, `evidence`, `shares`, `committed_revision`, `replayed` |
+| `schemas/ssot_account_ownership_correct.schema.json` | ssot account ownership-correct output | `assertion_id`, `account_id`, `supersedes_assertion_id`, `confirmation_state`, `evidence`, `shares`, `committed_revision`, `replayed` |
+| `schemas/ssot_account_preview.schema.json` | ssot account preview output | `expected_generation`, `expected_revision`, `before`, `after`, `observed_scope`, `historical_rows_rewritten`, `importer_supported` |
+| `schemas/ssot_assets_confirm.schema.json` | ssot assets confirm output | `assertion_id`, `committed_revision`, `replayed` |
+| `schemas/ssot_assets_correct.schema.json` | ssot assets correct output | `assertion_id`, `committed_revision`, `replayed` |
+| `schemas/ssot_assets_list.schema.json` | ssot assets list output | `sources`, `pending`, `dataset_revision` |
+| `schemas/ssot_assets_relation_confirm.schema.json` | ssot assets relation-confirm output | `assertion_id`, `committed_revision`, `replayed` |
+| `schemas/ssot_assets_relation_correct.schema.json` | ssot assets relation-correct output | `assertion_id`, `committed_revision`, `replayed` |
+| `schemas/ssot_assets_report.schema.json` | ssot assets report output | `completeness`, `net_worth_total`, `known_net_worth_subtotal`, `lines`, `issues`, `dataset_revision` |
+| `schemas/ssot_backup_capture_bundle.schema.json` | ssot backup capture-bundle --json output | `kind`, `graph_digest`, `activation_sha256`, `wheel_basename`, `snapshot_generation`, `snapshot_backup_id`, `snapshot_manifest_digest`, `capsule_digest`, `snapshot_schema_version`, `snapshot_revision`, `activation_revision`, `file_count` |
+| `schemas/ssot_backup_create.schema.json` | ssot backup create --json output | `backup_id`, `backup_kind`, `database_digest`, `manifest_digest`, `source_generation`, `byte_count`, `dataset_revision`, `file_count`, `manifest_schema_version`, `complete`, `status`, `warnings` |
+| `schemas/ssot_backup_deliver_run.schema.json` | ssot backup deliver run --json output | `kind`, `job_id`, `recording`, `backup`, `source_observed_revision`, `coverage_as_of`, `pending_commit_count`, `last_verified_at`, `last_attempt_error_code`, `history_unknown`, `attempt` |
+| `schemas/ssot_backup_deliver_status.schema.json` | ssot backup deliver status --json output | `kind`, `job_id`, `recording`, `backup`, `source_observed_revision`, `coverage_as_of`, `pending_commit_count`, `last_verified_at`, `last_attempt_error_code`, `history_unknown`, `attempt` |
+| `schemas/ssot_backup_restore.schema.json` | ssot backup restore --json output | `restore_id`, `descriptor_digest`, `dataset_generation`, `initial_database_digest`, `source_manifest_digest`, `initial_dataset_revision`, `sqlite_schema_version` |
+| `schemas/ssot_backup_restore_bundle.schema.json` | ssot backup restore-bundle --json output | `restore_id`, `descriptor_digest`, `dataset_generation`, `initial_database_digest`, `source_manifest_digest`, `initial_dataset_revision`, `sqlite_schema_version` |
+| `schemas/ssot_backup_status.schema.json` | ssot backup status --json output | `byte_count`, `file_count`, `complete`, `reason`, `manifest_digest`, `source_generation` |
+| `schemas/ssot_backup_store_capture.schema.json` | ssot backup store capture --json output | `kind`, `graph_digest`, `activation_sha256`, `wheel_basename`, `snapshot_generation`, `snapshot_backup_id`, `snapshot_manifest_digest`, `capsule_digest`, `snapshot_schema_version`, `snapshot_revision`, `activation_revision`, `file_count`, `copy_id`, `baseline_registered` |
+| `schemas/ssot_backup_store_init.schema.json` | ssot backup store init --json output | `kind`, `store_id`, `activation_sha256`, `enrollment_digest` |
+| `schemas/ssot_backup_store_list.schema.json` | ssot backup store list --json output | `kind`, `store_id`, `healthy_count`, `held_count`, `baseline_copy_ids`, `latest_healthy_id`, `copies`, `plan_digest` |
+| `schemas/ssot_backup_store_plan.schema.json` | ssot backup store plan --json output | `kind`, `plan_digest`, `delete_count`, `keep_count`, `protected_count`, `latest_healthy_id`, `policy`, `keep_ids`, `delete_ids`, `protected_ids` |
+| `schemas/ssot_backup_store_protect.schema.json` | ssot backup store protect --json output | `kind`, `copy_id`, `graph_digest` |
+| `schemas/ssot_backup_store_prune.schema.json` | ssot backup store prune --json output | `kind`, `deleted_count`, `kept_count`, `held_count`, `plan_digest`, `deleted_ids`, `kept_ids` |
+| `schemas/ssot_backup_store_restore.schema.json` | ssot backup store restore --json output | `restore_id`, `descriptor_digest`, `dataset_generation`, `initial_database_digest`, `source_manifest_digest`, `initial_dataset_revision`, `sqlite_schema_version` |
+| `schemas/ssot_backup_store_verify.schema.json` | ssot backup store verify --json output | `kind`, `graph_digest`, `activation_sha256`, `wheel_basename`, `snapshot_generation`, `snapshot_backup_id`, `snapshot_manifest_digest`, `capsule_digest`, `snapshot_schema_version`, `snapshot_revision`, `activation_revision`, `file_count` |
+| `schemas/ssot_backup_verify_bundle.schema.json` | ssot backup verify-bundle --json output | `kind`, `graph_digest`, `activation_sha256`, `wheel_basename`, `snapshot_generation`, `snapshot_backup_id`, `snapshot_manifest_digest`, `capsule_digest`, `snapshot_schema_version`, `snapshot_revision`, `activation_revision`, `file_count` |
+| `schemas/ssot_intake_confirm.schema.json` | ssot intake confirm output | `proposal_id`, `confirmation_id`, `applied`, `committed_revision`, `replayed` |
+| `schemas/ssot_intake_list.schema.json` | ssot intake list output | `dataset_generation`, `dataset_revision`, `decisions` |
+| `schemas/ssot_intake_submit.schema.json` | ssot intake submit output | `proposal_id`, `source_artifact_id`, `occurrence_id`, `committed_revision`, `replayed` |
+| `schemas/ssot_migrate_build.schema.json` | ssot migrate build --json output | `status`, `phase`, `manifest_digest`, `input_count`, `cutover_ready`, `limitations`, `generation_status`, `attempt_id`, `origin_kind`, `dataset_revision`, `checks` |
+| `schemas/ssot_migrate_plan.schema.json` | ssot migrate plan --json output | `status`, `phase`, `manifest_digest`, `input_count`, `cutover_ready`, `limitations` |
+| `schemas/ssot_migrate_verify.schema.json` | ssot migrate verify --json output | `status`, `phase`, `manifest_digest`, `input_count`, `cutover_ready`, `limitations`, `generation_status`, `attempt_id`, `origin_kind`, `dataset_revision`, `checks` |
 | `schemas/status.schema.json` | status --json output | `data_directory`, `transactions`, `last_import`, `terminology`, `tagging`, `rules_file`, `health`, `actionable`, `signals`, `next_steps` |
 | `schemas/tag.schema.json` | tag --json output | `status` |
 | `schemas/template_list.schema.json` | template list --json output | `templates` |
@@ -942,7 +978,7 @@ automation run --json output
       }
     }
   ],
-  "description": "automation run --json output. The raw and redacted privacy profiles include data_dir and merchant_pressure samples; compact replaces those samples with counts.",
+  "description": "automation run --json output. The raw and redacted privacy profiles include data_dir and merchant_pressure samples; compact replaces those samples with counts. Canonical pending samples have validation_skips:null because exact-import dispositions are distinct from legacy validation skips; independent preview totals are identified in _meta.",
   "properties": {
     "_meta": {
       "$ref": "_meta.schema.json"
@@ -985,6 +1021,74 @@ automation run --json output
     },
     "pending_imports": {
       "additionalProperties": true,
+      "properties": {
+        "estimated_new_asset_rows": {
+          "type": "integer"
+        },
+        "estimated_new_rows": {
+          "type": "integer"
+        },
+        "failed_file_count": {
+          "type": "integer"
+        },
+        "failed_files": {
+          "items": {
+            "additionalProperties": true,
+            "properties": {
+              "error": {
+                "type": "string"
+              },
+              "source_file": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "files_found": {
+          "type": "integer"
+        },
+        "pending_files": {
+          "type": "integer"
+        },
+        "sample_file_count": {
+          "type": "integer"
+        },
+        "sample_files": {
+          "items": {
+            "additionalProperties": true,
+            "properties": {
+              "estimated_new_asset_rows": {
+                "type": "integer"
+              },
+              "estimated_new_rows": {
+                "type": "integer"
+              },
+              "source_file": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "validation_skips": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
       "type": "object"
     },
     "tagging_pressure": {
@@ -998,7 +1102,10 @@ automation run --json output
             "additionalProperties": true,
             "properties": {
               "avg_amount": {
-                "type": "number"
+                "type": [
+                  "number",
+                  "null"
+                ]
               },
               "merchant": {
                 "type": "string"
@@ -1010,7 +1117,10 @@ automation run --json output
                 "type": "array"
               },
               "total_amount": {
-                "type": "number"
+                "type": [
+                  "number",
+                  "null"
+                ]
               },
               "transaction_count": {
                 "type": "integer"
@@ -1610,6 +1720,9 @@ budget status --json output
     "goals_file": {
       "additionalProperties": true,
       "properties": {
+        "authority": {
+          "type": "string"
+        },
         "exists": {
           "type": "boolean"
         },
@@ -1620,6 +1733,18 @@ budget status --json output
           ]
         },
         "path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "revision_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "selection_state": {
           "type": "string"
         },
         "updated": {
@@ -1842,8 +1967,11 @@ budget validate --json output
 | Field | Type | Required |
 |-------|------|----------|
 | `_meta` | `$ref` _meta.schema.json | yes |
-| `path` | `string` | yes |
+| `authority` | `string` | no |
+| `path` | `string` \| `null` | yes |
 | `problems` | `array`[`object`] | yes |
+| `revision_id` | `string` \| `null` | no |
+| `selection_state` | `string` | no |
 | `status` | enum(`valid`, `invalid`) | yes |
 
 ```json
@@ -1855,8 +1983,14 @@ budget validate --json output
     "_meta": {
       "$ref": "_meta.schema.json"
     },
-    "path": {
+    "authority": {
       "type": "string"
+    },
+    "path": {
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "problems": {
       "items": {
@@ -1864,6 +1998,15 @@ budget validate --json output
         "type": "object"
       },
       "type": "array"
+    },
+    "revision_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "selection_state": {
+      "type": "string"
     },
     "status": {
       "enum": [
@@ -2134,12 +2277,12 @@ context --json output
 | Field | Type | Required |
 |-------|------|----------|
 | `_meta` | `$ref` _meta.schema.json | yes |
-| `active_goals` | `array`[`any`] | yes |
-| `financial_metadata` | `object` | yes |
+| `active_goals` | `array` \| `null` | yes |
+| `financial_metadata` | `object` \| `null` | yes |
 | `journals` | `array`[`object`] | yes |
 | `rule_notes` | `array`[`object`] | yes |
 | `status_snapshot` | `object` | yes |
-| `top_patterns` | `array`[`object`] | yes |
+| `top_patterns` | `array` \| `null` | yes |
 
 ```json
 {
@@ -2152,11 +2295,17 @@ context --json output
     },
     "active_goals": {
       "items": {},
-      "type": "array"
+      "type": [
+        "array",
+        "null"
+      ]
     },
     "financial_metadata": {
       "additionalProperties": true,
-      "type": "object"
+      "type": [
+        "object",
+        "null"
+      ]
     },
     "journals": {
       "items": {
@@ -2183,6 +2332,15 @@ context --json output
           "snapshot": {
             "additionalProperties": true,
             "type": "object"
+          },
+          "snapshot_metadata": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "snapshot_metadata_basis": {
+            "enum": [
+              "historical_journal_observation"
+            ]
           },
           "summary_200": {
             "type": "string"
@@ -2258,7 +2416,10 @@ context --json output
         ],
         "type": "object"
       },
-      "type": "array"
+      "type": [
+        "array",
+        "null"
+      ]
     }
   },
   "required": [
@@ -2300,6 +2461,14 @@ doctor --json output
       "items": {
         "additionalProperties": true,
         "properties": {
+          "basis": {
+            "enum": [
+              "repository",
+              "runtime_observation",
+              "staged_observation"
+            ],
+            "type": "string"
+          },
           "detail": {
             "type": [
               "string",
@@ -2683,6 +2852,102 @@ export --json output
 }
 ```
 
+## `schemas/export_verify.schema.json`
+
+export-verify --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `command` | `any` | yes |
+| `current` | `object` | yes |
+| `files` | `array`[`object`] | yes |
+| `integrity` | enum(`intact`, `mismatch`) | yes |
+| `manifest_path` | `string` | yes |
+| `manifest_sha256` | `string` | no |
+| `source` | `object` | yes |
+| `stale` | `boolean` | yes |
+| `verification_policy` | `any` | no |
+
+```json
+{
+  "$id": "export_verify.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "command": {
+      "const": "export-verify"
+    },
+    "current": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "files": {
+      "items": {
+        "additionalProperties": true,
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "intact",
+              "modified",
+              "missing"
+            ]
+          }
+        },
+        "required": [
+          "path",
+          "status"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "integrity": {
+      "enum": [
+        "intact",
+        "mismatch"
+      ]
+    },
+    "manifest_path": {
+      "type": "string"
+    },
+    "manifest_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "source": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "stale": {
+      "type": "boolean"
+    },
+    "verification_policy": {
+      "const": "local_export_receipt.v1"
+    }
+  },
+  "required": [
+    "_meta",
+    "command",
+    "manifest_path",
+    "source",
+    "current",
+    "stale",
+    "integrity",
+    "files"
+  ],
+  "title": "export-verify --json output",
+  "type": "object",
+  "x-command": "export-verify"
+}
+```
+
 ## `schemas/history.schema.json`
 
 history --json output
@@ -2692,6 +2957,7 @@ history --json output
 | `_meta` | `$ref` _meta.schema.json | yes |
 | `count` | `integer` | yes |
 | `records` | `array`[`object`] | yes |
+| `summary` | `object` | no |
 
 ```json
 {
@@ -2722,11 +2988,30 @@ history --json output
               "null"
             ]
           },
-          "file_id": {
+          "artifact_id": {
             "type": "string"
           },
+          "field_issues": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "file_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "import_counts": {
+            "additionalProperties": true,
+            "type": "object"
+          },
           "imported_at": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "imported_from": {
             "type": [
@@ -2734,11 +3019,43 @@ history --json output
               "null"
             ]
           },
+          "legacy_file_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "occurrence_id": {
+            "type": "string"
+          },
+          "origin": {
+            "type": "string"
+          },
           "original_filename": {
             "type": [
               "string",
               "null"
             ]
+          },
+          "provenance_id": {
+            "type": "string"
+          },
+          "source_artifact_preserved": {
+            "type": "boolean"
+          },
+          "source_cells": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "source_fields": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "source_row": {
+            "type": "integer"
           },
           "source_rows": {
             "type": [
@@ -2754,6 +3071,24 @@ history --json output
         "type": "object"
       },
       "type": "array"
+    },
+    "summary": {
+      "additionalProperties": true,
+      "properties": {
+        "archived_files": {
+          "type": "integer"
+        },
+        "known_source_rows": {
+          "type": "integer"
+        },
+        "unknown_archive_records": {
+          "type": "integer"
+        },
+        "unknown_source_rows_records": {
+          "type": "integer"
+        }
+      },
+      "type": "object"
     }
   },
   "required": [
@@ -2965,7 +3300,7 @@ index --json output
       }
     }
   ],
-  "description": "index --json output. The raw privacy profile preserves the full catalog shape and only includes paths when --include-paths is requested. Redacted and compact profiles suppress resolved workspace and collection paths; compact also drops operational command and note detail.",
+  "description": "index --json output. The raw privacy profile preserves the full catalog shape and only includes paths when --include-paths is requested. Redacted and compact profiles suppress resolved workspace and collection paths; compact also drops operational command and note detail. Canonical financial collections retain repository/count/selection provenance with no filesystem paths or mtimes. External file observations and runtime inventory remain distinct. An unavailable external observation has null exists and count; canonical logical existence remains boolean. Unknown counts are never partial totals.",
   "properties": {
     "_meta": {
       "$ref": "_meta.schema.json"
@@ -2974,17 +3309,37 @@ index --json output
       "items": {
         "additionalProperties": true,
         "properties": {
+          "basis": {
+            "enum": [
+              "repository",
+              "filesystem_observation",
+              "runtime_inventory"
+            ]
+          },
           "count": {
             "type": [
               "integer",
               "null"
             ]
           },
+          "count_basis": {
+            "type": "string"
+          },
           "count_label": {
             "type": "string"
           },
+          "count_state": {
+            "enum": [
+              "known",
+              "absent",
+              "unavailable"
+            ]
+          },
           "exists": {
-            "type": "boolean"
+            "type": [
+              "boolean",
+              "null"
+            ]
           },
           "latest_modified": {
             "type": [
@@ -3019,11 +3374,29 @@ index --json output
             },
             "type": "array"
           },
+          "revision_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "selection_state": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "status": {
             "type": "string"
           },
           "type": {
             "type": "string"
+          },
+          "unavailable_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -4051,9 +4424,12 @@ networth init --json output
 | Field | Type | Required |
 |-------|------|----------|
 | `_meta` | `$ref` _meta.schema.json | yes |
+| `authority` | `string` | no |
 | `created` | `boolean` | yes |
 | `message` | `string` | yes |
-| `path` | `string` | yes |
+| `path` | `string` \| `null` | yes |
+| `revision_id` | `string` \| `null` | no |
+| `selection_state` | `string` | no |
 
 ```json
 {
@@ -4064,6 +4440,9 @@ networth init --json output
     "_meta": {
       "$ref": "_meta.schema.json"
     },
+    "authority": {
+      "type": "string"
+    },
     "created": {
       "type": "boolean"
     },
@@ -4071,6 +4450,18 @@ networth init --json output
       "type": "string"
     },
     "path": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "revision_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "selection_state": {
       "type": "string"
     }
   },
@@ -4092,12 +4483,15 @@ networth validate --json output
 | Field | Type | Required |
 |-------|------|----------|
 | `_meta` | `$ref` _meta.schema.json | yes |
+| `authority` | `string` | no |
 | `errors` | `integer` | yes |
 | `exists` | `boolean` | yes |
 | `liabilities` | `integer` | yes |
 | `manual_assets` | `integer` | yes |
-| `path` | `string` | yes |
+| `path` | `string` \| `null` | yes |
 | `problems` | `array`[`object`] | yes |
+| `revision_id` | `string` \| `null` | no |
+| `selection_state` | `string` | no |
 | `status` | enum(`valid`, `issues`) | yes |
 | `valid` | `boolean` | yes |
 | `version` | `integer` \| `null` | yes |
@@ -4112,6 +4506,9 @@ networth validate --json output
     "_meta": {
       "$ref": "_meta.schema.json"
     },
+    "authority": {
+      "type": "string"
+    },
     "errors": {
       "type": "integer"
     },
@@ -4125,7 +4522,10 @@ networth validate --json output
       "type": "integer"
     },
     "path": {
-      "type": "string"
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "problems": {
       "items": {
@@ -4171,6 +4571,15 @@ networth validate --json output
         "type": "object"
       },
       "type": "array"
+    },
+    "revision_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "selection_state": {
+      "type": "string"
     },
     "status": {
       "enum": [
@@ -5440,7 +5849,7 @@ rules suggest --json output
 | `coverage_before_pct` | `number` | no |
 | `dry_run` | `boolean` | no |
 | `message` | `string` | no |
-| `rules_file` | `string` | no |
+| `rules_file` | `string` \| `null` | no |
 | `rules_file_modified` | `boolean` | no |
 | `skipped` | `integer` | no |
 | `suggestable_coverage_before_pct` | `number` | no |
@@ -5508,7 +5917,10 @@ rules suggest --json output
       "type": "string"
     },
     "rules_file": {
-      "type": "string"
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "rules_file_modified": {
       "type": "boolean"
@@ -5998,6 +6410,2783 @@ show --json output
 }
 ```
 
+## `schemas/ssot_account_confirm.schema.json`
+
+ssot account confirm output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `account_id` | `string` | yes |
+| `binding_id` | `string` | yes |
+| `committed_revision` | `integer` | yes |
+| `external_key` | `string` | no |
+| `replayed` | `boolean` | yes |
+| `source_namespace` | `string` | no |
+
+```json
+{
+  "$id": "ssot_account_confirm.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "account_id": {
+      "type": "string"
+    },
+    "binding_id": {
+      "type": "string"
+    },
+    "committed_revision": {
+      "type": "integer"
+    },
+    "external_key": {
+      "type": "string"
+    },
+    "replayed": {
+      "type": "boolean"
+    },
+    "source_namespace": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "binding_id",
+    "account_id",
+    "committed_revision",
+    "replayed"
+  ],
+  "title": "ssot account confirm output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_account_correct.schema.json`
+
+ssot account correct output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `account_id` | `string` | yes |
+| `binding_id` | `string` | yes |
+| `committed_revision` | `integer` | yes |
+| `replayed` | `boolean` | yes |
+| `supersedes_binding_id` | `string` | yes |
+
+```json
+{
+  "$id": "ssot_account_correct.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "account_id": {
+      "type": "string"
+    },
+    "binding_id": {
+      "type": "string"
+    },
+    "committed_revision": {
+      "type": "integer"
+    },
+    "replayed": {
+      "type": "boolean"
+    },
+    "supersedes_binding_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "binding_id",
+    "account_id",
+    "supersedes_binding_id",
+    "committed_revision",
+    "replayed"
+  ],
+  "title": "ssot account correct output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_account_list.schema.json`
+
+ssot account list output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `accounts` | `array`[`object`] | yes |
+| `bindings` | `array`[`object`] | yes |
+| `candidates` | `array`[`object`] | yes |
+| `dataset_revision` | `integer` | yes |
+
+```json
+{
+  "$id": "ssot_account_list.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "accounts": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "bindings": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "candidates": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "dataset_revision": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "_meta",
+    "dataset_revision",
+    "accounts",
+    "bindings",
+    "candidates"
+  ],
+  "title": "ssot account list output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_account_ownership.schema.json`
+
+ssot account ownership output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `account_id` | `string` | yes |
+| `as_of` | `string` | yes |
+| `dataset_revision` | `integer` | yes |
+
+```json
+{
+  "$id": "ssot_account_ownership.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "account_id": {
+      "type": "string"
+    },
+    "as_of": {
+      "type": "string"
+    },
+    "dataset_revision": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "_meta",
+    "dataset_revision",
+    "account_id",
+    "as_of"
+  ],
+  "title": "ssot account ownership output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_account_ownership_confirm.schema.json`
+
+ssot account ownership-confirm output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `account_id` | `string` | yes |
+| `assertion_id` | `string` | yes |
+| `committed_revision` | `integer` | yes |
+| `confirmation_state` | `any` | yes |
+| `evidence` | `object` | yes |
+| `replayed` | `boolean` | yes |
+| `shares` | `array`[`object`] | yes |
+
+```json
+{
+  "$id": "ssot_account_ownership_confirm.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "account_id": {
+      "type": "string"
+    },
+    "assertion_id": {
+      "type": "string"
+    },
+    "committed_revision": {
+      "type": "integer"
+    },
+    "confirmation_state": {
+      "const": "confirmed"
+    },
+    "evidence": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "replayed": {
+      "type": "boolean"
+    },
+    "shares": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "assertion_id",
+    "account_id",
+    "confirmation_state",
+    "evidence",
+    "shares",
+    "committed_revision",
+    "replayed"
+  ],
+  "title": "ssot account ownership-confirm output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_account_ownership_correct.schema.json`
+
+ssot account ownership-correct output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `account_id` | `string` | yes |
+| `assertion_id` | `string` | yes |
+| `committed_revision` | `integer` | yes |
+| `confirmation_state` | `any` | yes |
+| `evidence` | `object` | yes |
+| `replayed` | `boolean` | yes |
+| `shares` | `array`[`object`] | yes |
+| `supersedes_assertion_id` | `string` | yes |
+
+```json
+{
+  "$id": "ssot_account_ownership_correct.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "account_id": {
+      "type": "string"
+    },
+    "assertion_id": {
+      "type": "string"
+    },
+    "committed_revision": {
+      "type": "integer"
+    },
+    "confirmation_state": {
+      "const": "confirmed"
+    },
+    "evidence": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "replayed": {
+      "type": "boolean"
+    },
+    "shares": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "supersedes_assertion_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "assertion_id",
+    "account_id",
+    "supersedes_assertion_id",
+    "confirmation_state",
+    "evidence",
+    "shares",
+    "committed_revision",
+    "replayed"
+  ],
+  "title": "ssot account ownership-correct output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_account_preview.schema.json`
+
+ssot account preview output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `after` | `object` | yes |
+| `before` | `object` | yes |
+| `expected_generation` | `string` | yes |
+| `expected_revision` | `integer` | yes |
+| `historical_rows_rewritten` | `integer` | yes |
+| `importer_supported` | `boolean` | yes |
+| `observed_scope` | `array`[`object`] | yes |
+
+```json
+{
+  "$id": "ssot_account_preview.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "after": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "before": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "expected_generation": {
+      "type": "string"
+    },
+    "expected_revision": {
+      "type": "integer"
+    },
+    "historical_rows_rewritten": {
+      "type": "integer"
+    },
+    "importer_supported": {
+      "type": "boolean"
+    },
+    "observed_scope": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "expected_generation",
+    "expected_revision",
+    "before",
+    "after",
+    "observed_scope",
+    "historical_rows_rewritten",
+    "importer_supported"
+  ],
+  "title": "ssot account preview output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_assets_confirm.schema.json`
+
+ssot assets confirm output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `assertion_id` | `string` | yes |
+| `committed_revision` | `integer` | yes |
+| `replayed` | `boolean` | yes |
+
+```json
+{
+  "$id": "ssot_assets_confirm.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "assertion_id": {
+      "type": "string"
+    },
+    "committed_revision": {
+      "type": "integer"
+    },
+    "replayed": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "_meta",
+    "assertion_id",
+    "committed_revision",
+    "replayed"
+  ],
+  "title": "ssot assets confirm output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_assets_correct.schema.json`
+
+ssot assets correct output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `assertion_id` | `string` | yes |
+| `committed_revision` | `integer` | yes |
+| `replayed` | `boolean` | yes |
+
+```json
+{
+  "$id": "ssot_assets_correct.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "assertion_id": {
+      "type": "string"
+    },
+    "committed_revision": {
+      "type": "integer"
+    },
+    "replayed": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "_meta",
+    "assertion_id",
+    "committed_revision",
+    "replayed"
+  ],
+  "title": "ssot assets correct output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_assets_list.schema.json`
+
+ssot assets list output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `dataset_revision` | `integer` | yes |
+| `pending` | `array`[`object`] | yes |
+| `sources` | `array`[`object`] | yes |
+
+```json
+{
+  "$id": "ssot_assets_list.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "dataset_revision": {
+      "type": "integer"
+    },
+    "pending": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "sources": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "sources",
+    "pending",
+    "dataset_revision"
+  ],
+  "title": "ssot assets list output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_assets_relation_confirm.schema.json`
+
+ssot assets relation-confirm output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `assertion_id` | `string` | yes |
+| `committed_revision` | `integer` | yes |
+| `replayed` | `boolean` | yes |
+
+```json
+{
+  "$id": "ssot_assets_relation_confirm.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "assertion_id": {
+      "type": "string"
+    },
+    "committed_revision": {
+      "type": "integer"
+    },
+    "replayed": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "_meta",
+    "assertion_id",
+    "committed_revision",
+    "replayed"
+  ],
+  "title": "ssot assets relation-confirm output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_assets_relation_correct.schema.json`
+
+ssot assets relation-correct output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `assertion_id` | `string` | yes |
+| `committed_revision` | `integer` | yes |
+| `replayed` | `boolean` | yes |
+
+```json
+{
+  "$id": "ssot_assets_relation_correct.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "assertion_id": {
+      "type": "string"
+    },
+    "committed_revision": {
+      "type": "integer"
+    },
+    "replayed": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "_meta",
+    "assertion_id",
+    "committed_revision",
+    "replayed"
+  ],
+  "title": "ssot assets relation-correct output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_assets_report.schema.json`
+
+ssot assets report output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `completeness` | `string` | yes |
+| `dataset_revision` | `integer` | yes |
+| `issues` | `array`[`object`] | yes |
+| `known_net_worth_subtotal` | `object` or `null` | yes |
+| `lines` | `array`[`object`] | yes |
+| `net_worth_total` | `object` or `null` | yes |
+
+```json
+{
+  "$id": "ssot_assets_report.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "completeness": {
+      "type": "string"
+    },
+    "dataset_revision": {
+      "type": "integer"
+    },
+    "issues": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "known_net_worth_subtotal": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "lines": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "net_worth_total": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "_meta",
+    "completeness",
+    "net_worth_total",
+    "known_net_worth_subtotal",
+    "lines",
+    "issues",
+    "dataset_revision"
+  ],
+  "title": "ssot assets report output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_backup_capture_bundle.schema.json`
+
+ssot backup capture-bundle --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `activation_revision` | `integer` | yes |
+| `activation_sha256` | `string` | yes |
+| `capsule_digest` | `string` | yes |
+| `file_count` | `integer` | yes |
+| `graph_digest` | `string` | yes |
+| `kind` | `any` | yes |
+| `snapshot_backup_id` | `string` | yes |
+| `snapshot_generation` | `string` | yes |
+| `snapshot_manifest_digest` | `string` | yes |
+| `snapshot_revision` | `integer` | yes |
+| `snapshot_schema_version` | `integer` | yes |
+| `wheel_basename` | `string` | yes |
+
+```json
+{
+  "$id": "ssot_backup_capture_bundle.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "activation_revision": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "activation_sha256": {
+      "type": "string"
+    },
+    "capsule_digest": {
+      "type": "string"
+    },
+    "file_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "graph_digest": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "local_graph_verified"
+    },
+    "snapshot_backup_id": {
+      "type": "string"
+    },
+    "snapshot_generation": {
+      "type": "string"
+    },
+    "snapshot_manifest_digest": {
+      "type": "string"
+    },
+    "snapshot_revision": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "snapshot_schema_version": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "wheel_basename": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "kind",
+    "graph_digest",
+    "activation_sha256",
+    "wheel_basename",
+    "snapshot_generation",
+    "snapshot_backup_id",
+    "snapshot_manifest_digest",
+    "capsule_digest",
+    "snapshot_schema_version",
+    "snapshot_revision",
+    "activation_revision",
+    "file_count"
+  ],
+  "title": "ssot backup capture-bundle --json output",
+  "type": "object",
+  "x-command": "ssot.backup.capture-bundle"
+}
+```
+
+## `schemas/ssot_backup_create.schema.json`
+
+ssot backup create --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `backup_id` | `string` | yes |
+| `backup_kind` | `string` | yes |
+| `byte_count` | `integer` | yes |
+| `complete` | `any` | yes |
+| `database_digest` | `string` | yes |
+| `dataset_revision` | `integer` | yes |
+| `file_count` | `integer` | yes |
+| `manifest_digest` | `string` | yes |
+| `manifest_schema_version` | `integer` | yes |
+| `source_generation` | `string` | yes |
+| `status` | `any` | yes |
+| `warnings` | `array`[`string`] | yes |
+
+```json
+{
+  "$id": "ssot_backup_create.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "backup_id": {
+      "type": "string"
+    },
+    "backup_kind": {
+      "type": "string"
+    },
+    "byte_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "complete": {
+      "const": true
+    },
+    "database_digest": {
+      "type": "string"
+    },
+    "dataset_revision": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "file_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "manifest_digest": {
+      "type": "string"
+    },
+    "manifest_schema_version": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "source_generation": {
+      "type": "string"
+    },
+    "status": {
+      "const": "complete"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "backup_id",
+    "backup_kind",
+    "database_digest",
+    "manifest_digest",
+    "source_generation",
+    "byte_count",
+    "dataset_revision",
+    "file_count",
+    "manifest_schema_version",
+    "complete",
+    "status",
+    "warnings"
+  ],
+  "title": "ssot backup create --json output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_backup_deliver_run.schema.json`
+
+ssot backup deliver run --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `attempt` | `object` \| `null` | yes |
+| `backup` | `object` | yes |
+| `coverage_as_of` | `string` \| `null` | yes |
+| `history_unknown` | `boolean` | yes |
+| `job_id` | `string` | yes |
+| `kind` | enum(`backup_delivery_status`, `backup_delivery_run`) | yes |
+| `last_attempt_error_code` | `string` \| `null` | yes |
+| `last_verified_at` | `string` \| `null` | yes |
+| `pending_commit_count` | `integer` \| `null` | yes |
+| `recording` | `object` \| `null` | yes |
+| `source_observed_revision` | `integer` \| `null` | yes |
+
+```json
+{
+  "$defs": {
+    "projection": {
+      "properties": {
+        "attempt": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "backup": {
+          "properties": {
+            "destination": {
+              "enum": [
+                "covered",
+                "pending",
+                "transfer_failed",
+                "verification_failed",
+                "unknown"
+              ],
+              "type": "string"
+            },
+            "local": {
+              "enum": [
+                "covered",
+                "pending",
+                "verification_failed",
+                "unknown"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "destination",
+            "local"
+          ],
+          "type": "object"
+        },
+        "coverage_as_of": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "history_unknown": {
+          "type": "boolean"
+        },
+        "job_id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "backup_delivery_status",
+            "backup_delivery_run"
+          ],
+          "type": "string"
+        },
+        "last_attempt_error_code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "last_verified_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pending_commit_count": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "recording": {
+          "properties": {
+            "changeset_id": {
+              "type": "string"
+            },
+            "committed_revision": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "replayed": {
+              "type": "boolean"
+            },
+            "status": {
+              "enum": [
+                "committed",
+                "unknown"
+              ],
+              "type": "string"
+            }
+          },
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "source_observed_revision": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "job_id",
+        "recording",
+        "backup",
+        "source_observed_revision",
+        "coverage_as_of",
+        "pending_commit_count",
+        "last_verified_at",
+        "last_attempt_error_code",
+        "history_unknown",
+        "attempt"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "ssot_backup_deliver_run.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "attempt": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "backup": {
+      "properties": {
+        "destination": {
+          "enum": [
+            "covered",
+            "pending",
+            "transfer_failed",
+            "verification_failed",
+            "unknown"
+          ],
+          "type": "string"
+        },
+        "local": {
+          "enum": [
+            "covered",
+            "pending",
+            "verification_failed",
+            "unknown"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "destination",
+        "local"
+      ],
+      "type": "object"
+    },
+    "coverage_as_of": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "history_unknown": {
+      "type": "boolean"
+    },
+    "job_id": {
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "backup_delivery_status",
+        "backup_delivery_run"
+      ],
+      "type": "string"
+    },
+    "last_attempt_error_code": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "last_verified_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "pending_commit_count": {
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "recording": {
+      "properties": {
+        "changeset_id": {
+          "type": "string"
+        },
+        "committed_revision": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "replayed": {
+          "type": "boolean"
+        },
+        "status": {
+          "enum": [
+            "committed",
+            "unknown"
+          ],
+          "type": "string"
+        }
+      },
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "source_observed_revision": {
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "_meta",
+    "kind",
+    "job_id",
+    "recording",
+    "backup",
+    "source_observed_revision",
+    "coverage_as_of",
+    "pending_commit_count",
+    "last_verified_at",
+    "last_attempt_error_code",
+    "history_unknown",
+    "attempt"
+  ],
+  "title": "ssot backup deliver run --json output",
+  "type": "object",
+  "x-command": "ssot.backup.deliver.run"
+}
+```
+
+## `schemas/ssot_backup_deliver_status.schema.json`
+
+ssot backup deliver status --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `attempt` | `object` \| `null` | yes |
+| `backup` | `object` | yes |
+| `coverage_as_of` | `string` \| `null` | yes |
+| `history_unknown` | `boolean` | yes |
+| `job_id` | `string` | yes |
+| `kind` | enum(`backup_delivery_status`, `backup_delivery_run`) | yes |
+| `last_attempt_error_code` | `string` \| `null` | yes |
+| `last_verified_at` | `string` \| `null` | yes |
+| `pending_commit_count` | `integer` \| `null` | yes |
+| `recording` | `object` \| `null` | yes |
+| `source_observed_revision` | `integer` \| `null` | yes |
+
+```json
+{
+  "$defs": {
+    "projection": {
+      "properties": {
+        "attempt": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "backup": {
+          "properties": {
+            "destination": {
+              "enum": [
+                "covered",
+                "pending",
+                "transfer_failed",
+                "verification_failed",
+                "unknown"
+              ],
+              "type": "string"
+            },
+            "local": {
+              "enum": [
+                "covered",
+                "pending",
+                "verification_failed",
+                "unknown"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "destination",
+            "local"
+          ],
+          "type": "object"
+        },
+        "coverage_as_of": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "history_unknown": {
+          "type": "boolean"
+        },
+        "job_id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "backup_delivery_status",
+            "backup_delivery_run"
+          ],
+          "type": "string"
+        },
+        "last_attempt_error_code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "last_verified_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pending_commit_count": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "recording": {
+          "properties": {
+            "changeset_id": {
+              "type": "string"
+            },
+            "committed_revision": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "replayed": {
+              "type": "boolean"
+            },
+            "status": {
+              "enum": [
+                "committed",
+                "unknown"
+              ],
+              "type": "string"
+            }
+          },
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "source_observed_revision": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "job_id",
+        "recording",
+        "backup",
+        "source_observed_revision",
+        "coverage_as_of",
+        "pending_commit_count",
+        "last_verified_at",
+        "last_attempt_error_code",
+        "history_unknown",
+        "attempt"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "ssot_backup_deliver_status.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "attempt": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "backup": {
+      "properties": {
+        "destination": {
+          "enum": [
+            "covered",
+            "pending",
+            "transfer_failed",
+            "verification_failed",
+            "unknown"
+          ],
+          "type": "string"
+        },
+        "local": {
+          "enum": [
+            "covered",
+            "pending",
+            "verification_failed",
+            "unknown"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "destination",
+        "local"
+      ],
+      "type": "object"
+    },
+    "coverage_as_of": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "history_unknown": {
+      "type": "boolean"
+    },
+    "job_id": {
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "backup_delivery_status",
+        "backup_delivery_run"
+      ],
+      "type": "string"
+    },
+    "last_attempt_error_code": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "last_verified_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "pending_commit_count": {
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "recording": {
+      "properties": {
+        "changeset_id": {
+          "type": "string"
+        },
+        "committed_revision": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "replayed": {
+          "type": "boolean"
+        },
+        "status": {
+          "enum": [
+            "committed",
+            "unknown"
+          ],
+          "type": "string"
+        }
+      },
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "source_observed_revision": {
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "_meta",
+    "kind",
+    "job_id",
+    "recording",
+    "backup",
+    "source_observed_revision",
+    "coverage_as_of",
+    "pending_commit_count",
+    "last_verified_at",
+    "last_attempt_error_code",
+    "history_unknown",
+    "attempt"
+  ],
+  "title": "ssot backup deliver status --json output",
+  "type": "object",
+  "x-command": "ssot.backup.deliver.status"
+}
+```
+
+## `schemas/ssot_backup_restore.schema.json`
+
+ssot backup restore --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `dataset_generation` | `string` | yes |
+| `descriptor_digest` | `string` | yes |
+| `initial_database_digest` | `string` | yes |
+| `initial_dataset_revision` | `integer` | yes |
+| `restore_id` | `string` | yes |
+| `source_manifest_digest` | `string` | yes |
+| `sqlite_schema_version` | `integer` | yes |
+
+```json
+{
+  "$id": "ssot_backup_restore.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "dataset_generation": {
+      "type": "string"
+    },
+    "descriptor_digest": {
+      "type": "string"
+    },
+    "initial_database_digest": {
+      "type": "string"
+    },
+    "initial_dataset_revision": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "restore_id": {
+      "type": "string"
+    },
+    "source_manifest_digest": {
+      "type": "string"
+    },
+    "sqlite_schema_version": {
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "_meta",
+    "restore_id",
+    "descriptor_digest",
+    "dataset_generation",
+    "initial_database_digest",
+    "source_manifest_digest",
+    "initial_dataset_revision",
+    "sqlite_schema_version"
+  ],
+  "title": "ssot backup restore --json output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_backup_restore_bundle.schema.json`
+
+ssot backup restore-bundle --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `dataset_generation` | `string` | yes |
+| `descriptor_digest` | `string` | yes |
+| `initial_database_digest` | `string` | yes |
+| `initial_dataset_revision` | `integer` | yes |
+| `restore_id` | `string` | yes |
+| `source_manifest_digest` | `string` | yes |
+| `sqlite_schema_version` | `integer` | yes |
+
+```json
+{
+  "$id": "ssot_backup_restore_bundle.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "dataset_generation": {
+      "type": "string"
+    },
+    "descriptor_digest": {
+      "type": "string"
+    },
+    "initial_database_digest": {
+      "type": "string"
+    },
+    "initial_dataset_revision": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "restore_id": {
+      "type": "string"
+    },
+    "source_manifest_digest": {
+      "type": "string"
+    },
+    "sqlite_schema_version": {
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "_meta",
+    "restore_id",
+    "descriptor_digest",
+    "dataset_generation",
+    "initial_database_digest",
+    "source_manifest_digest",
+    "initial_dataset_revision",
+    "sqlite_schema_version"
+  ],
+  "title": "ssot backup restore-bundle --json output",
+  "type": "object",
+  "x-command": "ssot.backup.restore-bundle"
+}
+```
+
+## `schemas/ssot_backup_status.schema.json`
+
+ssot backup status --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `byte_count` | `integer` | yes |
+| `complete` | `boolean` | yes |
+| `file_count` | `integer` | yes |
+| `manifest_digest` | `string` \| `null` | yes |
+| `reason` | `string` | yes |
+| `source_generation` | `string` \| `null` | yes |
+
+```json
+{
+  "$id": "ssot_backup_status.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "byte_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "complete": {
+      "type": "boolean"
+    },
+    "file_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "manifest_digest": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "reason": {
+      "type": "string"
+    },
+    "source_generation": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "_meta",
+    "byte_count",
+    "file_count",
+    "complete",
+    "reason",
+    "manifest_digest",
+    "source_generation"
+  ],
+  "title": "ssot backup status --json output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_backup_store_capture.schema.json`
+
+ssot backup store capture --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `activation_revision` | `integer` | yes |
+| `activation_sha256` | `string` | yes |
+| `baseline_registered` | `boolean` | yes |
+| `capsule_digest` | `string` | yes |
+| `copy_id` | `string` | yes |
+| `file_count` | `integer` | yes |
+| `graph_digest` | `string` | yes |
+| `kind` | `any` | yes |
+| `snapshot_backup_id` | `string` | yes |
+| `snapshot_generation` | `string` | yes |
+| `snapshot_manifest_digest` | `string` | yes |
+| `snapshot_revision` | `integer` | yes |
+| `snapshot_schema_version` | `integer` | yes |
+| `wheel_basename` | `string` | yes |
+
+```json
+{
+  "$id": "ssot_backup_store_capture.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "activation_revision": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "activation_sha256": {
+      "type": "string"
+    },
+    "baseline_registered": {
+      "type": "boolean"
+    },
+    "capsule_digest": {
+      "type": "string"
+    },
+    "copy_id": {
+      "type": "string"
+    },
+    "file_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "graph_digest": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "local_recovery_store_captured"
+    },
+    "snapshot_backup_id": {
+      "type": "string"
+    },
+    "snapshot_generation": {
+      "type": "string"
+    },
+    "snapshot_manifest_digest": {
+      "type": "string"
+    },
+    "snapshot_revision": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "snapshot_schema_version": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "wheel_basename": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "kind",
+    "graph_digest",
+    "activation_sha256",
+    "wheel_basename",
+    "snapshot_generation",
+    "snapshot_backup_id",
+    "snapshot_manifest_digest",
+    "capsule_digest",
+    "snapshot_schema_version",
+    "snapshot_revision",
+    "activation_revision",
+    "file_count",
+    "copy_id",
+    "baseline_registered"
+  ],
+  "title": "ssot backup store capture --json output",
+  "type": "object",
+  "x-command": "ssot.backup.store.capture"
+}
+```
+
+## `schemas/ssot_backup_store_init.schema.json`
+
+ssot backup store init --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `activation_sha256` | `string` | yes |
+| `enrollment_digest` | `string` | yes |
+| `kind` | `any` | yes |
+| `store_id` | `string` | yes |
+
+```json
+{
+  "$id": "ssot_backup_store_init.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "activation_sha256": {
+      "type": "string"
+    },
+    "enrollment_digest": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "local_recovery_store_initialized"
+    },
+    "store_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "kind",
+    "store_id",
+    "activation_sha256",
+    "enrollment_digest"
+  ],
+  "title": "ssot backup store init --json output",
+  "type": "object",
+  "x-command": "ssot.backup.store.init"
+}
+```
+
+## `schemas/ssot_backup_store_list.schema.json`
+
+ssot backup store list --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `baseline_copy_ids` | `array`[`string`] | yes |
+| `copies` | `array`[`object`] | yes |
+| `healthy_count` | `integer` | yes |
+| `held_count` | `integer` | yes |
+| `kind` | `any` | yes |
+| `latest_healthy_id` | `string` \| `null` | yes |
+| `plan_digest` | `string` \| `null` | yes |
+| `store_id` | `string` | yes |
+
+```json
+{
+  "$id": "ssot_backup_store_list.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "baseline_copy_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "copies": {
+      "items": {
+        "properties": {
+          "copy_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "graph_digest": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "health": {
+            "enum": [
+              "healthy",
+              "held"
+            ],
+            "type": "string"
+          },
+          "hold_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "protected": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "healthy_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "held_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "kind": {
+      "const": "local_recovery_store_inventory"
+    },
+    "latest_healthy_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "plan_digest": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "store_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "kind",
+    "store_id",
+    "healthy_count",
+    "held_count",
+    "baseline_copy_ids",
+    "latest_healthy_id",
+    "copies",
+    "plan_digest"
+  ],
+  "title": "ssot backup store list --json output",
+  "type": "object",
+  "x-command": "ssot.backup.store.list"
+}
+```
+
+## `schemas/ssot_backup_store_plan.schema.json`
+
+ssot backup store plan --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `delete_count` | `integer` | yes |
+| `delete_ids` | `array`[`string`] | yes |
+| `keep_count` | `integer` | yes |
+| `keep_ids` | `array`[`string`] | yes |
+| `kind` | `any` | yes |
+| `latest_healthy_id` | `string` \| `null` | yes |
+| `plan_digest` | `string` | yes |
+| `policy` | `object` | yes |
+| `protected_count` | `integer` | yes |
+| `protected_ids` | `array`[`string`] | yes |
+
+```json
+{
+  "$id": "ssot_backup_store_plan.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "delete_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "delete_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "keep_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "keep_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "kind": {
+      "const": "local_recovery_store_plan"
+    },
+    "latest_healthy_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "plan_digest": {
+      "type": "string"
+    },
+    "policy": {
+      "properties": {
+        "daily": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "monthly": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "weekly": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "daily",
+        "weekly",
+        "monthly"
+      ],
+      "type": "object"
+    },
+    "protected_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "protected_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "kind",
+    "plan_digest",
+    "delete_count",
+    "keep_count",
+    "protected_count",
+    "latest_healthy_id",
+    "policy",
+    "keep_ids",
+    "delete_ids",
+    "protected_ids"
+  ],
+  "title": "ssot backup store plan --json output",
+  "type": "object",
+  "x-command": "ssot.backup.store.plan"
+}
+```
+
+## `schemas/ssot_backup_store_protect.schema.json`
+
+ssot backup store protect --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `copy_id` | `string` | yes |
+| `graph_digest` | `string` | yes |
+| `kind` | `any` | yes |
+
+```json
+{
+  "$id": "ssot_backup_store_protect.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "copy_id": {
+      "type": "string"
+    },
+    "graph_digest": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "local_recovery_store_protected"
+    }
+  },
+  "required": [
+    "_meta",
+    "kind",
+    "copy_id",
+    "graph_digest"
+  ],
+  "title": "ssot backup store protect --json output",
+  "type": "object",
+  "x-command": "ssot.backup.store.protect"
+}
+```
+
+## `schemas/ssot_backup_store_prune.schema.json`
+
+ssot backup store prune --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `deleted_count` | `integer` | yes |
+| `deleted_ids` | `array`[`string`] | yes |
+| `held_count` | `integer` | yes |
+| `kept_count` | `integer` | yes |
+| `kept_ids` | `array`[`string`] | yes |
+| `kind` | `any` | yes |
+| `plan_digest` | `string` | yes |
+
+```json
+{
+  "$id": "ssot_backup_store_prune.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "deleted_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "deleted_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "held_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "kept_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "kept_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "kind": {
+      "const": "local_recovery_store_pruned"
+    },
+    "plan_digest": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "kind",
+    "deleted_count",
+    "kept_count",
+    "held_count",
+    "plan_digest",
+    "deleted_ids",
+    "kept_ids"
+  ],
+  "title": "ssot backup store prune --json output",
+  "type": "object",
+  "x-command": "ssot.backup.store.prune"
+}
+```
+
+## `schemas/ssot_backup_store_restore.schema.json`
+
+ssot backup store restore --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `dataset_generation` | `string` | yes |
+| `descriptor_digest` | `string` | yes |
+| `initial_database_digest` | `string` | yes |
+| `initial_dataset_revision` | `integer` | yes |
+| `restore_id` | `string` | yes |
+| `source_manifest_digest` | `string` | yes |
+| `sqlite_schema_version` | `integer` | yes |
+
+```json
+{
+  "$id": "ssot_backup_store_restore.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "dataset_generation": {
+      "type": "string"
+    },
+    "descriptor_digest": {
+      "type": "string"
+    },
+    "initial_database_digest": {
+      "type": "string"
+    },
+    "initial_dataset_revision": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "restore_id": {
+      "type": "string"
+    },
+    "source_manifest_digest": {
+      "type": "string"
+    },
+    "sqlite_schema_version": {
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "_meta",
+    "restore_id",
+    "descriptor_digest",
+    "dataset_generation",
+    "initial_database_digest",
+    "source_manifest_digest",
+    "initial_dataset_revision",
+    "sqlite_schema_version"
+  ],
+  "title": "ssot backup store restore --json output",
+  "type": "object",
+  "x-command": "ssot.backup.store.restore"
+}
+```
+
+## `schemas/ssot_backup_store_verify.schema.json`
+
+ssot backup store verify --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `activation_revision` | `integer` | yes |
+| `activation_sha256` | `string` | yes |
+| `capsule_digest` | `string` | yes |
+| `file_count` | `integer` | yes |
+| `graph_digest` | `string` | yes |
+| `kind` | `any` | yes |
+| `snapshot_backup_id` | `string` | yes |
+| `snapshot_generation` | `string` | yes |
+| `snapshot_manifest_digest` | `string` | yes |
+| `snapshot_revision` | `integer` | yes |
+| `snapshot_schema_version` | `integer` | yes |
+| `wheel_basename` | `string` | yes |
+
+```json
+{
+  "$id": "ssot_backup_store_verify.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "activation_revision": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "activation_sha256": {
+      "type": "string"
+    },
+    "capsule_digest": {
+      "type": "string"
+    },
+    "file_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "graph_digest": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "local_graph_verified"
+    },
+    "snapshot_backup_id": {
+      "type": "string"
+    },
+    "snapshot_generation": {
+      "type": "string"
+    },
+    "snapshot_manifest_digest": {
+      "type": "string"
+    },
+    "snapshot_revision": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "snapshot_schema_version": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "wheel_basename": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "kind",
+    "graph_digest",
+    "activation_sha256",
+    "wheel_basename",
+    "snapshot_generation",
+    "snapshot_backup_id",
+    "snapshot_manifest_digest",
+    "capsule_digest",
+    "snapshot_schema_version",
+    "snapshot_revision",
+    "activation_revision",
+    "file_count"
+  ],
+  "title": "ssot backup store verify --json output",
+  "type": "object",
+  "x-command": "ssot.backup.store.verify"
+}
+```
+
+## `schemas/ssot_backup_verify_bundle.schema.json`
+
+ssot backup verify-bundle --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `activation_revision` | `integer` | yes |
+| `activation_sha256` | `string` | yes |
+| `capsule_digest` | `string` | yes |
+| `file_count` | `integer` | yes |
+| `graph_digest` | `string` | yes |
+| `kind` | `any` | yes |
+| `snapshot_backup_id` | `string` | yes |
+| `snapshot_generation` | `string` | yes |
+| `snapshot_manifest_digest` | `string` | yes |
+| `snapshot_revision` | `integer` | yes |
+| `snapshot_schema_version` | `integer` | yes |
+| `wheel_basename` | `string` | yes |
+
+```json
+{
+  "$id": "ssot_backup_verify_bundle.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "activation_revision": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "activation_sha256": {
+      "type": "string"
+    },
+    "capsule_digest": {
+      "type": "string"
+    },
+    "file_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "graph_digest": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "local_graph_verified"
+    },
+    "snapshot_backup_id": {
+      "type": "string"
+    },
+    "snapshot_generation": {
+      "type": "string"
+    },
+    "snapshot_manifest_digest": {
+      "type": "string"
+    },
+    "snapshot_revision": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "snapshot_schema_version": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "wheel_basename": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "kind",
+    "graph_digest",
+    "activation_sha256",
+    "wheel_basename",
+    "snapshot_generation",
+    "snapshot_backup_id",
+    "snapshot_manifest_digest",
+    "capsule_digest",
+    "snapshot_schema_version",
+    "snapshot_revision",
+    "activation_revision",
+    "file_count"
+  ],
+  "title": "ssot backup verify-bundle --json output",
+  "type": "object",
+  "x-command": "ssot.backup.verify-bundle"
+}
+```
+
+## `schemas/ssot_intake_confirm.schema.json`
+
+ssot intake confirm output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `applied` | `object` | yes |
+| `committed_revision` | `integer` | yes |
+| `confirmation_id` | `string` | yes |
+| `proposal_id` | `string` | yes |
+| `replayed` | `boolean` | yes |
+
+```json
+{
+  "$id": "ssot_intake_confirm.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "applied": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "committed_revision": {
+      "type": "integer"
+    },
+    "confirmation_id": {
+      "type": "string"
+    },
+    "proposal_id": {
+      "type": "string"
+    },
+    "replayed": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "_meta",
+    "proposal_id",
+    "confirmation_id",
+    "applied",
+    "committed_revision",
+    "replayed"
+  ],
+  "title": "ssot intake confirm output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_intake_list.schema.json`
+
+ssot intake list output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `dataset_generation` | `string` | yes |
+| `dataset_revision` | `integer` | yes |
+| `decisions` | `array`[`object`] | yes |
+
+```json
+{
+  "$id": "ssot_intake_list.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "dataset_generation": {
+      "type": "string"
+    },
+    "dataset_revision": {
+      "type": "integer"
+    },
+    "decisions": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "dataset_generation",
+    "dataset_revision",
+    "decisions"
+  ],
+  "title": "ssot intake list output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_intake_submit.schema.json`
+
+ssot intake submit output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `committed_revision` | `integer` | yes |
+| `occurrence_id` | `string` | yes |
+| `proposal_id` | `string` | yes |
+| `replayed` | `boolean` | yes |
+| `source_artifact_id` | `string` | yes |
+
+```json
+{
+  "$id": "ssot_intake_submit.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "committed_revision": {
+      "type": "integer"
+    },
+    "occurrence_id": {
+      "type": "string"
+    },
+    "proposal_id": {
+      "type": "string"
+    },
+    "replayed": {
+      "type": "boolean"
+    },
+    "source_artifact_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "proposal_id",
+    "source_artifact_id",
+    "occurrence_id",
+    "committed_revision",
+    "replayed"
+  ],
+  "title": "ssot intake submit output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_migrate_build.schema.json`
+
+ssot migrate build --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `attempt_id` | `string` | yes |
+| `checks` | `object` | yes |
+| `cutover_ready` | `any` | yes |
+| `dataset_revision` | `any` | yes |
+| `generation_status` | `any` | yes |
+| `input_count` | `integer` | yes |
+| `limitations` | `array`[`string`] | yes |
+| `manifest_digest` | `string` | yes |
+| `origin_kind` | `any` | yes |
+| `phase` | enum(`migration_plan`, `migration_verify`) | yes |
+| `status` | enum(`ok`, `already_complete`) | yes |
+
+```json
+{
+  "$id": "ssot_migrate_build.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "attempt_id": {
+      "pattern": "^[a-f0-9]{32}$",
+      "type": "string"
+    },
+    "checks": {
+      "additionalProperties": {
+        "enum": [
+          "passed",
+          "not_run",
+          "failed"
+        ]
+      },
+      "type": "object"
+    },
+    "cutover_ready": {
+      "const": false
+    },
+    "dataset_revision": {
+      "const": 0
+    },
+    "generation_status": {
+      "const": "inactive"
+    },
+    "input_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "manifest_digest": {
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "origin_kind": {
+      "const": "legacy_current_state"
+    },
+    "phase": {
+      "enum": [
+        "migration_plan",
+        "migration_verify"
+      ]
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "already_complete"
+      ]
+    }
+  },
+  "required": [
+    "_meta",
+    "status",
+    "phase",
+    "manifest_digest",
+    "input_count",
+    "cutover_ready",
+    "limitations",
+    "generation_status",
+    "attempt_id",
+    "origin_kind",
+    "dataset_revision",
+    "checks"
+  ],
+  "title": "ssot migrate build --json output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_migrate_plan.schema.json`
+
+ssot migrate plan --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `cutover_ready` | `any` | yes |
+| `input_count` | `integer` | yes |
+| `limitations` | `array`[`string`] | yes |
+| `manifest_digest` | `string` | yes |
+| `phase` | enum(`migration_plan`, `migration_verify`) | yes |
+| `status` | enum(`ok`, `already_complete`) | yes |
+
+```json
+{
+  "$id": "ssot_migrate_plan.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "cutover_ready": {
+      "const": false
+    },
+    "input_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "manifest_digest": {
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "phase": {
+      "enum": [
+        "migration_plan",
+        "migration_verify"
+      ]
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "already_complete"
+      ]
+    }
+  },
+  "required": [
+    "_meta",
+    "status",
+    "phase",
+    "manifest_digest",
+    "input_count",
+    "cutover_ready",
+    "limitations"
+  ],
+  "title": "ssot migrate plan --json output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_migrate_verify.schema.json`
+
+ssot migrate verify --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `attempt_id` | `string` | yes |
+| `checks` | `object` | yes |
+| `cutover_ready` | `any` | yes |
+| `dataset_revision` | `any` | yes |
+| `generation_status` | `any` | yes |
+| `input_count` | `integer` | yes |
+| `limitations` | `array`[`string`] | yes |
+| `manifest_digest` | `string` | yes |
+| `origin_kind` | `any` | yes |
+| `phase` | enum(`migration_plan`, `migration_verify`) | yes |
+| `status` | enum(`ok`, `already_complete`) | yes |
+
+```json
+{
+  "$id": "ssot_migrate_verify.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "attempt_id": {
+      "pattern": "^[a-f0-9]{32}$",
+      "type": "string"
+    },
+    "checks": {
+      "additionalProperties": {
+        "enum": [
+          "passed",
+          "not_run",
+          "failed"
+        ]
+      },
+      "type": "object"
+    },
+    "cutover_ready": {
+      "const": false
+    },
+    "dataset_revision": {
+      "const": 0
+    },
+    "generation_status": {
+      "const": "inactive"
+    },
+    "input_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "manifest_digest": {
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "origin_kind": {
+      "const": "legacy_current_state"
+    },
+    "phase": {
+      "enum": [
+        "migration_plan",
+        "migration_verify"
+      ]
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "already_complete"
+      ]
+    }
+  },
+  "required": [
+    "_meta",
+    "status",
+    "phase",
+    "manifest_digest",
+    "input_count",
+    "cutover_ready",
+    "limitations",
+    "generation_status",
+    "attempt_id",
+    "origin_kind",
+    "dataset_revision",
+    "checks"
+  ],
+  "title": "ssot migrate verify --json output",
+  "type": "object"
+}
+```
+
 ## `schemas/status.schema.json`
 
 status --json output
@@ -6169,7 +9358,10 @@ status --json output
           ]
         },
         "path": {
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -6433,10 +9625,11 @@ tag --json output
 | Field | Type | Required |
 |-------|------|----------|
 | `_meta` | `$ref` _meta.schema.json | yes |
+| `backup_delivery` | `$ref` ssot_backup_deliver_run.schema.json#/$defs/projection | no |
 | `coverage_pct` | `number` | no |
 | `dry_run` | `boolean` | no |
 | `operation` | `string` | no |
-| `partition` | `object` | no |
+| `partition` | `object` \| `null` | no |
 | `row_hash` | `string` | no |
 | `status` | `string` | yes |
 | `tagged` | `integer` | no |
@@ -6454,6 +9647,9 @@ tag --json output
     "_meta": {
       "$ref": "_meta.schema.json"
     },
+    "backup_delivery": {
+      "$ref": "ssot_backup_deliver_run.schema.json#/$defs/projection"
+    },
     "coverage_pct": {
       "type": "number"
     },
@@ -6464,8 +9660,10 @@ tag --json output
       "type": "string"
     },
     "partition": {
-      "additionalProperties": true,
-      "type": "object"
+      "type": [
+        "object",
+        "null"
+      ]
     },
     "row_hash": {
       "type": "string"

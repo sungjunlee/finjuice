@@ -37,6 +37,11 @@ from .suggest_json import (
     _rules_suggest_json_payload,
 )
 from .suggest_rendering import _render_apply_dry_run, _render_suggestion_context_table
+from .suggest_repository import (
+    RepositorySuggestOptions,
+    SuggestionReadOptions,
+    try_repository_suggest,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -176,6 +181,20 @@ def suggest_rules_command(
     )
 
     try:
+        if try_repository_suggest(
+            ctx,
+            config,
+            RepositorySuggestOptions(
+                SuggestionReadOptions(top_n, min_count, file_id),
+                output,
+                apply,
+                dry_run,
+                preview,
+                json_output,
+                privacy,
+            ),
+        ):
+            return
         if json_output:
             result = _rules_suggest_json_payload(
                 config,
@@ -205,9 +224,7 @@ def suggest_rules_command(
             )
             return
 
-        if dry_run and not apply:
-            typer.echo("Cannot use --dry-run without --apply.", err=True)
-            raise typer.Exit(code=2)
+        _require_dry_run_apply(dry_run, apply)
 
         # Check if data directory structure exists
         if not config.csv_base_dir.exists():
@@ -340,3 +357,9 @@ def suggest_rules_command(
             command="rules suggest",
             privacy=privacy,
         )
+
+
+def _require_dry_run_apply(dry_run: bool, apply: bool) -> None:
+    if dry_run and not apply:
+        typer.echo("Cannot use --dry-run without --apply.", err=True)
+        raise typer.Exit(code=2)

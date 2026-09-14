@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import Any
 
 try:
     import duckdb
@@ -108,6 +109,13 @@ def _collect_tagging_pressure(
             "Tagging pressure unavailable; check DuckDB analytics setup.",
         )
 
+    return tagging_pressure_from_suggestions(stats, suggestions), None
+
+
+def tagging_pressure_from_suggestions(
+    stats: dict[str, Any], suggestions: list[dict[str, Any]]
+) -> TaggingPressureSignal:
+    """Project detached suggestion results using the existing pressure contract."""
     merchant_pressure = [
         MerchantPressureSample(
             merchant=str(suggestion["merchant"]),
@@ -135,16 +143,13 @@ def _collect_tagging_pressure(
         stats.get("suggestable_coverage_before_pct", coverage_pct) or 0.0
     )
     status: SignalStatus = "present" if suggestable_untagged_transactions > 0 else "clear"
-    return (
-        TaggingPressureSignal(
-            status=status,
-            total_transactions=int(stats.get("total_count") or 0),
-            untagged_transactions=untagged_transactions,
-            coverage_pct=coverage_pct,
-            suggestable_untagged_transactions=suggestable_untagged_transactions,
-            suggestable_coverage_pct=suggestable_coverage_pct,
-            transfer_excluded_untagged_transactions=transfer_excluded_untagged_transactions,
-            merchant_pressure=merchant_pressure,
-        ),
-        None,
+    return TaggingPressureSignal(
+        status=status,
+        total_transactions=int(stats.get("total_count") or 0),
+        untagged_transactions=untagged_transactions,
+        coverage_pct=coverage_pct,
+        suggestable_untagged_transactions=suggestable_untagged_transactions,
+        suggestable_coverage_pct=suggestable_coverage_pct,
+        transfer_excluded_untagged_transactions=transfer_excluded_untagged_transactions,
+        merchant_pressure=merchant_pressure,
     )

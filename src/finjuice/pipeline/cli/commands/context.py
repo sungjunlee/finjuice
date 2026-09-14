@@ -7,12 +7,14 @@ from typing import Any
 
 import typer
 
-from finjuice.pipeline.cli.utils import get_config
+from finjuice.pipeline.cli.output import ErrorCode, emit_error
+from finjuice.pipeline.cli.utils import get_activation_evidence_provider, get_config
 from finjuice.pipeline.context import (
     DEFAULT_JOURNAL_LIMIT,
     collect_context_bundle,
     resolve_context_budget,
 )
+from finjuice.pipeline.context_repository import RepositoryContextError
 
 
 def register_context_command(app: typer.Typer) -> None:
@@ -58,11 +60,21 @@ def register_context_command(app: typer.Typer) -> None:
         """
         config = get_config(ctx)
         resolved_budget = resolve_context_budget(budget)
-        bundle = collect_context_bundle(
-            config,
-            journal_limit=journal_count,
-            budget=resolved_budget,
-        )
+        try:
+            bundle = collect_context_bundle(
+                config,
+                journal_limit=journal_count,
+                budget=resolved_budget,
+                evidence_provider=get_activation_evidence_provider(ctx),
+            )
+        except RepositoryContextError:
+            emit_error(
+                "Canonical context could not read complete validated financial inputs.",
+                error_code=ErrorCode.VALIDATION_FAILED,
+                json_output=json_output,
+                command="context",
+            )
+            raise AssertionError("emit_error must exit") from None
 
         if verbose:
             typer.echo(_format_token_breakdown(bundle["_meta"]), err=True)
@@ -80,6 +92,11 @@ def _render_text(bundle: dict[str, Any]) -> str:
     meta = bundle["_meta"]
     lines = ["finjuice context", ""]
 
+    repository = meta.get("repository")
+    if repository:
+        lines.append(f"Repository revision: {repository['dataset_revision']}")
+        lines.extend(f"Warning: {message}" for message in meta.get("warnings", []))
+        lines.append("")
     lines.append("Journals")
     if bundle["journals"]:
         for entry in bundle["journals"]:
@@ -116,18 +133,16 @@ def _render_text(bundle: dict[str, Any]) -> str:
         lines.append(f"- top_categories: {category_summary}")
 
     lines.extend(["", "Active Goals"])
-    if bundle["active_goals"]:
-        lines.extend(f"- {goal}" for goal in bundle["active_goals"])
-    else:
-        lines.append("- none")
+    lines.extend(_optional_lines(bundle["active_goals"]))
 
     lines.extend(["", "Financial Metadata"])
-    financial_metadata = bundle.get("financial_metadata") or {}
-    metadata_summary = _summarize_financial_metadata(financial_metadata)
-    if metadata_summary:
-        lines.extend(f"- {item}" for item in metadata_summary)
-    else:
-        lines.append("- none")
+    financial_metadata = bundle.get("financial_metadata")
+    metadata_summary = (
+        _summarize_financial_metadata(financial_metadata)
+        if financial_metadata is not None
+        else None
+    )
+    lines.extend(_optional_lines(metadata_summary))
 
     lines.extend(["", "Rule Notes"])
     rule_notes = bundle.get("rule_notes") or []
@@ -138,12 +153,7 @@ def _render_text(bundle: dict[str, Any]) -> str:
         lines.append("- none")
 
     lines.extend(["", "Top Patterns"])
-    if bundle["top_patterns"]:
-        for pattern in bundle["top_patterns"]:
-            delta_value = _format_won(abs(int(pattern["delta_krw"])))
-            lines.append(f"- {pattern['label']}: {pattern['direction']} {delta_value}")
-    else:
-        lines.append("- none")
+    lines.extend(_pattern_lines(bundle["top_patterns"]))
 
     lines.extend(
         [
@@ -160,6 +170,23 @@ def _render_text(bundle: dict[str, Any]) -> str:
         lines.append(f"Dropped: {', '.join(meta['dropped_sections'])}")
 
     return "\n".join(lines)
+
+
+def _optional_lines(values: list[str] | None) -> list[str]:
+    """Distinguish unavailable content from a verified empty summary."""
+    if values is None:
+        return ["- unavailable"]
+    return [f"- {value}" for value in values] or ["- none"]
+
+
+def _pattern_lines(patterns: list[dict[str, Any]] | None) -> list[str]:
+    if patterns is None:
+        return _optional_lines(None)
+    values = []
+    for pattern in patterns:
+        delta_value = _format_won(abs(int(pattern["delta_krw"])))
+        values.append(f"{pattern['label']}: {pattern['direction']} {delta_value}")
+    return _optional_lines(values)
 
 
 def _format_token_breakdown(meta: dict[str, Any]) -> str:

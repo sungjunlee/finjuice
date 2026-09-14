@@ -15,15 +15,17 @@ from typing import Any, Literal
 
 import typer
 
+from finjuice.pipeline.cli.commands.assets_reads import load_portfolio_display
 from finjuice.pipeline.cli.commands.networth_errors import _handle_networth_exception
 from finjuice.pipeline.cli.commands.networth_guidance import _build_networth_guidance
 from finjuice.pipeline.cli.commands.networth_rendering import (
     _render_breakdown,
     _render_overview,
 )
-from finjuice.pipeline.cli.output import _build_meta
+from finjuice.pipeline.cli.output import _build_meta, info
 from finjuice.pipeline.cli.utils import get_config
 from finjuice.pipeline.networth import build_breakdown_rows, build_networth_position
+from finjuice.pipeline.portfolio_networth import build_repository_networth
 
 logger = logging.getLogger(__name__)
 
@@ -79,12 +81,24 @@ def _build_networth_result(
 ) -> dict[str, Any]:
     """Build the aggregated net worth payload."""
     config = get_config(ctx)
-    position = build_networth_position(
-        config.data_dir / "assets" / "snapshots",
-        config.assets_file,
-        as_of=as_of,
-        balance_dir=config.data_dir / "banksalad" / "balance",
-    )
+    display = load_portfolio_display(ctx, config.data_dir)
+    metadata: dict[str, object] | None = None
+    if display is None:
+        position = build_networth_position(
+            config.data_dir / "assets" / "snapshots",
+            config.assets_file,
+            as_of=as_of,
+            balance_dir=config.data_dir / "banksalad" / "balance",
+        )
+    else:
+        position, metadata = build_repository_networth(display, as_of=as_of)
+    if metadata is not None and not json_output:
+        info(
+            f"Repository revision {metadata['dataset_revision']} "
+            f"({metadata['dataset_generation']}); policy {metadata['calculation_policy']}; "
+            f"as of {metadata['as_of'] or 'undated'}; "
+            f"assets {metadata['assets_selection_state']} ({metadata['manual_config_policy']})"
+        )
     resolved_as_of = position.as_of.isoformat() if position.as_of is not None else None
 
     return {
@@ -101,6 +115,7 @@ def _build_networth_result(
         "_assets": position.assets,
         "_liabilities": position.liabilities,
         "_filters_applied": 0,
+        "_repository_metadata": metadata,
     }
 
 
@@ -125,13 +140,14 @@ def _run_overview_command(
                 command="networth",
                 as_of=result["as_of"],
                 filters_applied=result["_filters_applied"],
+                extras=result.get("_repository_metadata"),
             )
             return
         _render_overview(result)
     except typer.Exit:
         raise
     except Exception as exc:  # intended catch-all for CLI robustness
-        logger.error("Failed to compute net worth: %s", exc, exc_info=True)
+        logger.error("Failed to compute net worth (%s)", type(exc).__name__)
         _handle_networth_exception(exc, json_output=json_output, command="networth")
 
 
@@ -161,11 +177,12 @@ def _run_breakdown_command(
                 command="networth breakdown",
                 as_of=result["as_of"],
                 filters_applied=result["_filters_applied"],
+                extras=result.get("_repository_metadata"),
             )
             return
         _render_breakdown(result["as_of"], rows, by=by)
     except typer.Exit:
         raise
     except Exception as exc:  # intended catch-all for CLI robustness
-        logger.error("Failed to compute net worth breakdown: %s", exc, exc_info=True)
+        logger.error("Failed to compute net worth breakdown (%s)", type(exc).__name__)
         _handle_networth_exception(exc, json_output=json_output, command="networth breakdown")

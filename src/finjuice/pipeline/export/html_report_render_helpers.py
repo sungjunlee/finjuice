@@ -33,6 +33,7 @@ def _plotly_js_tag(offline: bool = True) -> str:
                 {"data": [], "layout": {"template": {}}},
                 include_plotlyjs=True,
                 full_html=False,
+                div_id="finjuice-plotly-bootstrap",
             )
         )
         return embedded

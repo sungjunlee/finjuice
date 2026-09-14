@@ -6,20 +6,47 @@ import json
 import uuid
 from collections.abc import Mapping, Sequence
 from contextlib import AbstractContextManager, contextmanager
+from copy import deepcopy
 from functools import wraps
 from pathlib import Path
 from types import TracebackType
 from typing import Any, BinaryIO, Callable, Final, Iterator, TypeVar, cast
 
+from finjuice.pipeline.storage.sqlite.analysis_reads import (
+    AnalysisReadSnapshot,
+    analysis_snapshot,
+)
+from finjuice.pipeline.storage.sqlite.asset_reports import AssetReportQuery
+from finjuice.pipeline.storage.sqlite.checkup_reads import (
+    CheckupReadSnapshot,
+    import_preview_snapshot,
+    rules_config_snapshot,
+)
 from finjuice.pipeline.storage.sqlite.errors import RepositoryPathError
 from finjuice.pipeline.storage.sqlite.exact import ExactValue
+from finjuice.pipeline.storage.sqlite.history_reads import HistoryReadSnapshot, history_snapshot
 from finjuice.pipeline.storage.sqlite.ids import (
     canonical_locator,
     migration_entity_id,
     validate_entity_id,
 )
+from finjuice.pipeline.storage.sqlite.legacy_overview import (
+    LegacyOverviewBalanceRecord,
+    LegacyOverviewCandidateRecord,
+    LegacyOverviewCashflowRecord,
+    LegacyOverviewInsuranceRecord,
+    LegacyOverviewInvestmentRecord,
+    LegacyOverviewLoanRecord,
+    LegacyOverviewReferenceRecord,
+    LegacyOverviewReportRecord,
+    LegacyOverviewWriter,
+)
 from finjuice.pipeline.storage.sqlite.objects import SourceArtifact, SourceObjectStore
 from finjuice.pipeline.storage.sqlite.paths import GenerationPaths
+from finjuice.pipeline.storage.sqlite.portfolio_reads import (
+    PortfolioReadSnapshot,
+    portfolio_snapshot,
+)
 from finjuice.pipeline.storage.sqlite.records import (
     AccountRecord,
     AssetSnapshotRecord,
@@ -43,24 +70,28 @@ from finjuice.pipeline.storage.sqlite.records import (
 )
 from finjuice.pipeline.storage.sqlite.schema import (
     RepositoryInfo,
-    _apply_schema_v1,
-    _apply_schema_v2,
-    _apply_schema_v3,
-    _apply_schema_v4,
     _cleanup_staging,
     _connect_builder,
     _connect_snapshot,
+    _initialize_schema,
     _prepare_generation_layout,
     _publish_database,
+    _resolve_schema_version,
     _validate_connection,
 )
+from finjuice.pipeline.storage.sqlite.schema_v5 import LEGACY_OVERVIEW_TABLES
 from finjuice.pipeline.storage.sqlite.snapshot import inspection_snapshot
+from finjuice.pipeline.storage.sqlite.status_reads import StatusReadSnapshot, status_snapshot
+from finjuice.pipeline.storage.sqlite.transaction_reads import (
+    TransactionReadSnapshot,
+    transaction_snapshot,
+)
 from finjuice.pipeline.storage.sqlite.writes import (
     _EXACT_SUBTYPE_INSERT_SQL as _WRITER_EXACT_SUBTYPE_INSERT_SQL,
 )
 from finjuice.pipeline.storage.sqlite.writes import TypedRowWriter
 
-_READ_TABLE_SQL: Final = {
+_READ_TABLE_SQL_V4: Final = {
     "repository_meta": "SELECT * FROM repository_meta",
     "schema_migrations": "SELECT * FROM schema_migrations",
     "entities": "SELECT * FROM entities",
@@ -108,6 +139,31 @@ _READ_TABLE_SQL: Final = {
     "agent_intake_applications": "SELECT * FROM agent_intake_applications",
 }
 
+
+_READ_TABLE_SQL_V5: Final = {
+    **_READ_TABLE_SQL_V4,
+    **{table: f"SELECT * FROM {table}" for table in LEGACY_OVERVIEW_TABLES},
+}
+
+
+def _read_table_sql(schema_version: int) -> Mapping[str, str]:
+    """Return exactly the authoritative table surface of the selected schema."""
+    _resolve_schema_version(schema_version)
+    return {
+        4: _READ_TABLE_SQL_V4,
+        5: _READ_TABLE_SQL_V5,
+        6: {
+            **_READ_TABLE_SQL_V5,
+            "account_source_bindings": "SELECT * FROM account_source_bindings",
+        },
+        7: {
+            **_READ_TABLE_SQL_V5,
+            "account_source_bindings": "SELECT * FROM account_source_bindings",
+            "asset_meaning_assertions": "SELECT * FROM asset_meaning_assertions",
+        },
+    }[schema_version]
+
+
 # Shared with TypedRowWriter so builder exact-value SQL has exactly one definition.
 _EXACT_SUBTYPE_INSERT_SQL: Final = _WRITER_EXACT_SUBTYPE_INSERT_SQL
 
@@ -138,7 +194,10 @@ class RepositoryBuilder:
         paths: GenerationPaths,
         dataset_generation: str,
         dataset_revision: int = 0,
+        *,
+        expected_schema_version: int | None = None,
     ) -> None:
+        self._schema_version = _resolve_schema_version(expected_schema_version)
         validate_entity_id(dataset_generation)
         if isinstance(dataset_revision, bool) or not isinstance(dataset_revision, int):
             raise ValueError("Dataset revision must be the integer zero for a new repository.")
@@ -159,14 +218,12 @@ class RepositoryBuilder:
         self._closed = False
         self._published_artifacts: list[SourceArtifact] = []
         try:
-            _apply_schema_v1(
+            _initialize_schema(
                 self._connection,
                 dataset_generation,
                 dataset_revision=dataset_revision,
+                schema_version=self._schema_version,
             )
-            _apply_schema_v2(self._connection)
-            _apply_schema_v3(self._connection)
-            _apply_schema_v4(self._connection)
         except Exception:
             self._connection.close()
             self._closed = True
@@ -249,6 +306,46 @@ class RepositoryBuilder:
     ) -> None:
         """Add a canonical exact value and its required semantic subtype."""
         self._writer.add_exact_value(value_id, value, provenance_id=provenance_id)
+
+    @_atomic_add
+    def add_legacy_overview_report(self, record: LegacyOverviewReportRecord) -> None:
+        """Preserve legacy report evidence in schema v5."""
+        LegacyOverviewWriter(self._connection).add_report(record)
+
+    @_atomic_add
+    def add_legacy_overview_balance(self, record: LegacyOverviewBalanceRecord) -> None:
+        """Preserve legacy balance evidence in schema v5."""
+        LegacyOverviewWriter(self._connection).add_balance(record)
+
+    @_atomic_add
+    def add_legacy_overview_cashflow(self, record: LegacyOverviewCashflowRecord) -> None:
+        """Preserve legacy cashflow evidence in schema v5."""
+        LegacyOverviewWriter(self._connection).add_cashflow(record)
+
+    @_atomic_add
+    def add_legacy_overview_insurance(self, record: LegacyOverviewInsuranceRecord) -> None:
+        """Preserve legacy insurance evidence in schema v5."""
+        LegacyOverviewWriter(self._connection).add_insurance(record)
+
+    @_atomic_add
+    def add_legacy_overview_investment(self, record: LegacyOverviewInvestmentRecord) -> None:
+        """Preserve legacy investment evidence in schema v5."""
+        LegacyOverviewWriter(self._connection).add_investment(record)
+
+    @_atomic_add
+    def add_legacy_overview_loan(self, record: LegacyOverviewLoanRecord) -> None:
+        """Preserve legacy loan evidence in schema v5."""
+        LegacyOverviewWriter(self._connection).add_loan(record)
+
+    @_atomic_add
+    def add_legacy_overview_reference(self, record: LegacyOverviewReferenceRecord) -> None:
+        """Preserve legacy reference evidence in schema v5."""
+        LegacyOverviewWriter(self._connection).add_reference(record)
+
+    @_atomic_add
+    def add_legacy_overview_candidate(self, record: LegacyOverviewCandidateRecord) -> None:
+        """Preserve legacy candidate evidence in schema v5."""
+        LegacyOverviewWriter(self._connection).add_candidate(record)
 
     @_atomic_add
     def add_party(self, record: PartyRecord) -> None:
@@ -452,6 +549,7 @@ class RepositoryBuilder:
                 self._connection,
                 expected_generation=self.dataset_generation,
                 object_paths=self.paths,
+                expected_schema_version=self._schema_version,
             )
         except Exception:
             self.abort()
@@ -499,15 +597,25 @@ class RepositoryBuilder:
 class RepositoryReader(AbstractContextManager["RepositoryReader"]):
     """Read a stable DB/WAL snapshot without touching source SQLite sidecars."""
 
-    def __init__(self, database: Path, *, scratch_root: Path | None = None) -> None:
+    def __init__(
+        self,
+        database: Path,
+        *,
+        scratch_root: Path | None = None,
+        expected_schema_version: int | None = None,
+    ) -> None:
+        schema_version = _resolve_schema_version(expected_schema_version)
+        self._read_table_sql = _read_table_sql(schema_version)
         self._snapshot_context = inspection_snapshot(database, scratch_root=scratch_root)
         snapshot = self._snapshot_context.__enter__()
         try:
             self._connection = _connect_snapshot(snapshot)
             repository_paths = GenerationPaths(database.expanduser().absolute().parent)
+            self._repository_paths = repository_paths
             self.info = _validate_connection(
                 self._connection,
                 object_paths=repository_paths,
+                expected_schema_version=schema_version,
             )
         except Exception:
             self._snapshot_context.__exit__(None, None, None)
@@ -525,16 +633,111 @@ class RepositoryReader(AbstractContextManager["RepositoryReader"]):
     ) -> None:
         self.close()
 
+    @property
+    def table_names(self) -> tuple[str, ...]:
+        """Return the authoritative tables for this reader's exact schema."""
+        return tuple(self._read_table_sql)
+
     def rows(self, table: str) -> list[dict[str, Any]]:
         """Return rows from one fixed schema table as dictionaries."""
         if self._closed:
             raise RuntimeError("Repository reader is already closed.")
-        query = _READ_TABLE_SQL.get(table)
+        query = self._read_table_sql.get(table)
         if query is None:
             raise ValueError("Table is not part of the authoritative repository read surface.")
         cursor = self._connection.execute(query)
         names = [description[0] for description in cursor.description]
         return [dict(zip(names, row, strict=True)) for row in cursor.fetchall()]
+
+    def account_ownership(self, account_id: str, *, as_of: str) -> dict[str, Any]:
+        """Project existing exact ownership assertions from this validated snapshot."""
+        from finjuice.pipeline.storage.sqlite.ownership_projection import ownership_projection
+
+        return {
+            "dataset_revision": self.info.dataset_revision,
+            **ownership_projection(self._connection, account_id, as_of=as_of),
+        }
+
+    def intake_decisions(self) -> dict[str, Any]:
+        """Read all canonical intake decision evidence from this pinned snapshot."""
+        from finjuice.pipeline.storage.sqlite.intake_queries import intake_decision_view
+
+        owns_snapshot = not self._connection.in_transaction
+        if owns_snapshot:
+            self._connection.execute("BEGIN")
+        try:
+            return dict(intake_decision_view(self._connection))
+        finally:
+            if owns_snapshot:
+                self._connection.execute("ROLLBACK")
+
+    def canonical_assets(self, query: AssetReportQuery | None = None) -> dict[str, Any]:
+        """Read source evidence and its confirmed meaning at this validated revision."""
+        from finjuice.pipeline.storage.sqlite.asset_reports import asset_candidates, asset_report
+
+        payload = (
+            asset_candidates(self._connection)
+            if query is None
+            else asset_report(self._connection, query)
+        )
+        return {
+            "dataset_revision": self.info.dataset_revision,
+            "dataset_generation": self.info.dataset_generation,
+            **payload,
+        }
+
+    def account_binding_snapshot(self) -> dict[str, Any]:
+        """Read the account registry and binding candidates at this reader revision."""
+        from finjuice.pipeline.storage.sqlite.account_bindings import account_binding_snapshot
+
+        return {
+            "dataset_revision": self.info.dataset_revision,
+            **account_binding_snapshot(self._connection),
+        }
+
+    def transaction_snapshot(self) -> TransactionReadSnapshot:
+        """Return exact transaction rows and rules pinned to this reader snapshot."""
+        if self._closed:
+            raise RuntimeError("Repository reader is already closed.")
+        return transaction_snapshot(self._connection, self.info, self._repository_paths)
+
+    def analysis_snapshot(self) -> AnalysisReadSnapshot:
+        """Return transactions and canonical config selections from this revision."""
+        transactions = self.transaction_snapshot()
+        return analysis_snapshot(self._connection, self._repository_paths, transactions)
+
+    def checkup_snapshot(self, digests: tuple[str, ...] = ()) -> CheckupReadSnapshot:
+        """Read all checkup domains and requested import evidence from this revision."""
+        if self._closed:
+            raise RuntimeError("Repository reader is already closed.")
+        status = self.status_snapshot()
+        return deepcopy(
+            CheckupReadSnapshot(
+                self.info,
+                status,
+                self.portfolio_snapshot(),
+                import_preview_snapshot(self._connection, self.info, digests),
+                rules_config_snapshot(self._connection, self._repository_paths),
+                status.transactions.unmaterialized_months,
+            )
+        )
+
+    def portfolio_snapshot(self) -> PortfolioReadSnapshot:
+        """Return portfolio values and evidence pinned to this reader."""
+        if self._closed:
+            raise RuntimeError("Repository reader is already closed.")
+        return portfolio_snapshot(self._connection, self.info, self._repository_paths)
+
+    def history_snapshot(self) -> HistoryReadSnapshot:
+        """Return complete legacy/native history evidence from this pinned revision."""
+        if self._closed:
+            raise RuntimeError("Repository reader is already closed.")
+        return history_snapshot(self._connection, self._repository_paths, self.info)
+
+    def status_snapshot(self) -> StatusReadSnapshot:
+        """Return status evidence from the same validated transaction snapshot."""
+        transactions = self.transaction_snapshot()
+        return status_snapshot(self._connection, self._repository_paths, transactions)
 
     def close(self) -> None:
         """Close the scratch connection and delete its temporary snapshot."""

@@ -38,6 +38,7 @@ from finjuice.pipeline.tagging.suggest_compute_stats import (
     _stats_int,
     _suggest_transfer_exclusions,  # noqa: F401 — re-exported for existing suggest_compute imports
 )
+from finjuice.pipeline.tagging.suggest_preview import build_suggestion_preview
 
 
 def _append_applied_suggestion_audit(
@@ -64,7 +65,6 @@ def _compute_rules_suggest_json(
 ) -> dict[str, Any]:
     """Compute JSON payload for `rules suggest`."""
     from finjuice.pipeline.tagging.suggestions import (
-        build_rule_dict_from_suggestion,
         generate_merchant_context,
         get_suggestion_coverage_stats,
         is_auto_apply_eligible,
@@ -112,31 +112,13 @@ def _compute_rules_suggest_json(
             error_code="NO_DATA",
             exit_code=4,
         )
-    untagged_count = _stats_int(stats, "untagged_count")
     suggestable_untagged_count = _stats_int(stats, "suggestable_untagged_count")
     coverage_before = _stats_float(stats, "coverage_before_pct")
 
     if suggestable_untagged_count == 0:
-        if untagged_count > 0:
-            message = "No suggestable untagged transactions after excluding transfers."
-        else:
-            message = "All transactions are tagged."
-        result: dict[str, Any] = {
-            **_rules_suggest_count_payload(stats),
-            "suggestions": [],
-            "message": message,
-        }
-        if apply and dry_run:
-            result.update(
-                {
-                    "dry_run": True,
-                    "rules_file": str(config.rules_file),
-                    "rules_file_modified": False,
-                    "would_apply": [],
-                    "message": "Dry run: no changes made",
-                }
-            )
-        return result
+        return build_suggestion_preview(
+            stats, [], dry_run=apply and dry_run, rules_file=str(config.rules_file)
+        )
 
     suggestions = generate_merchant_context(
         data_dir=config.data_dir,
@@ -145,37 +127,13 @@ def _compute_rules_suggest_json(
         min_count=min_count,
         file_id=file_id,
     )
-    auto_apply_suggestions = [
-        suggestion for suggestion in suggestions if is_auto_apply_eligible(suggestion)
-    ]
+    if apply and dry_run:
+        return build_suggestion_preview(
+            stats, suggestions, dry_run=True, rules_file=str(config.rules_file)
+        )
     auto_apply_skipped = [
         suggestion for suggestion in suggestions if not is_auto_apply_eligible(suggestion)
     ]
-
-    if apply and dry_run:
-        return {
-            "dry_run": True,
-            "rules_file": str(config.rules_file),
-            "rules_file_modified": False,
-            **_rules_suggest_count_payload(stats),
-            "suggestions": suggestions,
-            "auto_apply_skipped": [
-                {
-                    "merchant": suggestion["merchant"],
-                    "reason": suggestion.get("ambiguous_reason") or "not_auto_apply_eligible",
-                    "default_action": suggestion.get("default_action"),
-                }
-                for suggestion in auto_apply_skipped
-            ],
-            "would_apply": [
-                {
-                    "merchant": suggestion["merchant"],
-                    "rule": build_rule_dict_from_suggestion(suggestion),
-                }
-                for suggestion in auto_apply_suggestions
-            ],
-            "message": "Dry run: no changes made",
-        }
 
     if apply and yes:
         from finjuice.pipeline.tagging.pipeline import run_tagging
@@ -205,7 +163,4 @@ def _compute_rules_suggest_json(
             "coverage_after_pct": round(float(coverage_after), 2),
         }
 
-    return {
-        **_rules_suggest_count_payload(stats),
-        "suggestions": suggestions,
-    }
+    return build_suggestion_preview(stats, suggestions)

@@ -27,6 +27,18 @@ from tests.pipeline.test_sqlite_source_lookup import (
 active_root = _active_root_fixture
 
 
+def _assert_export_manifest(active: _ActiveRoot, exported: dict) -> None:
+    manifest_path = Path(exported["manifest_path"])
+    assert manifest_path.is_file()
+    metadata = exported["_repository_meta"]
+    assert metadata["dataset_generation"] == active.generation
+    with closing(sqlite3.connect(active.database)) as connection:
+        revision = connection.execute("SELECT dataset_revision FROM repository_meta").fetchone()[0]
+    assert metadata["dataset_revision"] == revision
+    assert exported["output_files"]
+    assert all(Path(entry["path"]).is_file() for entry in exported["output_files"])
+
+
 def _transaction_count(active: _ActiveRoot) -> int:
     with closing(sqlite3.connect(active.database)) as connection:
         return int(connection.execute("SELECT count(*) FROM transactions").fetchone()[0])
@@ -58,21 +70,18 @@ def test_active_import_runs_before_legacy_init_and_copy(
 
     result = _import_cli(active_root, str(source), *(["--json"] if json_output else []))
 
-    assert result.exit_code == ExitCode.GENERAL_ERROR, result.output
+    assert result.exit_code == ExitCode.SUCCESS, result.output
     assert not (active_root.root / "rules.yaml").exists()
     assert not (active_root.root / "imports" / "outside.xlsx").exists()
     assert not list((active_root.root / "transactions").rglob("*.csv"))
     assert _authority_state(active_root) != before_objects
     if json_output:
-        recorded = json.loads(result.output)["_meta"]["pipeline"]
-        assert recorded["failed_step"] == "export"
-        assert recorded["completed_steps"] == ["ingest", "tag", "transfer"]
+        recorded = json.loads(result.output)
+        _assert_export_manifest(active_root, recorded["steps"]["export"])
         receipts = recorded["steps"]["ingest"]["receipts"]
         assert receipts[0]["result"]["counts"]["transactions"]["inserted"] == 1
     else:
-        assert "완료!" not in result.output
-        assert "파이프라인 완료" not in result.output
-        assert "export" in result.output
+        assert "완료" in result.output
 
 
 def test_same_bytes_replay_is_noop_and_force_does_not_duplicate(
@@ -81,14 +90,14 @@ def test_same_bytes_replay_is_noop_and_force_does_not_duplicate(
     source = tmp_path / "one.xlsx"
     _write_xlsx(source)
     first = _import_cli(active_root, str(source), "--json")
-    assert first.exit_code == ExitCode.GENERAL_ERROR, first.output
-    first_receipt = json.loads(first.output)["_meta"]["pipeline"]["steps"]["ingest"]["receipts"][0]
+    assert first.exit_code == ExitCode.SUCCESS, first.output
+    first_receipt = json.loads(first.output)["steps"]["ingest"]["receipts"][0]
     before = _authority_state(active_root)
 
     second = _import_cli(active_root, "--force", str(source), "--json")
 
-    assert second.exit_code == ExitCode.GENERAL_ERROR, second.output
-    replay = json.loads(second.output)["_meta"]["pipeline"]["steps"]["ingest"]["receipts"][0]
+    assert second.exit_code == ExitCode.SUCCESS, second.output
+    replay = json.loads(second.output)["steps"]["ingest"]["receipts"][0]
     assert replay["result"]["noop"] is True
     assert replay["result"]["counts"]["transactions"]["inserted"] == 0
     assert replay["result"]["occurrence_id"] == first_receipt["result"]["occurrence_id"]
@@ -221,7 +230,7 @@ def test_partial_second_file_failure_keeps_first_receipt_and_stops_later_steps(
 
 
 @pytest.mark.parametrize("json_output", [False, True], ids=["human", "json"])
-def test_active_refresh_export_unavailable_preserves_mutation_receipts(
+def test_active_refresh_exports_and_preserves_mutation_receipts(
     active_root: _ActiveRoot, json_output: bool
 ) -> None:
     _rules(active_root)
@@ -230,17 +239,17 @@ def test_active_refresh_export_unavailable_preserves_mutation_receipts(
 
     result = _invoke(active_root, "refresh", *(["--json"] if json_output else []))
 
-    assert result.exit_code == ExitCode.GENERAL_ERROR, result.output
+    assert result.exit_code == ExitCode.SUCCESS, result.output
     if json_output:
-        recorded = json.loads(result.output)["_meta"]["pipeline"]
-        assert recorded["failed_step"] == "export"
-        assert recorded["error_type"] == "CanonicalExportUnavailableError"
-        assert recorded["completed_steps"] == ["ingest", "tag", "transfer"]
+        recorded = json.loads(result.output)
+        _assert_export_manifest(active_root, recorded["steps"]["export"])
         assert recorded["steps"]["ingest"]["receipts"][0]["changeset_id"]
         assert recorded["steps"]["tag"]["authority"] == "repository"
         assert recorded["steps"]["transfer"]["authority"] == "repository"
     else:
-        assert "파이프라인 완료" not in result.output
+        assert "파이프라인 완료" in result.output
+        assert "/exports/runs/" in result.output
+        assert "export-manifest.json" in result.output
         assert "export" in result.output
 
 
@@ -382,7 +391,7 @@ def test_zip_extraction_temp_dirs_are_cleaned(
 
     result = _import_cli(active_root, str(archive), "--json")
 
-    assert result.exit_code == ExitCode.GENERAL_ERROR, result.output
+    assert result.exit_code == ExitCode.SUCCESS, result.output
     assert created
     assert all(not Path(path).exists() for path in created)
 
@@ -403,3 +412,35 @@ def test_from_archive_occurrence_reimports_without_legacy_metadata(
     assert not (active_root.root / "metadata" / "archives").exists()
     assert _transaction_count(active_root) == 1
     del before
+
+
+@pytest.mark.parametrize("command", ["import", "refresh"])
+def test_export_failure_keeps_completed_mutation_receipts(
+    active_root: _ActiveRoot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, command: str
+) -> None:
+    from finjuice.pipeline.export.source import RepositoryExportError
+
+    _rules(active_root)
+    source = (
+        active_root.root / "imports" / "failure.xlsx"
+        if command == "refresh"
+        else tmp_path / "failure.xlsx"
+    )
+    _write_xlsx(source)
+
+    def fail_export(*args, **kwargs):
+        raise RepositoryExportError("Injected export publication failure.")
+
+    monkeypatch.setattr("finjuice.pipeline.export.result._compute_export_result", fail_export)
+    result = (
+        _invoke(active_root, "refresh", "--json")
+        if command == "refresh"
+        else _import_cli(active_root, str(source), "--json")
+    )
+    assert result.exit_code == ExitCode.GENERAL_ERROR, result.output
+    recorded = json.loads(result.output)["_meta"]["pipeline"]
+    assert recorded["failed_step"] == "export"
+    assert recorded["completed_steps"] == ["ingest", "tag", "transfer"]
+    assert recorded["steps"]["ingest"]["receipts"][0]["changeset_id"]
+    assert recorded["error_type"] == "RepositoryExportError"
+    assert _transaction_count(active_root) == 1

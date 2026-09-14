@@ -13,6 +13,7 @@ from typing import Any, Literal, cast
 
 import typer
 
+from finjuice.pipeline.cli.commands.assets_reads import load_portfolio_display
 from finjuice.pipeline.cli.commands.networth_errors import (
     _handle_networth_exception,
     _raise_goals_validation_error,
@@ -25,6 +26,7 @@ from finjuice.pipeline.cli.commands.networth_rendering import (
     _render_forecast,
     _render_forecast_comparison,
 )
+from finjuice.pipeline.cli.output import info
 from finjuice.pipeline.cli.utils import get_config
 from finjuice.pipeline.forecast import (
     SCENARIO_NAMES,
@@ -36,6 +38,8 @@ from finjuice.pipeline.forecast import (
 )
 from finjuice.pipeline.goals import load_goals_file
 from finjuice.pipeline.networth import NetWorthPosition, build_networth_position
+from finjuice.pipeline.portfolio_display import PortfolioDisplayError
+from finjuice.pipeline.portfolio_forecast import load_repository_forecast
 
 logger = logging.getLogger(__name__)
 
@@ -95,26 +99,36 @@ def _run_forecast_command(
 ) -> None:
     """Run the ``finjuice networth forecast`` command body."""
     command = "networth forecast"
+    display = None
     try:
         config = get_config(ctx)
         start_date = _resolve_as_of(ctx, from_value)
-        position = build_networth_position(
-            config.data_dir / "assets" / "snapshots",
-            config.assets_file,
-            as_of=start_date,
-            balance_dir=config.data_dir / "banksalad" / "balance",
-        )
-        scenarios_config = load_scenarios_config(config.scenarios_file)
-        goals_result = load_goals_file(config.goals_file)
-        if goals_result.problems:
-            _raise_goals_validation_error(
-                command=command,
-                problems=goals_result.problems,
-                json_output=json_output,
+        display = load_portfolio_display(ctx, config.data_dir)
+        metadata: dict[str, object] = {}
+        if display is None:
+            position = build_networth_position(
+                config.data_dir / "assets" / "snapshots",
+                config.assets_file,
+                as_of=start_date,
+                balance_dir=config.data_dir / "banksalad" / "balance",
             )
-        target_net_worth = (
-            goals_result.document.net_worth_target if goals_result.document is not None else None
-        )
+            scenarios_config = load_scenarios_config(config.scenarios_file)
+            goals_result = load_goals_file(config.goals_file)
+            if goals_result.problems:
+                _raise_goals_validation_error(
+                    command=command,
+                    problems=goals_result.problems,
+                    json_output=json_output,
+                )
+            target_net_worth = (
+                goals_result.document.net_worth_target
+                if goals_result.document is not None
+                else None
+            )
+        else:
+            inputs = load_repository_forecast(display, as_of=start_date)
+            position, scenarios_config = inputs.position, inputs.scenarios
+            target_net_worth, metadata = inputs.target_net_worth, inputs.metadata
 
         if scenario == "all":
             scenario_payloads = _build_all_scenario_forecasts(
@@ -140,9 +154,11 @@ def _run_forecast_command(
                         "years": years,
                         "start_date": start_as_of,
                         "events_fired": total_events,
+                        **metadata,
                     },
                 )
                 return
+            _render_forecast_identity(metadata)
             _render_forecast_comparison(scenario_payloads, years=years)
             return
 
@@ -166,12 +182,25 @@ def _run_forecast_command(
                     "years": years,
                     "start_date": result["summary"]["start"],
                     "events_fired": result["summary"]["events_count"],
+                    **metadata,
                 },
             )
             return
+        _render_forecast_identity(metadata)
         _render_forecast(result)
     except typer.Exit:
         raise
     except Exception as exc:  # intended catch-all for CLI robustness
-        logger.error("Failed to compute net worth forecast: %s", exc, exc_info=True)
+        logger.error("Failed to compute net worth forecast (%s)", type(exc).__name__)
+        if display is not None and not isinstance(exc, PortfolioDisplayError):
+            exc = PortfolioDisplayError("Repository net worth forecast could not be calculated.")
         _handle_networth_exception(exc, json_output=json_output, command=command)
+
+
+def _render_forecast_identity(metadata: dict[str, object]) -> None:
+    if metadata:
+        info(
+            f"Repository revision {metadata['dataset_revision']} "
+            f"({metadata['dataset_generation']}); policy {metadata['calculation_policy']}; "
+            f"as of {metadata['as_of'] or 'undated'}"
+        )

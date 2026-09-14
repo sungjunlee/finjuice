@@ -38,6 +38,7 @@ finjuice --version
 │ import          Import XLSX files and run full pipeline.                                                             │
 │ tag             Apply tagging rules to all transactions in the active storage.                                       │
 │ export          Generate master XLSX, HTML, and/or Markdown reports.                                                 │
+│ export-verify   Check export revision freshness and modified or missing artifacts without writing.                   │
 │ refresh         Re-process all existing data                                                                         │
 │ validate        Validate CSV partition files against the schema.                                                     │
 │ index           Emit workspace catalog                                                                               │
@@ -70,6 +71,7 @@ finjuice --version
 │ version         Show finjuice CLI version and data schema version.                                                   │
 │ workspace       Manage workspace directories (symlink-based)                                                         │
 │ backup          Create, verify, and restore a complete legacy data-tree backup.                                      │
+│ ssot            Manage inactive SQLite migration candidates.                                                         │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Advanced ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ ingest          Import XLSX files from imports/ into the selected storage authority.                                 │
@@ -393,6 +395,7 @@ finjuice --version
 │ --idempotency-key                        TEXT     Stable retry key for an authoritative mutation                     │
 │ --expected-generation                    TEXT     Expected active dataset generation                                 │
 │ --expected-revision                      INTEGER  Expected active dataset revision                                   │
+│ --delivery-config                        PATH     Explicit delivery JSON after manual edit.                          │
 │ --help                                            Show this message and exit.                                        │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
@@ -720,8 +723,8 @@ finjuice --version
 │ breakdown   Show aggregated asset breakdown by category or asset.                                                    │
 │ history     Show monthly net worth history from available snapshots.                                                 │
 │ forecast    Project net worth under deterministic scenario assumptions.                                              │
-│ init        Create a starter assets.yaml from the built-in template.                                                 │
-│ validate    Validate assets.yaml and report line-numbered errors.                                                    │
+│ init        Initialize assets settings; repositories receive an empty configuration.                                 │
+│ validate    Validate the selected assets configuration and report issues.                                            │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```
@@ -784,7 +787,7 @@ finjuice --version
 
  Usage: finjuice networth validate [OPTIONS]
 
- Validate assets.yaml and report line-numbered errors.
+ Validate the selected assets configuration and report issues.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ --json          Output as JSON                                                                                       │
@@ -850,7 +853,8 @@ finjuice --version
 
  Execute a SQL query on your transaction data.
 
- The query is executed against a 'transactions' view created from your CSV partitions.
+ The 'transactions' view reads the selected authority: legacy CSV or a verified
+ SQLite snapshot. Repository results include the generation and revision in JSON metadata.
  Only SELECT and WITH statements are allowed for safety.
  Report filters are applied by default by prepending a CTE that rebinds the
  conventional `transactions` view to filtered rows; use the root `--no-filter`
@@ -943,6 +947,795 @@ finjuice --version
 | `spending_comparison` | Period-over-period total spending comparison | `period_days:int` optional (default=7, min=1, max=365) |
 | `compare` | Baseline-vs-current monthly-average comparison by category, major, or merchant | `baseline_months:month_window` required<br>`current_months:month_window` required<br>`group_by:enum` optional (default=category_final)<br>`type_norm:enum` optional (default=expense) |
 | `pivot` | Dynamic pivot by row axis, column axis, and metric | `row:enum` required<br>`col:enum` required<br>`value:enum` optional (default=amount)<br>`agg:enum` optional (default=sum)<br>`months:month_range` optional (default=None)<br>`top_n_cols:int` optional (default=10, min=1, max=100) |
+
+---
+
+## `finjuice ssot`
+
+```
+
+ Usage: finjuice ssot [OPTIONS] COMMAND [ARGS]...
+
+ Manage inactive SQLite migration candidates.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ migrate   Plan, build, and verify preservation migrations.                                                           │
+│ backup    Create snapshots, capture a local recovery graph, retain a managed store, and restore inactive workspaces. │
+│ account   Inspect canonical accounts and explicitly bind source identities.                                          │
+│ assets    Confirm source-backed asset meanings and report exact scoped ownership.                                    │
+│ intake    Preserve original evidence and review explicitly supplied extraction and proposals.                        │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot intake`
+
+```
+
+ Usage: finjuice ssot intake [OPTIONS] COMMAND [ARGS]...
+
+ Preserve original evidence and review explicitly supplied extraction and proposals.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ submit    Preserve source bytes and supplied metadata; never infer OCR or account meaning.                           │
+│ list      Read one authority-bound snapshot including pending, stale and uncertain decisions.                        │
+│ confirm   Apply exactly the stored proposal with its explicit application identity.                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot intake submit`
+
+```
+
+ Usage: finjuice ssot intake submit [OPTIONS] SOURCE METADATA
+
+ Preserve source bytes and supplied metadata; never infer OCR or account meaning.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    source        PATH  Original description/image/workbook file [required]                                         │
+│ *    metadata      PATH  Explicit extraction and proposal JSON document [required]                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot intake list`
+
+```
+
+ Usage: finjuice ssot intake list [OPTIONS]
+
+ Read one authority-bound snapshot including pending, stale and uncertain decisions.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot intake confirm`
+
+```
+
+ Usage: finjuice ssot intake confirm [OPTIONS] PROPOSAL_ID
+
+ Apply exactly the stored proposal with its explicit application identity.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    proposal_id      TEXT  [required]                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --confirmed-at               TEXT     Explicit confirmation timestamp [required]                                  │
+│    --json                                                                                                            │
+│    --idempotency-key            TEXT     Stable retry key for an authoritative mutation                              │
+│    --expected-generation        TEXT     Expected active dataset generation                                          │
+│    --expected-revision          INTEGER  Expected active dataset revision                                            │
+│    --help                                Show this message and exit.                                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot assets`
+
+```
+
+ Usage: finjuice ssot assets [OPTIONS] COMMAND [ARGS]...
+
+ Confirm source-backed asset meanings and report exact scoped ownership.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ list               List original source identities, pending meanings and immutable decision history.                 │
+│ confirm            Record explicit meaning/scope/date/evidence for one existing source value.                        │
+│ correct            Append a source meaning correction; retain its earlier assertion and raw source.                  │
+│ relation-confirm   Explicitly include/overlap two existing source entities with review evidence.                     │
+│ relation-correct   Correct an inclusion/overlap decision without deleting its previous evidence.                     │
+│ report             Report exact owned values in an explicit party/source scope; surface unknowns.                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot assets list`
+
+```
+
+ Usage: finjuice ssot assets list [OPTIONS]
+
+ List original source identities, pending meanings and immutable decision history.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot assets confirm`
+
+```
+
+ Usage: finjuice ssot assets confirm [OPTIONS] REQUEST
+
+ Record explicit meaning/scope/date/evidence for one existing source value.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    request      PATH  [required]                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot assets correct`
+
+```
+
+ Usage: finjuice ssot assets correct [OPTIONS] ASSERTION_ID REQUEST
+
+ Append a source meaning correction; retain its earlier assertion and raw source.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    assertion_id      TEXT  [required]                                                                              │
+│ *    request           PATH  [required]                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot assets relation-confirm`
+
+```
+
+ Usage: finjuice ssot assets relation-confirm [OPTIONS] REQUEST
+
+ Explicitly include/overlap two existing source entities with review evidence.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    request      PATH  [required]                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot assets relation-correct`
+
+```
+
+ Usage: finjuice ssot assets relation-correct [OPTIONS] ASSERTION_ID REQUEST
+
+ Correct an inclusion/overlap decision without deleting its previous evidence.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    assertion_id      TEXT  [required]                                                                              │
+│ *    request           PATH  [required]                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot assets report`
+
+```
+
+ Usage: finjuice ssot assets report [OPTIONS]
+
+ Report exact owned values in an explicit party/source scope; surface unknowns.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --as-of             TEXT                  [required]                                                              │
+│ *  --currency          TEXT                  [required]                                                              │
+│ *  --party             TEXT                  [required]                                                              │
+│    --source            TEXT                                                                                          │
+│    --stale-days        INTEGER RANGE [x>=0]  [default: 30]                                                           │
+│    --json                                                                                                            │
+│    --help                                    Show this message and exit.                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot account`
+
+```
+
+ Usage: finjuice ssot account [OPTIONS] COMMAND [ARGS]...
+
+ Inspect canonical accounts and explicitly bind source identities.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ list                List accounts, exact source candidates and immutable confirmation history.                       │
+│ confirm             Confirm an exact source binding from an explicit JSON request file.                              │
+│ correct             Append a correction of the named current binding; retain the original evidence.                  │
+│ ownership           Read exact confirmed ownership as of a date without household aggregation.                       │
+│ preview             Preview binding impact; pass its generation/revision to confirm or correct.                      │
+│ ownership-confirm   Confirm exact party shares, effective dates and explicit evidence from JSON.                     │
+│ ownership-correct   Correct ownership by appending a confirmed successor; retain prior evidence.                     │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot account list`
+
+```
+
+ Usage: finjuice ssot account list [OPTIONS]
+
+ List accounts, exact source candidates and immutable confirmation history.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot account confirm`
+
+```
+
+ Usage: finjuice ssot account confirm [OPTIONS] REQUEST
+
+ Confirm an exact source binding from an explicit JSON request file.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    request      PATH  [required]                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot account correct`
+
+```
+
+ Usage: finjuice ssot account correct [OPTIONS] BINDING_ID REQUEST
+
+ Append a correction of the named current binding; retain the original evidence.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    binding_id      TEXT  [required]                                                                                │
+│ *    request         PATH  [required]                                                                                │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot account ownership`
+
+```
+
+ Usage: finjuice ssot account ownership [OPTIONS] ACCOUNT_ID
+
+ Read exact confirmed ownership as of a date without household aggregation.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    account_id      TEXT  [required]                                                                                │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --as-of        TEXT  [required]                                                                                   │
+│    --json                                                                                                            │
+│    --help               Show this message and exit.                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot account preview`
+
+```
+
+ Usage: finjuice ssot account preview [OPTIONS] REQUEST
+
+ Preview binding impact; pass its generation/revision to confirm or correct.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    request      PATH  [required]                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --corrects        TEXT                                                                                               │
+│ --json                                                                                                               │
+│ --help                  Show this message and exit.                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot account ownership-confirm`
+
+```
+
+ Usage: finjuice ssot account ownership-confirm [OPTIONS] REQUEST
+
+ Confirm exact party shares, effective dates and explicit evidence from JSON.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    request      PATH  [required]                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot account ownership-correct`
+
+```
+
+ Usage: finjuice ssot account ownership-correct [OPTIONS] ASSERTION_ID REQUEST
+
+ Correct ownership by appending a confirmed successor; retain prior evidence.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    assertion_id      TEXT  [required]                                                                              │
+│ *    request           PATH  [required]                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup`
+
+```
+
+ Usage: finjuice ssot backup [OPTIONS] COMMAND [ARGS]...
+
+ Create snapshots, capture a local recovery graph, retain a managed store, and restore inactive workspaces.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ create           Capture one SQLite generation snapshot and its referenced artifacts.                                │
+│ restore          Restore a verified SQLite backup into an inactive isolated directory.                               │
+│ status           Report whether one SQLite backup directory is an intact local snapshot.                             │
+│ capture-bundle   Capture one local recovery graph from explicit operator paths.                                      │
+│ verify-bundle    Verify one published recovery graph against independently enrolled evidence.                        │
+│ restore-bundle   Verify the graph, then restore its snapshot into an inactive workspace.                             │
+│ store            Initialize and retain complete local recovery graphs in one managed store.                          │
+│ deliver          Run one filesystem backup delivery or report committed vs pending coverage.                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup create`
+
+```
+
+ Usage: finjuice ssot backup create [OPTIONS]
+
+ Capture one SQLite generation snapshot and its referenced artifacts.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --source        PATH  Published generation root or database. [required]                                           │
+│ *  --output        PATH  Backup directory to publish. [required]                                                     │
+│    --json                Output as JSON                                                                              │
+│    --help                Show this message and exit.                                                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup restore`
+
+```
+
+ Usage: finjuice ssot backup restore [OPTIONS] BACKUP
+
+ Restore a verified SQLite backup into an inactive isolated directory.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    backup      PATH  Backup directory or current attempt. [required]                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --target        PATH  Fresh isolated workspace directory; parent must exist. [required]                           │
+│    --json                Output as JSON                                                                              │
+│    --help                Show this message and exit.                                                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup status`
+
+```
+
+ Usage: finjuice ssot backup status [OPTIONS] BACKUP
+
+ Report whether one SQLite backup directory is an intact local snapshot.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    backup      PATH  Backup directory to inspect. [required]                                                       │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json          Output as JSON                                                                                       │
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup capture-bundle`
+
+```
+
+ Usage: finjuice ssot backup capture-bundle [OPTIONS]
+
+ Capture one local recovery graph from explicit operator paths.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --source-data-dir            PATH  Explicit live data directory to snapshot; not read from the host pointer.      │
+│                                       [required]                                                                     │
+│ *  --output                     PATH  Fresh directory for the published graph. [required]                            │
+│ *  --expected                   PATH  Independently retained expectation JSON; never derived from the live tree.     │
+│                                       [required]                                                                     │
+│ *  --wheel                      PATH  Operator-selected release wheel. [required]                                    │
+│ *  --dependency-lock            PATH  Operator-selected dependency lock file. [required]                             │
+│ *  --binding                    PATH  Operator-selected trusted binding file. [required]                             │
+│ *  --migration-candidate        PATH  Immutable migration candidate directory. [required]                            │
+│    --json                             Output as JSON                                                                 │
+│    --help                             Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup verify-bundle`
+
+```
+
+ Usage: finjuice ssot backup verify-bundle [OPTIONS] BUNDLE
+
+ Verify one published recovery graph against independently enrolled evidence.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    bundle      PATH  Published local recovery graph directory. [required]                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --expected        PATH  Independently retained expectation JSON; never derived from the bundle. [required]        │
+│    --json                  Output as JSON                                                                            │
+│    --help                  Show this message and exit.                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup restore-bundle`
+
+```
+
+ Usage: finjuice ssot backup restore-bundle [OPTIONS] BUNDLE
+
+ Verify the graph, then restore its snapshot into an inactive workspace.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    bundle      PATH  Published local recovery graph directory. [required]                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --target          PATH  Fresh isolated workspace directory; parent must exist. [required]                         │
+│ *  --expected        PATH  Independently retained expectation JSON; never derived from the bundle. [required]        │
+│    --json                  Output as JSON                                                                            │
+│    --help                  Show this message and exit.                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup deliver`
+
+```
+
+ Usage: finjuice ssot backup deliver [OPTIONS] COMMAND [ARGS]...
+
+ Run one filesystem backup delivery or report committed vs pending coverage.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ status   Report committed-record coverage and delivery history without transferring.                                 │
+│ run      Run one filesystem delivery. Nonzero exit is backup failure, not a domain rollback.                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup deliver status`
+
+```
+
+ Usage: finjuice ssot backup deliver status [OPTIONS]
+
+ Report committed-record coverage and delivery history without transferring.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --source-data-dir          PATH  [required]                                                                       │
+│ *  --expected                 PATH  Independently retained expectation JSON; never derived from the store.           │
+│                                     [required]                                                                       │
+│ *  --sender-store             PATH  [required]                                                                       │
+│ *  --destination-store        PATH  [required]                                                                       │
+│ *  --control-dir              PATH  [required]                                                                       │
+│    --json                                                                                                            │
+│    --help                           Show this message and exit.                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup deliver run`
+
+```
+
+ Usage: finjuice ssot backup deliver run [OPTIONS]
+
+ Run one filesystem delivery. Nonzero exit is backup failure, not a domain rollback.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --source-data-dir            PATH  [required]                                                                     │
+│ *  --expected                   PATH  Independently retained expectation JSON; never derived from the store.         │
+│                                       [required]                                                                     │
+│ *  --sender-store               PATH  [required]                                                                     │
+│ *  --destination-store          PATH  [required]                                                                     │
+│ *  --control-dir                PATH  [required]                                                                     │
+│    --wheel                      PATH                                                                                 │
+│    --dependency-lock            PATH                                                                                 │
+│    --binding                    PATH                                                                                 │
+│    --migration-candidate        PATH                                                                                 │
+│    --json                                                                                                            │
+│    --help                             Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup store`
+
+```
+
+ Usage: finjuice ssot backup store [OPTIONS] COMMAND [ARGS]...
+
+ Initialize and retain complete local recovery graphs in one managed store.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ init      Create one empty local store bound to independently enrolled expectations.                                 │
+│ capture   Capture one verified recovery graph into the initialized store.                                            │
+│ list      Verify and list complete graphs in one initialized local store.                                            │
+│ verify    Verify one managed recovery graph against independently enrolled evidence.                                 │
+│ restore   Verify one managed graph, then restore its snapshot into an inactive workspace.                            │
+│ protect   Verify one graph and durably register it as an additional baseline.                                        │
+│ plan      Recompute a GFS retention plan from verified local inventory.                                              │
+│ prune     Recompute under an exclusive lease and delete only unprotected local graphs.                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup store init`
+
+```
+
+ Usage: finjuice ssot backup store init [OPTIONS]
+
+ Create one empty local store bound to independently enrolled expectations.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --store           PATH  Fresh directory for the initialized store. [required]                                     │
+│ *  --expected        PATH  Independently retained JSON for this activation. [required]                               │
+│    --json                  Output as JSON                                                                            │
+│    --help                  Show this message and exit.                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup store capture`
+
+```
+
+ Usage: finjuice ssot backup store capture [OPTIONS]
+
+ Capture one verified recovery graph into the initialized store.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --store                      PATH  Initialized local recovery-graph store. [required]                             │
+│ *  --source-data-dir            PATH  Explicit live data directory to snapshot; not read from the host pointer.      │
+│                                       [required]                                                                     │
+│ *  --expected                   PATH  Independently retained expectation JSON; never derived from the store.         │
+│                                       [required]                                                                     │
+│ *  --wheel                      PATH  Operator-selected release wheel. [required]                                    │
+│ *  --dependency-lock            PATH  Operator-selected dependency lock file. [required]                             │
+│ *  --binding                    PATH  Operator-selected trusted binding file. [required]                             │
+│ *  --migration-candidate        PATH  Immutable migration candidate directory. [required]                            │
+│    --json                             Output as JSON                                                                 │
+│    --help                             Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup store list`
+
+```
+
+ Usage: finjuice ssot backup store list [OPTIONS]
+
+ Verify and list complete graphs in one initialized local store.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --store           PATH  Initialized local recovery-graph store. [required]                                        │
+│ *  --expected        PATH  Independently retained expectation JSON; never derived from the store. [required]         │
+│    --json                  Output as JSON                                                                            │
+│    --help                  Show this message and exit.                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup store verify`
+
+```
+
+ Usage: finjuice ssot backup store verify [OPTIONS]
+
+ Verify one managed recovery graph against independently enrolled evidence.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --store           PATH  Initialized local recovery-graph store. [required]                                        │
+│ *  --copy-id         TEXT  UUID identity of one published graph. [required]                                          │
+│ *  --expected        PATH  Independently retained expectation JSON; never derived from the store. [required]         │
+│    --json                  Output as JSON                                                                            │
+│    --help                  Show this message and exit.                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup store restore`
+
+```
+
+ Usage: finjuice ssot backup store restore [OPTIONS]
+
+ Verify one managed graph, then restore its snapshot into an inactive workspace.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --store           PATH  Initialized local recovery-graph store. [required]                                        │
+│ *  --copy-id         TEXT  UUID identity of one published graph. [required]                                          │
+│ *  --target          PATH  Fresh isolated workspace directory; parent must exist. [required]                         │
+│ *  --expected        PATH  Independently retained expectation JSON; never derived from the store. [required]         │
+│    --json                  Output as JSON                                                                            │
+│    --help                  Show this message and exit.                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup store protect`
+
+```
+
+ Usage: finjuice ssot backup store protect [OPTIONS]
+
+ Verify one graph and durably register it as an additional baseline.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --store           PATH  Initialized local recovery-graph store. [required]                                        │
+│ *  --copy-id         TEXT  UUID identity of one published graph. [required]                                          │
+│ *  --expected        PATH  Independently retained expectation JSON; never derived from the store. [required]         │
+│    --json                  Output as JSON                                                                            │
+│    --help                  Show this message and exit.                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup store plan`
+
+```
+
+ Usage: finjuice ssot backup store plan [OPTIONS]
+
+ Recompute a GFS retention plan from verified local inventory.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --store           PATH     Initialized local recovery-graph store. [required]                                     │
+│ *  --expected        PATH     Independently retained expectation JSON; never derived from the store. [required]      │
+│    --daily           INTEGER  GFS window; omit unused fields to keep the default policy.                             │
+│    --weekly          INTEGER  GFS window; omit unused fields to keep the default policy.                             │
+│    --monthly         INTEGER  GFS window; omit unused fields to keep the default policy.                             │
+│    --json                     Output as JSON                                                                         │
+│    --help                     Show this message and exit.                                                            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup store prune`
+
+```
+
+ Usage: finjuice ssot backup store prune [OPTIONS]
+
+ Recompute under an exclusive lease and delete only unprotected local graphs.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --store              PATH     Initialized local recovery-graph store. [required]                                  │
+│ *  --expected           PATH     Independently retained expectation JSON; never derived from the store. [required]   │
+│    --plan-digest        TEXT     Optional reviewed plan digest; stale values are rejected.                           │
+│    --daily              INTEGER  GFS window; omit unused fields to keep the default policy.                          │
+│    --weekly             INTEGER  GFS window; omit unused fields to keep the default policy.                          │
+│    --monthly            INTEGER  GFS window; omit unused fields to keep the default policy.                          │
+│    --json                        Output as JSON                                                                      │
+│    --help                        Show this message and exit.                                                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
 
 ---
 

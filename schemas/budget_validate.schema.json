@@ -6,8 +6,14 @@
     "_meta": {
       "$ref": "_meta.schema.json"
     },
-    "path": {
+    "authority": {
       "type": "string"
+    },
+    "path": {
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "problems": {
       "items": {
@@ -15,6 +21,15 @@
         "type": "object"
       },
       "type": "array"
+    },
+    "revision_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "selection_state": {
+      "type": "string"
     },
     "status": {
       "enum": [

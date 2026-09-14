@@ -33,6 +33,7 @@ from finjuice.pipeline.cli.commands.context import register_context_command
 from finjuice.pipeline.cli.commands.doctor import register_doctor_command
 from finjuice.pipeline.cli.commands.explain import register_explain_command
 from finjuice.pipeline.cli.commands.export_cmd import export_command
+from finjuice.pipeline.cli.commands.export_verify import export_verify_command
 from finjuice.pipeline.cli.commands.import_cmd import register_import_command
 from finjuice.pipeline.cli.commands.index import register_index_command
 from finjuice.pipeline.cli.commands.ingest import ingest_command
@@ -47,6 +48,11 @@ from finjuice.pipeline.cli.commands.reconcile_cmd import reconcile_command
 from finjuice.pipeline.cli.commands.refresh_cmd import refresh_command
 from finjuice.pipeline.cli.commands.review import review_command
 from finjuice.pipeline.cli.commands.rules import rules_app
+from finjuice.pipeline.cli.commands.sqlite_backup import ssot_backup_app
+from finjuice.pipeline.cli.commands.ssot_accounts import account_app
+from finjuice.pipeline.cli.commands.ssot_assets import assets_app as canonical_assets_app
+from finjuice.pipeline.cli.commands.ssot_intake import intake_app
+from finjuice.pipeline.cli.commands.ssot_migrate import ssot_app
 from finjuice.pipeline.cli.commands.tag import tag_command
 from finjuice.pipeline.cli.commands.template_cmd import template_app
 from finjuice.pipeline.cli.commands.transfer import transfer_command
@@ -84,7 +90,9 @@ class FinjuiceGroup(TyperGroup):
     def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
         ctx.ensure_object(dict)
         ctx.obj["_raw_args"] = list(args)
-        return super().parse_args(ctx, args)
+        remaining = super().parse_args(ctx, args)
+        ctx.obj["_root_subcommand_args"] = list(remaining)
+        return remaining
 
 
 # Create Typer app
@@ -105,6 +113,7 @@ register_import_command(app)
 # Register core pipeline commands (split from pipeline.py, Issue #269)
 app.command(name="tag", rich_help_panel="Commands")(tag_command)
 app.command(name="export", rich_help_panel="Commands")(export_command)
+app.command(name="export-verify", rich_help_panel="Commands")(export_verify_command)
 app.command(
     name="refresh",
     rich_help_panel="Commands",
@@ -196,6 +205,11 @@ app.add_typer(networth_app, name="networth", rich_help_panel="Analysis")
 app.add_typer(budget_app, name="budget", rich_help_panel="Analysis")
 app.add_typer(journal_app, name="journal", rich_help_panel="Commands")
 app.add_typer(backup_app, name="backup", rich_help_panel="Admin")
+ssot_app.add_typer(ssot_backup_app, name="backup")
+ssot_app.add_typer(account_app, name="account")
+ssot_app.add_typer(canonical_assets_app, name="assets")
+ssot_app.add_typer(intake_app, name="intake")
+app.add_typer(ssot_app, name="ssot", rich_help_panel="Admin")
 
 
 def _resolve_active_data_dir(data_dir: Optional[Path]) -> Optional[Path]:
@@ -283,11 +297,18 @@ def main(
         "manifest",
         "inspect",
         "backup",
+        "ssot",
     }
     # Also check for resilient_parsing (used during completion/help)
     if help_requested or utility_without_data_dir_requested or ctx.resilient_parsing:
         ctx.obj["config"] = None
-        ctx.obj["active_data_dir"] = _resolve_active_data_dir(data_dir)
+        # SQLite backup commands resolve restore configuration inside their safe error boundary.
+        sqlite_backup_requested = ctx.invoked_subcommand == "ssot" and ctx.obj.get(
+            "_root_subcommand_args", []
+        )[:1] == ["backup"]
+        ctx.obj["active_data_dir"] = (
+            None if sqlite_backup_requested else _resolve_active_data_dir(data_dir)
+        )
         return
 
     # Create Config instance with specified data directory

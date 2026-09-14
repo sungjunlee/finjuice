@@ -9,9 +9,10 @@ from this module.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any, Callable, Optional
 
 import polars as pl
@@ -28,7 +29,14 @@ from finjuice.pipeline.export.result_outputs import (
     _generate_markdown_outputs,
     _generate_xlsx_outputs,
 )
+from finjuice.pipeline.export.source import (
+    ExportSourceOptions,
+    RepositoryExportError,
+    RepositoryExportSource,
+    load_export_source,
+)
 from finjuice.pipeline.report_filters import apply_report_filters
+from finjuice.pipeline.storage.authority import ActivationEvidenceProvider
 from finjuice.pipeline.tagging.models import ReportFilters
 from finjuice.pipeline.tagging.rules_yaml_io import load_report_filters
 
@@ -67,6 +75,8 @@ class ExportRunContext:
     report_source_df: pl.DataFrame | None
     emit_text: bool
     online: bool = False
+    full_source_df: pl.DataFrame | None = None
+    repository_metadata: dict[str, Any] | None = None
 
 
 _runtime = ExportResultRuntime()
@@ -194,8 +204,30 @@ def _compute_export_result(  # noqa: PLR0913 - moved helper keeps the existing p
     dry_run: bool,
     emit_text: bool = True,
     online: bool = False,
+    *,
+    evidence_provider: ActivationEvidenceProvider | None = None,
 ) -> dict[str, Any]:
     """Compute export output without deciding how it is emitted."""
+    source = load_export_source(
+        config.data_dir,
+        evidence_provider,
+        ExportSourceOptions(format_lower, period, _no_filter_requested(ctx), online),
+    )
+    if source is not None:
+        run = ExportRunContext(
+            config=config,
+            paths=replace(
+                _build_export_paths(config),
+                today=str(source.metadata["calculation_as_of"] or "undated").replace("-", ""),
+            ),
+            period=period,
+            report_source_df=source.report_frame,
+            emit_text=emit_text,
+            online=online,
+            full_source_df=source.full_frame,
+            repository_metadata=source.metadata,
+        )
+        return _repository_export(run, source, format_lower, auto_open, dry_run)
     report_source_df, filters_applied = _load_filtered_report_export_source(
         ctx,
         config,
@@ -226,6 +258,12 @@ def _compute_export_result(  # noqa: PLR0913 - moved helper keeps the existing p
         online=online,
     )
 
+    return _generate_export_result(run, format_lower, auto_open, filters_applied)
+
+
+def _generate_export_result(
+    run: ExportRunContext, format_lower: str, auto_open: bool, filters_applied: int
+) -> dict[str, Any]:
     generated_artifacts: list[dict[str, Any]] = []
     skipped_outputs: list[dict[str, Any]] = []
     transaction_count: int | None = None
@@ -258,9 +296,108 @@ def _compute_export_result(  # noqa: PLR0913 - moved helper keeps the existing p
         "command": "export",
         "dry_run": False,
         "format": format_lower,
-        "period": period,
+        "period": run.period,
         "transaction_count": transaction_count,
         "output_files": generated_artifacts,
         "skipped_outputs": skipped_outputs,
         "_filters_applied": filters_applied,
     }
+
+
+def _repository_export(
+    run: ExportRunContext,
+    source: RepositoryExportSource,
+    format_lower: str,
+    auto_open: bool,
+    dry_run: bool,
+) -> dict[str, Any]:
+    try:
+        if dry_run:
+            count = len(
+                source.full_frame if format_lower in {"xlsx", "all"} else source.report_frame
+            )
+            return _repository_plan(
+                run,
+                {
+                    "command": "export",
+                    "dry_run": True,
+                    "_filters_applied": source.filters_applied,
+                    "_repository_meta": source.metadata,
+                    **build_export_plan(
+                        run.config.data_dir,
+                        run.config.csv_base_dir,
+                        format_lower,
+                        run.period,
+                        transaction_count=count,
+                    ),
+                },
+            )
+        return _publish_repository_run(run, source, format_lower, auto_open)
+    except Exception:
+        raise RepositoryExportError(
+            "Repository export could not generate verified artifacts."
+        ) from None
+
+
+def _publish_repository_run(
+    run: ExportRunContext, source: RepositoryExportSource, format_lower: str, auto_open: bool
+) -> dict[str, Any]:
+    from finjuice.pipeline.export.artifacts import publish_repository_export
+
+    export_root = run.paths.export_dir
+    export_root.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(prefix=".repository-export-", dir=export_root) as directory:
+        staging = Path(directory)
+        paths = ExportPaths(staging, staging / "reports", run.paths.today)
+        paths.reports_dir.mkdir()
+        staged_run = replace(run, paths=paths, emit_text=False)
+        result = _generate_export_result(staged_run, format_lower, False, source.filters_applied)
+        result["_repository_meta"] = source.metadata
+        published: dict[str, Any] = publish_repository_export(
+            staging, export_root, result, source.metadata
+        )
+    if auto_open and format_lower == "html" and _runtime.open_file is not None:
+        _open_published_html(published, run.emit_text)
+    return published
+
+
+def _open_published_html(result: dict[str, Any], emit_text: bool) -> None:
+    for entry in result.get("output_files", []):
+        if entry.get("kind") != "html_report" or not entry.get("available", True):
+            continue
+        try:
+            if _runtime.open_file is not None:
+                _runtime.open_file(Path(entry["path"]))
+        except Exception:
+            _emit_warning("Export completed; the report could not be opened.", emit_text=emit_text)
+
+
+def _repository_plan(run: ExportRunContext, plan: dict[str, Any]) -> dict[str, Any]:
+    """Describe a future isolated run without inspecting old output sizes."""
+    if plan["format"] in {"xlsx", "all"}:
+        plan["output_files"].append(
+            build_output_entry(
+                run.paths.export_dir / "transactions.csv",
+                "transactions_csv",
+                row_count=plan["transaction_count"],
+            )
+        )
+    for key in ("output_files", "skipped_outputs"):
+        for item in plan[key]:
+            path = Path(item["path"])
+            if item["kind"] == "transactions_csv":
+                relative = Path("transactions.csv")
+            elif item["kind"] == "master_xlsx":
+                relative = Path(f"master_{run.paths.today}.xlsx")
+            else:
+                name = path.name
+                if item["kind"] in {"html_report", "markdown_report"}:
+                    name = f"report_{run.period or run.paths.today}{path.suffix}"
+                relative = Path("reports") / name
+            item.update(
+                path=str(run.paths.export_dir / "runs" / "<new-run>" / relative),
+                would_overwrite=False,
+                estimated_size_bytes=None,
+                estimated_size_human=None,
+            )
+    return plan

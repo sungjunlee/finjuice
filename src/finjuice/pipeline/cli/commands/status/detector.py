@@ -28,6 +28,9 @@ class StatusDiagnoses:
 
 def diagnose_status(facts: StatusFacts) -> StatusDiagnoses:
     """Derive status health, signals, and next-step cues from collected facts."""
+    if facts.repository is not None:
+        return _diagnose_repository_status(facts)
+    assert facts.schema_summary is not None
     health = _compute_status_health(
         rules_exists=facts.rules_exists,
         schema_state=facts.schema_summary.state,
@@ -98,6 +101,7 @@ def _build_status_next_steps(
     transfer_excluded_untagged_count: int,
 ) -> list[dict[str, str]]:
     """Return additive next-step cues for agent consumers."""
+    assert facts.schema_summary is not None
     schema_next_steps: list[dict[str, str]] = []
     if facts.schema_summary.state is SchemaCompatibilityState.COMPATIBLE_LEGACY:
         guidance = get_schema_migration_guidance(
@@ -160,3 +164,71 @@ def _build_status_next_steps(
         ]
 
     return schema_next_steps
+
+
+def _diagnose_repository_status(facts: StatusFacts) -> StatusDiagnoses:
+    """Diagnose canonical configuration without consulting CSV schema or live files."""
+    repository = facts.repository
+    assert repository is not None
+    rules_status = repository["rules_head"]["parsed_status"]
+    health = _compute_status_health(
+        rules_exists=True,
+        schema_state=SchemaCompatibilityState.ACTIVE,
+        suggestable_untagged_count=facts.suggestable_untagged_count,
+        suggestable_tagging_rate=facts.suggestable_tagging_rate,
+        transfer_excluded_untagged_count=facts.transfer_excluded_untagged_count,
+    )
+    steps: list[dict[str, str]] = []
+    if rules_status != "parsed":
+        reason = f"{rules_status}_rules_head"
+        health = {"status": "critical", "reasons": [reason]}
+        steps.append(
+            {
+                "signal": reason,
+                "message": "Inspect canonical rules before tagging or filtering.",
+                "command": "finjuice rules --help",
+            }
+        )
+    elif facts.suggestable_untagged_count > 0:
+        steps.extend(
+            [
+                {
+                    "signal": "untagged_transactions",
+                    "message": "Inspect the current review queue.",
+                    "command": "finjuice review --json",
+                },
+                {
+                    "signal": "retag_after_rules",
+                    "message": "Re-apply rules after reviewing the queue.",
+                    "command": "finjuice tag",
+                },
+            ]
+        )
+    goals_status = repository["goals_head"]["parsed_status"]
+    if facts.detailed_requested and goals_status in {"invalid", "opaque"}:
+        reason = f"{goals_status}_goals_head"
+        health["reasons"].append(reason)
+        if health["status"] == "ok":
+            health["status"] = "warning"
+        steps.append(
+            {
+                "signal": reason,
+                "message": "Inspect canonical goals; configured recurring savings are unavailable.",
+                "command": "finjuice status --help",
+            }
+        )
+    return StatusDiagnoses(
+        health=health,
+        actionable=health["status"] != "ok",
+        signals={
+            "rules_file_exists": rules_status != "missing",
+            "rules_authority": "repository",
+            "rules_head_status": rules_status,
+            "goals_head_status": goals_status,
+            "tagging_rate": facts.tagging_rate,
+            "untagged_count": facts.untagged_count,
+            "filters_applied": facts.filters_applied,
+            "detailed_requested": facts.detailed_requested,
+        },
+        next_steps=steps,
+    )

@@ -48,6 +48,15 @@ def get_config(ctx: typer.Context) -> Config:
     return config
 
 
+def get_activation_evidence_provider(ctx: typer.Context) -> ActivationEvidenceProvider | None:
+    """Get host-supplied evidence without inferring trust from on-disk activation."""
+    root_obj = ctx.find_root().obj
+    for obj in (ctx.obj, root_obj):
+        if isinstance(obj, dict) and obj.get("activation_evidence_provider") is not None:
+            return cast(ActivationEvidenceProvider, obj["activation_evidence_provider"])
+    return None
+
+
 def get_mutation_facade(ctx: typer.Context, config: Config) -> StorageMutationFacade:
     """Build the authority-aware mutation facade from trusted host context."""
     provider: ActivationEvidenceProvider | None = None

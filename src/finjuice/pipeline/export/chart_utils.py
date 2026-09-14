@@ -16,6 +16,8 @@ except ImportError:
 def create_monthly_trend_chart(
     df: pl.DataFrame,
     include_plotlyjs: bool = False,
+    *,
+    div_id: str | None = None,
 ) -> str:
     """Create monthly spending trend line chart.
 
@@ -54,12 +56,20 @@ def create_monthly_trend_chart(
         margin=dict(l=60, r=40, t=60, b=40),
         height=400,
     )
-    return str(fig.to_html(full_html=False, include_plotlyjs=include_plotlyjs))
+    return str(
+        fig.to_html(
+            full_html=False,
+            include_plotlyjs=include_plotlyjs,
+            **({"div_id": div_id} if div_id is not None else {}),
+        )
+    )
 
 
 def create_tag_pie_chart(
     df: pl.DataFrame,
     include_plotlyjs: bool = False,
+    *,
+    div_id: str | None = None,
 ) -> str:
     """Create tag breakdown pie chart.
 
@@ -109,12 +119,20 @@ def create_tag_pie_chart(
         showlegend=True,
         legend=dict(orientation="v", x=1.02, y=0.5),
     )
-    return str(fig.to_html(full_html=False, include_plotlyjs=include_plotlyjs))
+    return str(
+        fig.to_html(
+            full_html=False,
+            include_plotlyjs=include_plotlyjs,
+            **({"div_id": div_id} if div_id is not None else {}),
+        )
+    )
 
 
 def create_merchants_bar_chart(
     df: pl.DataFrame,
     include_plotlyjs: bool = False,
+    *,
+    div_id: str | None = None,
 ) -> str:
     """Create top merchants horizontal bar chart.
 
@@ -150,4 +168,10 @@ def create_merchants_bar_chart(
         margin=dict(l=150, r=40, t=60, b=40),
         height=max(400, len(df) * 25 + 100),
     )
-    return str(fig.to_html(full_html=False, include_plotlyjs=include_plotlyjs))
+    return str(
+        fig.to_html(
+            full_html=False,
+            include_plotlyjs=include_plotlyjs,
+            **({"div_id": div_id} if div_id is not None else {}),
+        )
+    )

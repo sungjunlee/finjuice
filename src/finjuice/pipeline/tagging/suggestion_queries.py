@@ -16,6 +16,10 @@ module.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from duckdb import DuckDBPyConnection
 
 from finjuice.pipeline.filters import exclude_transfers_sql
 
@@ -106,6 +110,17 @@ def get_suggestion_coverage_stats(
     from finjuice.pipeline.analytics.duckdb_layer import DuckDBAnalytics
 
     normalized_data_dir = _normalize_suggest_data_dir(data_dir)
+    try:
+        with DuckDBAnalytics(normalized_data_dir) as analytics:
+            return coverage_stats_from_connection(analytics.conn, file_id)
+    except FileNotFoundError:
+        return _coverage_stats([])
+
+
+def coverage_stats_from_connection(
+    conn: DuckDBPyConnection, file_id: str | None = None
+) -> dict[str, int | float]:
+    """Compute coverage using a caller-owned, already registered transaction view."""
     untagged_sql = "(tags_list IS NULL OR len(tags_list) = 0)"
     sql = f"""
         SELECT
@@ -125,22 +140,12 @@ def get_suggestion_coverage_stats(
         {"WHERE file_id = ?" if file_id is not None else ""}
     """
 
-    try:
-        with DuckDBAnalytics(normalized_data_dir) as analytics:
-            params = [file_id] if file_id is not None else []
-            result = analytics.conn.execute(sql, params).pl().to_dicts()
-    except FileNotFoundError:
-        return {
-            "total_count": 0,
-            "untagged_count": 0,
-            "suggestable_total_count": 0,
-            "suggestable_untagged_count": 0,
-            "transfer_excluded_count": 0,
-            "transfer_excluded_untagged_count": 0,
-            "coverage_before_pct": 0.0,
-            "suggestable_coverage_before_pct": 0.0,
-        }
+    params = [file_id] if file_id is not None else []
+    return _coverage_stats(conn.execute(sql, params).pl().to_dicts())
 
+
+def _coverage_stats(result: list[dict[str, Any]]) -> dict[str, int | float]:
+    """Shape the established counts and percentage display contract."""
     if not result:
         return {
             "total_count": 0,
@@ -178,3 +183,20 @@ def get_suggestion_coverage_stats(
         "coverage_before_pct": round(float(coverage_before), 2),
         "suggestable_coverage_before_pct": round(float(suggestable_coverage_before), 2),
     }
+
+
+def merchant_context_from_connection(
+    conn: DuckDBPyConnection,
+    top_n: int = 10,
+    min_count: int = 2,
+    file_id: str | None = None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Detach merchant and tagged context queries from one caller-owned view."""
+    query_limit = max(top_n * 20, top_n)
+    params = [file_id, min_count, query_limit] if file_id is not None else [min_count, query_limit]
+    merchant_contexts = conn.execute(_merchant_context_query(file_id), params).pl().to_dicts()
+    tagged_params = [file_id] if file_id is not None else []
+    tagged_merchants = (
+        conn.execute(_similar_merchants_query(file_id), tagged_params).pl().to_dicts()
+    )
+    return merchant_contexts, tagged_merchants

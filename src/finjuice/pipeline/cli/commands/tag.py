@@ -6,6 +6,7 @@ Split from pipeline.py as part of Issue #269.
 
 import logging
 from contextlib import nullcontext
+from pathlib import Path
 from typing import Any, NoReturn
 
 import typer
@@ -29,6 +30,12 @@ from finjuice.pipeline.cli.output import (
     info,
     success,
     warning,
+)
+from finjuice.pipeline.cli.post_commit_delivery import (
+    execute_after_commit,
+    load_delivery_job,
+    render_delivery,
+    with_delivery_option,
 )
 from finjuice.pipeline.cli.utils import (
     get_mutation_facade,
@@ -155,6 +162,7 @@ def _execute_tag_edit_command(
     config: Any,
     request: TagEditRequest,
     json_output: bool,
+    delivery_config: Path | None = None,
 ) -> None:
     """Resolve authority and execute one manual transaction edit command."""
     mutation_options = get_mutation_options(ctx)
@@ -180,6 +188,11 @@ def _execute_tag_edit_command(
         or request.set_category is not None
         or request.set_note is not None
     )
+    delivery_job = None
+    if delivery_config is not None:
+        if not repository_active or not legacy_mutation_requested or request.dry_run:
+            raise ValueError("Delivery requires a committed SQLite manual edit.")
+        delivery_job = load_delivery_job(delivery_config, config.data_dir)
     edit_lease = (
         legacy_write_lease(config.data_dir)
         if legacy_mutation_requested and not request.dry_run and not repository_active
@@ -191,10 +204,18 @@ def _execute_tag_edit_command(
             request,
             facade=facade if repository_active else None,
             identity=identity,
+            after_commit=(lambda receipt: execute_after_commit(delivery_job, receipt))
+            if delivery_job is not None
+            else None,
         )
         if result["updated"] and not repository_active:
             write_schema_version(config.data_dir, SCHEMA_VERSION)
-    emit(result, json_output, _render_tag_edit, command="tag")
+    emit(result, json_output, _render_edit_with_delivery, command="tag")
+
+
+def _render_edit_with_delivery(result: dict[str, Any]) -> None:
+    _render_tag_edit(result)
+    render_delivery(result)
 
 
 def _execute_bulk_tag_command(
@@ -225,6 +246,7 @@ def _execute_bulk_tag_command(
     emit(result, json_output, _render_tag, command="tag")
 
 
+@with_delivery_option
 @with_mutation_options
 def tag_command(
     ctx: typer.Context,
@@ -269,8 +291,11 @@ def tag_command(
     Use --dry-run to preview changes before applying them.
     """
     config = _require_tag_config(ctx, edit)
+    delivery_config = ctx.meta.get("finjuice_delivery_config")
 
     try:
+        if delivery_config is not None and edit is None:
+            raise ValueError("Delivery configuration requires --edit.")
         warn_on_schema_mismatch(config.data_dir)
 
         if edit is None and (
@@ -297,6 +322,7 @@ def tag_command(
                     dry_run=dry_run,
                 ),
                 json_output,
+                delivery_config,
             )
             return
 

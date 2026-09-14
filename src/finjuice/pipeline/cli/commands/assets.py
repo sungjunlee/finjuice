@@ -14,6 +14,14 @@ from typing import Any, Optional
 import polars as pl
 import typer
 
+from finjuice.pipeline.cli.commands.assets_reads import (
+    latest_portfolio_partition,
+    load_portfolio_display,
+    portfolio_holding_evidence,
+    portfolio_meta,
+    render_portfolio_identity,
+    safe_portfolio_error,
+)
 from finjuice.pipeline.cli.commands.assets_rendering import (
     _render_balance,
     _render_show,
@@ -32,6 +40,7 @@ from finjuice.pipeline.networth import (
     load_latest_snapshot_partition,
     load_snapshot_partition,
 )
+from finjuice.pipeline.portfolio_display import PortfolioDisplay
 
 logger = logging.getLogger(__name__)
 
@@ -43,13 +52,23 @@ assets_app = typer.Typer(
 
 def _build_status_result(
     snapshots_dir: Path,
+    *,
+    display: PortfolioDisplay | None = None,
 ) -> dict[str, Any]:
     """Build asset status data."""
-    months = discover_snapshot_months(snapshots_dir)
+    months = (
+        list(display.snapshot_months)
+        if display is not None
+        else discover_snapshot_months(snapshots_dir)
+    )
     if not months:
         return {"has_data": False}
 
-    df, month_label = load_latest_snapshot_partition(snapshots_dir)
+    df, month_label = (
+        (display.snapshot_partition(months[-1]), months[-1])
+        if display is not None
+        else load_latest_snapshot_partition(snapshots_dir)
+    )
     if df is None or df.is_empty():
         return {"has_data": False}
 
@@ -88,15 +107,24 @@ def _build_show_result(
     month: Optional[str] = None,
     account: Optional[str] = None,
     limit: int = 50,
+    *,
+    display: PortfolioDisplay | None = None,
 ) -> dict[str, Any]:
     """Build detailed holdings data."""
     if month:
-        df = load_snapshot_partition(snapshots_dir, month)
+        df = (
+            display.snapshot_partition(month)
+            if display is not None
+            else load_snapshot_partition(snapshots_dir, month)
+        )
         if df is None:
             return {"has_data": False, "error": f"No snapshot for {month}"}
         month_label = month
     else:
-        loaded_df, loaded_label = load_latest_snapshot_partition(snapshots_dir)
+        if display is None:
+            loaded_df, loaded_label = load_latest_snapshot_partition(snapshots_dir)
+        else:
+            loaded_df, loaded_label = latest_portfolio_partition(display, "snapshot")
         if loaded_df is None:
             return {"has_data": False, "error": "No snapshot data found"}
         df = loaded_df
@@ -126,15 +154,21 @@ def _build_show_result(
                 "quantity": row["quantity"],
                 "market_value": row["market_value"],
                 "currency": row["currency"],
+                **(portfolio_holding_evidence(row) if display is not None else {}),
             }
             for row in df.to_dicts()
         ],
     }
 
 
-def _build_balance_result(balance_dir: Path) -> dict[str, Any]:
+def _build_balance_result(
+    balance_dir: Path, *, display: PortfolioDisplay | None = None
+) -> dict[str, Any]:
     """Build latest Banksalad overview balance data."""
-    df, month_label = load_latest_balance_partition(balance_dir)
+    if display is None:
+        df, month_label = load_latest_balance_partition(balance_dir)
+    else:
+        df, month_label = latest_portfolio_partition(display, "balance")
     if df is None or df.is_empty():
         return {
             "has_data": False,
@@ -191,13 +225,23 @@ def status(
     config = get_config(ctx)
     snapshots_dir = config.data_dir / "assets" / "snapshots"
 
+    display = None
     try:
-        result = _build_status_result(snapshots_dir)
-        emit(result, json_output, _render_status, command="assets status")
+        display = load_portfolio_display(ctx, config.data_dir)
+        result = _build_status_result(snapshots_dir, display=display)
+        emit(
+            result,
+            json_output,
+            _render_status,
+            command="assets status",
+            meta_extras=portfolio_meta(display),
+        )
+        render_portfolio_identity(display, json_output=json_output)
     except Exception as exc:  # intended catch-all for CLI robustness
-        logger.error(f"Failed to load asset status: {exc}", exc_info=True)
+        message = safe_portfolio_error(exc, display)
+        logger.error("Failed to load asset status: %s", message)
         emit_error(
-            f"Failed to load asset status: {exc}",
+            f"Failed to load asset status: {message}",
             error_code=ErrorCode.GENERAL_ERROR,
             json_output=json_output,
             command="assets status",
@@ -213,13 +257,23 @@ def balance(
     config = get_config(ctx)
     balance_dir = config.data_dir / "banksalad" / "balance"
 
+    display = None
     try:
-        result = _build_balance_result(balance_dir)
-        emit(result, json_output, _render_balance, command="assets balance")
+        display = load_portfolio_display(ctx, config.data_dir)
+        result = _build_balance_result(balance_dir, display=display)
+        emit(
+            result,
+            json_output,
+            _render_balance,
+            command="assets balance",
+            meta_extras=portfolio_meta(display),
+        )
+        render_portfolio_identity(display, json_output=json_output)
     except Exception as exc:  # intended catch-all for CLI robustness
-        logger.error("Failed to load Banksalad overview balance: %s", exc, exc_info=True)
+        message = safe_portfolio_error(exc, display)
+        logger.error("Failed to load Banksalad overview balance: %s", message)
         emit_error(
-            f"Failed to load Banksalad overview balance: {exc}",
+            f"Failed to load Banksalad overview balance: {message}",
             error_code=ErrorCode.GENERAL_ERROR,
             json_output=json_output,
             command="assets balance",
@@ -238,8 +292,12 @@ def show(
     config = get_config(ctx)
     snapshots_dir = config.data_dir / "assets" / "snapshots"
 
+    display = None
     try:
-        result = _build_show_result(snapshots_dir, month=month, account=account, limit=limit)
+        display = load_portfolio_display(ctx, config.data_dir)
+        result = _build_show_result(
+            snapshots_dir, month=month, account=account, limit=limit, display=display
+        )
 
         if not result.get("has_data"):
             emit_error(
@@ -248,15 +306,24 @@ def show(
                 exit_code=ExitCode.NO_DATA,
                 json_output=json_output,
                 command="assets show",
+                meta_extras=portfolio_meta(display),
             )
 
-        emit(result, json_output, _render_show, command="assets show")
+        emit(
+            result,
+            json_output,
+            _render_show,
+            command="assets show",
+            meta_extras=portfolio_meta(display),
+        )
+        render_portfolio_identity(display, json_output=json_output)
     except typer.Exit:
         raise
     except Exception as exc:  # intended catch-all for CLI robustness
-        logger.error(f"Failed to load holdings: {exc}", exc_info=True)
+        message = safe_portfolio_error(exc, display)
+        logger.error("Failed to load holdings: %s", message)
         emit_error(
-            f"Failed to load holdings: {exc}",
+            f"Failed to load holdings: {message}",
             error_code=ErrorCode.GENERAL_ERROR,
             json_output=json_output,
             command="assets show",

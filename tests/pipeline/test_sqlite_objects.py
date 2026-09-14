@@ -171,7 +171,7 @@ def test_new_object_directories_and_link_are_synced_in_durable_order(
         paths.objects,
         paths.sha256_objects,
         target_parent,
-        target_parent,
+        paths.sha256_objects,
     ]
     assert (paths.root / artifact.relative_path).read_bytes() == content
 
@@ -200,7 +200,7 @@ def test_object_publication_syncs_link_before_removing_staging(
     assert states == [(1, True), (0, True)]
 
 
-def test_object_publication_reports_directory_sync_failure_and_rolls_back_link(
+def test_object_publication_reports_directory_sync_failure_and_retains_link(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -220,7 +220,7 @@ def test_object_publication_reports_directory_sync_failure_and_rolls_back_link(
     with pytest.raises(ObjectStoreError, match="published durably"):
         store.publish(io.BytesIO(content))
 
-    assert not target.exists()
+    assert target.read_bytes() == content
     assert list(paths.sha256_objects.glob(".object-*.tmp")) == []
 
 
@@ -246,3 +246,42 @@ def test_new_prefix_directory_sync_failure_does_not_publish_an_object(
 
     assert not paths.object_path(digest).exists()
     assert list(paths.sha256_objects.glob(".object-*.tmp")) == []
+
+
+def test_retry_of_unconfirmed_object_requires_successful_directory_sync(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths = GenerationPaths(tmp_path / "unconfirmed-object")
+    store = SourceObjectStore(paths)
+    content = b"retained after a real fsync error"
+    digest = hashlib.sha256(content).hexdigest()
+    store.prepare()
+    target = paths.object_path(digest)
+    target.parent.mkdir(mode=0o700)
+    directory_identity = (target.parent.stat().st_dev, target.parent.stat().st_ino)
+    real_fsync = os.fsync
+    directory_syncs = 0
+
+    def fail_directory_sync(descriptor: int) -> None:
+        nonlocal directory_syncs
+        info = os.fstat(descriptor)
+        if (info.st_dev, info.st_ino) == directory_identity:
+            directory_syncs += 1
+            raise OSError("synthetic disk sync failure")
+        real_fsync(descriptor)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(os, "fsync", fail_directory_sync)
+        with pytest.raises(ObjectStoreError, match="durable"):
+            store.publish(io.BytesIO(content))
+        assert target.read_bytes() == content
+        with pytest.raises(ObjectStoreError, match="durable"):
+            store.publish(io.BytesIO(content))
+        assert directory_syncs == 2
+        assert target.read_bytes() == content
+        assert list(paths.sha256_objects.glob(".object-*.tmp")) == []
+
+    receipt = store.publish(io.BytesIO(content))
+    assert receipt.reused
+    assert store.verify(receipt.artifact_id).byte_length == len(content)

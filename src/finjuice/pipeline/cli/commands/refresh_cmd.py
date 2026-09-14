@@ -4,6 +4,7 @@ Runs the complete pipeline: ingest → tag → transfer → export.
 """
 
 import logging
+from pathlib import Path
 from typing import Any
 
 import typer
@@ -101,7 +102,7 @@ def _compute_full_pipeline_result(
                 return
 
             if step_name == "export":
-                output.info("   ✓ export: master + reports 생성")
+                _render_export_step(step_result)
 
         return run_full_pipeline_orchestrator(
             ctx,
@@ -113,6 +114,13 @@ def _compute_full_pipeline_result(
                 on_step_complete=_on_step_complete,
             ),
         )
+
+
+def _render_export_step(step_result: dict[str, Any]) -> None:
+    if step_result.get("manifest_path"):
+        output.info(f"   ✓ export: {len(step_result['output_files'])}개 산출물 생성")
+    else:
+        output.info("   ✓ export: master + reports 생성")
 
 
 def _render_missing_rules(result: dict[str, Any], config: Any) -> None:
@@ -135,8 +143,14 @@ def _render_full_pipeline_result(result: dict[str, Any], config: Any) -> None:
     output.info(f"   새 거래: {ingest_summary['new_transactions']}건 처리됨")
     output.info(f"   태깅: {tag_result.get('tagged', 0)}건")
     output.info(f"   이체: {transfer_result['pairs_found']}개 쌍 감지")
-    output.info(f"   리포트: {REPORTS_COUNT}개 파일 생성")
-    output.success(f"📁 결과 확인: {config.data_dir / 'exports'}")
+    export = result["steps"].get("export", {})
+    if export.get("manifest_path"):
+        output.info(f"   산출물: {len(export['output_files'])}개 파일 생성")
+        output.success(f"📁 결과 확인: {Path(export['manifest_path']).parent}")
+        output.info(f"   Manifest: {export['manifest_path']}")
+    else:
+        output.info(f"   리포트: {REPORTS_COUNT}개 파일 생성")
+        output.success(f"📁 결과 확인: {config.data_dir / 'exports'}")
 
 
 def run_full_pipeline_command(

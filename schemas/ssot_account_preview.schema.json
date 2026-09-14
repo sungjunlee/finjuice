@@ -1,0 +1,49 @@
+{
+  "$id": "ssot_account_preview.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "after": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "before": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "expected_generation": {
+      "type": "string"
+    },
+    "expected_revision": {
+      "type": "integer"
+    },
+    "historical_rows_rewritten": {
+      "type": "integer"
+    },
+    "importer_supported": {
+      "type": "boolean"
+    },
+    "observed_scope": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "expected_generation",
+    "expected_revision",
+    "before",
+    "after",
+    "observed_scope",
+    "historical_rows_rewritten",
+    "importer_supported"
+  ],
+  "title": "ssot account preview output",
+  "type": "object"
+}

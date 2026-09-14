@@ -666,12 +666,16 @@ class TestDoctorAnalyticsChecks:
         assert results[0].status == "ok"
         assert "duckdb 1.4.2" in results[0].message
 
+    @pytest.mark.parametrize(
+        "hint", ["uv sync --extra analytics", "pip install 'finjuice[analytics]'"]
+    )
     def test_doctor_text_shows_analytics_section_and_install_hint(
-        self, doctor_data_dir: Path, monkeypatch: pytest.MonkeyPatch
+        self, doctor_data_dir: Path, monkeypatch: pytest.MonkeyPatch, hint: str
     ) -> None:
         """Doctor text output should name the missing analytics extra and install command."""
         import finjuice.pipeline.doctor.analytics_duckdb as doctor
 
+        monkeypatch.setattr(doctor, "detect_analytics_install_command", lambda _: hint)
         original_import_module = doctor.importlib.import_module
 
         def fake_import_module(name: str):
@@ -686,14 +690,18 @@ class TestDoctorAnalyticsChecks:
         assert result.exit_code == 0
         assert "Analytics / DuckDB" in result.output
         assert "analytics extra 누락" in result.output
-        assert "uv sync --extra analytics" in result.output
+        assert hint in result.output
 
+    @pytest.mark.parametrize(
+        "hint", ["uv sync --extra analytics", "pip install 'finjuice[analytics]'"]
+    )
     def test_doctor_json_adds_missing_extras_and_install_hint(
-        self, doctor_data_dir: Path, monkeypatch: pytest.MonkeyPatch
+        self, doctor_data_dir: Path, monkeypatch: pytest.MonkeyPatch, hint: str
     ) -> None:
         """doctor --json should expose additive analytics recovery keys."""
         import finjuice.pipeline.doctor.analytics_duckdb as doctor
 
+        monkeypatch.setattr(doctor, "detect_analytics_install_command", lambda _: hint)
         original_import_module = doctor.importlib.import_module
 
         def fake_import_module(name: str):
@@ -710,7 +718,7 @@ class TestDoctorAnalyticsChecks:
         assert isinstance(payload["checks"], list)
         assert payload["summary"]["total"] == len(payload["checks"])
         assert payload["missing_extras"] == ["analytics"]
-        assert payload["install_hint"] == "uv sync --extra analytics"
+        assert payload["install_hint"] == hint
         assert {"name", "status", "message", "detail", "suggestion"} <= set(
             payload["checks"][0].keys()
         )
