@@ -195,6 +195,15 @@ def generate_cli_docs() -> None:
             "backup capture-bundle",
             "backup verify-bundle",
             "backup restore-bundle",
+            "backup store",
+            "backup store init",
+            "backup store capture",
+            "backup store list",
+            "backup store verify",
+            "backup store restore",
+            "backup store protect",
+            "backup store plan",
+            "backup store prune",
         ],
     }
 

@@ -142,15 +142,20 @@ def sqlite_backup_restore_bundle(
     try:
         enrolled = load_expected_recovery_graph(expected)
         _reject_active_restore(target, _active_data_dir(ctx))
-        verified = verify_recovery_bundle(bundle, enrolled)
-        result = restore_workspace(bundle / "snapshot", target)
-        if (
-            result.source_manifest_digest != verified.snapshot_manifest_digest
-            or result.dataset_generation != verified.snapshot_generation
-            or result.sqlite_schema_version != verified.snapshot_schema_version
-            or result.initial_dataset_revision != verified.snapshot_revision
-        ):
-            raise BackupVerificationError("Restored snapshot does not match the verified graph.")
+        from finjuice.pipeline.storage.sqlite.recovery_store_lock import managed_read_lease
+
+        with managed_read_lease(bundle):
+            verified = verify_recovery_bundle(bundle, enrolled)
+            result = restore_workspace(bundle / "snapshot", target)
+            if (
+                result.source_manifest_digest != verified.snapshot_manifest_digest
+                or result.dataset_generation != verified.snapshot_generation
+                or result.sqlite_schema_version != verified.snapshot_schema_version
+                or result.initial_dataset_revision != verified.snapshot_revision
+            ):
+                raise BackupVerificationError(
+                    "Restored snapshot does not match the verified graph."
+                )
     except (RepositoryBackupError, RepositoryPathError) as exc:
         _fail(exc, command=command, json_output=json_output)
         return

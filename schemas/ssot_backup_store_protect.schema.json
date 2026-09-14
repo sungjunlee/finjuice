@@ -1,0 +1,28 @@
+{
+  "$id": "ssot_backup_store_protect.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "copy_id": {
+      "type": "string"
+    },
+    "graph_digest": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "local_recovery_store_protected"
+    }
+  },
+  "required": [
+    "_meta",
+    "kind",
+    "copy_id",
+    "graph_digest"
+  ],
+  "title": "ssot backup store protect --json output",
+  "type": "object",
+  "x-command": "ssot.backup.store.protect"
+}

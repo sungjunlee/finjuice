@@ -1,0 +1,32 @@
+{
+  "$id": "ssot_backup_store_init.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "activation_sha256": {
+      "type": "string"
+    },
+    "enrollment_digest": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "local_recovery_store_initialized"
+    },
+    "store_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "kind",
+    "store_id",
+    "activation_sha256",
+    "enrollment_digest"
+  ],
+  "title": "ssot backup store init --json output",
+  "type": "object",
+  "x-command": "ssot.backup.store.init"
+}

@@ -337,6 +337,13 @@ def restore_backup(backup_root: Path, destination: Path) -> RestoreResult:
         BackupVerificationError: If any digest or database check fails.
         RepositoryPathError: If the destination is unsafe or already populated.
     """
+    from finjuice.pipeline.storage.sqlite.recovery_store_lock import managed_read_lease
+
+    with managed_read_lease(backup_root):
+        return _restore_backup_unlocked(backup_root, destination)
+
+
+def _restore_backup_unlocked(backup_root: Path, destination: Path) -> RestoreResult:
     input_root = _absolute_root(backup_root)
     source_root, manifest, _ = resolve_backup_input(input_root)
     verify_payload(source_root, manifest)
@@ -368,11 +375,21 @@ def restore_backup(backup_root: Path, destination: Path) -> RestoreResult:
 
 def read_backup_manifest(backup_root: Path) -> BackupManifest:
     """Read a strict version-1 receipt from a direct backup or selected attempt."""
-    return resolve_backup_input(backup_root)[1]
+    from finjuice.pipeline.storage.sqlite.recovery_store_lock import managed_read_lease
+
+    with managed_read_lease(backup_root):
+        return resolve_backup_input(backup_root)[1]
 
 
 def backup_status(backup_root: Path) -> BackupStatus:
     """Verify the selected receipt and exact payload, returning static failure reasons."""
+    from finjuice.pipeline.storage.sqlite.recovery_store_lock import managed_read_lease
+
+    with managed_read_lease(backup_root):
+        return _backup_status_unlocked(backup_root)
+
+
+def _backup_status_unlocked(backup_root: Path) -> BackupStatus:
     root = backup_root.expanduser().absolute()
     manifest = None
     try:

@@ -53,6 +53,13 @@ def restore_workspace(backup_root: Path, destination: Path) -> RestoredWorkspace
     Failed workspaces remain for inspection and cannot issue a successful receipt.
     This API neither detects arbitrary external activation nor promotes the copy.
     """
+    from finjuice.pipeline.storage.sqlite.recovery_store_lock import managed_read_lease
+
+    with managed_read_lease(backup_root):
+        return _restore_workspace_unlocked(backup_root, destination)
+
+
+def _restore_workspace_unlocked(backup_root: Path, destination: Path) -> RestoredWorkspaceReceipt:
     try:
         source, manifest, _ = resolve_backup_input(backup_root)
         verify_payload(source, manifest)

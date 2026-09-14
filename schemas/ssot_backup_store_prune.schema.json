@@ -1,0 +1,53 @@
+{
+  "$id": "ssot_backup_store_prune.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "deleted_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "deleted_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "held_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "kept_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "kept_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "kind": {
+      "const": "local_recovery_store_pruned"
+    },
+    "plan_digest": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "kind",
+    "deleted_count",
+    "kept_count",
+    "held_count",
+    "plan_digest",
+    "deleted_ids",
+    "kept_ids"
+  ],
+  "title": "ssot backup store prune --json output",
+  "type": "object",
+  "x-command": "ssot.backup.store.prune"
+}

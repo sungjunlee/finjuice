@@ -324,12 +324,20 @@ def test_manifest_recovery_bundle_policy() -> None:
         ("create", True),
         ("status", False),
         ("restore", True),
+        ("store init", True),
+        ("store capture", True),
+        ("store list", False),
+        ("store verify", False),
+        ("store restore", True),
+        ("store protect", True),
+        ("store plan", False),
+        ("store prune", True),
     ):
         policy = commands[f"ssot backup {action}"]
         assert policy["mutates_data"] is mutating
         assert policy["safe_readonly"] is not mutating
         assert policy["privacy_profile"] == "artifact_path"
-        schema = f"schemas/ssot_backup_{action.replace('-', '_')}.schema.json"
+        schema = f"schemas/ssot_backup_{action.replace('-', '_').replace(' ', '_')}.schema.json"
         assert policy["output_schema_ref"] == schema
 
 

@@ -962,7 +962,7 @@ finjuice --version
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ migrate   Plan, build, and verify preservation migrations.                                                           │
-│ backup    Create snapshots, capture a local recovery graph, and restore inactive workspaces.                         │
+│ backup    Create snapshots, capture a local recovery graph, retain a managed store, and restore inactive workspaces. │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```
@@ -973,7 +973,7 @@ finjuice --version
 
  Usage: finjuice ssot backup [OPTIONS] COMMAND [ARGS]...
 
- Create snapshots, capture a local recovery graph, and restore inactive workspaces.
+ Create snapshots, capture a local recovery graph, retain a managed store, and restore inactive workspaces.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ --help          Show this message and exit.                                                                          │
@@ -985,6 +985,7 @@ finjuice --version
 │ capture-bundle   Capture one local recovery graph from explicit operator paths.                                      │
 │ verify-bundle    Verify one published recovery graph against independently enrolled evidence.                        │
 │ restore-bundle   Verify the graph, then restore its snapshot into an inactive workspace.                             │
+│ store            Initialize and retain complete local recovery graphs in one managed store.                          │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```
@@ -1102,6 +1103,184 @@ finjuice --version
 │ *  --expected        PATH  Independently retained expectation JSON; never derived from the bundle. [required]        │
 │    --json                  Output as JSON                                                                            │
 │    --help                  Show this message and exit.                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup store`
+
+```
+
+ Usage: finjuice ssot backup store [OPTIONS] COMMAND [ARGS]...
+
+ Initialize and retain complete local recovery graphs in one managed store.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ init      Create one empty local store bound to independently enrolled expectations.                                 │
+│ capture   Capture one verified recovery graph into the initialized store.                                            │
+│ list      Verify and list complete graphs in one initialized local store.                                            │
+│ verify    Verify one managed recovery graph against independently enrolled evidence.                                 │
+│ restore   Verify one managed graph, then restore its snapshot into an inactive workspace.                            │
+│ protect   Verify one graph and durably register it as an additional baseline.                                        │
+│ plan      Recompute a GFS retention plan from verified local inventory.                                              │
+│ prune     Recompute under an exclusive lease and delete only unprotected local graphs.                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup store init`
+
+```
+
+ Usage: finjuice ssot backup store init [OPTIONS]
+
+ Create one empty local store bound to independently enrolled expectations.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --store           PATH  Fresh directory for the initialized store. [required]                                     │
+│ *  --expected        PATH  Independently retained JSON for this activation. [required]                               │
+│    --json                  Output as JSON                                                                            │
+│    --help                  Show this message and exit.                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup store capture`
+
+```
+
+ Usage: finjuice ssot backup store capture [OPTIONS]
+
+ Capture one verified recovery graph into the initialized store.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --store                      PATH  Initialized local recovery-graph store. [required]                             │
+│ *  --source-data-dir            PATH  Explicit live data directory to snapshot; not read from the host pointer.      │
+│                                       [required]                                                                     │
+│ *  --expected                   PATH  Independently retained expectation JSON; never derived from the store.         │
+│                                       [required]                                                                     │
+│ *  --wheel                      PATH  Operator-selected release wheel. [required]                                    │
+│ *  --dependency-lock            PATH  Operator-selected dependency lock file. [required]                             │
+│ *  --binding                    PATH  Operator-selected trusted binding file. [required]                             │
+│ *  --migration-candidate        PATH  Immutable migration candidate directory. [required]                            │
+│    --json                             Output as JSON                                                                 │
+│    --help                             Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup store list`
+
+```
+
+ Usage: finjuice ssot backup store list [OPTIONS]
+
+ Verify and list complete graphs in one initialized local store.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --store           PATH  Initialized local recovery-graph store. [required]                                        │
+│ *  --expected        PATH  Independently retained expectation JSON; never derived from the store. [required]         │
+│    --json                  Output as JSON                                                                            │
+│    --help                  Show this message and exit.                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup store verify`
+
+```
+
+ Usage: finjuice ssot backup store verify [OPTIONS]
+
+ Verify one managed recovery graph against independently enrolled evidence.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --store           PATH  Initialized local recovery-graph store. [required]                                        │
+│ *  --copy-id         TEXT  UUID identity of one published graph. [required]                                          │
+│ *  --expected        PATH  Independently retained expectation JSON; never derived from the store. [required]         │
+│    --json                  Output as JSON                                                                            │
+│    --help                  Show this message and exit.                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup store restore`
+
+```
+
+ Usage: finjuice ssot backup store restore [OPTIONS]
+
+ Verify one managed graph, then restore its snapshot into an inactive workspace.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --store           PATH  Initialized local recovery-graph store. [required]                                        │
+│ *  --copy-id         TEXT  UUID identity of one published graph. [required]                                          │
+│ *  --target          PATH  Fresh isolated workspace directory; parent must exist. [required]                         │
+│ *  --expected        PATH  Independently retained expectation JSON; never derived from the store. [required]         │
+│    --json                  Output as JSON                                                                            │
+│    --help                  Show this message and exit.                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup store protect`
+
+```
+
+ Usage: finjuice ssot backup store protect [OPTIONS]
+
+ Verify one graph and durably register it as an additional baseline.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --store           PATH  Initialized local recovery-graph store. [required]                                        │
+│ *  --copy-id         TEXT  UUID identity of one published graph. [required]                                          │
+│ *  --expected        PATH  Independently retained expectation JSON; never derived from the store. [required]         │
+│    --json                  Output as JSON                                                                            │
+│    --help                  Show this message and exit.                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup store plan`
+
+```
+
+ Usage: finjuice ssot backup store plan [OPTIONS]
+
+ Recompute a GFS retention plan from verified local inventory.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --store           PATH     Initialized local recovery-graph store. [required]                                     │
+│ *  --expected        PATH     Independently retained expectation JSON; never derived from the store. [required]      │
+│    --daily           INTEGER  GFS window; omit unused fields to keep the default policy.                             │
+│    --weekly          INTEGER  GFS window; omit unused fields to keep the default policy.                             │
+│    --monthly         INTEGER  GFS window; omit unused fields to keep the default policy.                             │
+│    --json                     Output as JSON                                                                         │
+│    --help                     Show this message and exit.                                                            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup store prune`
+
+```
+
+ Usage: finjuice ssot backup store prune [OPTIONS]
+
+ Recompute under an exclusive lease and delete only unprotected local graphs.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --store              PATH     Initialized local recovery-graph store. [required]                                  │
+│ *  --expected           PATH     Independently retained expectation JSON; never derived from the store. [required]   │
+│    --plan-digest        TEXT     Optional reviewed plan digest; stale values are rejected.                           │
+│    --daily              INTEGER  GFS window; omit unused fields to keep the default policy.                          │
+│    --weekly             INTEGER  GFS window; omit unused fields to keep the default policy.                          │
+│    --monthly            INTEGER  GFS window; omit unused fields to keep the default policy.                          │
+│    --json                        Output as JSON                                                                      │
+│    --help                        Show this message and exit.                                                         │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```

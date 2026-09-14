@@ -85,6 +85,14 @@ command/code/exit-code combinations against this schema.
 | `schemas/ssot_backup_restore.schema.json` | ssot backup restore --json output | `restore_id`, `descriptor_digest`, `dataset_generation`, `initial_database_digest`, `source_manifest_digest`, `initial_dataset_revision`, `sqlite_schema_version` |
 | `schemas/ssot_backup_restore_bundle.schema.json` | ssot backup restore-bundle --json output | `restore_id`, `descriptor_digest`, `dataset_generation`, `initial_database_digest`, `source_manifest_digest`, `initial_dataset_revision`, `sqlite_schema_version` |
 | `schemas/ssot_backup_status.schema.json` | ssot backup status --json output | `byte_count`, `file_count`, `complete`, `reason`, `manifest_digest`, `source_generation` |
+| `schemas/ssot_backup_store_capture.schema.json` | ssot backup store capture --json output | `kind`, `graph_digest`, `activation_sha256`, `wheel_basename`, `snapshot_generation`, `snapshot_backup_id`, `snapshot_manifest_digest`, `capsule_digest`, `snapshot_schema_version`, `snapshot_revision`, `activation_revision`, `file_count`, `copy_id`, `baseline_registered` |
+| `schemas/ssot_backup_store_init.schema.json` | ssot backup store init --json output | `kind`, `store_id`, `activation_sha256`, `enrollment_digest` |
+| `schemas/ssot_backup_store_list.schema.json` | ssot backup store list --json output | `kind`, `store_id`, `healthy_count`, `held_count`, `baseline_copy_ids`, `latest_healthy_id`, `copies`, `plan_digest` |
+| `schemas/ssot_backup_store_plan.schema.json` | ssot backup store plan --json output | `kind`, `plan_digest`, `delete_count`, `keep_count`, `protected_count`, `latest_healthy_id`, `policy`, `keep_ids`, `delete_ids`, `protected_ids` |
+| `schemas/ssot_backup_store_protect.schema.json` | ssot backup store protect --json output | `kind`, `copy_id`, `graph_digest` |
+| `schemas/ssot_backup_store_prune.schema.json` | ssot backup store prune --json output | `kind`, `deleted_count`, `kept_count`, `held_count`, `plan_digest`, `deleted_ids`, `kept_ids` |
+| `schemas/ssot_backup_store_restore.schema.json` | ssot backup store restore --json output | `restore_id`, `descriptor_digest`, `dataset_generation`, `initial_database_digest`, `source_manifest_digest`, `initial_dataset_revision`, `sqlite_schema_version` |
+| `schemas/ssot_backup_store_verify.schema.json` | ssot backup store verify --json output | `kind`, `graph_digest`, `activation_sha256`, `wheel_basename`, `snapshot_generation`, `snapshot_backup_id`, `snapshot_manifest_digest`, `capsule_digest`, `snapshot_schema_version`, `snapshot_revision`, `activation_revision`, `file_count` |
 | `schemas/ssot_backup_verify_bundle.schema.json` | ssot backup verify-bundle --json output | `kind`, `graph_digest`, `activation_sha256`, `wheel_basename`, `snapshot_generation`, `snapshot_backup_id`, `snapshot_manifest_digest`, `capsule_digest`, `snapshot_schema_version`, `snapshot_revision`, `activation_revision`, `file_count` |
 | `schemas/ssot_migrate_build.schema.json` | ssot migrate build --json output | `status`, `phase`, `manifest_digest`, `input_count`, `cutover_ready`, `limitations`, `generation_status`, `attempt_id`, `origin_kind`, `dataset_revision`, `checks` |
 | `schemas/ssot_migrate_plan.schema.json` | ssot migrate plan --json output | `status`, `phase`, `manifest_digest`, `input_count`, `cutover_ready`, `limitations` |
@@ -6756,6 +6764,647 @@ ssot backup status --json output
   ],
   "title": "ssot backup status --json output",
   "type": "object"
+}
+```
+
+## `schemas/ssot_backup_store_capture.schema.json`
+
+ssot backup store capture --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `activation_revision` | `integer` | yes |
+| `activation_sha256` | `string` | yes |
+| `baseline_registered` | `boolean` | yes |
+| `capsule_digest` | `string` | yes |
+| `copy_id` | `string` | yes |
+| `file_count` | `integer` | yes |
+| `graph_digest` | `string` | yes |
+| `kind` | `any` | yes |
+| `snapshot_backup_id` | `string` | yes |
+| `snapshot_generation` | `string` | yes |
+| `snapshot_manifest_digest` | `string` | yes |
+| `snapshot_revision` | `integer` | yes |
+| `snapshot_schema_version` | `integer` | yes |
+| `wheel_basename` | `string` | yes |
+
+```json
+{
+  "$id": "ssot_backup_store_capture.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "activation_revision": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "activation_sha256": {
+      "type": "string"
+    },
+    "baseline_registered": {
+      "type": "boolean"
+    },
+    "capsule_digest": {
+      "type": "string"
+    },
+    "copy_id": {
+      "type": "string"
+    },
+    "file_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "graph_digest": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "local_recovery_store_captured"
+    },
+    "snapshot_backup_id": {
+      "type": "string"
+    },
+    "snapshot_generation": {
+      "type": "string"
+    },
+    "snapshot_manifest_digest": {
+      "type": "string"
+    },
+    "snapshot_revision": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "snapshot_schema_version": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "wheel_basename": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "kind",
+    "graph_digest",
+    "activation_sha256",
+    "wheel_basename",
+    "snapshot_generation",
+    "snapshot_backup_id",
+    "snapshot_manifest_digest",
+    "capsule_digest",
+    "snapshot_schema_version",
+    "snapshot_revision",
+    "activation_revision",
+    "file_count",
+    "copy_id",
+    "baseline_registered"
+  ],
+  "title": "ssot backup store capture --json output",
+  "type": "object",
+  "x-command": "ssot.backup.store.capture"
+}
+```
+
+## `schemas/ssot_backup_store_init.schema.json`
+
+ssot backup store init --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `activation_sha256` | `string` | yes |
+| `enrollment_digest` | `string` | yes |
+| `kind` | `any` | yes |
+| `store_id` | `string` | yes |
+
+```json
+{
+  "$id": "ssot_backup_store_init.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "activation_sha256": {
+      "type": "string"
+    },
+    "enrollment_digest": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "local_recovery_store_initialized"
+    },
+    "store_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "kind",
+    "store_id",
+    "activation_sha256",
+    "enrollment_digest"
+  ],
+  "title": "ssot backup store init --json output",
+  "type": "object",
+  "x-command": "ssot.backup.store.init"
+}
+```
+
+## `schemas/ssot_backup_store_list.schema.json`
+
+ssot backup store list --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `baseline_copy_ids` | `array`[`string`] | yes |
+| `copies` | `array`[`object`] | yes |
+| `healthy_count` | `integer` | yes |
+| `held_count` | `integer` | yes |
+| `kind` | `any` | yes |
+| `latest_healthy_id` | `string` \| `null` | yes |
+| `plan_digest` | `string` \| `null` | yes |
+| `store_id` | `string` | yes |
+
+```json
+{
+  "$id": "ssot_backup_store_list.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "baseline_copy_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "copies": {
+      "items": {
+        "properties": {
+          "copy_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "graph_digest": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "health": {
+            "enum": [
+              "healthy",
+              "held"
+            ],
+            "type": "string"
+          },
+          "hold_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "protected": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "healthy_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "held_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "kind": {
+      "const": "local_recovery_store_inventory"
+    },
+    "latest_healthy_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "plan_digest": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "store_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "kind",
+    "store_id",
+    "healthy_count",
+    "held_count",
+    "baseline_copy_ids",
+    "latest_healthy_id",
+    "copies",
+    "plan_digest"
+  ],
+  "title": "ssot backup store list --json output",
+  "type": "object",
+  "x-command": "ssot.backup.store.list"
+}
+```
+
+## `schemas/ssot_backup_store_plan.schema.json`
+
+ssot backup store plan --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `delete_count` | `integer` | yes |
+| `delete_ids` | `array`[`string`] | yes |
+| `keep_count` | `integer` | yes |
+| `keep_ids` | `array`[`string`] | yes |
+| `kind` | `any` | yes |
+| `latest_healthy_id` | `string` \| `null` | yes |
+| `plan_digest` | `string` | yes |
+| `policy` | `object` | yes |
+| `protected_count` | `integer` | yes |
+| `protected_ids` | `array`[`string`] | yes |
+
+```json
+{
+  "$id": "ssot_backup_store_plan.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "delete_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "delete_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "keep_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "keep_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "kind": {
+      "const": "local_recovery_store_plan"
+    },
+    "latest_healthy_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "plan_digest": {
+      "type": "string"
+    },
+    "policy": {
+      "properties": {
+        "daily": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "monthly": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "weekly": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "daily",
+        "weekly",
+        "monthly"
+      ],
+      "type": "object"
+    },
+    "protected_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "protected_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "kind",
+    "plan_digest",
+    "delete_count",
+    "keep_count",
+    "protected_count",
+    "latest_healthy_id",
+    "policy",
+    "keep_ids",
+    "delete_ids",
+    "protected_ids"
+  ],
+  "title": "ssot backup store plan --json output",
+  "type": "object",
+  "x-command": "ssot.backup.store.plan"
+}
+```
+
+## `schemas/ssot_backup_store_protect.schema.json`
+
+ssot backup store protect --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `copy_id` | `string` | yes |
+| `graph_digest` | `string` | yes |
+| `kind` | `any` | yes |
+
+```json
+{
+  "$id": "ssot_backup_store_protect.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "copy_id": {
+      "type": "string"
+    },
+    "graph_digest": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "local_recovery_store_protected"
+    }
+  },
+  "required": [
+    "_meta",
+    "kind",
+    "copy_id",
+    "graph_digest"
+  ],
+  "title": "ssot backup store protect --json output",
+  "type": "object",
+  "x-command": "ssot.backup.store.protect"
+}
+```
+
+## `schemas/ssot_backup_store_prune.schema.json`
+
+ssot backup store prune --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `deleted_count` | `integer` | yes |
+| `deleted_ids` | `array`[`string`] | yes |
+| `held_count` | `integer` | yes |
+| `kept_count` | `integer` | yes |
+| `kept_ids` | `array`[`string`] | yes |
+| `kind` | `any` | yes |
+| `plan_digest` | `string` | yes |
+
+```json
+{
+  "$id": "ssot_backup_store_prune.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "deleted_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "deleted_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "held_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "kept_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "kept_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "kind": {
+      "const": "local_recovery_store_pruned"
+    },
+    "plan_digest": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "kind",
+    "deleted_count",
+    "kept_count",
+    "held_count",
+    "plan_digest",
+    "deleted_ids",
+    "kept_ids"
+  ],
+  "title": "ssot backup store prune --json output",
+  "type": "object",
+  "x-command": "ssot.backup.store.prune"
+}
+```
+
+## `schemas/ssot_backup_store_restore.schema.json`
+
+ssot backup store restore --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `dataset_generation` | `string` | yes |
+| `descriptor_digest` | `string` | yes |
+| `initial_database_digest` | `string` | yes |
+| `initial_dataset_revision` | `integer` | yes |
+| `restore_id` | `string` | yes |
+| `source_manifest_digest` | `string` | yes |
+| `sqlite_schema_version` | `integer` | yes |
+
+```json
+{
+  "$id": "ssot_backup_store_restore.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "dataset_generation": {
+      "type": "string"
+    },
+    "descriptor_digest": {
+      "type": "string"
+    },
+    "initial_database_digest": {
+      "type": "string"
+    },
+    "initial_dataset_revision": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "restore_id": {
+      "type": "string"
+    },
+    "source_manifest_digest": {
+      "type": "string"
+    },
+    "sqlite_schema_version": {
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "_meta",
+    "restore_id",
+    "descriptor_digest",
+    "dataset_generation",
+    "initial_database_digest",
+    "source_manifest_digest",
+    "initial_dataset_revision",
+    "sqlite_schema_version"
+  ],
+  "title": "ssot backup store restore --json output",
+  "type": "object",
+  "x-command": "ssot.backup.store.restore"
+}
+```
+
+## `schemas/ssot_backup_store_verify.schema.json`
+
+ssot backup store verify --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `activation_revision` | `integer` | yes |
+| `activation_sha256` | `string` | yes |
+| `capsule_digest` | `string` | yes |
+| `file_count` | `integer` | yes |
+| `graph_digest` | `string` | yes |
+| `kind` | `any` | yes |
+| `snapshot_backup_id` | `string` | yes |
+| `snapshot_generation` | `string` | yes |
+| `snapshot_manifest_digest` | `string` | yes |
+| `snapshot_revision` | `integer` | yes |
+| `snapshot_schema_version` | `integer` | yes |
+| `wheel_basename` | `string` | yes |
+
+```json
+{
+  "$id": "ssot_backup_store_verify.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "activation_revision": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "activation_sha256": {
+      "type": "string"
+    },
+    "capsule_digest": {
+      "type": "string"
+    },
+    "file_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "graph_digest": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "local_graph_verified"
+    },
+    "snapshot_backup_id": {
+      "type": "string"
+    },
+    "snapshot_generation": {
+      "type": "string"
+    },
+    "snapshot_manifest_digest": {
+      "type": "string"
+    },
+    "snapshot_revision": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "snapshot_schema_version": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "wheel_basename": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "kind",
+    "graph_digest",
+    "activation_sha256",
+    "wheel_basename",
+    "snapshot_generation",
+    "snapshot_backup_id",
+    "snapshot_manifest_digest",
+    "capsule_digest",
+    "snapshot_schema_version",
+    "snapshot_revision",
+    "activation_revision",
+    "file_count"
+  ],
+  "title": "ssot backup store verify --json output",
+  "type": "object",
+  "x-command": "ssot.backup.store.verify"
 }
 ```
 

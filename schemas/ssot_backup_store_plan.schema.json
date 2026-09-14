@@ -1,0 +1,90 @@
+{
+  "$id": "ssot_backup_store_plan.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "delete_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "delete_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "keep_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "keep_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "kind": {
+      "const": "local_recovery_store_plan"
+    },
+    "latest_healthy_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "plan_digest": {
+      "type": "string"
+    },
+    "policy": {
+      "properties": {
+        "daily": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "monthly": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "weekly": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "daily",
+        "weekly",
+        "monthly"
+      ],
+      "type": "object"
+    },
+    "protected_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "protected_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "kind",
+    "plan_digest",
+    "delete_count",
+    "keep_count",
+    "protected_count",
+    "latest_healthy_id",
+    "policy",
+    "keep_ids",
+    "delete_ids",
+    "protected_ids"
+  ],
+  "title": "ssot backup store plan --json output",
+  "type": "object",
+  "x-command": "ssot.backup.store.plan"
+}

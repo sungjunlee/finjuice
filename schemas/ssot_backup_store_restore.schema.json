@@ -1,0 +1,46 @@
+{
+  "$id": "ssot_backup_store_restore.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "dataset_generation": {
+      "type": "string"
+    },
+    "descriptor_digest": {
+      "type": "string"
+    },
+    "initial_database_digest": {
+      "type": "string"
+    },
+    "initial_dataset_revision": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "restore_id": {
+      "type": "string"
+    },
+    "source_manifest_digest": {
+      "type": "string"
+    },
+    "sqlite_schema_version": {
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "_meta",
+    "restore_id",
+    "descriptor_digest",
+    "dataset_generation",
+    "initial_database_digest",
+    "source_manifest_digest",
+    "initial_dataset_revision",
+    "sqlite_schema_version"
+  ],
+  "title": "ssot backup store restore --json output",
+  "type": "object",
+  "x-command": "ssot.backup.store.restore"
+}
