@@ -393,3 +393,37 @@ def test_stale_persist_does_not_drop_fence_modes(tmp_path: Path) -> None:
         resumed.close()
         assert resumed.fence_enabled is True
         assert stat.S_IMODE(seed.stat().st_mode) == original_file_mode
+
+
+def test_second_fence_activation_does_not_poison_remembered_modes(tmp_path: Path) -> None:
+    """Re-activating the fence must restore the original, not 0o444."""
+    csv_relative = "transactions/2024/01/transactions.csv"
+    target = tmp_path / "target"
+    with IsolatedCutover(target, _pin()) as session:
+        seed = session.data_dir / csv_relative
+        seed.parent.mkdir(parents=True, exist_ok=True)
+        seed.write_text("row_hash,amount\nsynthetic,0\n", encoding="utf-8")
+        original_file_mode = stat.S_IMODE(seed.stat().st_mode)
+        session.activate_legacy_csv_fence()
+        session.activate_legacy_csv_fence()
+        session.close()
+        assert stat.S_IMODE(seed.stat().st_mode) == original_file_mode
+
+
+def test_mismatched_overlay_digest_does_not_adopt_disk_correction(tmp_path: Path) -> None:
+    """A stale handle with a different overlay must keep the disk apply-once id."""
+    target = tmp_path / "target"
+    pin = _pin()
+    other = b"overlay: other-binding\n"
+    with IsolatedCutover(target, pin, overlay_bytes=SYNTHETIC_OVERLAY) as session:
+        applied = session.apply_overlay_corrections("overlay-baseline-v1")
+        stale = IsolatedCutover(target, pin, overlay_bytes=other)
+        stale.persist()
+        resumed = IsolatedCutover.resume(target)
+        retry = resumed.apply_overlay_corrections("overlay-baseline-v1")
+
+    assert applied.status == "applied"
+    assert retry.status == "already_applied"
+    assert resumed.overlay is not None
+    assert resumed.overlay.digest == overlay_digest(SYNTHETIC_OVERLAY)
+    assert resumed.overlay.applied_correction_id == "overlay-baseline-v1"

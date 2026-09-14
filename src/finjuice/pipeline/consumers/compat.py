@@ -513,6 +513,9 @@ class IsolatedCutover:
         lock_path = self.data_dir / LOCK_FILENAME
         encoded = json.dumps(_lock_payload(), ensure_ascii=False, sort_keys=True, indent=2)
         lock_path.write_text(f"{encoded}\n", encoding="utf-8")
+        if self.fence_enabled and self._remembered_modes:
+            self.persist()
+            return lock_path
         remembered: dict[Path, int] = {}
         for name in CSV_TREE_NAMES:
             remembered.update(_chmod_tree_readonly(self.data_dir / name))
@@ -555,8 +558,8 @@ class IsolatedCutover:
         if existing.get("fence_enabled") and not self.fence_enabled:
             self.fence_enabled = True
         disk_modes = existing.get("remembered_modes") or {}
-        if disk_modes and not self._remembered_modes:
-            remembered: dict[Path, int] = {}
+        if disk_modes:
+            remembered: dict[Path, int] = dict(self._remembered_modes)
             for relative, mode in disk_modes.items():
                 remembered[self.data_dir / str(relative)] = int(mode)
             self._remembered_modes = remembered
@@ -582,6 +585,14 @@ class IsolatedCutover:
         baseline = overlay_payload.get("baseline_revision")
         if self.overlay is None:
             if digest and isinstance(baseline, int):
+                self.overlay = OverlayBinding(
+                    digest=digest,
+                    baseline_revision=baseline,
+                    applied_correction_id=str(disk_id),
+                )
+            return
+        if self.overlay is not None and digest and self.overlay.digest != digest:
+            if isinstance(baseline, int):
                 self.overlay = OverlayBinding(
                     digest=digest,
                     baseline_revision=baseline,
