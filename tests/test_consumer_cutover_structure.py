@@ -456,7 +456,7 @@ def test_applied_overlay_cannot_rebind_to_a_different_pin(tmp_path: Path) -> Non
     other = DatasetPin(dataset_generation=str(uuid4()), dataset_revision=pin.dataset_revision + 1)
     with IsolatedCutover(target, pin, overlay_bytes=SYNTHETIC_OVERLAY) as session:
         applied = session.apply_overlay_corrections("overlay-baseline-v1")
-        with pytest.raises(ConsumerCutoverError, match="different dataset revision"):
+        with pytest.raises(ConsumerCutoverError, match="different dataset pin"):
             IsolatedCutover(target, other, overlay_bytes=SYNTHETIC_OVERLAY)
         resumed = IsolatedCutover.resume(target)
         retry = resumed.apply_overlay_corrections("overlay-baseline-v1")
@@ -521,3 +521,30 @@ def test_owner_close_does_not_drop_applied_overlay(tmp_path: Path) -> None:
     assert retry.status == "already_applied"
     assert resumed.overlay is not None
     assert resumed.overlay.applied_correction_id == "overlay-baseline-v1"
+
+
+def test_applied_overlay_cannot_rebind_to_same_revision_other_generation(
+    tmp_path: Path,
+) -> None:
+    """Same revision number with a different generation is still a different pin."""
+    target = tmp_path / "target"
+    pin = _pin()
+    other = DatasetPin(dataset_generation=str(uuid4()), dataset_revision=pin.dataset_revision)
+    with IsolatedCutover(target, pin, overlay_bytes=SYNTHETIC_OVERLAY) as session:
+        session.apply_overlay_corrections("overlay-baseline-v1")
+        with pytest.raises(ConsumerCutoverError, match="different dataset pin"):
+            IsolatedCutover(target, other, overlay_bytes=SYNTHETIC_OVERLAY)
+        resumed = IsolatedCutover.resume(target)
+        assert resumed.overlay is not None
+        assert resumed.overlay.dataset_generation == pin.dataset_generation
+
+
+def test_data_dir_symlink_is_rejected(tmp_path: Path) -> None:
+    """The isolated data dir itself must not point outside the target."""
+    target = tmp_path / "target"
+    target.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (target / "data").symlink_to(outside)
+    with pytest.raises(ConsumerCutoverError, match="data dir must not be a symlink"):
+        IsolatedCutover(target, _pin())

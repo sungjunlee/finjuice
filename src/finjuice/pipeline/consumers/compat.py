@@ -160,10 +160,11 @@ class ConsumerRead:
 
 @dataclass(frozen=True)
 class OverlayBinding:
-    """External overlay pinned to one canonical baseline revision."""
+    """External overlay pinned to one canonical dataset pin."""
 
     digest: str
     baseline_revision: int
+    dataset_generation: str
     applied_correction_id: str | None = None
 
     def to_public_dict(self) -> dict[str, object]:
@@ -171,6 +172,7 @@ class OverlayBinding:
         return {
             "digest": self.digest,
             "baseline_revision": self.baseline_revision,
+            "dataset_generation": self.dataset_generation,
             "applied_correction_id": self.applied_correction_id,
         }
 
@@ -300,7 +302,10 @@ class IsolatedCutover:
         if ".." in Path(target_root).parts:
             raise ConsumerCutoverError("Cutover target must not contain parent segments.")
         self.target_root = target_root.expanduser().absolute()
-        self.data_dir = self.target_root / "data"
+        data_dir = self.target_root / "data"
+        if data_dir.exists() and data_dir.is_symlink():
+            raise ConsumerCutoverError("Cutover data dir must not be a symlink.")
+        self.data_dir = data_dir
         self.pin = pin
         self.mode: RuntimeMode = mode
         self.manual_state = manual_state or ManualState()
@@ -310,6 +315,8 @@ class IsolatedCutover:
         self._owns_fence = False
         self._remembered_modes: dict[Path, int] = {}
         self.data_dir.mkdir(parents=True, exist_ok=True)
+        if self.data_dir.is_symlink():
+            raise ConsumerCutoverError("Cutover data dir must not be a symlink.")
         if overlay_bytes:
             self.bind_overlay(overlay_bytes)
 
@@ -387,6 +394,9 @@ class IsolatedCutover:
             session.overlay = OverlayBinding(
                 digest=str(overlay_payload["digest"]),
                 baseline_revision=int(overlay_payload["baseline_revision"]),
+                dataset_generation=str(
+                    overlay_payload.get("dataset_generation") or pin_payload["dataset_generation"]
+                ),
                 applied_correction_id=overlay_payload.get("applied_correction_id"),
             )
         remembered: dict[Path, int] = {}
@@ -469,12 +479,16 @@ class IsolatedCutover:
         if self.overlay is not None and self.overlay.applied_correction_id is not None:
             if self.overlay.digest != digest:
                 raise OverlayAlreadyAppliedError("Overlay already bound to a different payload.")
-            if self.overlay.baseline_revision != self.pin.dataset_revision:
-                raise ConsumerCutoverError("Overlay already bound to a different dataset revision.")
+            if (
+                self.overlay.baseline_revision != self.pin.dataset_revision
+                or self.overlay.dataset_generation != self.pin.dataset_generation
+            ):
+                raise ConsumerCutoverError("Overlay already bound to a different dataset pin.")
             return self.overlay
         binding = OverlayBinding(
             digest=digest,
             baseline_revision=self.pin.dataset_revision,
+            dataset_generation=self.pin.dataset_generation,
             applied_correction_id=self.overlay.applied_correction_id if self.overlay else None,
         )
         self.overlay_bytes = payload
@@ -488,8 +502,11 @@ class IsolatedCutover:
         self._adopt_disk_state()
         if self.overlay is None:
             raise ConsumerCutoverError("Overlay is not bound to a canonical revision.")
-        if self.overlay.baseline_revision != self.pin.dataset_revision:
-            raise ConsumerCutoverError("Overlay baseline must match the dataset revision.")
+        if (
+            self.overlay.baseline_revision != self.pin.dataset_revision
+            or self.overlay.dataset_generation != self.pin.dataset_generation
+        ):
+            raise ConsumerCutoverError("Overlay baseline must match the dataset pin.")
         if self.overlay.applied_correction_id == correction_id:
             return OverlayApplyResult(
                 status="already_applied",
@@ -501,6 +518,7 @@ class IsolatedCutover:
         self.overlay = OverlayBinding(
             digest=self.overlay.digest,
             baseline_revision=self.overlay.baseline_revision,
+            dataset_generation=self.overlay.dataset_generation,
             applied_correction_id=correction_id,
         )
         self.persist()
@@ -603,11 +621,15 @@ class IsolatedCutover:
             return
         digest = str(overlay_payload.get("digest") or "")
         baseline = overlay_payload.get("baseline_revision")
+        generation = overlay_payload.get("dataset_generation")
+        if not isinstance(generation, str) or not generation:
+            generation = self.pin.dataset_generation
         if self.overlay is None:
             if digest and isinstance(baseline, int):
                 self.overlay = OverlayBinding(
                     digest=digest,
                     baseline_revision=baseline,
+                    dataset_generation=generation,
                     applied_correction_id=str(disk_id),
                 )
             return
@@ -616,6 +638,7 @@ class IsolatedCutover:
                 self.overlay = OverlayBinding(
                     digest=digest,
                     baseline_revision=baseline,
+                    dataset_generation=generation,
                     applied_correction_id=str(disk_id),
                 )
             return
@@ -623,6 +646,7 @@ class IsolatedCutover:
             self.overlay = OverlayBinding(
                 digest=self.overlay.digest,
                 baseline_revision=self.overlay.baseline_revision,
+                dataset_generation=self.overlay.dataset_generation,
                 applied_correction_id=str(disk_id),
             )
 
