@@ -395,6 +395,7 @@ finjuice --version
 │ --idempotency-key                        TEXT     Stable retry key for an authoritative mutation                     │
 │ --expected-generation                    TEXT     Expected active dataset generation                                 │
 │ --expected-revision                      INTEGER  Expected active dataset revision                                   │
+│ --delivery-config                        PATH     Explicit delivery JSON after manual edit.                          │
 │ --help                                            Show this message and exit.                                        │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
@@ -986,6 +987,7 @@ finjuice --version
 │ verify-bundle    Verify one published recovery graph against independently enrolled evidence.                        │
 │ restore-bundle   Verify the graph, then restore its snapshot into an inactive workspace.                             │
 │ store            Initialize and retain complete local recovery graphs in one managed store.                          │
+│ deliver          Run one filesystem backup delivery or report committed vs pending coverage.                         │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```
@@ -1103,6 +1105,70 @@ finjuice --version
 │ *  --expected        PATH  Independently retained expectation JSON; never derived from the bundle. [required]        │
 │    --json                  Output as JSON                                                                            │
 │    --help                  Show this message and exit.                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup deliver`
+
+```
+
+ Usage: finjuice ssot backup deliver [OPTIONS] COMMAND [ARGS]...
+
+ Run one filesystem backup delivery or report committed vs pending coverage.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ status   Report committed-record coverage and delivery history without transferring.                                 │
+│ run      Run one filesystem delivery. Nonzero exit is backup failure, not a domain rollback.                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup deliver status`
+
+```
+
+ Usage: finjuice ssot backup deliver status [OPTIONS]
+
+ Report committed-record coverage and delivery history without transferring.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --source-data-dir          PATH  [required]                                                                       │
+│ *  --expected                 PATH  Independently retained expectation JSON; never derived from the store.           │
+│                                     [required]                                                                       │
+│ *  --sender-store             PATH  [required]                                                                       │
+│ *  --destination-store        PATH  [required]                                                                       │
+│ *  --control-dir              PATH  [required]                                                                       │
+│    --json                                                                                                            │
+│    --help                           Show this message and exit.                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup deliver run`
+
+```
+
+ Usage: finjuice ssot backup deliver run [OPTIONS]
+
+ Run one filesystem delivery. Nonzero exit is backup failure, not a domain rollback.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --source-data-dir            PATH  [required]                                                                     │
+│ *  --expected                   PATH  Independently retained expectation JSON; never derived from the store.         │
+│                                       [required]                                                                     │
+│ *  --sender-store               PATH  [required]                                                                     │
+│ *  --destination-store          PATH  [required]                                                                     │
+│ *  --control-dir                PATH  [required]                                                                     │
+│    --wheel                      PATH                                                                                 │
+│    --dependency-lock            PATH                                                                                 │
+│    --binding                    PATH                                                                                 │
+│    --migration-candidate        PATH                                                                                 │
+│    --json                                                                                                            │
+│    --help                             Show this message and exit.                                                    │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```

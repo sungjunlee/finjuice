@@ -82,6 +82,8 @@ command/code/exit-code combinations against this schema.
 | `schemas/show.schema.json` | show --json output | `rows`, `row_count`, `total_matches`, `pagination` |
 | `schemas/ssot_backup_capture_bundle.schema.json` | ssot backup capture-bundle --json output | `kind`, `graph_digest`, `activation_sha256`, `wheel_basename`, `snapshot_generation`, `snapshot_backup_id`, `snapshot_manifest_digest`, `capsule_digest`, `snapshot_schema_version`, `snapshot_revision`, `activation_revision`, `file_count` |
 | `schemas/ssot_backup_create.schema.json` | ssot backup create --json output | `backup_id`, `backup_kind`, `database_digest`, `manifest_digest`, `source_generation`, `byte_count`, `dataset_revision`, `file_count`, `manifest_schema_version`, `complete`, `status`, `warnings` |
+| `schemas/ssot_backup_deliver_run.schema.json` | ssot backup deliver run --json output | `kind`, `job_id`, `recording`, `backup`, `source_observed_revision`, `coverage_as_of`, `pending_commit_count`, `last_verified_at`, `last_attempt_error_code`, `history_unknown`, `attempt` |
+| `schemas/ssot_backup_deliver_status.schema.json` | ssot backup deliver status --json output | `kind`, `job_id`, `recording`, `backup`, `source_observed_revision`, `coverage_as_of`, `pending_commit_count`, `last_verified_at`, `last_attempt_error_code`, `history_unknown`, `attempt` |
 | `schemas/ssot_backup_restore.schema.json` | ssot backup restore --json output | `restore_id`, `descriptor_digest`, `dataset_generation`, `initial_database_digest`, `source_manifest_digest`, `initial_dataset_revision`, `sqlite_schema_version` |
 | `schemas/ssot_backup_restore_bundle.schema.json` | ssot backup restore-bundle --json output | `restore_id`, `descriptor_digest`, `dataset_generation`, `initial_database_digest`, `source_manifest_digest`, `initial_dataset_revision`, `sqlite_schema_version` |
 | `schemas/ssot_backup_status.schema.json` | ssot backup status --json output | `byte_count`, `file_count`, `complete`, `reason`, `manifest_digest`, `source_generation` |
@@ -6576,6 +6578,560 @@ ssot backup create --json output
 }
 ```
 
+## `schemas/ssot_backup_deliver_run.schema.json`
+
+ssot backup deliver run --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `attempt` | `object` \| `null` | yes |
+| `backup` | `object` | yes |
+| `coverage_as_of` | `string` \| `null` | yes |
+| `history_unknown` | `boolean` | yes |
+| `job_id` | `string` | yes |
+| `kind` | enum(`backup_delivery_status`, `backup_delivery_run`) | yes |
+| `last_attempt_error_code` | `string` \| `null` | yes |
+| `last_verified_at` | `string` \| `null` | yes |
+| `pending_commit_count` | `integer` \| `null` | yes |
+| `recording` | `object` \| `null` | yes |
+| `source_observed_revision` | `integer` \| `null` | yes |
+
+```json
+{
+  "$defs": {
+    "projection": {
+      "properties": {
+        "attempt": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "backup": {
+          "properties": {
+            "destination": {
+              "enum": [
+                "covered",
+                "pending",
+                "transfer_failed",
+                "verification_failed",
+                "unknown"
+              ],
+              "type": "string"
+            },
+            "local": {
+              "enum": [
+                "covered",
+                "pending",
+                "verification_failed",
+                "unknown"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "destination",
+            "local"
+          ],
+          "type": "object"
+        },
+        "coverage_as_of": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "history_unknown": {
+          "type": "boolean"
+        },
+        "job_id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "backup_delivery_status",
+            "backup_delivery_run"
+          ],
+          "type": "string"
+        },
+        "last_attempt_error_code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "last_verified_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pending_commit_count": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "recording": {
+          "properties": {
+            "changeset_id": {
+              "type": "string"
+            },
+            "committed_revision": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "replayed": {
+              "type": "boolean"
+            },
+            "status": {
+              "enum": [
+                "committed",
+                "unknown"
+              ],
+              "type": "string"
+            }
+          },
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "source_observed_revision": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "job_id",
+        "recording",
+        "backup",
+        "source_observed_revision",
+        "coverage_as_of",
+        "pending_commit_count",
+        "last_verified_at",
+        "last_attempt_error_code",
+        "history_unknown",
+        "attempt"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "ssot_backup_deliver_run.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "attempt": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "backup": {
+      "properties": {
+        "destination": {
+          "enum": [
+            "covered",
+            "pending",
+            "transfer_failed",
+            "verification_failed",
+            "unknown"
+          ],
+          "type": "string"
+        },
+        "local": {
+          "enum": [
+            "covered",
+            "pending",
+            "verification_failed",
+            "unknown"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "destination",
+        "local"
+      ],
+      "type": "object"
+    },
+    "coverage_as_of": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "history_unknown": {
+      "type": "boolean"
+    },
+    "job_id": {
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "backup_delivery_status",
+        "backup_delivery_run"
+      ],
+      "type": "string"
+    },
+    "last_attempt_error_code": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "last_verified_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "pending_commit_count": {
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "recording": {
+      "properties": {
+        "changeset_id": {
+          "type": "string"
+        },
+        "committed_revision": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "replayed": {
+          "type": "boolean"
+        },
+        "status": {
+          "enum": [
+            "committed",
+            "unknown"
+          ],
+          "type": "string"
+        }
+      },
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "source_observed_revision": {
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "_meta",
+    "kind",
+    "job_id",
+    "recording",
+    "backup",
+    "source_observed_revision",
+    "coverage_as_of",
+    "pending_commit_count",
+    "last_verified_at",
+    "last_attempt_error_code",
+    "history_unknown",
+    "attempt"
+  ],
+  "title": "ssot backup deliver run --json output",
+  "type": "object",
+  "x-command": "ssot.backup.deliver.run"
+}
+```
+
+## `schemas/ssot_backup_deliver_status.schema.json`
+
+ssot backup deliver status --json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `attempt` | `object` \| `null` | yes |
+| `backup` | `object` | yes |
+| `coverage_as_of` | `string` \| `null` | yes |
+| `history_unknown` | `boolean` | yes |
+| `job_id` | `string` | yes |
+| `kind` | enum(`backup_delivery_status`, `backup_delivery_run`) | yes |
+| `last_attempt_error_code` | `string` \| `null` | yes |
+| `last_verified_at` | `string` \| `null` | yes |
+| `pending_commit_count` | `integer` \| `null` | yes |
+| `recording` | `object` \| `null` | yes |
+| `source_observed_revision` | `integer` \| `null` | yes |
+
+```json
+{
+  "$defs": {
+    "projection": {
+      "properties": {
+        "attempt": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "backup": {
+          "properties": {
+            "destination": {
+              "enum": [
+                "covered",
+                "pending",
+                "transfer_failed",
+                "verification_failed",
+                "unknown"
+              ],
+              "type": "string"
+            },
+            "local": {
+              "enum": [
+                "covered",
+                "pending",
+                "verification_failed",
+                "unknown"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "destination",
+            "local"
+          ],
+          "type": "object"
+        },
+        "coverage_as_of": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "history_unknown": {
+          "type": "boolean"
+        },
+        "job_id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "backup_delivery_status",
+            "backup_delivery_run"
+          ],
+          "type": "string"
+        },
+        "last_attempt_error_code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "last_verified_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pending_commit_count": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "recording": {
+          "properties": {
+            "changeset_id": {
+              "type": "string"
+            },
+            "committed_revision": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "replayed": {
+              "type": "boolean"
+            },
+            "status": {
+              "enum": [
+                "committed",
+                "unknown"
+              ],
+              "type": "string"
+            }
+          },
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "source_observed_revision": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "job_id",
+        "recording",
+        "backup",
+        "source_observed_revision",
+        "coverage_as_of",
+        "pending_commit_count",
+        "last_verified_at",
+        "last_attempt_error_code",
+        "history_unknown",
+        "attempt"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "ssot_backup_deliver_status.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "attempt": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "backup": {
+      "properties": {
+        "destination": {
+          "enum": [
+            "covered",
+            "pending",
+            "transfer_failed",
+            "verification_failed",
+            "unknown"
+          ],
+          "type": "string"
+        },
+        "local": {
+          "enum": [
+            "covered",
+            "pending",
+            "verification_failed",
+            "unknown"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "destination",
+        "local"
+      ],
+      "type": "object"
+    },
+    "coverage_as_of": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "history_unknown": {
+      "type": "boolean"
+    },
+    "job_id": {
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "backup_delivery_status",
+        "backup_delivery_run"
+      ],
+      "type": "string"
+    },
+    "last_attempt_error_code": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "last_verified_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "pending_commit_count": {
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "recording": {
+      "properties": {
+        "changeset_id": {
+          "type": "string"
+        },
+        "committed_revision": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "replayed": {
+          "type": "boolean"
+        },
+        "status": {
+          "enum": [
+            "committed",
+            "unknown"
+          ],
+          "type": "string"
+        }
+      },
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "source_observed_revision": {
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "_meta",
+    "kind",
+    "job_id",
+    "recording",
+    "backup",
+    "source_observed_revision",
+    "coverage_as_of",
+    "pending_commit_count",
+    "last_verified_at",
+    "last_attempt_error_code",
+    "history_unknown",
+    "attempt"
+  ],
+  "title": "ssot backup deliver status --json output",
+  "type": "object",
+  "x-command": "ssot.backup.deliver.status"
+}
+```
+
 ## `schemas/ssot_backup_restore.schema.json`
 
 ssot backup restore --json output
@@ -8204,10 +8760,11 @@ tag --json output
 | Field | Type | Required |
 |-------|------|----------|
 | `_meta` | `$ref` _meta.schema.json | yes |
+| `backup_delivery` | `$ref` ssot_backup_deliver_run.schema.json#/$defs/projection | no |
 | `coverage_pct` | `number` | no |
 | `dry_run` | `boolean` | no |
 | `operation` | `string` | no |
-| `partition` | `object` | no |
+| `partition` | `object` \| `null` | no |
 | `row_hash` | `string` | no |
 | `status` | `string` | yes |
 | `tagged` | `integer` | no |
@@ -8225,6 +8782,9 @@ tag --json output
     "_meta": {
       "$ref": "_meta.schema.json"
     },
+    "backup_delivery": {
+      "$ref": "ssot_backup_deliver_run.schema.json#/$defs/projection"
+    },
     "coverage_pct": {
       "type": "number"
     },
@@ -8235,8 +8795,10 @@ tag --json output
       "type": "string"
     },
     "partition": {
-      "additionalProperties": true,
-      "type": "object"
+      "type": [
+        "object",
+        "null"
+      ]
     },
     "row_hash": {
       "type": "string"

@@ -180,6 +180,7 @@ def _register_recovery_bundle_commands() -> None:
 
     importlib.import_module("finjuice.pipeline.cli.commands.sqlite_recovery_bundle")
     importlib.import_module("finjuice.pipeline.cli.commands.sqlite_recovery_store")
+    importlib.import_module("finjuice.pipeline.cli.commands.sqlite_backup_deliver")
 
 
 _register_recovery_bundle_commands()

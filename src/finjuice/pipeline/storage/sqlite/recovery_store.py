@@ -28,7 +28,16 @@ from finjuice.pipeline.backup.retention import (
     plan_retention,
 )
 from finjuice.pipeline.storage.authority import CoordinationLease, CoordinationPaths
-from finjuice.pipeline.storage.sqlite.backup_io import checked_directories, read_regular_bytes
+from finjuice.pipeline.storage.sqlite.backup_coverage import (
+    CommitObservation,
+    read_graph_commits,
+    select_retention_latest,
+)
+from finjuice.pipeline.storage.sqlite.backup_io import (
+    checked_directories,
+    copy_regular_file,
+    read_regular_bytes,
+)
 from finjuice.pipeline.storage.sqlite.backup_verify import resolve_backup_input
 from finjuice.pipeline.storage.sqlite.errors import BackupVerificationError
 from finjuice.pipeline.storage.sqlite.inactive_restore import restore_workspace
@@ -56,6 +65,7 @@ _REGISTRATION = "registration.json"
 _CAPTURE_STARTED = "capture-started"
 _INTENTS = "intents"
 _TOMBSTONE = ".tombstone-"
+_RECEIVE_PREFIX = ".recv-"
 _DIGEST = re.compile(r"^[0-9a-f]{64}$")
 _REG_KIND = "finjuice.sqlite.local-recovery-registration"
 _INTENT_KIND = "finjuice.sqlite.local-recovery-tombstone"
@@ -100,12 +110,14 @@ class StoreCopyRecord:
     snapshot_manifest_digest: str | None = None
     snapshot_revision: int = -1
     directory_identity: tuple[int, int] | None = None
+    commit_observation: CommitObservation | None = None
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         del payload["snapshot_manifest_digest"]
         del payload["snapshot_revision"]
         del payload["directory_identity"]
+        del payload["commit_observation"]
         return payload
 
 
@@ -121,11 +133,13 @@ class StoreInventoryReceipt:
     latest_healthy_id: str | None
     copies: tuple[StoreCopyRecord, ...]
     plan_digest: str | None = None
+    unresolved_copy_ids: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["baseline_copy_ids"] = list(self.baseline_copy_ids)
         payload["copies"] = [item.to_dict() for item in self.copies]
+        del payload["unresolved_copy_ids"]
         return payload
 
 
@@ -333,13 +347,49 @@ def capture_into_store(
         )
 
 
-def _admit_capture_registration(store: RecoveryGraphStore) -> bool:
+def receive_graph_into_store(
+    store: Path,
+    source_bundle: Path,
+    expected: ExpectedRecoveryGraph,
+    *,
+    expected_graph: RecoveryGraphReceipt,
+    timeout_ms: int = 5_000,
+) -> StoreCaptureReceipt:
+    """Publish one already-verified graph into a destination store by file copy."""
+    opened = open_recovery_store(store, expected, timeout_ms=timeout_ms)
+    source_root = Path(os.path.abspath(source_bundle))
+    _reject_overlap(opened.root, source_root)
+    from finjuice.pipeline.storage.sqlite.recovery_store_lock import managed_read_lease
+
+    with (
+        managed_read_lease(source_root, timeout_ms=timeout_ms),
+        opened.shared_lease(),
+        CoordinationLease(
+            CoordinationPaths(opened.control / "registration-lock"),
+            exclusive=True,
+            timeout_ms=timeout_ms,
+        ),
+    ):
+        _require_receive_registration(opened)
+        copy_id = _fresh_copy_id(opened.bundles)
+        staging = opened.bundles / f"{_RECEIVE_PREFIX}{uuid.uuid4().hex}"
+        try:
+            return _publish_received_graph(opened, source_root, staging, copy_id, expected_graph)
+        except Exception:
+            _discard_tree(staging)
+            raise
+
+
+def _admit_capture_registration(store: RecoveryGraphStore, *, receiving: bool = False) -> bool:
     current = _read_registration(store)
     if current is not None:
         _inventory(store)
         return False
     started = store.control / _CAPTURE_STARTED
-    if os.path.lexists(started) or any(store.bundles.iterdir()):
+    if os.path.lexists(started) or any(
+        not receiving or not child.name.startswith(_RECEIVE_PREFIX)
+        for child in store.bundles.iterdir()
+    ):
         raise BackupVerificationError(_ERROR)
     # Once a first capture starts, missing registration is never a fresh store.
     _write_exclusive(started, b"1\n")
@@ -486,15 +536,19 @@ def _inventory(store: RecoveryGraphStore) -> StoreInventoryReceipt:
         records.append(_inspect_copy(store, child))
     healthy = [item for item in records if item.health == "healthy"]
     latest = None
+    unresolved: tuple[str, ...] = ()
     if healthy:
-        latest = max(
-            healthy,
-            key=lambda item: (
-                item.snapshot_revision,
-                _parse_created(item.created_at),
-                item.copy_id,
-            ),
-        ).copy_id
+        latest, unresolved_ids = select_retention_latest(
+            tuple(
+                (
+                    item.copy_id,
+                    _parse_created(item.created_at),
+                    item.commit_observation,
+                )
+                for item in healthy
+            )
+        )
+        unresolved = tuple(sorted(unresolved_ids))
     registered = _read_registration(store) or ()
     _validate_baselines(registered, records)
     protected_ids = {item["copy_id"] for item in registered}
@@ -510,6 +564,8 @@ def _inventory(store: RecoveryGraphStore) -> StoreInventoryReceipt:
         tuple(item["copy_id"] for item in registered),
         latest,
         copies,
+        None,
+        unresolved,
     )
 
 
@@ -541,6 +597,16 @@ def _inspect_copy(store: RecoveryGraphStore, path: Path) -> StoreCopyRecord:
             return StoreCopyRecord(name, "held", False, None, None, "unreadable")
         verified = verify_recovery_bundle(path, store.expected)
         created_at = _snapshot_created_at(path)
+        observation = None
+        try:
+            observation = read_graph_commits(
+                path,
+                snapshot_generation=verified.snapshot_generation,
+                snapshot_schema_version=verified.snapshot_schema_version,
+                snapshot_revision=verified.snapshot_revision,
+            )
+        except (BackupVerificationError, OSError, ValueError):
+            observation = None
         return StoreCopyRecord(
             name,
             "healthy",
@@ -551,6 +617,7 @@ def _inspect_copy(store: RecoveryGraphStore, path: Path) -> StoreCopyRecord:
             verified.snapshot_manifest_digest,
             verified.snapshot_revision,
             (info.st_dev, info.st_ino),
+            observation,
         )
     except BackupVerificationError:
         return StoreCopyRecord(name, "held", False, None, None, "unverified")
@@ -592,7 +659,7 @@ def _plan_from_inventory(
                 created_at=_parse_created(item.created_at),
                 healthy=True,
                 location="local",
-                pinned=item.protected,
+                pinned=item.copy_id in registered,
             )
         )
         seen.add(item.copy_id)
@@ -600,7 +667,28 @@ def _plan_from_inventory(
         if extra.copy_id not in seen:
             raise BackupVerificationError(_ERROR)
     planned = plan_retention(copies, policy if policy is not None else RetentionPolicy())
-    return replace(planned, latest_healthy_id=inventory.latest_healthy_id)
+    ours = set(registered) | set(inventory.unresolved_copy_ids)
+    if inventory.latest_healthy_id is not None:
+        ours.add(inventory.latest_healthy_id)
+    keep = (set(planned.keep_ids) - set(planned.protected_ids)) | ours
+    ordered = tuple(item.copy_id for item in inventory.copies if item.copy_id in keep)
+    delete = tuple(
+        item.copy_id
+        for item in inventory.copies
+        if item.health == "healthy" and item.copy_id not in keep
+    )
+    protected = tuple(
+        item.copy_id
+        for item in inventory.copies
+        if item.copy_id in registered or item.copy_id == inventory.latest_healthy_id
+    )
+    return replace(
+        planned,
+        latest_healthy_id=inventory.latest_healthy_id,
+        keep_ids=ordered,
+        delete_ids=delete,
+        protected_ids=protected,
+    )
 
 
 def _plan_receipt(planned: RetentionPlan, inventory: StoreInventoryReceipt) -> StorePlanReceipt:
@@ -612,7 +700,10 @@ def _plan_receipt(planned: RetentionPlan, inventory: StoreInventoryReceipt) -> S
     payload = {
         "store_id": inventory.store_id,
         "baselines": inventory.baseline_copy_ids,
-        "copies": [asdict(item) for item in inventory.copies],
+        "copies": [
+            {key: value for key, value in asdict(item).items() if key != "commit_observation"}
+            for item in inventory.copies
+        ],
         "delete_ids": list(planned.delete_ids),
         "keep_ids": list(planned.keep_ids),
         "latest_healthy_id": planned.latest_healthy_id,
@@ -921,11 +1012,95 @@ def _fresh_copy_id(bundles: Path) -> str:
     raise BackupVerificationError(_ERROR)
 
 
+def _after_graph_file_copied() -> None:
+    """Test seam invoked after each regular file is copied into a receive staging tree."""
+    return None
+
+
+def _publish_received_graph(
+    opened: RecoveryGraphStore,
+    source_root: Path,
+    staging: Path,
+    copy_id: str,
+    expected_graph: RecoveryGraphReceipt,
+) -> StoreCaptureReceipt:
+    expected = opened.expected
+    _copy_graph_tree(source_root, staging)
+    published = verify_recovery_bundle(staging, expected)
+    if (
+        published.graph_digest != expected_graph.graph_digest
+        or published.snapshot_manifest_digest != expected_graph.snapshot_manifest_digest
+        or published.snapshot_generation != expected_graph.snapshot_generation
+        or published.snapshot_revision != expected_graph.snapshot_revision
+    ):
+        raise BackupVerificationError(_ERROR)
+    first = _admit_capture_registration(opened, receiving=True)
+    destination = opened.bundles / copy_id
+    rename_exclusive(staging, destination)
+    created_at = _snapshot_created_at(destination)
+    if first:
+        _write_registration(opened, (_baseline_record(copy_id, published, created_at),))
+    _fsync_directory(opened.bundles)
+    later = verify_recovery_bundle(destination, expected)
+    if later.graph_digest != published.graph_digest:
+        raise BackupVerificationError(_ERROR)
+    return StoreCaptureReceipt("local_recovery_store_received", copy_id, first, later.to_dict())
+
+
+def _require_receive_registration(opened: RecoveryGraphStore) -> None:
+    """Reject lost registration before copying; bootstrap begins only at publication."""
+    if _read_registration(opened) is not None:
+        _inventory(opened)
+    elif os.path.lexists(opened.control / _CAPTURE_STARTED) or any(
+        not child.name.startswith(_RECEIVE_PREFIX) for child in opened.bundles.iterdir()
+    ):
+        raise BackupVerificationError(_ERROR)
+
+
+def _copy_graph_tree(source: Path, destination: Path) -> None:
+    from finjuice.pipeline.storage.sqlite.backup_publication import fsync_attempt_tree
+
+    root = Path(os.path.abspath(source))
+    target_root = Path(os.path.abspath(destination))
+    checked_directories(root)
+    _mkdir_checked(target_root, boundary=target_root.parent)
+    pending = [root]
+    while pending:
+        parent = pending.pop()
+        checked_directories(parent)
+        for child in sorted(parent.iterdir(), key=lambda item: item.name):
+            relative = child.relative_to(root).as_posix()
+            info = child.lstat()
+            target = target_root / relative
+            if stat.S_ISLNK(info.st_mode) or child.is_symlink():
+                raise BackupVerificationError(_ERROR)
+            if stat.S_ISDIR(info.st_mode):
+                _mkdir_checked(target, boundary=target_root)
+                pending.append(child)
+            elif stat.S_ISREG(info.st_mode):
+                _mkdir_checked(target.parent, boundary=target_root)
+                copy_regular_file(child, target)
+                os.chmod(target, stat.S_IMODE(info.st_mode))
+                _after_graph_file_copied()
+            else:
+                raise BackupVerificationError(_ERROR)
+    fsync_attempt_tree(target_root)
+
+
+def _discard_tree(path: Path) -> None:
+    if not os.path.lexists(path):
+        return
+    info = path.lstat()
+    if not stat.S_ISDIR(info.st_mode) or path.is_symlink():
+        return
+    _remove_identity_tree(path, (info.st_dev, info.st_ino))
+
+
 def _bundle_children(bundles: Path) -> list[Path]:
     checked_directories(bundles)
     children: list[Path] = []
     for child in sorted(bundles.iterdir(), key=lambda path: path.name):
-        if child.name.startswith(_TOMBSTONE):
+        if child.name.startswith(_TOMBSTONE) or child.name.startswith(_RECEIVE_PREFIX):
             continue
         children.append(child)
     return children
