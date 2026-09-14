@@ -476,20 +476,50 @@ def _transaction_plan_items(planned: list[PlannedInput]) -> list[PlannedInput]:
     ]
 
 
+def _disposition_by_provenance(snapshot: dict[str, Any]) -> dict[str, str]:
+    return {row["provenance_id"]: row["disposition"] for row in snapshot["migration_dispositions"]}
+
+
+def _typed_hidden_override_match(
+    txn: dict[str, Any] | None, visible: list[str], selected: str | None
+) -> bool:
+    if txn is None:
+        return False
+    try:
+        typed_tags = json.loads(txn["tags_manual_json"])
+    except (TypeError, json.JSONDecodeError):
+        return False
+    return typed_tags == visible and (txn.get("category_manual") or None) == selected
+
+
 def _hidden_markers_match(
     planned: list[PlannedInput],
+    transactions: list[dict[str, Any]],
     payload_rows: list[dict[str, Any]],
     locators: dict[str, dict[str, Any]],
+    snapshot: dict[str, Any],
 ) -> bool:
+    dispositions = _disposition_by_provenance(snapshot)
+    by_provenance = {row["provenance_id"]: row for row in transactions}
     for item in _transaction_plan_items(planned):
-        payload = _payload_for_locator(
+        record = _payload_record_for_locator(
             item.relative_path, item.ordinal or 0, payload_rows, locators
         )
-        if payload is None:
+        if record is None:
             return False
-        tags, _issue = parse_tag_sequence(_payload_fields(payload).get("tags_manual"))
-        _visible, _selected, markers = split_hidden_category(tags)
-        if list(payload.get("category_override_markers") or []) != markers:
+        parsed = json.loads(record["payload_json"])
+        if not isinstance(parsed, dict):
+            return False
+        fields = _payload_fields(parsed)
+        tags, _issue = parse_tag_sequence(fields.get("tags_manual"))
+        visible, selected, markers = split_hidden_category(tags)
+        if list(parsed.get("category_override_markers") or []) != markers:
+            return False
+        if dispositions.get(record["provenance_id"]) != "migrated":
+            continue
+        if not _typed_hidden_override_match(
+            by_provenance.get(record["provenance_id"]), visible, selected
+        ):
             return False
     return True
 
@@ -499,7 +529,9 @@ def _persisted_category_match(
     transactions: list[dict[str, Any]],
     payload_rows: list[dict[str, Any]],
     locators: dict[str, dict[str, Any]],
+    snapshot: dict[str, Any],
 ) -> bool:
+    dispositions = _disposition_by_provenance(snapshot)
     by_provenance = {row["provenance_id"]: row for row in transactions}
     for item in _transaction_plan_items(planned):
         record = _payload_record_for_locator(
@@ -507,9 +539,11 @@ def _persisted_category_match(
         )
         if record is None:
             return False
+        if dispositions.get(record["provenance_id"]) != "migrated":
+            continue
         txn = by_provenance.get(record["provenance_id"])
         if txn is None:
-            continue
+            return False
         fields = _payload_fields(json.loads(record["payload_json"]))
         if str(txn.get("category_final") or "") != (fields.get("category_final") or ""):
             return False
@@ -580,13 +614,15 @@ def _preservation_checks(
         ),
         _check(
             "P02",
-            status="pass" if _hidden_markers_match(planned, payload_rows, locators) else "fail",
+            status="pass"
+            if _hidden_markers_match(planned, transactions, payload_rows, locators, snapshot)
+            else "fail",
             checked_count=hidden_count,
         ),
         _check(
             "P03",
             status="pass"
-            if _persisted_category_match(planned, transactions, payload_rows, locators)
+            if _persisted_category_match(planned, transactions, payload_rows, locators, snapshot)
             else "fail",
             checked_count=len(txn_items),
         ),
