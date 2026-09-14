@@ -667,6 +667,17 @@
       "value": 56
     },
     {
+      "code": "PLR0913",
+      "path": "src/finjuice/pipeline/cli/commands/ssot_close.py",
+      "symbol": "run",
+      "row": 57,
+      "column": 5,
+      "value": 11,
+      "limit": 5,
+      "message": "Too many arguments in function definition (11 > 5)",
+      "rationale": "Explicit CLI options or typed immutable-record fields; retain named contract parameters rather than introducing an untyped parameter bag. This accepts only current argument count, not branch or statement complexity."
+    },
+    {
       "code": "C901",
       "column": 5,
       "limit": 10,
@@ -827,6 +838,17 @@
       "value": 6
     },
     {
+      "code": "PLR0913",
+      "path": "src/finjuice/pipeline/close/canonical.py",
+      "symbol": "_record",
+      "row": 380,
+      "column": 5,
+      "value": 8,
+      "limit": 5,
+      "message": "Too many arguments in function definition (8 > 5)",
+      "rationale": "Explicit CLI options or typed immutable-record fields; retain named contract parameters rather than introducing an untyped parameter bag. This accepts only current argument count, not branch or statement complexity."
+    },
+    {
       "code": "C901",
       "column": 5,
       "limit": 10,
@@ -908,6 +930,17 @@
     },
     {
       "code": "PLR0913",
+      "path": "src/finjuice/pipeline/export/result.py",
+      "symbol": "_load_filtered_report_export_source",
+      "row": 131,
+      "column": 5,
+      "value": 6,
+      "limit": 5,
+      "message": "Too many arguments in function definition (6 > 5)",
+      "rationale": "Explicit CLI options or typed immutable-record fields; retain named contract parameters rather than introducing an untyped parameter bag. This accepts only current argument count, not branch or statement complexity."
+    },
+    {
+      "code": "PLR0913",
       "column": 5,
       "limit": 5,
       "message": "Too many arguments in function definition (6 > 5)",
@@ -965,6 +998,39 @@
       "row": 223,
       "symbol": "sanitize_order_by",
       "value": 12
+    },
+    {
+      "code": "PLR0913",
+      "path": "src/finjuice/pipeline/statements/canonical.py",
+      "symbol": "_apply_decision",
+      "row": 601,
+      "column": 5,
+      "value": 6,
+      "limit": 5,
+      "message": "Too many arguments in function definition (6 > 5)",
+      "rationale": "Explicit CLI options or typed immutable-record fields; retain named contract parameters rather than introducing an untyped parameter bag. This accepts only current argument count, not branch or statement complexity."
+    },
+    {
+      "code": "PLR0913",
+      "path": "src/finjuice/pipeline/statements/canonical.py",
+      "symbol": "_apply_row",
+      "row": 575,
+      "column": 5,
+      "value": 7,
+      "limit": 5,
+      "message": "Too many arguments in function definition (7 > 5)",
+      "rationale": "Explicit CLI options or typed immutable-record fields; retain named contract parameters rather than introducing an untyped parameter bag. This accepts only current argument count, not branch or statement complexity."
+    },
+    {
+      "code": "PLR0913",
+      "path": "src/finjuice/pipeline/statements/canonical.py",
+      "symbol": "_result",
+      "row": 621,
+      "column": 5,
+      "value": 6,
+      "limit": 5,
+      "message": "Too many arguments in function definition (6 > 5)",
+      "rationale": "Explicit CLI options or typed immutable-record fields; retain named contract parameters rather than introducing an untyped parameter bag. This accepts only current argument count, not branch or statement complexity."
     },
     {
       "code": "C901",
@@ -1025,6 +1091,17 @@
       "row": 158,
       "symbol": "write_month",
       "value": 12
+    },
+    {
+      "code": "PLR0913",
+      "path": "src/finjuice/pipeline/storage/sqlite/intake_asset_observation.py",
+      "symbol": "_reuse",
+      "row": 223,
+      "column": 5,
+      "value": 6,
+      "limit": 5,
+      "message": "Too many arguments in function definition (6 > 5)",
+      "rationale": "Explicit CLI options or typed immutable-record fields; retain named contract parameters rather than introducing an untyped parameter bag. This accepts only current argument count, not branch or statement complexity."
     },
     {
       "code": "C901",

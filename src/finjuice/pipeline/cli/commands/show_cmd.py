@@ -105,7 +105,7 @@ def _load_legacy_show(
     """Keep the existing CSV month selection and missing-data behavior."""
     from finjuice.pipeline.query import configured_snapshot
 
-    detached = configured_snapshot()
+    detached = configured_snapshot(config.data_dir)
     if detached is not None:
         return _load_detached_show(detached, month, search_all=search_all, json_output=json_output)
     table_title = "Transactions"

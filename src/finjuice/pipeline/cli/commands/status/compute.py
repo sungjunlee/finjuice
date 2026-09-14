@@ -120,7 +120,11 @@ def collect_status_facts(options: StatusOptions) -> StatusFacts:
     repository_facts = collect_repository_status_facts(options)
     if repository_facts is not None:
         return repository_facts
-    database = _resolve_sqlite_database_or_raise()
+    database = (
+        None
+        if any(options.config.csv_base_dir.glob("*/*/transactions.csv"))
+        else _resolve_sqlite_database_or_raise()
+    )
     if database is not None:
         return _collect_sqlite_status_facts(options, database)
 

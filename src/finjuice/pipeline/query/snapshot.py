@@ -97,8 +97,10 @@ def load_query_snapshot(database: Path) -> QuerySnapshot:
     )
 
 
-def configured_snapshot() -> QuerySnapshot | None:
+def configured_snapshot(data_dir: Path | None = None) -> QuerySnapshot | None:
     """Return the configured snapshot, or ``None`` when CSV mode is active."""
+    if data_dir is not None and any((data_dir / "transactions").glob("*/*/transactions.csv")):
+        return None
     database = resolve_generation_database()
     if database is None:
         return None

@@ -134,25 +134,9 @@ def _insert(
     context._record(table, identity, "insert", None, record)
 
 
-def import_evidence(
-    connection: sqlite3.Connection, context: MutationContext, command: EvidenceSubmission
-) -> dict[str, Any]:
-    """Preserve originals and typed evidence; an identity collision never discards new content."""
-    _text(command.source_namespace)
-    _time(command.received_at)
-    if not isinstance(command.content, bytes) or not command.content or not command.items:
-        raise MutationValidationError("Reconciliation requires original bytes and explicit items.")
-    artifact_id = "sha256:" + hashlib.sha256(command.content).hexdigest()
-    prior_occurrences = connection.execute(
-        "SELECT DISTINCT e.occurrence_id FROM reconcile_evidence e "
-        "JOIN source_occurrences o ON o.entity_id=e.occurrence_id "
-        "WHERE e.source_namespace=? AND o.source_artifact_id=?",
-        (command.source_namespace, artifact_id),
-    ).fetchall()
-    if len(prior_occurrences) > 1:
-        raise MutationConflictError("Evidence source has ambiguous preserved occurrences.")
-    occurrence = str(prior_occurrences[0][0]) if prior_occurrences else new_entity_id()
-    existing = {row["evidence_id"]: row for row in _rows(connection, "reconcile_evidence")}
+def _plan_evidence(
+    command: EvidenceSubmission, artifact_id: str, existing: dict[str, Any]
+) -> tuple[list[tuple[str, PurchaseEvidence, ExactValue, str]], set[str]]:
     planned = []
     seen: set[str] = set()
     for item in command.items:
@@ -175,6 +159,29 @@ def import_evidence(
         if identifier in existing and existing[identifier]["payload_digest"] != digest:
             raise MutationConflictError("Evidence identity is already bound to different content.")
         planned.append((identifier, item, exact, digest))
+    return planned, seen
+
+
+def import_evidence(
+    connection: sqlite3.Connection, context: MutationContext, command: EvidenceSubmission
+) -> dict[str, Any]:
+    """Preserve originals and typed evidence; an identity collision never discards new content."""
+    _text(command.source_namespace)
+    _time(command.received_at)
+    if not isinstance(command.content, bytes) or not command.content or not command.items:
+        raise MutationValidationError("Reconciliation requires original bytes and explicit items.")
+    artifact_id = "sha256:" + hashlib.sha256(command.content).hexdigest()
+    prior_occurrences = connection.execute(
+        "SELECT DISTINCT e.occurrence_id FROM reconcile_evidence e "
+        "JOIN source_occurrences o ON o.entity_id=e.occurrence_id "
+        "WHERE e.source_namespace=? AND o.source_artifact_id=?",
+        (command.source_namespace, artifact_id),
+    ).fetchall()
+    if len(prior_occurrences) > 1:
+        raise MutationConflictError("Evidence source has ambiguous preserved occurrences.")
+    occurrence = str(prior_occurrences[0][0]) if prior_occurrences else new_entity_id()
+    existing = {row["evidence_id"]: row for row in _rows(connection, "reconcile_evidence")}
+    planned, seen = _plan_evidence(command, artifact_id, existing)
     if all(identifier in existing for identifier in seen):
         SourceObjectStore(context.authority.paths).verify(artifact_id)
         return {
@@ -541,86 +548,85 @@ def reconcile_view(
     }
 
 
+def _validate_evidence(
+    connection: sqlite3.Connection, item: dict[str, Any], evidence: dict[str, dict[str, Any]]
+) -> None:
+    validate_entity_id(item["evidence_id"])
+    _date(item["occurred_on"])
+    amount, currency = _value(connection, item["amount_value_id"])
+    provenance = connection.execute(
+        "SELECT source_occurrence_id FROM record_provenance WHERE provenance_id=?",
+        (item["provenance_id"],),
+    ).fetchone()
+    value_provenance = connection.execute(
+        "SELECT provenance_id FROM exact_values WHERE value_id=?",
+        (item["amount_value_id"],),
+    ).fetchone()
+    if (
+        provenance is None
+        or provenance[0] != item["occurrence_id"]
+        or value_provenance[0] != item["provenance_id"]
+    ):
+        raise ValueError("Broken evidence lineage.")
+    _text(item["source_namespace"])
+    _text(item["external_key"])
+    detail = json.loads(item["detail_json"])
+    if not isinstance(detail, dict) or (item["settlement_unit"] and amount.is_zero()):
+        raise ValueError("Invalid settlement source meaning.")
+    parent_record = evidence.get(item["parent_evidence_id"])
+    if parent_record is not None and parent_record["source_namespace"] != item["source_namespace"]:
+        raise ValueError("Evidence parent changed namespace.")
+    artifact_id = connection.execute(
+        "SELECT source_artifact_id FROM source_occurrences WHERE entity_id=?",
+        (item["occurrence_id"],),
+    ).fetchone()[0]
+    lexical = connection.execute(
+        "SELECT lexical FROM exact_values WHERE value_id=?", (item["amount_value_id"],)
+    ).fetchone()[0]
+    preserved = {
+        "source_artifact_id": artifact_id,
+        "external_key": item["external_key"],
+        "evidence_kind": item["evidence_kind"],
+        "occurred_on": item["occurred_on"],
+        "amount": lexical,
+        "currency": currency,
+        "settlement_unit": bool(item["settlement_unit"]),
+        "detail": detail,
+        "parent_external_key": None if parent_record is None else parent_record["external_key"],
+        "transaction_id": item["transaction_id"],
+    }
+    if hashlib.sha256(_json(preserved).encode()).hexdigest() != item["payload_digest"] or item[
+        "evidence_id"
+    ] != _id(_json([item["source_namespace"], item["external_key"]])):
+        raise ValueError("Evidence identity or payload digest changed.")
+    seen = {item["evidence_id"]}
+    parent = item["parent_evidence_id"]
+    while parent is not None:
+        if parent in seen or parent not in evidence:
+            raise ValueError("Broken evidence hierarchy.")
+        seen.add(parent)
+        ancestor = evidence[parent]
+        if ancestor["evidence_kind"] not in {"purchase", "order"} or (
+            item["settlement_unit"] and ancestor["settlement_unit"]
+        ):
+            raise ValueError("Evidence hierarchy duplicates settlement scope.")
+        parent = ancestor["parent_evidence_id"]
+    if item["transaction_id"] is not None:
+        row = connection.execute(
+            "SELECT amount_value_id FROM transactions WHERE entity_id=?",
+            (item["transaction_id"],),
+        ).fetchone()
+        payment, payment_currency = _value(connection, row[0])
+        if payment.copy_negate() != amount or payment_currency != currency:
+            raise ValueError("Payment evidence disagrees with canonical payment.")
+
+
 def validate_reconcile(connection: sqlite3.Connection) -> None:
     """Reject broken source lineage, hierarchy, residuals or overlapping active reservations."""
     try:
         evidence = {item["evidence_id"]: item for item in _rows(connection, "reconcile_evidence")}
         for item in evidence.values():
-            validate_entity_id(item["evidence_id"])
-            _date(item["occurred_on"])
-            amount, currency = _value(connection, item["amount_value_id"])
-            provenance = connection.execute(
-                "SELECT source_occurrence_id FROM record_provenance WHERE provenance_id=?",
-                (item["provenance_id"],),
-            ).fetchone()
-            value_provenance = connection.execute(
-                "SELECT provenance_id FROM exact_values WHERE value_id=?",
-                (item["amount_value_id"],),
-            ).fetchone()
-            if (
-                provenance is None
-                or provenance[0] != item["occurrence_id"]
-                or value_provenance[0] != item["provenance_id"]
-            ):
-                raise ValueError("Broken evidence lineage.")
-            _text(item["source_namespace"])
-            _text(item["external_key"])
-            detail = json.loads(item["detail_json"])
-            if not isinstance(detail, dict) or (item["settlement_unit"] and amount.is_zero()):
-                raise ValueError("Invalid settlement source meaning.")
-            parent_record = evidence.get(item["parent_evidence_id"])
-            if (
-                parent_record is not None
-                and parent_record["source_namespace"] != item["source_namespace"]
-            ):
-                raise ValueError("Evidence parent changed namespace.")
-            artifact_id = connection.execute(
-                "SELECT source_artifact_id FROM source_occurrences WHERE entity_id=?",
-                (item["occurrence_id"],),
-            ).fetchone()[0]
-            lexical = connection.execute(
-                "SELECT lexical FROM exact_values WHERE value_id=?", (item["amount_value_id"],)
-            ).fetchone()[0]
-            preserved = {
-                "source_artifact_id": artifact_id,
-                "external_key": item["external_key"],
-                "evidence_kind": item["evidence_kind"],
-                "occurred_on": item["occurred_on"],
-                "amount": lexical,
-                "currency": currency,
-                "settlement_unit": bool(item["settlement_unit"]),
-                "detail": detail,
-                "parent_external_key": None
-                if parent_record is None
-                else parent_record["external_key"],
-                "transaction_id": item["transaction_id"],
-            }
-            if hashlib.sha256(_json(preserved).encode()).hexdigest() != item[
-                "payload_digest"
-            ] or item["evidence_id"] != _id(
-                _json([item["source_namespace"], item["external_key"]])
-            ):
-                raise ValueError("Evidence identity or payload digest changed.")
-            seen = {item["evidence_id"]}
-            parent = item["parent_evidence_id"]
-            while parent is not None:
-                if parent in seen or parent not in evidence:
-                    raise ValueError("Broken evidence hierarchy.")
-                seen.add(parent)
-                ancestor = evidence[parent]
-                if ancestor["evidence_kind"] not in {"purchase", "order"} or (
-                    item["settlement_unit"] and ancestor["settlement_unit"]
-                ):
-                    raise ValueError("Evidence hierarchy duplicates settlement scope.")
-                parent = ancestor["parent_evidence_id"]
-            if item["transaction_id"] is not None:
-                row = connection.execute(
-                    "SELECT amount_value_id FROM transactions WHERE entity_id=?",
-                    (item["transaction_id"],),
-                ).fetchone()
-                payment, payment_currency = _value(connection, row[0])
-                if payment.copy_negate() != amount or payment_currency != currency:
-                    raise ValueError("Payment evidence disagrees with canonical payment.")
+            _validate_evidence(connection, item, evidence)
         withdrawn = {row["allocation_id"] for row in _rows(connection, "reconcile_withdrawals")}
         reserved_evidence: set[str] = set()
         reserved_payments: set[str] = set()

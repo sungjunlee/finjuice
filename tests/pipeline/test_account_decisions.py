@@ -252,19 +252,7 @@ def test_ownership_cli_exact_correction_replay_import_and_restore(tmp_path, json
     backup = tmp_path / "backup"
     create_backup(env.database, backup)
     receipt = restore_workspace(backup, tmp_path / "restored")
-    with InactiveRestoreSession(receipt) as session:
-        projection = session.read_snapshot(
-            lambda reader: reader.account_ownership(env.account, as_of="2026-07-15")
-        )
-        assert projection["assertion_id"] == correction["assertion_id"]
-        assert projection["shares"][0]["party_id"] == env.parties[1]
-        assert len(projection["assertions"]) == 2
-        assert projection["remainder"] == {"coefficient": "0", "scale": 0}
-        rows = session.read_snapshot(lambda reader: reader.rows("asset_snapshots"))
-        assert baseline <= {row["entity_id"] for row in rows}
-        imported = [row for row in rows if row["entity_id"] not in baseline]
-        assert len(imported) == 2
-        assert {row["account_id"] for row in imported} == {env.account}
+    _assert_restored_ownership(receipt, env, correction, baseline)
 
 
 def test_ownership_invalid_total_rolls_back_and_transaction_preview(tmp_path):
@@ -302,3 +290,19 @@ def _catalog_command_result(tmp_path: Path, command: str):
         first = _payload(env.invoke(["ownership-confirm", request, *env.options("first")]))
         args.append(first["assertion_id"])
     return env.invoke([*args, request, *env.options("catalog")])
+
+
+def _assert_restored_ownership(receipt, env, correction, baseline):
+    with InactiveRestoreSession(receipt) as session:
+        projection = session.read_snapshot(
+            lambda reader: reader.account_ownership(env.account, as_of="2026-07-15")
+        )
+        assert projection["assertion_id"] == correction["assertion_id"]
+        assert projection["shares"][0]["party_id"] == env.parties[1]
+        assert len(projection["assertions"]) == 2
+        assert projection["remainder"] == {"coefficient": "0", "scale": 0}
+        rows = session.read_snapshot(lambda reader: reader.rows("asset_snapshots"))
+        assert baseline <= {row["entity_id"] for row in rows}
+        imported = [row for row in rows if row["entity_id"] not in baseline]
+        assert len(imported) == 2
+        assert {row["account_id"] for row in imported} == {env.account}

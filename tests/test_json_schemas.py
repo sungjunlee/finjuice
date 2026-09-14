@@ -761,6 +761,44 @@ def _account_catalog_result(schema_data_dir: Path, label: str):
     )
 
 
+def _validate_canonical_catalog(schema_data_dir: Path, label: str, schema_file: str) -> bool:
+    if label.startswith("ssot reconcile "):
+        from tests.pipeline.test_canonical_reconcile import reconcile_catalog_outputs
+
+        payload = reconcile_catalog_outputs(schema_data_dir.parent / "canonical-reconcile")[
+            label.split()[-1]
+        ]
+        _validator_for(_load_schema(schema_file)).validate(payload)
+        return True
+    if label in {"ssot import-json", "ssot statement-evidence"}:
+        from tests.pipeline.test_canonical_statement_json import statement_catalog_outputs
+
+        outputs = statement_catalog_outputs(schema_data_dir.parent / "canonical-statement")
+        _validator_for(_load_schema(schema_file)).validate(
+            outputs[label.replace(" ", "_").replace("-", "_")]
+        )
+        return True
+    if label.startswith("ssot close "):
+        from tests.pipeline.test_canonical_close import close_catalog_outputs
+
+        outputs = close_catalog_outputs(schema_data_dir.parent / "canonical-close")
+        _validator_for(_load_schema(schema_file)).validate(outputs[label.replace(" ", "_")])
+        return True
+    if label.startswith("ssot intake "):
+        from tests.pipeline.test_canonical_intake_cli import intake_catalog_outputs
+
+        if label.endswith((" revise", " withdraw")):
+            from tests.pipeline.test_intake_lifecycle import intake_lifecycle_catalog_outputs
+
+            outputs = intake_lifecycle_catalog_outputs(schema_data_dir.parent / "intake")
+        else:
+            outputs = intake_catalog_outputs(schema_data_dir.parent / "intake")
+        payload = outputs[label.replace(" ", "_")]
+        _validator_for(_load_schema(schema_file)).validate(payload)
+        return True
+    return False
+
+
 @pytest.mark.parametrize(("label", "cmd_args", "schema_file"), CATALOGUED_COMMANDS)
 def test_command_output_validates_against_schema(
     schema_data_dir: Path,
@@ -775,39 +813,7 @@ def test_command_output_validates_against_schema(
         cmd_args = _materialize_sqlite_backup_catalog_args(schema_data_dir, label)
     if label.startswith("ssot migrate "):
         cmd_args = _materialize_migration_catalog_args(schema_data_dir, label)
-    if label.startswith("ssot reconcile "):
-        from tests.pipeline.test_canonical_reconcile import reconcile_catalog_outputs
-
-        payload = reconcile_catalog_outputs(schema_data_dir.parent / "canonical-reconcile")[
-            label.split()[-1]
-        ]
-        _validator_for(_load_schema(schema_file)).validate(payload)
-        return
-    if label in {"ssot import-json", "ssot statement-evidence"}:
-        from tests.pipeline.test_canonical_statement_json import statement_catalog_outputs
-
-        outputs = statement_catalog_outputs(schema_data_dir.parent / "canonical-statement")
-        _validator_for(_load_schema(schema_file)).validate(
-            outputs[label.replace(" ", "_").replace("-", "_")]
-        )
-        return
-    if label.startswith("ssot close "):
-        from tests.pipeline.test_canonical_close import close_catalog_outputs
-
-        outputs = close_catalog_outputs(schema_data_dir.parent / "canonical-close")
-        _validator_for(_load_schema(schema_file)).validate(outputs[label.replace(" ", "_")])
-        return
-    if label.startswith("ssot intake "):
-        from tests.pipeline.test_canonical_intake_cli import intake_catalog_outputs
-
-        if label.endswith((" revise", " withdraw")):
-            from tests.pipeline.test_intake_lifecycle import intake_lifecycle_catalog_outputs
-
-            outputs = intake_lifecycle_catalog_outputs(schema_data_dir.parent / "intake")
-        else:
-            outputs = intake_catalog_outputs(schema_data_dir.parent / "intake")
-        payload = outputs[label.replace(" ", "_")]
-        _validator_for(_load_schema(schema_file)).validate(payload)
+    if _validate_canonical_catalog(schema_data_dir, label, schema_file):
         return
     if label.startswith("ssot assets "):
         from tests.pipeline.test_canonical_assets import _catalog_asset_result

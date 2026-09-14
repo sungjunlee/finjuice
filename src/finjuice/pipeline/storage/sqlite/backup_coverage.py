@@ -186,30 +186,7 @@ def _fetch_entries(connection: sqlite3.Connection) -> list[tuple[Any, ...]]:
         changeset_id, entry_index = str(chunk[-1][0]), int(chunk[-1][1])
 
 
-def _load_facts(connection: sqlite3.Connection) -> tuple[CommittedFact, ...]:
-    receipts = _fetch_keyed(
-        connection,
-        "SELECT changeset_id, command_scope, idempotency_key, request_digest, "
-        "result_json, base_revision, committed_revision, state_changed, created_at "
-        "FROM idempotency_requests WHERE status = 'committed' AND changeset_id > ? "
-        "ORDER BY changeset_id LIMIT ?",
-        ("",),
-    )
-    changesets = _fetch_keyed(
-        connection,
-        "SELECT changeset_id, command_scope, payload_digest, base_revision, "
-        "committed_revision, state_changed, confirmation_json, "
-        "reversal_of_changeset_id, created_at, idempotency_key, actor, reason "
-        "FROM changesets WHERE changeset_id > ? ORDER BY changeset_id LIMIT ?",
-        ("",),
-    )
-    entries = _fetch_entries(connection)
-    audits = _fetch_keyed(
-        connection,
-        "SELECT audit_event_id, changeset_id, event_kind, event_json, created_at "
-        "FROM audit_events WHERE audit_event_id > ? ORDER BY audit_event_id LIMIT ?",
-        ("",),
-    )
+def _domain_facts(connection: sqlite3.Connection) -> list[CommittedFact]:
     facts: list[CommittedFact] = []
     if connection.execute("PRAGMA user_version").fetchone()[0] >= 7:
         cursor = connection.execute("SELECT * FROM asset_meaning_assertions ORDER BY assertion_id")
@@ -253,6 +230,35 @@ def _load_facts(connection: sqlite3.Connection) -> tuple[CommittedFact, ...]:
                 facts.append(
                     _fact("close", {"table": table, **{key: content[key] for key in keys}}, content)
                 )
+    return facts
+
+
+def _load_facts(connection: sqlite3.Connection) -> tuple[CommittedFact, ...]:
+    receipts = _fetch_keyed(
+        connection,
+        "SELECT changeset_id, command_scope, idempotency_key, request_digest, "
+        "result_json, base_revision, committed_revision, state_changed, created_at "
+        "FROM idempotency_requests WHERE status = 'committed' AND changeset_id > ? "
+        "ORDER BY changeset_id LIMIT ?",
+        ("",),
+    )
+    changesets = _fetch_keyed(
+        connection,
+        "SELECT changeset_id, command_scope, payload_digest, base_revision, "
+        "committed_revision, state_changed, confirmation_json, "
+        "reversal_of_changeset_id, created_at, idempotency_key, actor, reason "
+        "FROM changesets WHERE changeset_id > ? ORDER BY changeset_id LIMIT ?",
+        ("",),
+    )
+    entries = _fetch_entries(connection)
+    audits = _fetch_keyed(
+        connection,
+        "SELECT audit_event_id, changeset_id, event_kind, event_json, created_at "
+        "FROM audit_events WHERE audit_event_id > ? ORDER BY audit_event_id LIMIT ?",
+        ("",),
+    )
+    facts: list[CommittedFact] = []
+    facts.extend(_domain_facts(connection))
     receipt_changes = set()
     for row in receipts:
         receipt_changes.add(row[0])

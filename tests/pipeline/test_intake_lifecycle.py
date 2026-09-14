@@ -127,7 +127,7 @@ def test_revision_resolves_stale_uncertainty_corrects_applied_fact_and_restores(
         ],
     )
     assert denied_revision.exit_code != 0
-    assert _view(env, parent["proposal_id"])["status"] == "rejected"
+    assert _view(env, parent["proposal_id"])["status"] == "revised"
     applied = _payload(_invoke(env, _confirm_arguments(revised)))
     applied_parent = _view(env, revised["proposal_id"])
     corrected_body = _revise_body(applied_parent)
@@ -166,26 +166,7 @@ def test_revision_resolves_stale_uncertainty_corrects_applied_fact_and_restores(
     receipt = capture_recovery_bundle(env.source, expected[0])
     assert verify_recovery_bundle(env.source.destination, expected[0]) == receipt
     restored = restore_workspace(env.source.destination / "snapshot", tmp_path / "restored")
-    with InactiveRestoreSession(restored) as session:
-        ownership = session.read_snapshot(
-            lambda reader: reader.account_ownership(env.account, as_of="2026-07-15")
-        )
-        assert ownership["shares"][0]["party_id"] == env.parties[1]
-        decisions = session.read_snapshot(lambda reader: reader.intake_decisions())["decisions"]
-        assert (
-            next(row for row in decisions if row["proposal_id"] == revised["proposal_id"])["status"]
-            == "applied"
-        )
-        assert (
-            next(row for row in decisions if row["proposal_id"] == correction["proposal_id"])[
-                "lineage"
-            ]["parent_application_changeset_id"]
-            == applied["changeset_id"]
-        )
-        artifact = old["source_artifact_id"].split(":", 1)[1]
-        assert (
-            (restored.workspace / "generation") / "objects" / "sha256" / artifact[:2] / artifact
-        ).read_bytes() == original_bytes
+    _assert_restored_intake(restored, env, revised, correction, (original_bytes, applied, old))
 
 
 @pytest.mark.parametrize("human", [False, True])
@@ -214,7 +195,7 @@ def test_pending_withdrawal_is_idempotent_and_never_undoes_applied_domain(tmp_pa
     from tests.test_json_schemas import _load_schema, _validator_for
 
     _validator_for(_load_schema("ssot_intake_withdraw.schema.json")).validate(result)
-    assert _view(env, parent["proposal_id"])["status"] == "rejected"
+    assert _view(env, parent["proposal_id"])["status"] == "revised"
     assert _invoke(env, _confirm_arguments(submitted)).exit_code != 0
     denied_revision = _invoke(
         env,
@@ -226,7 +207,7 @@ def test_pending_withdrawal_is_idempotent_and_never_undoes_applied_domain(tmp_pa
         ],
     )
     assert denied_revision.exit_code != 0
-    assert _view(env, parent["proposal_id"])["status"] == "rejected"
+    assert _view(env, parent["proposal_id"])["status"] == "revised"
     another = _payload(_invoke(env, ["submit", source, metadata, *env.options("another")]))
     applied = _payload(_invoke(env, _confirm_arguments(another)))
     body["payload_digest"] = _view(env, another["proposal_id"])["payload_digest"]
@@ -421,3 +402,27 @@ def intake_lifecycle_catalog_outputs(tmp_path):
         )
     )
     return {"ssot_intake_revise": revised, "ssot_intake_withdraw": withdrawn}
+
+
+def _assert_restored_intake(restored, env, revised, correction, preserved):
+    original_bytes, applied, old = preserved
+    with InactiveRestoreSession(restored) as session:
+        ownership = session.read_snapshot(
+            lambda reader: reader.account_ownership(env.account, as_of="2026-07-15")
+        )
+        assert ownership["shares"][0]["party_id"] == env.parties[1]
+        decisions = session.read_snapshot(lambda reader: reader.intake_decisions())["decisions"]
+        assert (
+            next(row for row in decisions if row["proposal_id"] == revised["proposal_id"])["status"]
+            == "applied"
+        )
+        assert (
+            next(row for row in decisions if row["proposal_id"] == correction["proposal_id"])[
+                "lineage"
+            ]["parent_application_changeset_id"]
+            == applied["changeset_id"]
+        )
+        artifact = old["source_artifact_id"].split(":", 1)[1]
+        assert (
+            (restored.workspace / "generation") / "objects" / "sha256" / artifact[:2] / artifact
+        ).read_bytes() == original_bytes
