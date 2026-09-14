@@ -248,7 +248,7 @@ def test_active_refresh_exports_and_preserves_mutation_receipts(
         assert recorded["steps"]["transfer"]["authority"] == "repository"
     else:
         assert "파이프라인 완료" in result.output
-        assert "/exports/runs/" in result.output
+        assert "/exports/runs/" in result.output.replace("\n", "")
         assert "export-manifest.json" in result.output
         assert "export" in result.output
 

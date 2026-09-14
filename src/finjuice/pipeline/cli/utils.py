@@ -59,12 +59,7 @@ def get_activation_evidence_provider(ctx: typer.Context) -> ActivationEvidencePr
 
 def get_mutation_facade(ctx: typer.Context, config: Config) -> StorageMutationFacade:
     """Build the authority-aware mutation facade from trusted host context."""
-    provider: ActivationEvidenceProvider | None = None
-    if isinstance(ctx.obj, dict):
-        raw_provider = ctx.obj.get("activation_evidence_provider")
-        if raw_provider is not None:
-            provider = cast(ActivationEvidenceProvider, raw_provider)
-    return StorageMutationFacade(config.data_dir, provider)
+    return StorageMutationFacade(config.data_dir, get_activation_evidence_provider(ctx))
 
 
 def mutation_identity(
