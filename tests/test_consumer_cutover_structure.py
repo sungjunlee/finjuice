@@ -548,3 +548,20 @@ def test_data_dir_symlink_is_rejected(tmp_path: Path) -> None:
     (target / "data").symlink_to(outside)
     with pytest.raises(ConsumerCutoverError, match="data dir must not be a symlink"):
         IsolatedCutover(target, _pin())
+
+
+def test_owner_persist_does_not_revive_cleared_fence(tmp_path: Path) -> None:
+    """A later owner persist must not rewrite fence_enabled=True after teardown."""
+    csv_relative = "transactions/2024/01/transactions.csv"
+    target = tmp_path / "target"
+    pin = _pin()
+    owner = IsolatedCutover(target, pin)
+    seed = owner.data_dir / csv_relative
+    seed.parent.mkdir(parents=True, exist_ok=True)
+    seed.write_text("row_hash,amount\nsynthetic,0\n", encoding="utf-8")
+    owner.activate_legacy_csv_fence()
+    IsolatedCutover.resume(target).close()
+    owner.persist()
+    payload = json.loads((target / "cutover-state.json").read_text(encoding="utf-8"))
+    assert payload["fence_enabled"] is False
+    owner.close()

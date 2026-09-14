@@ -543,7 +543,7 @@ class IsolatedCutover:
         encoded = json.dumps(_lock_payload(), ensure_ascii=False, sort_keys=True, indent=2)
         lock_path.write_text(f"{encoded}\n", encoding="utf-8")
         if self.fence_enabled and self._remembered_modes:
-            self.persist()
+            self._write_state()
             return lock_path
         remembered: dict[Path, int] = {}
         for name in CSV_TREE_NAMES:
@@ -551,7 +551,7 @@ class IsolatedCutover:
         self._remembered_modes = remembered
         self.fence_enabled = True
         self._owns_fence = True
-        self.persist()
+        self._write_state()
         return lock_path
 
     def attempt_direct_csv_write(
@@ -593,8 +593,11 @@ class IsolatedCutover:
         if existing is None:
             return
         self._adopt_disk_overlay_payload(existing.get("overlay"))
-        if existing.get("fence_enabled") and not self.fence_enabled:
+        if existing.get("fence_enabled"):
             self.fence_enabled = True
+        else:
+            self.fence_enabled = False
+            self._owns_fence = False
         disk_modes = existing.get("remembered_modes") or {}
         if disk_modes:
             remembered: dict[Path, int] = dict(self._remembered_modes)
