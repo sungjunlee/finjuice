@@ -15,8 +15,17 @@ import polars as pl
 from finjuice.pipeline.storage.csv_schema import (
     ASSET_SNAPSHOT_POLARS_SCHEMA,
     BANKSALAD_BALANCE_POLARS_SCHEMA,
+    BANKSALAD_INVESTMENT_POLARS_SCHEMA,
+    BANKSALAD_LOAN_POLARS_SCHEMA,
 )
 from finjuice.pipeline.storage.sqlite.portfolio_reads import PortfolioReadSnapshot
+
+_SCHEMAS = {
+    "snapshot": ASSET_SNAPSHOT_POLARS_SCHEMA,
+    "balance": BANKSALAD_BALANCE_POLARS_SCHEMA,
+    "investment": BANKSALAD_INVESTMENT_POLARS_SCHEMA,
+    "loan": BANKSALAD_LOAN_POLARS_SCHEMA,
+}
 
 
 class PortfolioDisplayError(ValueError):
@@ -58,6 +67,7 @@ class PortfolioDisplay:
         self._payloads = {row["provenance_id"]: row for row in snapshot.evidence["legacy_payloads"]}
         self._values = {row["value_id"]: row for row in snapshot.evidence["exact_values"]}
         self._money = {row["value_id"]: row for row in snapshot.evidence["money_values"]}
+        self._rates = {row["value_id"]: row for row in snapshot.evidence["rate_values"]}
         self._occurrences = {
             row["entity_id"]: row for row in snapshot.evidence["source_occurrences"]
         }
@@ -84,6 +94,26 @@ class PortfolioDisplay:
         frame = self._partitions("balance").get(month)
         return frame.clone() if frame is not None else None
 
+    @property
+    def investment_months(self) -> tuple[str, ...]:
+        """Available primary/native investment months, including empty partitions."""
+        return tuple(sorted(self._partitions("investment")))
+
+    @property
+    def loan_months(self) -> tuple[str, ...]:
+        """Available primary/native loan months, including empty partitions."""
+        return tuple(sorted(self._partitions("loan")))
+
+    def investment_partition(self, month: str) -> pl.DataFrame | None:
+        """Return investment amounts with exact values and unconverted rate units."""
+        frame = self._partitions("investment").get(month)
+        return frame.clone() if frame is not None else None
+
+    def loan_partition(self, month: str) -> pl.DataFrame | None:
+        """Return loan amounts with exact values and unconverted rate units."""
+        frame = self._partitions("loan").get(month)
+        return frame.clone() if frame is not None else None
+
     def metadata(self) -> dict[str, object]:
         """Report the pinned source and display policy, not materialization completeness."""
         references = self.snapshot.legacy_overview_reports.get(
@@ -105,11 +135,12 @@ class PortfolioDisplay:
         }
 
     def _scope_month(self, scope: dict[str, Any], kind: str) -> str | None:
-        prefix, filename = (
-            ("assets/snapshots", "snapshots.csv")
-            if kind == "snapshot"
-            else ("banksalad/balance", "balance.csv")
-        )
+        prefix, filename = {
+            "snapshot": ("assets/snapshots", "snapshots.csv"),
+            "balance": ("banksalad/balance", "balance.csv"),
+            "investment": ("banksalad/investments", "investments.csv"),
+            "loan": ("banksalad/loans", "loans.csv"),
+        }[kind]
         match = re.fullmatch(
             rf"{prefix}/([0-9]{{4}})/(0[1-9]|1[0-2])/{re.escape(filename)}", scope["path"]
         )
@@ -164,9 +195,7 @@ class PortfolioDisplay:
                 ordered.append((*location, identifier, row))
         for month, _, _, _, row in sorted(ordered, key=lambda item: item[:4]):
             grouped.setdefault(month, []).append(self._display(row, kind))
-        schema = (
-            ASSET_SNAPSHOT_POLARS_SCHEMA if kind == "snapshot" else BANKSALAD_BALANCE_POLARS_SCHEMA
-        )
+        schema = _SCHEMAS[kind]
         self._cache[kind] = {
             month: pl.DataFrame(values, schema_overrides=schema, infer_schema_length=None)
             if values
@@ -180,10 +209,14 @@ class PortfolioDisplay:
             return self.snapshot.asset_snapshots
         legacy = self.snapshot.legacy_overview_reports
         reports = {row["observation_id"]: row for row in legacy.get("legacy_overview_reports", ())}
-        return self.snapshot.native_overview_reports["overview_balances"] + tuple(
-            {**reports[row["observation_id"]], **row, "reported": True}
-            for row in legacy.get("legacy_overview_balances", ())
-        )
+        table = {"balance": "balances", "investment": "investments", "loan": "loans"}[kind]
+        reported = []
+        for row in legacy.get(f"legacy_overview_{table}", ()):
+            header = reports.get(row["observation_id"])
+            if header is None or header["report_kind"] != kind:
+                raise PortfolioDisplayError("Portfolio report header is incomplete.")
+            reported.append({**header, **row, "reported": True})
+        return self.snapshot.native_overview_reports[f"overview_{table}"] + tuple(reported)
 
     def _raw(self, row: dict[str, Any]) -> dict[str, Any]:
         payload = self._payloads.get(row["provenance_id"])
@@ -287,6 +320,9 @@ class PortfolioDisplay:
             result.update(self._number(row["quantity_value_id"], "quantity"))
             result.update(self._number(row["market_value_id"], "market_value"))
             value_id = row["market_value_id"]
+        elif kind in {"investment", "loan"}:
+            result.update(self._financial_report(row, kind, raw))
+            value_id = row["valuation_value_id" if kind == "investment" else "balance_value_id"]
         else:
             result.update({key: row[key] for key in ("side", "category", "item_name")})
             result.update(self._number(row["amount_value_id"], "amount"))
@@ -299,10 +335,46 @@ class PortfolioDisplay:
         result["currency_unknown"] = money.get("currency_unknown")
         result["currency_source"] = result["currency"]
         result["snapshot_date_raw"] = result["snapshot_date"]
-        schema = (
-            ASSET_SNAPSHOT_POLARS_SCHEMA if kind == "snapshot" else BANKSALAD_BALANCE_POLARS_SCHEMA
-        )
+        schema = _SCHEMAS[kind]
         for name, dtype in schema.items():
             if dtype == pl.Utf8 and result.get(name) in {"", "NA", "NULL"}:
                 result[name] = None
+        return result
+
+    def _financial_report(
+        self, row: dict[str, Any], kind: str, raw: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Preserve nullable values and per-field currencies; never convert or infer."""
+        type_field = "product_type" if kind == "investment" else "loan_type"
+        amount_field = "valuation_amount" if kind == "investment" else "balance_amount"
+        amount_key = "valuation_value_id" if kind == "investment" else "balance_value_id"
+        rate_field = "return_rate" if kind == "investment" else "interest_rate"
+        fields = (type_field, "institution", "product_name", "start_date", "maturity_date")
+        result = {key: row[key] for key in fields}
+        result.update(
+            source_fact_id=raw.get("source_fact_id"),
+            source_fact_uuid=None if row.get("reported") else row["source_fact_id"],
+            source_basis="reported" if row.get("reported") else "native",
+        )
+        for field, key, subtype in (
+            ("principal_amount", "principal_value_id", self._money),
+            (amount_field, amount_key, self._money),
+            (rate_field, f"{rate_field}_value_id", self._rates),
+        ):
+            value_id = row[key]
+            if value_id is not None and (value_id not in self._values or value_id not in subtype):
+                raise PortfolioDisplayError("Portfolio numeric evidence is incomplete.")
+            try:
+                result.update(self._number(value_id, field))
+            except (KeyError, TypeError, ValueError, ArithmeticError):
+                raise PortfolioDisplayError("Portfolio numeric evidence is invalid.") from None
+            detail = subtype.get(value_id, {})
+            if field == rate_field:
+                unit = detail.get("unit")
+                if value_id is not None and (not isinstance(unit, str) or ".v" not in unit):
+                    raise PortfolioDisplayError("Portfolio rate unit is invalid.")
+                result[f"{field}_unit"] = unit
+            else:
+                result[f"{field}_currency"] = detail.get("currency_code")
+                result[f"{field}_currency_unknown"] = detail.get("currency_unknown")
         return result
