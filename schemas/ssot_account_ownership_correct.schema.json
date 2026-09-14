@@ -48,5 +48,6 @@
     "replayed"
   ],
   "title": "ssot account ownership-correct output",
-  "type": "object"
+  "type": "object",
+  "x-command": "ssot.account.ownership-correct"
 }

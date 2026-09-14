@@ -147,7 +147,7 @@ def test_unmaterialized_primary_rows_and_file_failures_are_not_empty(
     )
     plan_migration(capture, output=plan, active_data_dir=source)
     build_migration(plan, candidate, active_data_dir=source)
-    with RepositoryReader(candidate / "finjuice.sqlite3") as reader:
+    with RepositoryReader(candidate / "finjuice.sqlite3", expected_schema_version=5) as reader:
         snapshot = reader.analysis_snapshot()
     assert snapshot.unmaterialized_months == ("2026-01",)
     assert snapshot.transactions.unmaterialized_months == snapshot.unmaterialized_months

@@ -23,5 +23,6 @@
     "replayed"
   ],
   "title": "ssot assets relation-correct output",
-  "type": "object"
+  "type": "object",
+  "x-command": "ssot.assets.relation-correct"
 }

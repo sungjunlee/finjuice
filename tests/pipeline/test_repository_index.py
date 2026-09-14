@@ -139,7 +139,9 @@ def test_scope_unknown_unmaterialized_empty_and_duplicate_aliases(root: QueryRoo
 
 
 def test_asset_scope_opaque_and_overflow_count(tmp_path: Path) -> None:
-    with RepositoryReader(_candidate(tmp_path, extra_root=True)) as reader:
+    with RepositoryReader(
+        _candidate(tmp_path, extra_root=True), expected_schema_version=5
+    ) as reader:
         snapshot = reader.checkup_snapshot()
     initial = _collections(adapter.index_inputs_from_snapshot(snapshot))
     assert initial["assets"].count == 1  # auxiliary, empty partition, balances not counted

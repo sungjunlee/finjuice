@@ -86,5 +86,6 @@
     "replayed"
   ],
   "title": "ssot import-json output",
-  "type": "object"
+  "type": "object",
+  "x-command": "ssot.import-json"
 }

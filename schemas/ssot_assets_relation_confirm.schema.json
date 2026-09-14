@@ -23,5 +23,6 @@
     "replayed"
   ],
   "title": "ssot assets relation-confirm output",
-  "type": "object"
+  "type": "object",
+  "x-command": "ssot.assets.relation-confirm"
 }

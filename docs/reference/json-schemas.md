@@ -6687,7 +6687,8 @@ ssot account ownership-confirm output
     "replayed"
   ],
   "title": "ssot account ownership-confirm output",
-  "type": "object"
+  "type": "object",
+  "x-command": "ssot.account.ownership-confirm"
 }
 ```
 
@@ -6758,7 +6759,8 @@ ssot account ownership-correct output
     "replayed"
   ],
   "title": "ssot account ownership-correct output",
-  "type": "object"
+  "type": "object",
+  "x-command": "ssot.account.ownership-correct"
 }
 ```
 
@@ -6997,7 +6999,8 @@ ssot assets relation-confirm output
     "replayed"
   ],
   "title": "ssot assets relation-confirm output",
-  "type": "object"
+  "type": "object",
+  "x-command": "ssot.assets.relation-confirm"
 }
 ```
 
@@ -7038,7 +7041,8 @@ ssot assets relation-correct output
     "replayed"
   ],
   "title": "ssot assets relation-correct output",
-  "type": "object"
+  "type": "object",
+  "x-command": "ssot.assets.relation-correct"
 }
 ```
 
@@ -9053,7 +9057,8 @@ ssot import-json output
     "replayed"
   ],
   "title": "ssot import-json output",
-  "type": "object"
+  "type": "object",
+  "x-command": "ssot.import-json"
 }
 ```
 
@@ -9874,7 +9879,8 @@ ssot statement-evidence output
     "record_count"
   ],
   "title": "ssot statement-evidence output",
-  "type": "object"
+  "type": "object",
+  "x-command": "ssot.statement-evidence"
 }
 ```
 

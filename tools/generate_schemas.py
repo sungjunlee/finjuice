@@ -2488,6 +2488,19 @@ SCHEMAS: dict[str, JsonSchema] = {
 }
 
 
+# Underscores in artifact names cannot distinguish command nesting from hyphens.
+for _command in (
+    "ssot.account.ownership-confirm",
+    "ssot.account.ownership-correct",
+    "ssot.assets.relation-confirm",
+    "ssot.assets.relation-correct",
+    "ssot.import-json",
+    "ssot.statement-evidence",
+):
+    _filename = _command.replace(".", "_").replace("-", "_") + ".schema.json"
+    SCHEMAS[_filename]["x-command"] = _command
+
+
 def write_schema(path: Path, schema: JsonSchema) -> None:
     """Write one schema in canonical JSON form."""
     path.write_text(

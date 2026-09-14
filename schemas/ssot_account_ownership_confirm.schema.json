@@ -44,5 +44,6 @@
     "replayed"
   ],
   "title": "ssot account ownership-confirm output",
-  "type": "object"
+  "type": "object",
+  "x-command": "ssot.account.ownership-confirm"
 }

@@ -37,5 +37,6 @@
     "record_count"
   ],
   "title": "ssot statement-evidence output",
-  "type": "object"
+  "type": "object",
+  "x-command": "ssot.statement-evidence"
 }
