@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import importlib
+import os
+import stat
 from dataclasses import replace
 from pathlib import Path
 
@@ -255,3 +257,56 @@ def test_close_rejects_invalid_period_and_parent_store_path(tmp_path: Path) -> N
         importlib.import_module(OPERATIONS_MODULE).reopen_month(
             CloseStore(tmp_path / "empty"), "2026-01"
         )
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits are required")
+def test_close_save_backup_restore_keep_private_files(tmp_path: Path) -> None:
+    """New and replaced ledger files remain private across a backup round trip."""
+    operations = importlib.import_module(OPERATIONS_MODULE)
+    live = CloseStore(tmp_path / "live")
+    closed = operations.close_month(live, _snapshot(), occurred_at="2026-02-02T00:00:00+00:00")
+    backup_root = tmp_path / "backup"
+
+    operations.backup_close_ledger(live, backup_root)
+    restored = CloseStore(tmp_path / "restored")
+    operations.restore_close_ledger(backup_root, restored, occurred_at="2026-02-03T00:00:00+00:00")
+
+    assert CloseStore(restored.root).get_revision("2026-01", 1).report == closed.report
+    for root in (live.root, backup_root, restored.root):
+        assert stat.S_IMODE(root.stat().st_mode) == 0o700
+        assert stat.S_IMODE((root / live.path.name).stat().st_mode) == 0o600
+        assert sorted(path.name for path in root.iterdir()) == [live.path.name]
+
+
+@pytest.mark.parametrize("failure_stage", ["write", "publish"])
+def test_close_failed_save_preserves_persisted_ledger(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure_stage: str
+) -> None:
+    """Failed staging or publication leaves the previous ledger readable and intact."""
+    operations = importlib.import_module(OPERATIONS_MODULE)
+    atomic = importlib.import_module("finjuice.pipeline.storage.atomic_files")
+    live = CloseStore(tmp_path / "live")
+    closed = operations.close_month(live, _snapshot(), occurred_at="2026-02-02T00:00:00+00:00")
+    before = live.path.read_bytes()
+
+    def fail_write(descriptor: int, content: bytes) -> None:
+        os.write(descriptor, content[:1])
+        raise OSError("Synthetic staging failure")
+
+    def fail_publish(source: Path, target: Path) -> None:
+        raise OSError("Synthetic publication failure")
+
+    if failure_stage == "write":
+        monkeypatch.setattr(atomic, "_write_all", fail_write)
+    else:
+        monkeypatch.setattr(atomic.os, "replace", fail_publish)
+    with pytest.raises(OSError, match="Synthetic"):
+        operations.reopen_month(
+            live, "2026-01", occurred_at="2026-02-03T00:00:00+00:00", reason="late_source"
+        )
+
+    assert live.path.read_bytes() == before
+    persisted = CloseStore(live.root)
+    assert persisted.current("2026-01") == closed
+    assert [event.action for event in persisted.events()] == ["closed"]
+    assert sorted(path.name for path in live.root.iterdir()) == [live.path.name]
