@@ -356,7 +356,7 @@ def test_explicit_sqlite_query_ignores_csv_while_cli_preserves_selected_legacy(
     mirrored_dataset: dict[str, Path],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A mutated CSV partition must not change SQLite-backed query results."""
+    """Explicit SQLite reads stay pinned; CLI preserves selected legacy CSV authority."""
     data_dir = mirrored_dataset["data_dir"]
     csv_path = data_dir / "transactions" / "2024" / "10" / "transactions.csv"
     csv_path.write_text(
@@ -467,9 +467,12 @@ def test_export_html_md_transaction_count_honors_period_when_filters_empty(
     format_lower: str,
     dry_run: bool,
 ) -> None:
-    """SQLite html/md export counts the --period slice, not the full snapshot."""
+    """Legacy html/md export counts its period even when a detached locator is set."""
     data_dir = mirrored_dataset["data_dir"]
     monkeypatch.setenv(GENERATION_ENV_VAR, str(mirrored_dataset["database"].parent))
+    from finjuice.pipeline.query import configured_snapshot
+
+    assert configured_snapshot(data_dir) is None  # Exercise the legacy CSV counting branch.
     snapshot = read_transactions_frame(mirrored_dataset["database"])
     period_count = snapshot.filter(pl.col("date").str.starts_with("2024-10")).height
     assert snapshot.height > period_count > 0
