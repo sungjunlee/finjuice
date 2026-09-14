@@ -31,3 +31,9 @@ It records a rejected confirmation for an undecided proposal. It cannot undo an 
 domain change. Both commands support human and JSON output. No schema version or separate
 ledger is introduced; validated parent evidence and original source objects travel with
 ordinary capture and restore.
+
+## 철회와 자산 의미 정정의 종료 조건
+
+철회한 미적용 제안은 다시 수정할 수 없다. 새 판단이 필요하면 새 증빙 제안을 제출하며 기존 철회 이력은 보존한다.
+
+자산 의미의 정정은 불변 계보의 마지막 assertion을 명시한다. 그 마지막 assertion이 미확정·거절이어도 기존 확정 의미는 계속 보고와 동일 증빙 재전송에 사용된다. 마지막 assertion을 가리키는 새 의미를 사용자가 명시적으로 확정한 시점에만 이전 확정 의미가 교체된다. 중간 미확정 assertion을 건너뛰는 분기 정정은 허용하지 않는다.

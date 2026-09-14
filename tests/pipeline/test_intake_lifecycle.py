@@ -117,6 +117,17 @@ def test_revision_resolves_stale_uncertainty_corrects_applied_fact_and_restores(
         and child["lineage"]["parent_extraction_id"] == old["extraction_id"]
     )
     assert _invoke(env, _confirm_arguments(submitted)).exit_code != 0
+    denied_revision = _invoke(
+        env,
+        [
+            "revise",
+            parent["proposal_id"],
+            env.file("revive.json", _revise_body(parent)),
+            *env.options("revive"),
+        ],
+    )
+    assert denied_revision.exit_code != 0
+    assert _view(env, parent["proposal_id"])["status"] == "rejected"
     applied = _payload(_invoke(env, _confirm_arguments(revised)))
     applied_parent = _view(env, revised["proposal_id"])
     corrected_body = _revise_body(applied_parent)
@@ -205,6 +216,17 @@ def test_pending_withdrawal_is_idempotent_and_never_undoes_applied_domain(tmp_pa
     _validator_for(_load_schema("ssot_intake_withdraw.schema.json")).validate(result)
     assert _view(env, parent["proposal_id"])["status"] == "rejected"
     assert _invoke(env, _confirm_arguments(submitted)).exit_code != 0
+    denied_revision = _invoke(
+        env,
+        [
+            "revise",
+            parent["proposal_id"],
+            env.file("revive.json", _revise_body(parent)),
+            *env.options("revive"),
+        ],
+    )
+    assert denied_revision.exit_code != 0
+    assert _view(env, parent["proposal_id"])["status"] == "rejected"
     another = _payload(_invoke(env, ["submit", source, metadata, *env.options("another")]))
     applied = _payload(_invoke(env, _confirm_arguments(another)))
     body["payload_digest"] = _view(env, another["proposal_id"])["payload_digest"]

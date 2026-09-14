@@ -133,11 +133,7 @@ def _current_head(
     if values is None:
         raise MutationConflictError("The requested typed correction head does not exist.")
     head = dict(zip(names, values, strict=True))
-    state_filter = (
-        " AND confirmation_state = 'confirmed'"
-        if operation in {"ownership", "asset_meaning"}
-        else ""
-    )
+    state_filter = " AND confirmation_state = 'confirmed'" if operation == "ownership" else ""
     if connection.execute(
         f"SELECT 1 FROM {table} WHERE {previous_key} = ?{state_filter}", (previous,)
     ).fetchone():
@@ -183,6 +179,8 @@ def _validate_revision(
         raise MutationConflictError(
             "Revise the latest successor instead of branching an old proposal."
         )
+    if parent["application"] is None and parent["confirmations"]:
+        raise MutationConflictError("A withdrawn proposal cannot be revised; submit new evidence.")
     applied = _applied_result(connection, parent)
     if applied is not None and revision.proposal["operation"] == "asset_observation":
         raise MutationValidationError(

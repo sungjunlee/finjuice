@@ -238,14 +238,26 @@ def _reuse(
         value.lexical,
     ):
         raise MutationConflictError("Existing observation requires an explicit correction.")
-    heads = connection.execute(
-        "SELECT a.assertion_id,a.value_id,a.account_id,a.resource_id,a.measure_kind,a.source_kind,"
-        "a.as_of,a.scope_state,a.confirmation_state,a.original_currency,a.net_worth_sign,"
-        "a.evidence_json,a.fx_value_id FROM asset_meaning_assertions a WHERE source_entity_id=? "
-        "AND NOT EXISTS(SELECT 1 FROM asset_meaning_assertions n "
-        "WHERE n.supersedes_assertion_id=a.assertion_id)",
-        (ids["asset"],),
-    ).fetchall()
+    from finjuice.pipeline.storage.sqlite.asset_reports import _heads
+
+    cursor = connection.execute(
+        "SELECT * FROM asset_meaning_assertions WHERE source_entity_id=?", (ids["asset"],)
+    )
+    columns = [column[0] for column in cursor.description]
+    meanings = [dict(zip(columns, row, strict=True)) for row in cursor]
+    heads = [row for row in _heads(meanings) if row["confirmation_state"] == "confirmed"]
+    fields = (
+        "value_id",
+        "account_id",
+        "resource_id",
+        "measure_kind",
+        "source_kind",
+        "as_of",
+        "scope_state",
+        "confirmation_state",
+        "original_currency",
+        "net_worth_sign",
+    )
     expected_head = (
         ids["value"],
         command.account_id,
@@ -260,11 +272,11 @@ def _reuse(
     )
     if (
         len(heads) != 1
-        or tuple(heads[0][1:11]) != expected_head
-        or json.loads(heads[0][11]) != dict(command.evidence)
-        or heads[0][12] is not None
+        or tuple(heads[0][field] for field in fields) != expected_head
+        or json.loads(heads[0]["evidence_json"]) != dict(command.evidence)
+        or heads[0]["fx_value_id"] is not None
     ):
         raise MutationConflictError(
             "Existing asset meaning differs; use explicit typed correction."
         )
-    return {"assertion_id": heads[0][0]}
+    return {"assertion_id": heads[0]["assertion_id"]}

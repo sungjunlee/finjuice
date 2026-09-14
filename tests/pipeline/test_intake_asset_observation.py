@@ -204,7 +204,9 @@ def test_retransmission_cannot_undo_explicit_meaning_correction(asset_repo):
 
 
 @pytest.mark.parametrize("pending_state", ["unconfirmed", "rejected"])
-def test_pending_meaning_successor_does_not_block_intake_revision(asset_repo, pending_state):
+def test_pending_meaning_preserves_replay_until_explicit_successor_confirmation(
+    asset_repo, pending_state
+):
     from dataclasses import asdict, replace
 
     from finjuice.pipeline.storage.sqlite.intake_lifecycle import IntakeRevision
@@ -233,16 +235,24 @@ def test_pending_meaning_successor_does_not_block_intake_revision(asset_repo, pe
         confirmation_state=pending_state,
         supersedes_assertion_id=original["assertion_id"],
     )
-    service.execute(
+    pending = service.execute(
         MutationRequest(
             "synthetic.meaning", "pending", {}, generation, current_revision(), "human"
         ),
         lambda context: MutationOutcome(context.confirm_asset_meaning(meaning)),
     )
+    replay, _, _ = _apply(asset_repo, "pending-successor-replay")
+    assert replay.result["applied"]["assertion_id"] == original["assertion_id"]
     proposal = {
         "change_kind": "account_fact",
         "operation": "asset_meaning",
-        "decision": asdict(replace(meaning, confirmation_state="confirmed")),
+        "decision": asdict(
+            replace(
+                meaning,
+                confirmation_state="confirmed",
+                supersedes_assertion_id=pending.result["assertion_id"],
+            )
+        ),
     }
     submitted = submit_intake(
         service,
@@ -282,3 +292,29 @@ def test_pending_meaning_successor_does_not_block_intake_revision(asset_repo, pe
     )
     assert result.result["parent_proposal_id"] == parent["proposal_id"]
     assert result.result["proposal_id"] != parent["proposal_id"]
+    confirm_request = MutationRequest(
+        result.result["application_scope"],
+        result.result["application_key"],
+        proposal,
+        generation,
+        result.result["expected_revision"],
+        "human",
+    )
+    confirmed = service.execute(
+        confirm_request,
+        lambda context: MutationOutcome(
+            context.apply_intake_decision(
+                result.result["proposal_id"],
+                confirm_request,
+                NOW,
+            )
+        ),
+    )
+    from finjuice.pipeline.storage.sqlite.asset_meanings import rows
+    from finjuice.pipeline.storage.sqlite.asset_reports import _heads
+
+    with sqlite3.connect(database) as connection:
+        heads = _heads(rows(connection, "asset_meaning_assertions"))
+    assert [head["assertion_id"] for head in heads] == [confirmed.result["applied"]["assertion_id"]]
+    with pytest.raises(MutationConflictError):
+        _apply(asset_repo, "obsolete-semantics-replay")
