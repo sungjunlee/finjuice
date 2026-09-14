@@ -19,6 +19,7 @@ from finjuice.pipeline.storage.authority import (
     RepositoryAuthority,
     resolve_storage_authority,
 )
+from finjuice.pipeline.storage.sqlite.account_bindings import AccountBindingConfirmation
 from finjuice.pipeline.storage.sqlite.bulk_tagging import (
     BulkTagCommand,
     apply_bulk_tagging,
@@ -214,6 +215,55 @@ class StorageMutationFacade:
                 else identity.expected_revision
             ),
         )
+
+    def confirm_account_binding(
+        self,
+        command: AccountBindingConfirmation,
+        *,
+        identity: MutationIdentity = MutationIdentity(),
+    ) -> MutationReceipt:
+        """Persist an operator-confirmed source binding or explicit correction."""
+        from dataclasses import asdict
+
+        scope = (
+            "account.binding.correct"
+            if command.supersedes_binding_id
+            else "account.binding.confirm"
+        )
+        return self._execute(
+            _RequestSpec(scope, asdict(command), identity, "cli", None),
+            lambda context: MutationOutcome(result=context.confirm_account_binding(command)),
+        )
+
+    def read_account_bindings(self) -> dict[str, Any]:
+        """Return candidates and history under the current authority and one validated view."""
+        from finjuice.pipeline.storage.authority import (
+            require_repository_authority,
+            shared_write_lease,
+        )
+        from finjuice.pipeline.storage.sqlite.repository import RepositoryReader
+
+        dispatch, _ = self._repository_dispatch()
+        assert dispatch.evidence is not None
+        with shared_write_lease(dispatch.paths):
+            authority = require_repository_authority(dispatch.paths, dispatch.evidence)
+            with RepositoryReader(authority.paths.database) as reader:
+                return reader.account_binding_snapshot()
+
+    def read_account_ownership(self, account_id: str, *, as_of: str) -> dict[str, Any]:
+        """Read dated ownership through the same authority-bound snapshot boundary."""
+        from finjuice.pipeline.storage.authority import (
+            require_repository_authority,
+            shared_write_lease,
+        )
+        from finjuice.pipeline.storage.sqlite.repository import RepositoryReader
+
+        dispatch, _ = self._repository_dispatch()
+        assert dispatch.evidence is not None
+        with shared_write_lease(dispatch.paths):
+            authority = require_repository_authority(dispatch.paths, dispatch.evidence)
+            with RepositoryReader(authority.paths.database) as reader:
+                return reader.account_ownership(account_id, as_of=as_of)
 
     def edit_manual_transaction(
         self,

@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from finjuice.pipeline.ingest.exact_assets import ExactAssetMapping, ExactMappedAssetRow
+from finjuice.pipeline.storage.sqlite.account_bindings import ASSET_ACCOUNT_NAMESPACE
 from finjuice.pipeline.storage.sqlite.exact import ExactValue
 from finjuice.pipeline.storage.sqlite.exact_import.constants import (
     UNRESOLVED_ACCOUNT_KIND,
@@ -61,6 +62,10 @@ def _persist_asset_row(
 ) -> str | None:
     place = SourcePlace("asset", row.sheet_name, row.source_row)
     extra = _row_payload(mapping, row, decision)
+    resolution = session.context.resolve_account_binding(
+        ASSET_ACCOUNT_NAMESPACE, row.source_account_id or ""
+    )
+    extra["account_binding"] = resolution.to_dict()
     provenance_id = add_row_provenance(session, place, row.cells, extra)
     add_mapper_issues(session, provenance_id, row.issues, sheet_name=row.sheet_name)
     if decision.action != "insert":
@@ -102,6 +107,10 @@ def _account_id(
     accounts: dict[str, str],
 ) -> str:
     explicit = row.source_account_id
+    if explicit is not None:
+        resolution = session.context.resolve_account_binding(ASSET_ACCOUNT_NAMESPACE, explicit)
+        if resolution.account_id is not None:
+            return resolution.account_id
     if explicit is not None and explicit in accounts:
         return accounts[explicit]
     account_id = new_entity_id()

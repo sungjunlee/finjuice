@@ -188,6 +188,11 @@ def generate_cli_docs() -> None:
         "networth": ["breakdown", "history", "forecast", "validate"],
         "template": ["run"],
         "ssot": [
+            "account",
+            "account list",
+            "account confirm",
+            "account correct",
+            "account ownership",
             "backup",
             "backup create",
             "backup restore",

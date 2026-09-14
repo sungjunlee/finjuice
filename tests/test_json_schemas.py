@@ -21,6 +21,10 @@ SCHEMAS_DIR = REPO_ROOT / "schemas"
 runner = CliRunner()
 
 CATALOGUED_COMMANDS = [
+    ("ssot account list", [], "ssot_account_list.schema.json"),
+    ("ssot account confirm", [], "ssot_account_confirm.schema.json"),
+    ("ssot account correct", [], "ssot_account_correct.schema.json"),
+    ("ssot account ownership", [], "ssot_account_ownership.schema.json"),
     ("ssot backup create", [], "ssot_backup_create.schema.json"),
     ("ssot backup capture-bundle", [], "ssot_backup_capture_bundle.schema.json"),
     ("ssot backup verify-bundle", [], "ssot_backup_verify_bundle.schema.json"),
@@ -684,6 +688,49 @@ def _materialize_backup_deliver_catalog_args(schema_data_dir: Path, label: str) 
     return shared
 
 
+def _account_catalog_result(schema_data_dir: Path, label: str):
+    from finjuice.pipeline.storage.mutation_facade import StorageMutationFacade
+    from finjuice.pipeline.storage.sqlite.account_bindings import AccountBindingConfirmation
+    from finjuice.pipeline.storage.sqlite.schema import inspect_repository
+    from tests.pipeline.test_recovery_bundle import _live
+
+    source, _expected, paths, generation, _transactions, account = _live(
+        schema_data_dir.parent / "account-live"
+    )
+    request = schema_data_dir.parent / "account-binding.json"
+    body = {
+        "source_namespace": "catalog.account.v1",
+        "external_key": "synthetic",
+        "account_id": account,
+        "evidence": {"reason": "explicit synthetic confirmation"},
+    }
+    request.write_text(json.dumps(body))
+    command = label.split()[-1]
+    args = ["ssot", "account", command]
+    if command == "correct":
+        facade = StorageMutationFacade(source.data_dir, evidence_provider=source.evidence_provider)
+        first = facade.confirm_account_binding(AccountBindingConfirmation(**body))
+        args.append(first.result["binding_id"])
+    if command in {"correct", "confirm"}:
+        revision = inspect_repository(paths.generation(generation).database).dataset_revision
+        args += [
+            str(request),
+            "--idempotency-key",
+            "catalog",
+            "--expected-generation",
+            generation,
+            "--expected-revision",
+            str(revision),
+        ]
+    elif command == "ownership":
+        args += [account, "--as-of", "2026-09-14"]
+    return runner.invoke(
+        app,
+        ["--data-dir", str(source.data_dir), *args, "--json"],
+        obj={"activation_evidence_provider": source.evidence_provider},
+    )
+
+
 @pytest.mark.parametrize(("label", "cmd_args", "schema_file"), CATALOGUED_COMMANDS)
 def test_command_output_validates_against_schema(
     schema_data_dir: Path,
@@ -698,7 +745,9 @@ def test_command_output_validates_against_schema(
         cmd_args = _materialize_sqlite_backup_catalog_args(schema_data_dir, label)
     if label.startswith("ssot migrate "):
         cmd_args = _materialize_migration_catalog_args(schema_data_dir, label)
-    if label == "export-verify":
+    if label.startswith("ssot account "):
+        result = _account_catalog_result(schema_data_dir, label)
+    elif label == "export-verify":
         from tests.cli.commands.test_repository_export import _export, _payload, _verify
         from tests.cli.commands.test_repository_query import query_root
 

@@ -40,6 +40,8 @@ MUTATING_COMMANDS = {
     "rules gaps",
     "rules remove",
     "rules suggest",
+    "ssot account confirm",
+    "ssot account correct",
     "ssot backup create",
     "ssot backup capture-bundle",
     "ssot backup restore",
@@ -79,6 +81,8 @@ RUNTIME_METADATA_COMMANDS = {
 
 ARTIFACT_COMMANDS = {
     "ssot backup status",
+    "ssot account confirm",
+    "ssot account correct",
     "ssot backup create",
     "ssot backup capture-bundle",
     "ssot backup verify-bundle",

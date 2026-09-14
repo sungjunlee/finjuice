@@ -20,6 +20,7 @@ def parser_versions() -> dict[str, str]:
 
     return {
         "assets": exact_assets.PARSER_VERSION,
+        "account_binding_policy": "explicit_runtime_binding.v1",
         "import_policy": IMPORT_POLICY_VERSION,
         "overview": exact_overview.PARSER_VERSION,
         "parser_policy": PARSER_POLICY_VERSION,

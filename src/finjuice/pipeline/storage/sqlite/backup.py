@@ -421,7 +421,10 @@ def _snapshot_into(connection: sqlite3.Connection, source_database: Path) -> Rep
     finally:
         source.close()
     _normalize_journal_mode(connection)
-    return _read_info(connection)
+    return _read_info(
+        connection,
+        expected_schema_version=int(connection.execute("PRAGMA user_version").fetchone()[0]),
+    )
 
 
 def _connect_readonly(path: Path) -> sqlite3.Connection:
@@ -476,7 +479,11 @@ def _referenced_object_entries(connection: sqlite3.Connection) -> tuple[BackupFi
 def _validate_snapshot(connection: sqlite3.Connection, paths: GenerationPaths) -> None:
     """Prove the snapshot is a valid repository before any manifest is written."""
     try:
-        info = _validate_connection(connection, object_paths=paths)
+        info = _validate_connection(
+            connection,
+            object_paths=paths,
+            expected_schema_version=int(connection.execute("PRAGMA user_version").fetchone()[0]),
+        )
     except (RepositoryIntegrityError, RepositoryVersionError) as exc:
         raise BackupVerificationError(
             "The captured snapshot failed repository validation; no backup was committed.",
@@ -625,7 +632,11 @@ def _verify_restored_database(
     """Run integrity, foreign-key, and identity checks on the restored copy."""
     connection = _connect_readonly(target_paths.database)
     try:
-        info = _validate_connection(connection, object_paths=target_paths)
+        info = _validate_connection(
+            connection,
+            object_paths=target_paths,
+            expected_schema_version=int(connection.execute("PRAGMA user_version").fetchone()[0]),
+        )
     except (RepositoryIntegrityError, RepositoryVersionError) as exc:
         raise BackupVerificationError("Restored database failed repository validation.") from exc
     finally:

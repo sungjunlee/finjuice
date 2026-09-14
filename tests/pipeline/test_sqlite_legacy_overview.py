@@ -118,7 +118,7 @@ def test_v4_upgrade_adds_empty_v5_tables_without_mutating_source(tmp_path: Path)
         builder.finalize()
     before = source.database.read_bytes()
     info = upgrade_repository(source.database, target)
-    assert info.schema_version == 5
+    assert info.schema_version == 6
     assert source.database.read_bytes() == before
     with RepositoryReader(source.database, expected_schema_version=4) as reader:
         assert reader.info.schema_version == 4

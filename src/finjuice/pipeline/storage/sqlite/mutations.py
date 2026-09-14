@@ -22,6 +22,12 @@ from finjuice.pipeline.storage.authority import (
     require_repository_binding,
     shared_write_lease,
 )
+from finjuice.pipeline.storage.sqlite.account_bindings import (
+    AccountBindingConfirmation,
+    AccountBindingResolution,
+    insert_account_binding,
+    resolve_account_binding,
+)
 from finjuice.pipeline.storage.sqlite.errors import (
     MutationAbortedError,
     MutationBusyError,
@@ -83,6 +89,7 @@ from finjuice.pipeline.storage.sqlite.schema import (
     _validate_v3_invariants,
     _validate_v4_invariants,
 )
+from finjuice.pipeline.storage.sqlite.schema_v6 import validate_v6_invariants
 from finjuice.pipeline.storage.sqlite.writes import TypedRowWriter
 
 JSONValue: TypeAlias = Any
@@ -930,6 +937,19 @@ class MutationContext:
         _canonical_request_json(after)
         write()
         self._record(entity_kind, entity_id, "insert", None, after)
+
+    def confirm_account_binding(self, command: AccountBindingConfirmation) -> dict[str, Any]:
+        """Confirm or explicitly supersede a runtime source binding with audited evidence."""
+        _canonical_request_json(asdict(command))
+        result = insert_account_binding(self.__connection, command, self.changeset_id)
+        self._record("account_source_binding", result["binding_id"], "assert", None, result)
+        return result
+
+    def resolve_account_binding(
+        self, namespace: str, external_key: str
+    ) -> AccountBindingResolution:
+        """Resolve explicit current bindings in the same transaction as an import."""
+        return resolve_account_binding(self.__connection, namespace, external_key)
 
     def add_ownership_assertion(
         self,
@@ -1838,6 +1858,7 @@ def _execute_new_request(
     _validate_intake_applications(connection)
     _validate_v3_invariants(connection)
     _validate_v4_invariants(connection)
+    validate_v6_invariants(connection)
     _advance_revision(connection, commit)
     retained = _attempt_retained_artifacts(attempt)
     _store_receipt(connection, request, commit, result_json, retained)

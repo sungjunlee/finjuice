@@ -964,6 +964,104 @@ finjuice --version
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ migrate   Plan, build, and verify preservation migrations.                                                           │
 │ backup    Create snapshots, capture a local recovery graph, retain a managed store, and restore inactive workspaces. │
+│ account   Inspect canonical accounts and explicitly bind source identities.                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot account`
+
+```
+
+ Usage: finjuice ssot account [OPTIONS] COMMAND [ARGS]...
+
+ Inspect canonical accounts and explicitly bind source identities.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ list        List accounts, exact source candidates and immutable confirmation history.                               │
+│ confirm     Confirm an exact source binding from an explicit JSON request file.                                      │
+│ correct     Append a correction of the named current binding; retain the original evidence.                          │
+│ ownership   Read exact confirmed ownership as of a date without household aggregation.                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot account list`
+
+```
+
+ Usage: finjuice ssot account list [OPTIONS]
+
+ List accounts, exact source candidates and immutable confirmation history.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot account confirm`
+
+```
+
+ Usage: finjuice ssot account confirm [OPTIONS] REQUEST
+
+ Confirm an exact source binding from an explicit JSON request file.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    request      PATH  [required]                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot account correct`
+
+```
+
+ Usage: finjuice ssot account correct [OPTIONS] BINDING_ID REQUEST
+
+ Append a correction of the named current binding; retain the original evidence.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    binding_id      TEXT  [required]                                                                                │
+│ *    request         PATH  [required]                                                                                │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot account ownership`
+
+```
+
+ Usage: finjuice ssot account ownership [OPTIONS] ACCOUNT_ID
+
+ Read exact confirmed ownership as of a date without household aggregation.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    account_id      TEXT  [required]                                                                                │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --as-of        TEXT  [required]                                                                                   │
+│    --json                                                                                                            │
+│    --help               Show this message and exit.                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```

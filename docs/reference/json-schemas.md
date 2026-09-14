@@ -80,6 +80,10 @@ command/code/exit-code combinations against this schema.
 | `schemas/rules_test.schema.json` | rules test --json output | `rule_name`, `scope`, `match_count`, `sample`, `monthly_distribution`, `cross_tags_top` |
 | `schemas/rules_validate.schema.json` | rules validate --json output | `status`, `total_rules`, `errors`, `warnings`, `passed`, `problems` |
 | `schemas/show.schema.json` | show --json output | `rows`, `row_count`, `total_matches`, `pagination` |
+| `schemas/ssot_account_confirm.schema.json` | ssot account confirm output | `binding_id`, `account_id`, `committed_revision`, `replayed` |
+| `schemas/ssot_account_correct.schema.json` | ssot account correct output | `binding_id`, `account_id`, `supersedes_binding_id`, `committed_revision`, `replayed` |
+| `schemas/ssot_account_list.schema.json` | ssot account list output | `dataset_revision`, `accounts`, `bindings`, `candidates` |
+| `schemas/ssot_account_ownership.schema.json` | ssot account ownership output | `dataset_revision`, `account_id`, `as_of` |
 | `schemas/ssot_backup_capture_bundle.schema.json` | ssot backup capture-bundle --json output | `kind`, `graph_digest`, `activation_sha256`, `wheel_basename`, `snapshot_generation`, `snapshot_backup_id`, `snapshot_manifest_digest`, `capsule_digest`, `snapshot_schema_version`, `snapshot_revision`, `activation_revision`, `file_count` |
 | `schemas/ssot_backup_create.schema.json` | ssot backup create --json output | `backup_id`, `backup_kind`, `database_digest`, `manifest_digest`, `source_generation`, `byte_count`, `dataset_revision`, `file_count`, `manifest_schema_version`, `complete`, `status`, `warnings` |
 | `schemas/ssot_backup_deliver_run.schema.json` | ssot backup deliver run --json output | `kind`, `job_id`, `recording`, `backup`, `source_observed_revision`, `coverage_as_of`, `pending_commit_count`, `last_verified_at`, `last_attempt_error_code`, `history_unknown`, `attempt` |
@@ -6390,6 +6394,210 @@ show --json output
     "pagination"
   ],
   "title": "show --json output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_account_confirm.schema.json`
+
+ssot account confirm output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `account_id` | `string` | yes |
+| `binding_id` | `string` | yes |
+| `committed_revision` | `integer` | yes |
+| `external_key` | `string` | no |
+| `replayed` | `boolean` | yes |
+| `source_namespace` | `string` | no |
+
+```json
+{
+  "$id": "ssot_account_confirm.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "account_id": {
+      "type": "string"
+    },
+    "binding_id": {
+      "type": "string"
+    },
+    "committed_revision": {
+      "type": "integer"
+    },
+    "external_key": {
+      "type": "string"
+    },
+    "replayed": {
+      "type": "boolean"
+    },
+    "source_namespace": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "binding_id",
+    "account_id",
+    "committed_revision",
+    "replayed"
+  ],
+  "title": "ssot account confirm output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_account_correct.schema.json`
+
+ssot account correct output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `account_id` | `string` | yes |
+| `binding_id` | `string` | yes |
+| `committed_revision` | `integer` | yes |
+| `replayed` | `boolean` | yes |
+| `supersedes_binding_id` | `string` | yes |
+
+```json
+{
+  "$id": "ssot_account_correct.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "account_id": {
+      "type": "string"
+    },
+    "binding_id": {
+      "type": "string"
+    },
+    "committed_revision": {
+      "type": "integer"
+    },
+    "replayed": {
+      "type": "boolean"
+    },
+    "supersedes_binding_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "binding_id",
+    "account_id",
+    "supersedes_binding_id",
+    "committed_revision",
+    "replayed"
+  ],
+  "title": "ssot account correct output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_account_list.schema.json`
+
+ssot account list output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `accounts` | `array`[`object`] | yes |
+| `bindings` | `array`[`object`] | yes |
+| `candidates` | `array`[`object`] | yes |
+| `dataset_revision` | `integer` | yes |
+
+```json
+{
+  "$id": "ssot_account_list.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "accounts": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "bindings": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "candidates": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "dataset_revision": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "_meta",
+    "dataset_revision",
+    "accounts",
+    "bindings",
+    "candidates"
+  ],
+  "title": "ssot account list output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_account_ownership.schema.json`
+
+ssot account ownership output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `account_id` | `string` | yes |
+| `as_of` | `string` | yes |
+| `dataset_revision` | `integer` | yes |
+
+```json
+{
+  "$id": "ssot_account_ownership.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "account_id": {
+      "type": "string"
+    },
+    "as_of": {
+      "type": "string"
+    },
+    "dataset_revision": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "_meta",
+    "dataset_revision",
+    "account_id",
+    "as_of"
+  ],
+  "title": "ssot account ownership output",
   "type": "object"
 }
 ```

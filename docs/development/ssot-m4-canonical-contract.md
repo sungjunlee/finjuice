@@ -101,3 +101,13 @@ ObservationRecord에는 시간/범위/확정/supersedes가 있지만 전체/부�
 - 기존 보호 회귀는 `test_sqlite_mutations.py`의 ownership/intake/relation 선택 범위, `test_sqlite_portfolio_reads.py`, actual exact-import 관련 기존 test 중 변경 경계만 먼저 실행한다. 한 기능 묶음 완료 후 root의 통합 full/build/installed를 한 번 수행한다.
 
 이 첫 묶음이 끝나면 #442의 identity 재수입/ownership/교정 핵심에 실제 증거가 생긴다. #443 전체 자산 의미 집계, household reporting scope, #444 Hermes 모든 채널/변경 유형은 남은 연결별로 계속 추적한다. issue merge/모듈 존재/테이블 존재만으로 체크박스를 닫지 않는다.
+
+## 구현된 제한 묶음: runtime schema 6
+
+`ssot account list`는 실제 authority의 한 revision에서 계좌, source 후보와 불변 연결 이력을 반환한다. `confirm REQUEST.json`과 `correct BINDING_ID REQUEST.json`은 `--idempotency-key`, `--expected-generation`, `--expected-revision`을 모두 요구한다. 요청은 `source_namespace`, `external_key`, `account_id`, 객체형 `evidence`만 포함한다. 자산 namespace는 `banksalad.assets.account_id.v1`, 거래 계좌 텍스트는 `banksalad.transactions.account_text.v1`이다. 모든 명령은 `--json`을 지원한다.
+
+명시 연결은 새 exact import에 적용된다. 서로 다른 현재 연결이 다른 계좌를 가리키면 ambiguous로 남으며, 표시명으로 병합하지 않는다. 기존 import의 재실행은 원래 receipt를 재생하고 이미 저장된 거래·자산의 계좌를 소급 변경하지 않는다. 교정은 동일 source key의 현재 binding을 supersede하는 새 행으로 남는다. 계좌 및 기존 ownership assertion은 XLSX 재수입으로 덮어쓰지 않는다. `ssot account ownership ACCOUNT_ID --as-of YYYY-MM-DD`는 기준일의 정확 지분, 미확정 잔여와 assertion 확인 상태를 조회한다.
+
+runtime source binding은 schema 6의 별도 테이블에 기록한다. legacy capture mapping에 가짜 provenance를 추가하지 않으며, migration policy의 schema 4/5 pin도 바꾸지 않는다. schema 5 백업의 raw restore는 버전과 내용을 보존한다. 현재 runtime에서 사용할 때에는 명시적인 clone upgrade와 해당 activation 계약이 필요하며, 복원만으로 기존 활성 source를 자동 승격하지 않는다.
+
+이 묶음은 기존 source occurrence의 소급 재연결·영향 preview, ownership 확정 CLI, 일반 intake proposal/application 연결, 가계 집계를 구현하지 않는다. 이 항목과 장비 밖 운영 증거를 완료한 것으로 간주하지 않는다.
