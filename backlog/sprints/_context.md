@@ -89,3 +89,9 @@ GitHub 이슈가 명세·AC·상태의 정본이다. 전체 목표는 `goals/fin
 - 최신 main 기반 `codex/ssot-final-fixes`에서 실패 원인을 묶어 수정했다: 긴 경로의 refresh manifest 이름 줄바꿈, HTML/MD dry-run 기간별 거래 수, 철회 상태 fixture 오기, detached SQLite API와 legacy CLI 선택 계약을 혼동한 테스트.
 - 관련 9개 회귀 PASS(16.12초), Ruff/mypy 606개/complexity 통과. 원래 main full CI 성공으로 잘못 표기하지 않는다. 최종 수정 소스의 CI와 설치 artifact 확인 후 실제 배포로 진행한다.
 - 실제 운영 전환·첫 사용·전환 후 장비 밖 복원 및 M4/M5 실제 수용 증거는 여전히 남아 있다. 목표 전체를 완료 처리하지 않는다.
+
+## Native portfolio consumer projection follow-up
+
+- PR #522 head `67839ba` fixes the sole failure in the prior full CI (4846 passed, 4 skipped): an analytics test mock lacked the new typed scope evidence. The corrected six-test file passes; package sources and the installed artifact are unchanged. Exact-head CI 34867296195 is running.
+- `codex/portfolio-consumer-projection` adds investment/loan display and a single-snapshot native-aware bundle. Preserved unsupported native overview projections now contribute to incomplete readiness rather than disappearing from coverage. Initial 39 focused tests passed. Five cross-family findings were fixed; the final focused set of 37 tests, changed-source Ruff/mypy, and diff checks pass. Full Ruff/mypy (609 sources) also passed before those localized review corrections.
+- Historical compatibility, operating cutover, new-record recovery, and confirmed family ownership remain separate gates. No operating source or service was changed by this implementation.

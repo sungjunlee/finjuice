@@ -204,6 +204,23 @@ def _portfolio_path(path: str) -> bool:
 def _evidence(
     connection: sqlite3.Connection, domain: Rows, configs: Rows, scopes: Rows
 ) -> dict[str, Rows]:
+    # Include unmaterialized native overview fragments, not only typed row endpoints.
+    cursor = connection.execute(
+        "SELECT prov.* FROM record_provenance AS prov "
+        "JOIN source_occurrences AS source ON source.entity_id = prov.source_occurrence_id "
+        "WHERE source.occurrence_kind = ? AND "
+        "json_extract(prov.source_coordinate_json, '$.family') IN (?, ?, ?, ?) "
+        "ORDER BY prov.provenance_id",
+        (
+            "exact_xlsx_import",
+            "overview_fact",
+            "overview_balance",
+            "overview_investment",
+            "overview_loan",
+        ),
+    )
+    names = [column[0] for column in cursor.description]
+    native_provenance = tuple(dict(zip(names, row, strict=True)) for row in cursor)
     scoped = _ids(scopes, "source_occurrence_id")
     observations = _selected(
         connection,
@@ -226,7 +243,11 @@ def _evidence(
         "source_occurrence_id",
         scoped | _ids(configs, "source_occurrence_id"),
     )
-    provenance = tuple({row["provenance_id"]: row for row in provenance + file_provenance}.values())
+    provenance = tuple(
+        {
+            row["provenance_id"]: row for row in provenance + file_provenance + native_provenance
+        }.values()
+    )
     occurrences = _selected(
         connection,
         "source_occurrences",

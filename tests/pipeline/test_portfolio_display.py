@@ -111,3 +111,126 @@ def test_incomplete_report_headers_are_preserved_but_not_empty_display(tmp_path:
     assert snapshot.evidence["legacy_payloads"]
     with pytest.raises(PortfolioDisplayError, match="lack typed"):
         PortfolioDisplay(snapshot).balance_partition("2026-03")
+
+
+@pytest.mark.parametrize("kind,table", [("investment", "investments"), ("loan", "loans")])
+def test_report_primary_scope_empty_partition_and_missing_evidence(
+    tmp_path: Path, kind: str, table: str
+) -> None:
+    with RepositoryReader(
+        _candidate(tmp_path, extra_root=True), expected_schema_version=5
+    ) as reader:
+        snapshot = reader.portfolio_snapshot()
+    scope = next(
+        s for s in snapshot.source_scopes if f"/{table}/" in s["path"] and s["root"] == "data"
+    )
+    empty_scope = {
+        **scope,
+        "source_occurrence_id": "empty",
+        "path": scope["path"].replace("/01/", "/02/"),
+    }
+    snapshot = replace(snapshot, source_scopes=(*snapshot.source_scopes, empty_scope))
+    display = PortfolioDisplay(snapshot)
+    partition = getattr(display, f"{kind}_partition")
+    frame = partition("2026-01")
+    assert frame is not None and frame.height == 1
+    assert frame["source_basis"].to_list() == ["reported"]
+    assert frame["source_fact_uuid"].to_list() == [None]
+    assert getattr(display, f"{kind}_months") == ("2026-01", "2026-02")
+    assert partition("2026-02").is_empty()
+    assert partition("2026-03") is None
+    legacy = {**snapshot.legacy_overview_reports, f"legacy_overview_{table}": ()}
+    with pytest.raises(PortfolioDisplayError, match="lack typed"):
+        getattr(
+            PortfolioDisplay(replace(snapshot, legacy_overview_reports=legacy)), f"{kind}_partition"
+        )("2026-01")
+    headers = tuple(
+        row
+        for row in snapshot.legacy_overview_reports["legacy_overview_reports"]
+        if row["report_kind"] != kind
+    )
+    malformed = replace(
+        snapshot,
+        legacy_overview_reports={
+            **snapshot.legacy_overview_reports,
+            "legacy_overview_reports": headers,
+        },
+    )
+    with pytest.raises(PortfolioDisplayError, match="report header"):
+        getattr(PortfolioDisplay(malformed), f"{kind}_partition")("2026-01")
+    missing = replace(snapshot, evidence={**snapshot.evidence, "exact_values": ()})
+    with pytest.raises(PortfolioDisplayError, match="numeric evidence"):
+        getattr(PortfolioDisplay(missing), f"{kind}_partition")("2026-01")
+
+
+@pytest.mark.parametrize(
+    "kind,table,amount,rate",
+    [
+        ("investment", "investments", "valuation_amount", "return_rate"),
+        ("loan", "loans", "balance_amount", "interest_rate"),
+    ],
+)
+def test_native_report_exact_currency_rate_units_and_duplicate_dates(
+    tmp_path: Path, kind: str, table: str, amount: str, rate: str
+) -> None:
+    with RepositoryReader(_candidate(tmp_path), expected_schema_version=5) as reader:
+        snapshot = reader.portfolio_snapshot()
+    typed = snapshot.legacy_overview_reports[f"legacy_overview_{table}"][0]
+    header = next(
+        row
+        for row in snapshot.legacy_overview_reports["legacy_overview_reports"]
+        if row["observation_id"] == typed["observation_id"]
+    )
+    native = ({**header, **typed, "entity_id": "native-report", "source_fact_id": "native-fact"},)
+    provenance = next(
+        row
+        for row in snapshot.evidence["record_provenance"]
+        if row["provenance_id"] == header["provenance_id"]
+    )
+    occurrence_id = provenance["source_occurrence_id"]
+    snapshot = replace(
+        snapshot,
+        legacy_overview_reports={
+            **snapshot.legacy_overview_reports,
+            f"legacy_overview_{table}": (),
+        },
+        source_scopes=tuple(
+            row for row in snapshot.source_scopes if row["source_occurrence_id"] != occurrence_id
+        ),
+        evidence={
+            **snapshot.evidence,
+            "source_occurrences": tuple(
+                {**row, "occurrence_kind": "native"} if row["entity_id"] == occurrence_id else row
+                for row in snapshot.evidence["source_occurrences"]
+            ),
+        },
+    )
+    duplicate = {**native[0], "entity_id": "second-identity"}
+    snapshot = replace(
+        snapshot,
+        native_overview_reports={
+            **snapshot.native_overview_reports,
+            f"overview_{table}": (*native, duplicate),
+        },
+    )
+    display = PortfolioDisplay(snapshot)
+    month = getattr(display, f"{kind}_months")[0]
+    frame = getattr(display, f"{kind}_partition")(month)
+    assert frame is not None and frame.height == len(native) + 1
+    assert frame["source_basis"].to_list() == ["native"] * frame.height
+    assert frame[f"{amount}_lexical"].null_count() == 0
+    assert f"{amount}_currency_unknown" in frame.columns
+    rates = {row["value_id"]: row["unit"] for row in snapshot.evidence["rate_values"]}
+    first = frame.filter(frame["authoritative_id"] == native[0]["entity_id"]).row(0, named=True)
+    assert first[f"{rate}_unit"] == rates.get(native[0][f"{rate}_value_id"])
+    broken = replace(
+        snapshot,
+        evidence={
+            **snapshot.evidence,
+            "exact_values": tuple(
+                {**row, "coefficient": "malformed"} for row in snapshot.evidence["exact_values"]
+            ),
+        },
+    )
+    with pytest.raises(PortfolioDisplayError, match="numeric evidence"):
+        getattr(PortfolioDisplay(broken), f"{kind}_partition")(month)
