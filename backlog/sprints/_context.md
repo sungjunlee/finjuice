@@ -1,97 +1,40 @@
 # finjuice SSOT 실행 연속성
 
-2026-09-08 준비. GitHub Issues가 명세·AC·상태의 정본이며 이 파일에는 재개에 필요한 운영 맥락만 둔다.
+GitHub Issues가 명세·AC·상태의 정본이다. 실행 권한과 완료 조건은 `goals/finjuice-ssot.md`, 상세 구현·검사 이력은 `backlog/sprints/2026-09-ssot-m2-storage.md`에 있다. 이 문서는 현재 재개 지점만 유지한다.
 
-- 로드맵: https://github.com/sungjunlee/finjuice/issues/425
-- 실행 계약/시작 프롬프트: `goals/finjuice-ssot.md`.
-- 활성 실행 계획: `backlog/sprints/2026-09-ssot-m2-storage.md`. #433 완료, #434는 ready PR #463에서 진행 중이다. 2026-09-12 다른 세션의 main PR #473~#476을 통합해 대상 파일 import·legacy 처리 이력, 증빙 대사 첫 부분과 0.8.0 버전을 보존했다. 최신 head의 로컬/설치본/CI 검증 근거는 PR #463과 Issue #434에서 확인한다. GitHub 필수 approving review 1건 후 머지한다. 2026-09-12 추가 위임으로 #435 합성 준비를 #463 head 4fcf0b7 기반 별도 stacked branch `codex/ssot-m2-migrate`에서 진행한다. #434 머지나 #435 전체 완료를 뜻하지 않는다. #436 정본 export가 없어 active import/refresh는 앞선 변경 영수증을 보존하고 export에서 실패한다. 이번 통합에서 운영 데이터 이전이나 SQLite 활성화는 수행하지 않았다. 실행 작업 공간은 `git worktree list`로 확인한다.
-- 2026-09-13 현재 #435 작업은 PR #481 / `codex/ssot-m2-migrate`다. main 0.8.2를 `5297c05`로 통합했고 전체 3,303 PASS·1 SKIP를 확인했다. canonical rules/goals head 선택은 `09c8247`에 구현했다. 이어 새 v3 계획은 기존 CSV 해석기의 공백·중복 marker 선택 의미를 재현하면서 원문/visible 순서·중복/저장된 최종 분류를 보존한다. 기존 v1/v2 후보는 원래 정책으로 재생하며 v3도 canonical 설정 선택을 유지한다. 이어 실패 단계 journal과 검증된 부모 계보를 구현한다. 새 lifecycle manifest v2는 portable 계보를 필수로 보존하고 기존 manifest v1 재생을 유지한다. 교차 파일 ADR-0015는 별도 legacy reported 값과 독립 참조 판정, 기존 v1/v2/v3 계획의 schema4 재생을 유지하는 새 schema5 방향으로 채택하고 저장·adapter를 구현했다(소비자·실운영 검증 미완료). Consumer parity 및 실운영 검증은 후속 수용 조건이다. #463의 필수 GitHub 승인을 대체하지 않는다.
-- 완료 실행 기록: `backlog/sprints/2026-09-ssot-m1-recovery.md`. #430은 #449·#450, 백업 구현은 #451, 실제 운영 검증과 스프린트 마감은 #452로 머지됐다. M1의 실제 캡처·Linux 격리 복원·장비 밖 독립 복원·최종 교차 검토와 복구 절차 보존을 통과했고 #431·#432·#426 및 milestone 2를 완료했다.
-- 전체 순서: M1 복구 계약 → M2 정본/보존 이전 → M3 실제 운영 전환 → M4 가족 재산 → M5 증빙/마감/추가 출처.
-- 에픽: M1 #426, M2 #427, M3 #428, M4 #429, M5 #355. 실행 이슈 #430~#448. 첫 작업 #430.
+## 목표와 현재 상태
 
-## 재개 시 확인할 사실
+- 전체 범위는 #425, #426–#429, #355와 #430–#448의 원래 25개 이슈다. 마지막 감사에서 25개를 찾았고 20개가 미완료였다. 부분 구현이나 스프린트 종료를 전체 목표 완료로 취급하지 않는다.
+- M1은 #449–#452로 구현·실제 캡처·Linux 격리 및 장비 밖 복원·운영 검증을 마쳤다. 영구 기록은 `2026-09-ssot-m1-recovery.md`다. 그때 운영 서비스는 0.7.1이었으며, 당시 legacy 복원 증거는 현재 SQLite cutover 증거가 아니다.
+- 활성 스프린트는 `2026-09-ssot-m2-storage.md`다. M2 정본/보존 이전 → M3 실제 운영 전환 → M4 가족 재산 → M5 증빙/마감/추가 출처 순서와 원래 AC를 유지한다.
+- PR #463(`codex/ssot-m2-mutations`, 마지막 확인5083f34)은 필수 GitHub approving review 대기다. 이를 우회하거나 교차 리뷰로 대체하지 않는다. PR #481은 그 branch 위의 stacked draft다.
+- #436/#437 및 #446–#448은 부분 구현 PR의 자동 종료 후 다시 열었다. 실제 전체 AC가 충족될 때만 닫는다.
 
-준비 당시 이 Mac checkout과 원격 main·실제 설치본의 버전이 달랐다. 현재 상태는 매번 다시 확인한다. 사용자 미커밋 변경을 보존하고 최신 main의 별도 `codex/` branch/worktree에서 개발한다. 실행 worktree에 `goals/`와 `backlog/`를 이어받았다. 초기 계약 PR에 함께 보존하며 이후에는 해당 branch/commit에서 이어간다.
+## 현재 작업 공간과 검증
 
-운영 에이전트 프로필이 실제 소비자다. 비공개 운영 inventory와 현재 서비스·CLI 설정으로 대상 호스트와 운영 경로를 확인한다. 원본과 파생 자료, 수동 태그/메모/분류, rules/goals, 별도 분석 도구의 수동 자산 보정, audit/history가 이전 대상이다. 자세한 데이터/호스트 경로·통계는 공개 파일에 옮기지 않는다.
+- 주 writer: `codex/ssot-m2-migrate`, worktree 이름 `finjuice-ssot-migrate`. 정확한 절대 경로는 `git worktree list`로 확인한다. 기본 active checkout을 writer로 가정하지 않는다.
+- 원격에 반영한 checkpoint는 `8a36a95`; main `fbc1682`(#504–#506)를 병합한 `cec0e9d`와 검증 기록을 포함한다. 전체4,447PASS/1SKIP,91.02%, 설치115PASS/494module origins/3runtime SHA, Cursor 독립115PASS/중요P1P2없음. 근거는 `/tmp/finjuice-main506-review/`와 PR #481이다.
+- 기존 정확 계산·실제 작업량 계측을 nm.py로 보존하고 새 main close/evidence 모듈을 유지했다. JSON adapter는 현 append API와 전체 legacy lease를 사용한다. 새 sidecar/CSV 기능만으로 canonical M5 완료를 주장하지 않는다.
+- 앞선 release helper와 migration capsule는 포함됐다. Capsule는 원본 source/candidate 삭제 후에도 보존 증거를 재검증하며 JSON 숫자 타입을 엄격히 비교한다. 상세 정책 replay·소비자·복원 이력은 활성 스프린트에 보존돼 있다.
+- 별도 `finjuice-ssot-recovery-bundle`의 wrapper는 root 회귀 보완 후21PASS다. 기존 설치89PASS는 빈 디렉터리2줄 보완 전 소스에 적용된다. 후속 수정은 관련21개 검사로 검증했으며 전체/설치/리뷰를 반복하지 않았다.
+- 현재 Cursor writer: `codex/ssot-recovery-operator`, worktree `finjuice-ssot-recovery-operator`, base392500c + 최신 wrapper3파일. 캡처/검증/격리복원 CLI, 독립 expected JSON, human/JSON/schema 및 실제 합성 복원후 수정·재백업을 하나의 기능 묶음으로 구현 중이다. 아직 주 branch에 포함되지 않았다.
+- Cursor supervisor는 `/tmp/finjuice-recovery-operator-implementation/run.py`, 원래 PID60927/tool session35410, hard deadline30분이다. 재개 시 실제 프로세스/핸들을 확인한다. 관측 timeout이나 로그 파일만으로 종료를 추정하거나 재시작하지 않는다. 최종 `type=result`와 실행 메타데이터를 회수한 뒤 검토한다.
+- 다른 에이전트 PR #507–#511은 마지막 확인 미머지였다. #510의 schema v2/별도 authority marker는 현재 schema5와 검증된 active.json 체계와 겹친다. main 또는 다른 branch를 덮어쓰지 말고 최신 상태와 필요한 동작을 대조한다. PR #503의 CLI 표면은 이미 안전한 엔진에 맞춰 반영했지만 그 PR 전체를 병합한 것은 아니다.
 
-기존 부분 사본이나 data Git 존재만으로 백업이 유효하다고 가정하지 않는다. 장비 밖 전체 사본·키 복구·실제 restore가 M1 gate다. 호스트/VM 백업과 과거 이미지 원본의 보관 상태는 실행 시 재확인한다.
+## 다음 행동
 
-## 유지할 결정
+1. 위 Cursor 구현 결과를 같은 실행에서 회수한다. 새 파일의 단일 writer를 유지하고 root가 동시에 구현하지 않는다.
+2. 복구 명령 흐름의 실제 기대값/캡처/검증/격리 복원과 오류·영수증·스키마를 집중 검증한 뒤 주 branch에 통합한다. inherited release/capsule 최신 수정을 보존한다.
+3. 기능 묶음 완료 후 동결 소스로 전체/설치본/교차 검증을 수행하고 PR에 결과와 남은 AC를 갱신한다. 운영 전에 기록된 실제 release artifact로 검증해야 한다.
+4. Durable reference retention, private 전수 보존/성능, 실제 배포·cutover·첫 사용, 장비 밖 사본·키 복구·용량·RPO/RTO와 M4/M5 실제 사례는 아직 미완료다. 동작하지 않은 CLI나 운영 증거를 만들지 않는다.
 
-- baseline 이전과 금융 의미 교정을 분리한다. 원본 재수입만으로 수동 축적을 복구하려 하지 않는다.
-- SQLite를 정본으로 전환해도 기존 CLI/JSON/DuckDB 의미를 보존한다. 호환 CSV는 파생 결과다.
-- 정정 이력과 상태 변경은 함께 저장한다. 과거 audit로 복원할 수 없는 이력을 새로 꾸미지 않는다.
-- 소비자 전환은 먼저 격리 환경에서 준비한다. 운영 CSV writer의 실제 차단은 #440 cutover에서 한다.
-- 새 기록이 생긴 뒤 과거 백업을 덮어쓰는 rollback은 허용하지 않는다.
-- 다른 OS에서 archive를 해제할 때 파일명의 Unicode 표현과 나노초 수정 시각도 검증한다. macOS 기본 tar의 실제 파일명 표현 차이를 확인했으며, manifest를 변경하는 대신 검증된 PAX 해제 절차로 원래 표현을 보존했다.
-- 장비 밖 복원은 최신 검토 도구를 포함한 절차 사본과 초기 기준선을 함께 내려받아 수행한다. 전체 조회는 status 총 건수에, manifest는 독립 원본 목록에 대조한다. 초기 기준선과 모든 대응 절차 사본은 영구 보호하며 원래 사본의 옛 도구를 최신 도구로 덮어쓰지 않는다.
-- M1 종료 시 운영 서비스는 0.7.1이다. SQLite 전환은 아직 하지 않았다. 후속 캡처는 최신 검토 도구 해시를 고정한 새 계획을 만들고, 실제 이전 검증과 cutover에서는 새 동결 기준선을 취득한다.
-- 운영 이슈 #432·#440·#441 등은 PR 머지만으로 닫지 않는다. 첫 실제 실행/사용/복원 증거가 필요하다.
-- #355의 과거 본문은 보관된 제안이다. 현재 상단 AC와 하위 #446~#448이 실행 범위다.
-- #423과 수정 파일이 겹치는지 구현 전 확인한다. #51의 dependency major bump는 자동 선행 조건이 아니다.
+## 계속 지킬 결정
 
-## 기록 경계
-
-공개 가능한 issue/PR·worktree·검사 요약·다음 행동은 활성 스프린트에 남긴다. 실제 금융 데이터·비밀·상세 운영 경로·검증 원본은 repo 밖 비공개 기록에 둔다. 각 스프린트를 마친 뒤 그 실행 기록을 보존하고 다음 마일스톤 스프린트로 이어간다.
-
-- 최신 통합 checkpoint: `c1a3c94`는 main `309c42b`의 0.8.3 변경을 보존한다. 전체3,367 PASS·1 SKIP, coverage89.56%, 정적 검사 및 별도 설치본의 새 후보/과거 세 정책 후보 재생을 통과했다. 기존 세 policy의 schema4 고정과 정확한 reader/builder/검증/registry 경계를 구현했다. 전체3,380 PASS·1 SKIP89.57%, 실제옛후보와별도설치본재생, Opus5high의근거있는P1/P2없음을확인했다. 다음 구현은 v4내용을 보존하면서 v5reported 값 테이블·새정책과 capture참조판정을 추가하는 것이다.
-
-- 2026-09-13 후속: schema5의 다섯 legacy reported 테이블과 capture-wide 참조 판정, 새 기본 policy `legacy_preservation.overview_reports.v4`를 구현했다. 기존 v1/v2/v3는 schema4 그대로 재생한다. 최종 전체3,434 PASS·1 SKIP89.62%, 새 설치본의 실제 과거4후보 불변 재생 및 별도 v4→v5 upgrade를 확인했다. Opus 최초 리뷰의 malformed-row 전제는 실제 build regression으로 대조했고 후보 제외 경로의 JSON 해석을 줄였다. 실제 capture peak-memory/성능, #436 소비자 parity, #435 전수 보존 및 운영 전환은 남아 있다. 리뷰 최종 판단과 commit은 활성 스프린트/PR #481에 기록한다.
-
-- #436 첫 읽기 연결 진행: transaction_snapshot은 저장된 거래·수동/최종값·exact 수치와 같은 revision의 canonical rules를 고정한다. authority facade→Arrow/DuckDB→query에 연결해 활성 상태에서 CSV fallback을 금지했다. 메모만 수정할 때 보존 중복/공백 태그를 canonical parser가 거부하던 공백을 실제 migration으로 재현하고 source-backed legacy 수동 편집에 한정해 보완했다. 생산 코드 동결 후 최종 통합 검사/교차 리뷰를 수행하며 결과는 활성 스프린트에 기록한다. #436 전체 소비자·export·stale 결과와 실자료 검증은 미완료다.
-
-- #436 후속 구현 순서(읽기 조사 결과, 아직 구현 아님): template_cmd/execution.py의 DuckDB/evidence·pinned filters·metadata → show_cmd.py의 CSV 존재/glob 이전 snapshot 분기와 태그 JSON decode → explain.py의 검색/규칙을 같은 snapshot에 고정하고 UUID와 legacy alias 분리 → export/result.py·result_outputs.py·result_helpers.py·master.py의 전체/필터 frame을 한 context로 전달 → status와 overview/assets 다중 도메인 snapshot. Export의 source_df가 None이면 CSV를 재조회하는 경로, master/dry-run 독립 CSV 로딩, status의 CSV partition/schema/import-history 진단을 함께 제거해야 한다. metadata만으로 stale 검증을 주장하지 않는다.
-
-- 최종 읽기 checkpoint: 전체3,467PASS1SKIP89.66%, 최종 wheel8시나리오/9모듈SHA/과거4후보replay·upgrade, Grok P2 status수정 재검토 통과. 단 추가 설치본 probe에서 보존 중복 tags_final이 bulk recompute_tags의 strict parser에서 거부됨을 실제 재현했다. **다음은 bulk legacy 배열 경계를 먼저 보완**, 이후 위 소비자 연결 순서로 진행한다. note-only fix를 bulk 완료로 보지 않는다.
-
-- bulk/template 후속: source-backed legacy bulk input·stored-derived·stale-before 경계에서 중복/blank 배열을 보존하고 새 after 값 검증은 유지했다. 실제 migration의 tag/transfer preview/apply/audit/no-op/replay를 검증했다. template run 일반 SQL/pivot도 동일 transaction snapshot의 canonical rules/status·revision metadata를 사용한다. 전체3,478PASS1SKIP89.68%, 별도 설치본 신규11시나리오 및405개모듈 설치경로 검증을 통과했다. 교차 리뷰/commit 결과는 활성 스프린트를 따른다.
-- 다음 show 연결 조사: 거래 scope는 row_hash가 아닌 transaction_id와 transaction provenance의 source_coordinate_json(root/path/row)로 결정한다. 기존 data-root transactions/YYYY/MM/transactions.csv의 월은 date_raw와 달라도 보존한다. 빈 partition도 latest/count에 영향을 주므로 file-level provenance inventory가 필요하다. Native exact import에는 CSV scope가 없어 effective_at 기반 가상 월/unknown 전체조회 및 보조 capture root 포함 규칙을 명시한 read policy가 필요하다. snapshot 내부 sidecar로 선택 후 frame을 만들며 원문 date를 고치지 않는다. 아직 구현하지 않았다.
-
-- show 구현 후속: 같은 snapshot의 scopes/partition_months로 primary 원래 path월과 빈월을 보존한다. Native effective_at 유효ISO달은 시간대변환없이사용하고unknown은all-scope검색포함. 원래CSV row ordinal을source_row로보존해 equal-datetime pagination에서 monthly/all의기존정렬단계를재현한다. 디스크CSV/rules는활성조회에영향없음. 최종검사/커밋은활성스프린트기록확인.
-- 다음 explain 조사: 실행당 analytics하나를열어 snapshot rules/status와검색을고정. 기존 explain은report filters를적용하지않으므로queryfilterhelper를그대로사용하지않고 --no-filter도invalid tagging rules우회를허용하지않는다. #497의최대10검색/5후보/--pick표시범위/JSON첫행/human선택취소를유지한다. Native row_hash=None과별도transaction_id, matcher용전체필드+exact금액, 저장된수동/final과규칙simulation구분이필요. no-rules/no-match/success metadata를모두같은revision에연결한다. _search_transactions는기존wrapper유지+열린analyticshelper분리, _load_explain_rules는same-snapshot bytes로연결하는최소구조가유력하다.
-
-- 최신 #436 진행: explain은45460db로push했다. 이어 export의single-snapshot full/report분리,재생성transactions.csv, 실행별artifactmanifest/digest/stale검증과export-verify명령을구현중이다. 위초기기록의activeexport불가상태는현재branch에서해소했지만운영cutover는아직없다. 최종검증·review·commit근거는활성스프린트와PR481을따른다. 다음은status의정본facts와legacyCSV진단분리,이후overview/assets소비자연결이다.
-- export는4badf09커밋/push완료. 이어status기본/detailed single-reader연결을작업중이며저장snapshot·기존import_history증거·nativeidentity·diagnostic/rendering·goalsbytes순수계산을구현했다. 현재검증/리뷰상태는활성스프린트최신기록을따른다. 운영전환/전체#436완료아님.
-- 다음 portfolio 전제:현migration configs.py는rules/goals만head선택하며assets/scenarios는revision만보존한다. 읽기연결전에명시선택정책/구버전immutable replay를해결해야하며,head없음을수동자산없음으로해석하거나live YAML fallback금지.
-
-- status checkpoint검증완료: full3575PASS1SKIP89.99%(최종goals경고표시수정전), 수정후관련64PASS+설치본39PASS/446모듈/12SHA검증. Cursor최초P2를수정하고후속실제2테스트+재리뷰해소확인. commit/push와최신PR481근거는활성스프린트/원격head에서확인. 다음은assets/scenarios canonicalhead선택정책을먼저해결한뒤portfolio조회연결.
-
-- portfolio 선행 선택정책 구현: 새 기본 `legacy_preservation.portfolio_configs.v5`는 primary `assets.yaml`/`scenarios.yaml` head를 invalid 상태까지 선택하며 다른경로fallback은 없다. v4 manual/overview 의미와 기존v1–v4계획의불변재생유지. 전체3583PASS1SKIP89.99%, 새설치본30PASS 및 옛설치본실제4후보의새런타임/설치본재생통과. 검토/commit의최종근거는활성스프린트를따른다. 다음은portfolio snapshot 및소비자연결이며oldpolicy의missinghead를빈수동자산으로간주하지않는다. 최신main은이미통합됐지만기반PR463충돌4파일과필수승인은아직남아있다.
-
-- 최신 기반은 PR463의 main0.8.3 통합 `2070d97`이다. 전체3197/설치85 및 CI10성공·2skip을 확인했고 MERGEABLE이며 필수 비작성자 승인만 남았다. Auto-merge 기능은 비활성이다. Migrate는 `e9df2e4`로 기반을 통합했다(생산/test 추가 diff0).
-- Portfolio 저장 DTO와 authority facade는 전체3594 PASS·1 SKIP(90.02%), 후속12개 및 최종 설치38개를 검증했고 Claude 교차 리뷰에 P1/P2가 없다. 설정 미선택·구schema 지원 차이, 원본/provenance, exact 수치와 소유·관계 증거를 보존한다. 최종 commit은 스프린트/원격 head를 확인한다. 다음은 DTO에서 기존 표시 frame과 월/as-of 선택을 구성해 assets/networth/history/forecast/checkup에 연결하는 것이다. Schema5 테이블 지원을 보고 변환 완료로 간주하지 않으며 미변환·격리 증거를 없던 자료로 취급하지 않는다. 상세 지도는 `/tmp/finjuice-overview-assets-read-map.md`다.
-
-- Portfolio consumers checkpoint: assets status/show/balance 및 networth overview/breakdown 연결. 전체3632 PASS·1 SKIP90.22%, 설치46 PASS/439 origins/8 sourceSHA, 정적·보안gate통과. Cursor consumer814.78s/security320.30s 두 리뷰 P1/P2없음; security의 비동작 confidence1건만 raw scanner와맞춤. 명시 absent+빈 revision만 빈수동설정, unselected/invalid/미변환primary보고는실패. 최종commit/PR은원격head·스프린트확인. 다음 history→scenarios bytes/forecast→same-reader status+portfolio/checkup.
-- 검증 비용 운영: 작은 수정은 --no-cov focused, 소스동결 checkpoint에서 full+coverage/installed, 결과기준tree와후속delta기록. 다음 예정full에 --durations=20. 주석/fixture/근거만변경시동일전체검사·전체리뷰반복하지않음. 현재passing full은재시작하지않았다.
-
-- History/forecast 연결 checkpoint: 단일portfolio revision으로 history월순서/빈월/currentmanual/balance제외와 forecast balance/asof/lifecycle/config전수검증 유지. 소스/설치 SHA7일치, 설치68PASS/421origins, 정적gate통과. 전체실행3658PASS1FAIL1SKIP90.40%362.16s의유일실패는새공개bytes API2개가빠진기대목록; 테스트만수정후소스12PASS+설치2PASS, 실행코드변경없이전체반복안함. 최종tree의whole-suite완전통과라고주장하지않으며다음예정frozen checkpoint에서gate유지. Cursor567.38s P1/P2없음/후속구조8PASS. 최장v5재생7.83s; 인덱스/coverage원인미확정. 다음은checkup same-reader status+portfolio+import preview identity/completedmanifest DTO 및collector연결, 상세지도 /tmp/finjuice-checkup-import-preview-map.md.
-
-- 2026-09-14 context checkpoint: main56d6692(PR501 backup기반)을 merge7344d6c로 통합해 authority/backup exports를 보존했다. context는 한 정본 revision으로 실제 목표 요약·상태·규칙 메모·지출 패턴을 구성하고 과거 journal provenance를 분리한다. 기존 rules import cycle과 DuckDB 미설치 coldCLI 차단을 최소 수정했다. 최종전체4184PASS1SKIP90.94%,설치166PASS475origins,Cursor후속P1/P2없음. 상세 근거는 활성 스프린트와 PR481. #437은 전체AC미완료로 재개했고, 늦은게시/shortwrite/fsync/status검증 결함의 합성 재현을 issuecomment5655624521에 남겼다. 다음index초안은 /tmp/finjuice-index-repository-draft.py·integration.md이며 아직writer미적용. PR463필수승인,private전체호환/성능,운영전환·복원과M3–M5는 계속 미완료다.
-
-- 2026-09-14 index checkpoint: 정본5collection은 한checkuprevision으로 logicalcount를 내며 금융float변환 없이 기존scope를 보존한다. unknown/null과disabledrules·설정signals 의미, compactprovenance, 외부files/runtime관측분리를 구현했다. 전체4206PASS1SKIP91.00%,설치165PASS496origins,Cursor213focused/P1P2없음. 다음 실제누락은openmaster/reports의정본export탐색(/tmp/finjuice-artifact-discovery-next-design.md). #437안전게시설계(/tmp/finjuice-backup-publication-next-design.md)는immutableattempt+currentpointer+공유검증을제안한읽기자료이고코드미적용이며CLI/provider정책은root결정사항이다. 운영/privateacceptance와PR463필수승인은남아있다.
-
-- 2026-09-14 open checkpoint: master/reports는한provider snapshot과현재정본receipt로실제run파일을선택하고열기직전재검증한다. legacyfallback/손상receipt/미신고파일/FIFO거부,관측mtime선택한계명시. 최종전체4236PASS1SKIP91.01%,설치69PASS459origins/3SHA,Cursor54focused/P1P2없음. 별도PR463mainrefresh5083f34는authority+backupunion과fixtureAPI적응을보존했고전체3213PASS1SKIP89.10%,설치221PASS411origins/8SHA,CursorP1P2없음. push/stackancestry최종상태는원격head와활성스프린트를확인한다. 다음437batch1지도 /tmp/finjuice-backup-publication-batch1-map.md;코드미적용/CLI정책미변경. requiredapproval/private전체수용/운영전환/M3–M5는미완료다.
-
-- 2026-09-14 #437 publication checkpoint: immutable attempts/current pointer, strict manifest/payload verification, write-all/fsync error propagation and owned staging cleanup implemented. Full4288PASS1SKIP90.88%, installed137PASS459origins/4SHA, source60+legacy77PASS, static/security/package gates pass. Cursor Grok4.6high review completed with no groundedP1/P2 and60focusedPASS; all9frozenhashes unchanged. Final commit is recorded in active sprint and PR481. Main56d6692 already included; PR463 remains MERGEABLE/REVIEW_REQUIRED. Config raw/history already reside in snapshot DB+objects; next work must bind external release/activation/dependencies and actual reference retention, then introduce an explicit inactive restore mutation context without faking activation. No operating/private acceptance claimed; #437 and M2–M5 remain incomplete.
-
-- 2026-09-14 inactive restore checkpoint: explicit receipt-bound workspace/session and shared typed mutation engine implemented without fake activation. Synthetic manual correction→read→replay→rebackup→second restore, audit/rollback/stale/retirement/concurrency and source/activation/backup byte+inode preservation pass. Source-object reuse now retries directory fsync before success; actual prior disk error retained object, so old unlink branch was not a confirmed real deletion race. Config head/history/exact object closure4tests pass. Full4309PASS1SKIP90.91%, installed227PASS462origins/5SHA, Cursor559.68s noP1P2/42focusedPASS, all9frozenhashes unchanged; static/security/package gates pass. Final commit/PR481 in active sprint/remote. Next external recovery wrapper must bind independently verified activation, exact release and dependency evidence (approved build/source-commit digest relation; cryptographic signing is not a new mandatory AC), and preserve actual reference retention. Plan /tmp/finjuice-recovery-bundle-implementation-plan.md. RequiredPR463approval, fullprivate/operating/M3–M5 remain incomplete; no production data accessed.
-
-
-- 2026-09-14 main PR502 integration: main258c66b's detached source_frame constructor/normalization support is preserved while query/explain keep verified authority and pinned revision. Source/installed93PASS (459 origins,3SHA); full4320PASS1SKIP90.91%; Cursor472.79s noP1P2/93focusedPASS; five frozen hashes unchanged, static/security/package gates pass. Includes inactive restore f96df79. #436 reopened after partial auto-closure. PR4635083f34 remains required-review pending. PR503e4f3670 is still unmerged; separate codex/ssot-backup-cli-integration adapts its surface to safe backup/inactive engines, including complete human receipt retention and active-path/config guards. This checkpoint does not include that unfinished CLI work. Full release/activation/retention/private/operating/M3–M5 remain incomplete. Final commit and remote publication are recorded in PR481 and active sprint.
-
-
-- 2026-09-14 backup CLI checkpoint: ssot backup create/status use current immutable snapshot/verifier; restore creates actual inactive workspace and emits the complete caller-retained receipt in both human/JSON modes. Strict active-path/config guards and parsed-subtree routing protect the new commands while preserving legacy backup/migrate. Root added real command schema catalog cases after the missing three entries failed. Frozen14files: full4345PASS1SKIP90.91%, source/installed207PASS484origins/6SHA, Cursor615.14s noP1P2/207PASS; static/security/package gates pass. Final commit/remote publication in PR481. Main258c66b still latest; PR503unmerged, PR463requiredapproval remains. Next separate codex/ssot-recovery-release-evidence worktree has frozen3files/39focusedPASS for trusted raw binding SHA + wheel/lock evidence, no full/review/commit yet; do not treat as integrated. Full bundle/retention/private/operating/M3–M5 and20of25 scope issues remain incomplete.
-
-
-- 2026-09-14 release evidence checkpoint: 독립 raw binding trust + wheel/lock retained bytes 검증 구현. Cursor Unicode ZIP alias P2를7실패로재현하고 수정; 최종full4395PASS1SKIP90.93%, source/installed50PASS86origins/1SHA, 후속Cursor524.72s P1P2없음. 실제f492wheel+lock 검증은별도합성trust등록이며 운영activation아님. 최종commit/원격은active sprint와PR481참조. Capsule별도worktree18PASS/root18PASS, Cursor리뷰중(/tmp/finjuice-recovery-capsule-review). 다음wrapper는codex/ssot-recovery-bundle에서Cursor구현중(/tmp/finjuice-recovery-bundle-implementation), inherited6files고정. main258c66b변경없음/PR503OPEN/PR463requiredreview대기. fullbundle/실제retention/private/offdevice/운영/M3–M5는미완료.
-
-
-- 2026-09-14 capsule 진행: migrate HEAD b4916e9에 새 capsule 3개 파일이 미커밋 상태다. 최초 Cursor18PASS/P1P2없음 이후 root가 float count/size 허용을2FAIL로 재현하고 canonical JSON 타입 비교로 수정했다. 소스/설치본70PASS,465origins,2SHA일치. 전체검사 session62830 및 후속리뷰41425 진행 중이며 상세 근거는 active sprint와 /tmp/finjuice-recovery-capsule-review/revision/에 있다. Wrapper는 별도worktree의 Cursor supervisor PID49780에서 구현 중이다. 이전toolhandle23005는unknown이지만 실제프로세스가live임을 확인했으므로 재시작하지 않았다. Wrapper에 전달된 inherited capsule는 옛버전이므로 root수정을 보존해 통합해야 한다. PR463requiredreview/PR503OPEN/main258c66b이며 original25중20개미완료다.
-
-- Capsule 최종전체4415PASS1SKIP90.96%778.72s와후속Cursor20PASS/P1P2없음확인, 소스/설치70PASS465origins2SHA로커밋진행. 새main fbc1682(#504–506)가발견됐으므로이full을새main통합검증으로표시하지않는다. Wrapper초안은Cursor13PASS로완료됐고root4실패재현/수정후별도worktree87focused진행중. 다음newmain정확금액/정본보존통합및wrapper검증을계속한다.
-
-- 2026-09-14 효율 지시 적용: 기능/AC 묶음별 구현·동결 후 통합 checkpoint에서 전체/설치본/교차 검증한다. 작은 후속 수정은 관련 회귀로 검증하고 기존 전체 결과의 적용 소스를 구분한다. main fbc1682 통합 검증 진행 및 #446–#448 재개방, PR #507–#511 중복 설계 주의 사항은 활성 스프린트 최신 항목을 따른다.
-
-- main #504–#506 통합 cec0e9d를 주 작업 branch에 반영했다. 최종 전체4,447PASS/1SKIP91.02%, 설치115PASS와교차리뷰통과. 복구operator는 별도Cursor작업이며 이검증에미포함. 다음은원격PR반영후복구명령기능묶음의집중검증을통합한다.
+- 이전은 기존 의미 보존이고 계좌 병합·소유자 추정·재분류는 근거 있는 별도 changeset이다. 원본/수동 태그·메모·분류 override·규칙·목표·외부 보정·참조·audit/history를 보존한다.
+- 전환 전 legacy, 전환 후 SQLite 하나만 정본이다. CSV 실시간 이중 쓰기나 활성 조회의 live YAML/CSV fallback을 두지 않는다. 기존 policy 후보는 원래 schema와 해석으로 재생한다.
+- 실제 cutover 전에 writer 통제 아래 새 기준선을 취득한다. 장비 밖 전체 사본과 독립 키 복구·격리 restore를 먼저 확인한다. 새 기록 후에는 옛 백업 덮어쓰기로 rollback하지 않는다.
+- macOS/Linux 복원에서 Unicode 파일명 표현과 나노초 수정 시각을 보존한다. 검증된 PAX 절차와 독립 manifest를 사용하며 옛 기준선/복구 절차 사본을 덮어쓰지 않는다.
+- 운영 에이전트 프로필은 실제 소비자다. 대상 호스트·경로·키는 비공개 inventory/현재 runtime으로 확인하고 공개 repo/Issue/PR/CI에 금융값·계좌·소유자·비밀·상세 운영 경로를 남기지 않는다.
+- 사용자 목표 계약은 범위 내 구조·CLI/schema·의존성·커밋·PR·머지·배포·검증된 이전/백업/복원을 승인한다. Cursor --trust 승인도 유지된다. 플랫폼 필수 승인은 별도이며 새 금융 거래·범위 밖 원본 삭제·유료 계약은 포함되지 않는다.
+- 사용자 효율 지시: 작은 helper마다 full pytest·wheel 설치·장시간 리뷰를 반복하지 않는다. 기능/AC 묶음 구현·자체검토 후 checkpoint에서 검증한다. 작은 후속 수정은 실패 재현+관련 회귀로 확인하고 이전 전체 결과의 적용 소스를 구분한다. 변경 없는 로그·refs·quota 재조회와 상세 이력 중복을 줄인다.
+- quota는 dispatch·통합·publish 같은 결정 시점에 확인한다. unknown은 소진이 아니며 다른 계정/창의 잔여율을 혼합하지 않는다. credit reset/결제는 승인되지 않았다.
