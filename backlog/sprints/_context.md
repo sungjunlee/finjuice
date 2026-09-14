@@ -16,16 +16,16 @@ GitHub Issues가 명세·AC·상태의 정본이다. 실행 권한과 완료 조
 - 원격에 반영한 checkpoint는 `8a36a95`; main `fbc1682`(#504–#506)를 병합한 `cec0e9d`와 검증 기록을 포함한다. 전체4,447PASS/1SKIP,91.02%, 설치115PASS/494module origins/3runtime SHA, Cursor 독립115PASS/중요P1P2없음. 근거는 `/tmp/finjuice-main506-review/`와 PR #481이다.
 - 기존 정확 계산·실제 작업량 계측을 nm.py로 보존하고 새 main close/evidence 모듈을 유지했다. JSON adapter는 현 append API와 전체 legacy lease를 사용한다. 새 sidecar/CSV 기능만으로 canonical M5 완료를 주장하지 않는다.
 - 앞선 release helper와 migration capsule는 포함됐다. Capsule는 원본 source/candidate 삭제 후에도 보존 증거를 재검증하며 JSON 숫자 타입을 엄격히 비교한다. 상세 정책 replay·소비자·복원 이력은 활성 스프린트에 보존돼 있다.
-- 별도 `finjuice-ssot-recovery-bundle`의 wrapper는 root 회귀 보완 후21PASS다. 기존 설치89PASS는 빈 디렉터리2줄 보완 전 소스에 적용된다. 후속 수정은 관련21개 검사로 검증했으며 전체/설치/리뷰를 반복하지 않았다.
-- 현재 Cursor writer: `codex/ssot-recovery-operator`, worktree `finjuice-ssot-recovery-operator`, base392500c + 최신 wrapper3파일. 캡처/검증/격리복원 CLI, 독립 expected JSON, human/JSON/schema 및 실제 합성 복원후 수정·재백업을 하나의 기능 묶음으로 구현 중이다. 아직 주 branch에 포함되지 않았다.
-- Cursor supervisor는 `/tmp/finjuice-recovery-operator-implementation/run.py`, 원래 PID60927/tool session35410, hard deadline30분이다. 재개 시 실제 프로세스/핸들을 확인한다. 관측 timeout이나 로그 파일만으로 종료를 추정하거나 재시작하지 않는다. 최종 `type=result`와 실행 메타데이터를 회수한 뒤 검토한다.
+- 현재 기능 소스 커밋은 `49add1b`다. 최신 recovery bundle와 capture/verify/restore CLI·독립 expected 입력·스키마를 함께 통합했다. Cursor 구현을 GPT 검토해 검증→복원 identity 누락3건을 재현하고 manifest digest/gen/schema/revision 연결로 수정했다. 원래 Cursor supervisor는 1008.67초/exit0로 종료됐으므로 다시 시작하지 않는다.
+- 관련52개+catalog12개 및 정적검사/commit hooks 통과. 동결 커밋 전체pytest는4,486PASS/1SKIP91.04%,799.06초/exit0로 종료했다. `/tmp/finjuice-recovery-operator-checkpoint/full.log`의 최종 결과이며 재시작하지 않는다.
+- 49add1b 실제wheel 설치265PASS(493개module origin), runtime/schema8개SHA일치. 실제wheel/lock을 담은 합성enrollment bundle의 원본제거→격리복원revision1→party수정→재백업→2차복원revision2도 통과(472개module origin). WheelSHA는6a38c3070253ed00a5cdda6844a741f164731ae7edd48d46c7c545e5fbc4ead8. 이는 운영trust/offdevice/cutover 증거가 아니다. 근거는 위 checkpoint 디렉터리다.
 - 다른 에이전트 PR #507–#511은 마지막 확인 미머지였다. #510의 schema v2/별도 authority marker는 현재 schema5와 검증된 active.json 체계와 겹친다. main 또는 다른 branch를 덮어쓰지 말고 최신 상태와 필요한 동작을 대조한다. PR #503의 CLI 표면은 이미 안전한 엔진에 맞춰 반영했지만 그 PR 전체를 병합한 것은 아니다.
 
 ## 다음 행동
 
-1. 위 Cursor 구현 결과를 같은 실행에서 회수한다. 새 파일의 단일 writer를 유지하고 root가 동시에 구현하지 않는다.
-2. 복구 명령 흐름의 실제 기대값/캡처/검증/격리 복원과 오류·영수증·스키마를 집중 검증한 뒤 주 branch에 통합한다. inherited release/capsule 최신 수정을 보존한다.
-3. 기능 묶음 완료 후 동결 소스로 전체/설치본/교차 검증을 수행하고 PR에 결과와 남은 AC를 갱신한다. 운영 전에 기록된 실제 release artifact로 검증해야 한다.
+1. 별도 기반 PR463 갱신을 회수한다: codex/ssot-base-main506, HEAD5083f34 + MERGE_HEADfbc1682, Cursor supervisor /tmp/finjuice-base-main506-integration/run.py/session83149. 기존 검증 adapter2파일 재사용과 새 main 회귀를 검사하며 아직 커밋 전이다. 실제 핸들/프로세스를 확인하고 관측 timeout으로 재시작하지 않는다.
+2. 복구 기능49add1b의 전체/설치/실제wheel복원 및 GPT 교차검토는 완료됐다. 새 근거 없이 반복하지 않는다. 기반 PR463는 최신main보다뒤처져갱신중이며GitHub필수승인1건이여전히필요하다.
+3. 다음 retention/운영 연결은 PR507 작성 세션이 미확인이다. 네 제안 파일을 덮어쓰지 않는다. 읽기전용 연결점 지도는 `/tmp/finjuice-recovery-operator-checkpoint/pr507-bridge-map.md`; 실제graph/독립key/운영증거와 순수정책·상태계산을 구분한다.
 4. Durable reference retention, private 전수 보존/성능, 실제 배포·cutover·첫 사용, 장비 밖 사본·키 복구·용량·RPO/RTO와 M4/M5 실제 사례는 아직 미완료다. 동작하지 않은 CLI나 운영 증거를 만들지 않는다.
 
 ## 계속 지킬 결정
