@@ -611,3 +611,10 @@ Claude Opus5high 교차 리뷰는 exit0/577.7s, 근거 있는 P1/P2 없음이다
 
 - Delivery Cursor 실행은2701.26초/dispatch_timeout/exit143으로terminal(PID84037/84038없음,session61612회수). 첫집중suite는7FAIL4PASS185.75초/exit1로종료했고완전로그 /tmp/finjuice-backup-delivery/cursor-focused-first.log,최종13파일SHA와원본사본cursor-final-source보존. 실패는주로receiver verification이며운영수용불가다. timeout은quota소진이나관측timeout으로해석하지않고동일산출물맹목재시작없음. native pr512_integration_map에게동일worktree solewriter를직렬이양하여실제receiver실패·postcommit CLI연결·pending건수및카탈로그/집중회귀를완성한다. root가확인한최종Cursor소스는receipt SELECT첫열changeset_id로초안pagination을수정했으므로이미수정된내용을재수정하지않고256초과실제회귀를확인한다.
 - 후속quota12:20KST: Cursor Ultra web/dataConfidenceunknown 월primary44.3026%used55.6974%잔여/secondary35.0167%used64.9833%잔여/tertiary100%used0%,reset09-17 00:44:24KST/primary·secondary reset까지유지;5h/주간unknown,USD20.54used20limit. Codex Pro12:20:17KST oauth/exact 주간74%used26%잔여/reset09-19 17:10:30KST/ETA15시간10분으로reset전소진,5h/월간unknown/credits0. native한정완성후기능동결점에서full/build/install1회원칙유지.
+
+## 2026-09-14 완료 checkpoint: delivery + 계좌 연결
+
+- Delivery 기능 `d000183`를 통합한 `c6b509b`: full4609PASS/1SKIP,90.63%,1827.06초/exit0. Ruff/mypy572/build/package PASS. 실제 설치 CLI3 및 same-revision257→송수신coverage→sender 제거→수신본복원/교정/재백업 PASS. 이는 로컬 합성 증거이며 운영/장비 밖 검증은 남는다.
+- 기반 #463은 main75e를7708df2로 병합해 behind를 해소했다. 필수리뷰는 남고 auto-merge는 저장소에서 금지됐다. #481의 기반동기화bacf7bd는 검증소스c6b509b와 동일tree이며 #481은 ready for review다.
+- 계좌 source binding/schema6/as-of ownership 구현15e98a6, 동기화8c046e9: 관련 회귀 및 설치 핵심8PASS/7.05초,505origins,686package bytes, Ruff/mypy576/build PASS. Grok 교차리뷰 회수 후 별도 stacked PR에 결과를 확정한다. 다음 계좌영향preview/ownership확정 CLI는 별도account-decisions tree에서 작성 중이다.
+- 사용자의 속도 지시에 따라 이번 완료 full은 반복하지 않으며 다음 변경은 관련 회귀로 진행한다. 최신 재개점과 실제 남은 범위는 _context.md를 따른다.
