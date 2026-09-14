@@ -21,7 +21,7 @@ from finjuice.pipeline.storage.authority import (
     StaticActivationEvidenceProvider,
 )
 from finjuice.pipeline.storage.read_facade import read_transaction_snapshot
-from finjuice.pipeline.storage.sqlite import RepositoryReader
+from finjuice.pipeline.storage.sqlite import GenerationPaths, RepositoryReader, upgrade_repository
 from finjuice.pipeline.storage.sqlite.errors import AuthorityEvidenceUnavailableError
 from tests.cli.commands.test_repository_mutation_fences import (
     _ActiveRoot,
@@ -101,6 +101,10 @@ def query_root(tmp_path: Path) -> QueryRoot:
     create_backup(CreateRequest(legacy, capture, ConsistencyEvidence("stopped_writers", ("test",))))
     plan_migration(capture, output=plan, active_data_dir=legacy)
     build_migration(plan, candidate, active_data_dir=legacy)
+    # M1 preserves its pinned schema; activation explicitly upgrades a clone.
+    upgraded = GenerationPaths(tmp_path / "upgraded")
+    upgrade_repository(candidate / "finjuice.sqlite3", upgraded)
+    candidate = upgraded.root
     with RepositoryReader(candidate / "finjuice.sqlite3") as reader:
         info = reader.info
     root = tmp_path / "active"

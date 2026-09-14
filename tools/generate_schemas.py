@@ -2260,6 +2260,38 @@ SCHEMAS: dict[str, JsonSchema] = {
         {"allocation_id": string, "withdrawal_id": string, "status": string, "replayed": boolean},
         ["allocation_id", "withdrawal_id", "status", "replayed"],
     ),
+    "ssot_close_run.schema.json": command_schema(
+        "ssot_close_run.schema.json",
+        "ssot close run output",
+        {
+            "close": object_any,
+            "close_id": string,
+            "report_digest": string,
+            "diff": array_of(object_any),
+            "reclosed": boolean,
+            "committed_revision": integer,
+            "replayed": boolean,
+        },
+        ["close", "close_id", "report_digest", "diff", "reclosed", "replayed"],
+    ),
+    "ssot_close_reopen.schema.json": command_schema(
+        "ssot_close_reopen.schema.json",
+        "ssot close reopen output",
+        {
+            "close_id": string,
+            "period": string,
+            "close_revision": integer,
+            "committed_revision": integer,
+            "replayed": boolean,
+        },
+        ["close_id", "period", "close_revision", "replayed"],
+    ),
+    "ssot_close_history.schema.json": command_schema(
+        "ssot_close_history.schema.json",
+        "ssot close history output",
+        {"revisions": array_of(object_any), "periods": object_any},
+        ["revisions", "periods"],
+    ),
     "ssot_intake_list.schema.json": command_schema(
         "ssot_intake_list.schema.json",
         "ssot intake list output",

@@ -40,7 +40,7 @@ CoverageStatus = Literal[
     "unknown",
     "transfer_failed",
 ]
-FactKind = Literal["receipt", "changeset", "entry", "audit", "asset_meaning", "reconcile"]
+FactKind = Literal["receipt", "changeset", "entry", "audit", "asset_meaning", "reconcile", "close"]
 
 
 @dataclass(frozen=True)
@@ -240,6 +240,18 @@ def _load_facts(connection: sqlite3.Connection) -> tuple[CommittedFact, ...]:
                         {"table": table, **{key: content[key] for key in keys}},
                         content,
                     )
+                )
+    if connection.execute("PRAGMA user_version").fetchone()[0] >= 9:
+        from finjuice.pipeline.storage.sqlite.schema_v9 import TABLE_KEYS as CLOSE_TABLE_KEYS
+
+        for table, keys in CLOSE_TABLE_KEYS.items():
+            cursor = connection.execute(f"SELECT * FROM {table} ORDER BY {', '.join(keys)}")
+            names = [column[0] for column in cursor.description]
+            for row in cursor:
+                content = dict(zip(names, row, strict=True))
+                content["changeset_id"] = content["created_changeset_id"]
+                facts.append(
+                    _fact("close", {"table": table, **{key: content[key] for key in keys}}, content)
                 )
     receipt_changes = set()
     for row in receipts:

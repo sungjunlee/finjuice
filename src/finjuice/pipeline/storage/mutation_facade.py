@@ -57,6 +57,7 @@ from finjuice.pipeline.storage.sqlite.records import (
 from finjuice.pipeline.storage.sqlite.schema import inspect_repository
 
 if TYPE_CHECKING:
+    from finjuice.pipeline.close.canonical import CloseCommand, ReopenCommand
     from finjuice.pipeline.reconcile.canonical import (
         AllocationConfirmation,
         AllocationWithdrawal,
@@ -314,6 +315,41 @@ class StorageMutationFacade:
             _RequestSpec("reconcile.allocation.withdraw", asdict(command), identity, "cli", None),
             lambda context: MutationOutcome(context.withdraw_reconcile(command)),
         )
+
+    def close_period(self, command: CloseCommand, *, identity: MutationIdentity) -> MutationReceipt:
+        """Publish one immutable canonical close revision through the audited transaction."""
+        from dataclasses import asdict
+
+        return self._execute(
+            _RequestSpec("close.period.close", asdict(command), identity, "cli", command.reason),
+            lambda context: MutationOutcome(context.close_period(command)),
+        )
+
+    def reopen_period(
+        self, command: ReopenCommand, *, identity: MutationIdentity
+    ) -> MutationReceipt:
+        """Append an explicit reopen decision that never rewrites a stored close revision."""
+        from dataclasses import asdict
+
+        return self._execute(
+            _RequestSpec("close.period.reopen", asdict(command), identity, "cli", command.reason),
+            lambda context: MutationOutcome(context.reopen_period(command)),
+        )
+
+    def read_close_history(self, *, period: str | None = None) -> dict[str, Any]:
+        """Read immutable close revisions from one authority-pinned repository snapshot."""
+        from finjuice.pipeline.storage.authority import (
+            require_repository_authority,
+            shared_write_lease,
+        )
+        from finjuice.pipeline.storage.sqlite.repository import RepositoryReader
+
+        dispatch, _ = self._repository_dispatch()
+        assert dispatch.evidence is not None
+        with shared_write_lease(dispatch.paths):
+            authority = require_repository_authority(dispatch.paths, dispatch.evidence)
+            with RepositoryReader(authority.paths.database) as reader:
+                return reader.close_history(period=period)
 
     def read_reconcile_evidence(self, *, window_days: int = 14) -> dict[str, Any]:
         """Read exact candidates under the same active-generation lease."""

@@ -969,6 +969,90 @@ finjuice --version
 │ assets      Confirm source-backed asset meanings and report exact scoped ownership.                                  │
 │ intake      Preserve original evidence and review explicitly supplied extraction and proposals.                      │
 │ reconcile   Preserve purchase evidence and review exact N:M ledger settlements.                                      │
+│ close       Record immutable month close revisions and explicit reopen lineage.                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot close`
+
+```
+
+ Usage: finjuice ssot close [OPTIONS] COMMAND [ARGS]...
+
+ Record immutable month close revisions and explicit reopen lineage.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ run       Freeze exact per-currency totals; a still-closed month must be reopened first.                             │
+│ reopen    Reopen the newest close revision without undoing later recorded transactions.                              │
+│ history   Regenerate stored close reports from frozen facts and read their history.                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot close run`
+
+```
+
+ Usage: finjuice ssot close run [OPTIONS]
+
+ Freeze exact per-currency totals; a still-closed month must be reopened first.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --period                     TEXT     Closed month as YYYY-MM [required]                                          │
+│ *  --source-as-of               TEXT     Timezone-aware source as-of [required]                                      │
+│ *  --calculation-policy         TEXT     [required]                                                                  │
+│ *  --closed-at                  TEXT     Timezone-aware close timestamp [required]                                   │
+│ *  --reason                     TEXT     [required]                                                                  │
+│    --asset-scope                TEXT     [default: transactions_only]                                                │
+│    --party-id                   TEXT                                                                                 │
+│    --source-id                  TEXT                                                                                 │
+│    --valuation-currency         TEXT                                                                                 │
+│    --json                                                                                                            │
+│    --idempotency-key            TEXT     Stable retry key for an authoritative mutation                              │
+│    --expected-generation        TEXT     Expected active dataset generation                                          │
+│    --expected-revision          INTEGER  Expected active dataset revision                                            │
+│    --help                                Show this message and exit.                                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot close reopen`
+
+```
+
+ Usage: finjuice ssot close reopen [OPTIONS]
+
+ Reopen the newest close revision without undoing later recorded transactions.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --period                     TEXT     [required]                                                                  │
+│ *  --reason                     TEXT     [required]                                                                  │
+│ *  --reopened-at                TEXT     [required]                                                                  │
+│    --json                                                                                                            │
+│    --idempotency-key            TEXT     Stable retry key for an authoritative mutation                              │
+│    --expected-generation        TEXT     Expected active dataset generation                                          │
+│    --expected-revision          INTEGER  Expected active dataset revision                                            │
+│    --help                                Show this message and exit.                                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot close history`
+
+```
+
+ Usage: finjuice ssot close history [OPTIONS]
+
+ Regenerate stored close reports from frozen facts and read their history.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --period        TEXT                                                                                                 │
+│ --json                                                                                                               │
+│ --help                Show this message and exit.                                                                    │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```

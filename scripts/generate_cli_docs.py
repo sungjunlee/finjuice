@@ -188,6 +188,10 @@ def generate_cli_docs() -> None:
         "networth": ["breakdown", "history", "forecast", "validate"],
         "template": ["run"],
         "ssot": [
+            "close",
+            "close run",
+            "close reopen",
+            "close history",
             "reconcile",
             "reconcile submit",
             "reconcile candidates",
