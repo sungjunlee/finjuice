@@ -8,6 +8,8 @@ import pytest
 
 from finjuice.pipeline.analytics import duckdb_view
 from finjuice.pipeline.analytics.transaction_frame_registration import register_transaction_frame
+from finjuice.pipeline.storage.sqlite.transaction_reads import TransactionReadSnapshot
+from finjuice.pipeline.storage.sqlite.transaction_scopes import TransactionScope
 from finjuice.pipeline.tagging.models import ExcludedCategoryFilter, ReportFilters
 
 
@@ -61,7 +63,12 @@ def test_existing_repository_view_closes_connection_on_registration_error(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     conn = Mock()
-    snapshot = Mock(rows=("present",))
+    snapshot = TransactionReadSnapshot(
+        info=Mock(),
+        rows=({"transaction_id": "present"},),
+        rules_content=None,
+        scopes=(TransactionScope("present", "2026/08", True),),
+    )
     monkeypatch.setattr(duckdb_view, "DUCKDB_AVAILABLE", True)
     monkeypatch.setattr(duckdb_view, "duckdb", Mock(connect=Mock(return_value=conn)))
     monkeypatch.setattr(duckdb_view, "read_transaction_snapshot", Mock(return_value=snapshot))
