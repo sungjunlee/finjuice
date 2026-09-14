@@ -645,6 +645,11 @@ class RepositoryReader(AbstractContextManager["RepositoryReader"]):
         self.close()
 
     @property
+    def paths(self) -> GenerationPaths:
+        """Return the generation paths bound to this validated reader."""
+        return self._repository_paths
+
+    @property
     def table_names(self) -> tuple[str, ...]:
         """Return the authoritative tables for this reader's exact schema."""
         return tuple(self._read_table_sql)
@@ -777,6 +782,21 @@ class RepositoryReader(AbstractContextManager["RepositoryReader"]):
         if self._closed:
             raise RuntimeError("Repository reader is already closed.")
         return portfolio_snapshot(self._connection, self.info, self._repository_paths)
+
+    def capture_file_scopes(self) -> tuple[dict[str, Any], ...]:
+        """Return validated file-level capture locators from this snapshot."""
+        from finjuice.pipeline.storage.sqlite.transaction_scopes import _source_scopes
+
+        if self._closed:
+            raise RuntimeError("Repository reader is already closed.")
+        return tuple(
+            {
+                "source_occurrence_id": occurrence,
+                "capture_manifest_digest": capture,
+                **locator,
+            }
+            for occurrence, (capture, locator) in sorted(_source_scopes(self._connection).items())
+        )
 
     def history_snapshot(self) -> HistoryReadSnapshot:
         """Return complete legacy/native history evidence from this pinned revision."""
