@@ -29,6 +29,8 @@ from finjuice.pipeline.storage.sqlite.account_bindings import (
     resolve_account_binding,
 )
 from finjuice.pipeline.storage.sqlite.account_decisions import OwnershipDecision
+from finjuice.pipeline.storage.sqlite.asset_meanings import AssetMeaningDecision
+from finjuice.pipeline.storage.sqlite.asset_reports import AssetRelationDecision
 from finjuice.pipeline.storage.sqlite.errors import (
     MutationAbortedError,
     MutationBusyError,
@@ -91,6 +93,7 @@ from finjuice.pipeline.storage.sqlite.schema import (
     _validate_v4_invariants,
 )
 from finjuice.pipeline.storage.sqlite.schema_v6 import validate_v6_invariants
+from finjuice.pipeline.storage.sqlite.schema_v7 import validate_v7_invariants
 from finjuice.pipeline.storage.sqlite.writes import TypedRowWriter
 
 JSONValue: TypeAlias = Any
@@ -951,6 +954,69 @@ class MutationContext:
     ) -> AccountBindingResolution:
         """Resolve explicit current bindings in the same transaction as an import."""
         return resolve_account_binding(self.__connection, namespace, external_key)
+
+    def find_intake_artifact(self, source_artifact_id: str) -> Mapping[str, Any] | None:
+        """Find existing canonical intake evidence for one immutable source artifact."""
+        from finjuice.pipeline.storage.sqlite.intake_queries import find_intake_artifact
+
+        return find_intake_artifact(self.__connection, source_artifact_id)
+
+    def apply_intake_decision(
+        self, proposal_id: str, request: MutationRequest, confirmed_at: str
+    ) -> Mapping[str, JSONValue]:
+        """Apply a confirmed proposal through the shared canonical mutation context."""
+        from finjuice.pipeline.storage.sqlite.intake_application import apply_intake_decision
+
+        return apply_intake_decision(self.__connection, self, proposal_id, request, confirmed_at)
+
+    def confirm_asset_meaning(self, command: AssetMeaningDecision) -> dict[str, Any]:
+        """Persist an explicit asset interpretation and FX basis as one audited decision."""
+        from finjuice.pipeline.storage.sqlite.asset_meanings import (
+            insert_asset_meaning,
+            validate_decision,
+        )
+        from finjuice.pipeline.storage.sqlite.exact import ExactValue
+
+        validate_decision(self.__connection, command)
+        fx_id = None
+        if command.fx is not None:
+            fx_id = new_entity_id()
+            value = ExactValue(
+                command.fx["coefficient"],
+                command.fx["scale"],
+                None,
+                "rate",
+                "calculated",
+                unit="fx_rate.v1",
+            )
+            if value.coefficient == "0" or value.coefficient.startswith("-"):
+                raise MutationValidationError("FX rate must be positive.")
+            self.add_exact_value(fx_id, value)
+        result = insert_asset_meaning(self.__connection, command, self.changeset_id, fx_id)
+        self._record("asset_meaning", result["assertion_id"], "assert", None, result)
+        return result
+
+    def confirm_asset_relation(self, command: AssetRelationDecision) -> dict[str, Any]:
+        """Use canonical relation assertions for explicit source inclusion/overlap."""
+        from finjuice.pipeline.storage.sqlite.asset_reports import validate_asset_relation
+
+        validate_asset_relation(self.__connection, command)
+        record = EntityRelationAssertionRecord(
+            assertion_id=new_entity_id(),
+            subject_entity_id=command.container_id,
+            object_entity_id=command.member_id,
+            relation_kind=command.relation_kind,
+            confirmation_state=command.confirmation_state,
+            evidence=command.evidence,
+            effective_from=command.effective_from,
+            effective_to=command.effective_to,
+            confirmed_at=datetime.now(timezone.utc).isoformat()
+            if command.confirmation_state == "confirmed"
+            else None,
+            supersedes_assertion_id=command.supersedes_assertion_id,
+        )
+        self.add_relation_assertion(record)
+        return asdict(record)
 
     def preview_account_binding(self, command: AccountBindingConfirmation) -> dict[str, Any]:
         """Read one binding impact under the mutation preview snapshot."""
@@ -1899,6 +1965,7 @@ def _execute_new_request(
     _validate_v3_invariants(connection)
     _validate_v4_invariants(connection)
     validate_v6_invariants(connection)
+    validate_v7_invariants(connection)
     _advance_revision(connection, commit)
     retained = _attempt_retained_artifacts(attempt)
     _store_receipt(connection, request, commit, result_json, retained)

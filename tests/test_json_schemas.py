@@ -21,6 +21,15 @@ SCHEMAS_DIR = REPO_ROOT / "schemas"
 runner = CliRunner()
 
 CATALOGUED_COMMANDS = [
+    ("ssot intake list", [], "ssot_intake_list.schema.json"),
+    ("ssot intake submit", [], "ssot_intake_submit.schema.json"),
+    ("ssot intake confirm", [], "ssot_intake_confirm.schema.json"),
+    ("ssot assets list", [], "ssot_assets_list.schema.json"),
+    ("ssot assets confirm", [], "ssot_assets_confirm.schema.json"),
+    ("ssot assets correct", [], "ssot_assets_correct.schema.json"),
+    ("ssot assets relation-confirm", [], "ssot_assets_relation_confirm.schema.json"),
+    ("ssot assets relation-correct", [], "ssot_assets_relation_correct.schema.json"),
+    ("ssot assets report", [], "ssot_assets_report.schema.json"),
     ("ssot account preview", [], "ssot_account_preview.schema.json"),
     ("ssot account ownership-confirm", [], "ssot_account_ownership_confirm.schema.json"),
     ("ssot account ownership-correct", [], "ssot_account_ownership_correct.schema.json"),
@@ -755,7 +764,19 @@ def test_command_output_validates_against_schema(
         cmd_args = _materialize_sqlite_backup_catalog_args(schema_data_dir, label)
     if label.startswith("ssot migrate "):
         cmd_args = _materialize_migration_catalog_args(schema_data_dir, label)
-    if label.startswith("ssot account "):
+    if label.startswith("ssot intake "):
+        from tests.pipeline.test_canonical_intake_cli import intake_catalog_outputs
+
+        payload = intake_catalog_outputs(schema_data_dir.parent / "intake")[label.replace(" ", "_")]
+        _validator_for(_load_schema(schema_file)).validate(payload)
+        return
+    if label.startswith("ssot assets "):
+        from tests.pipeline.test_canonical_assets import _catalog_asset_result
+
+        result = _catalog_asset_result(
+            schema_data_dir.parent / "canonical-assets", label.split()[-1]
+        )
+    elif label.startswith("ssot account "):
         result = _account_catalog_result(schema_data_dir, label)
     elif label == "export-verify":
         from tests.cli.commands.test_repository_export import _export, _payload, _verify

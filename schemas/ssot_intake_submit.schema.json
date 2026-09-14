@@ -1,0 +1,35 @@
+{
+  "$id": "ssot_intake_submit.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "committed_revision": {
+      "type": "integer"
+    },
+    "occurrence_id": {
+      "type": "string"
+    },
+    "proposal_id": {
+      "type": "string"
+    },
+    "replayed": {
+      "type": "boolean"
+    },
+    "source_artifact_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "proposal_id",
+    "source_artifact_id",
+    "occurrence_id",
+    "committed_revision",
+    "replayed"
+  ],
+  "title": "ssot intake submit output",
+  "type": "object"
+}

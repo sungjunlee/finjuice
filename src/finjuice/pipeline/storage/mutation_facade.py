@@ -9,7 +9,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import yaml
 
@@ -21,6 +21,8 @@ from finjuice.pipeline.storage.authority import (
 )
 from finjuice.pipeline.storage.sqlite.account_bindings import AccountBindingConfirmation
 from finjuice.pipeline.storage.sqlite.account_decisions import OwnershipDecision
+from finjuice.pipeline.storage.sqlite.asset_meanings import AssetMeaningDecision
+from finjuice.pipeline.storage.sqlite.asset_reports import AssetRelationDecision, AssetReportQuery
 from finjuice.pipeline.storage.sqlite.bulk_tagging import (
     BulkTagCommand,
     apply_bulk_tagging,
@@ -53,6 +55,9 @@ from finjuice.pipeline.storage.sqlite.records import (
     SourceOccurrenceRecord,
 )
 from finjuice.pipeline.storage.sqlite.schema import inspect_repository
+
+if TYPE_CHECKING:
+    from finjuice.pipeline.storage.sqlite.intake_submission import IntakeSubmission
 
 JSONValue = Any
 ConfigKind = Literal["rules", "goals", "assets", "scenarios", "schema", "other"]
@@ -216,6 +221,108 @@ class StorageMutationFacade:
                 else identity.expected_revision
             ),
         )
+
+    def submit_intake(self, submission: IntakeSubmission) -> MutationReceipt:
+        """Capture canonical intake evidence through its authority-bound submission service."""
+        from finjuice.pipeline.storage.sqlite.intake_submission import submit_intake
+
+        dispatch, _ = self._repository_dispatch()
+        assert dispatch.evidence is not None
+        return submit_intake(MutationService(dispatch.paths, dispatch.evidence), submission)
+
+    def read_intake_decisions(self) -> dict[str, Any]:
+        """Return detached intake evidence from one authority-bound snapshot."""
+        from finjuice.pipeline.storage.authority import (
+            require_repository_authority,
+            shared_write_lease,
+        )
+        from finjuice.pipeline.storage.sqlite.repository import RepositoryReader
+
+        dispatch, _ = self._repository_dispatch()
+        assert dispatch.evidence is not None
+        with shared_write_lease(dispatch.paths):
+            authority = require_repository_authority(dispatch.paths, dispatch.evidence)
+            with RepositoryReader(authority.paths.database) as reader:
+                return reader.intake_decisions()
+
+    def confirm_intake(
+        self, proposal_id: str, *, identity: MutationIdentity, confirmed_at: str
+    ) -> MutationReceipt:
+        """Apply stored proposal preconditions while preserving original receipt replay."""
+        from finjuice.pipeline.storage.sqlite.intake_application import confirm_intake
+
+        identity.validate()
+        if (
+            identity.expected_generation is None
+            or identity.expected_revision is None
+            or identity.idempotency_key is None
+        ):
+            raise ValueError("Intake confirmation requires explicit mutation identity.")
+        decision = next(
+            (
+                row
+                for row in self.read_intake_decisions()["decisions"]
+                if row["proposal_id"] == proposal_id
+            ),
+            None,
+        )
+        if decision is None:
+            raise ValueError("Unknown intake proposal.")
+        dispatch, _ = self._repository_dispatch()
+        assert dispatch.evidence is not None
+        return confirm_intake(
+            MutationService(dispatch.paths, dispatch.evidence),
+            decision,
+            expected_generation=identity.expected_generation,
+            expected_revision=identity.expected_revision,
+            idempotency_key=identity.idempotency_key,
+            confirmed_at=confirmed_at,
+        )
+
+    def confirm_asset_meaning(
+        self, command: AssetMeaningDecision, *, identity: MutationIdentity = MutationIdentity()
+    ) -> MutationReceipt:
+        """Confirm/correct a source-backed interpretation without editing its source."""
+        from dataclasses import asdict
+
+        scope = (
+            "asset.meaning.correct" if command.supersedes_assertion_id else "asset.meaning.confirm"
+        )
+        return self._execute(
+            _RequestSpec(scope, asdict(command), identity, "cli", None),
+            lambda context: MutationOutcome(result=context.confirm_asset_meaning(command)),
+        )
+
+    def confirm_asset_relation(
+        self, command: AssetRelationDecision, *, identity: MutationIdentity = MutationIdentity()
+    ) -> MutationReceipt:
+        """Confirm/correct canonical source inclusion and overlap evidence."""
+        from dataclasses import asdict
+
+        scope = (
+            "asset.relation.correct"
+            if command.supersedes_assertion_id
+            else "asset.relation.confirm"
+        )
+        return self._execute(
+            _RequestSpec(scope, asdict(command), identity, "cli", None),
+            lambda context: MutationOutcome(result=context.confirm_asset_relation(command)),
+        )
+
+    def read_canonical_assets(self, query: AssetReportQuery | None = None) -> dict[str, Any]:
+        """Read exact asset meaning and ownership from one authority-bound snapshot."""
+        from finjuice.pipeline.storage.authority import (
+            require_repository_authority,
+            shared_write_lease,
+        )
+        from finjuice.pipeline.storage.sqlite.repository import RepositoryReader
+
+        dispatch, _ = self._repository_dispatch()
+        assert dispatch.evidence is not None
+        with shared_write_lease(dispatch.paths):
+            authority = require_repository_authority(dispatch.paths, dispatch.evidence)
+            with RepositoryReader(authority.paths.database) as reader:
+                return reader.canonical_assets(query)
 
     def confirm_account_binding(
         self,

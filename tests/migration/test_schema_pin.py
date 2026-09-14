@@ -32,7 +32,7 @@ from finjuice.pipeline.storage.sqlite import (
 from finjuice.pipeline.storage.sqlite.errors import RepositoryVersionError
 
 
-@pytest.mark.parametrize("version", [True, False, "4", 4.0, 0, 3, 7])
+@pytest.mark.parametrize("version", [True, False, "4", 4.0, 0, 3, schema.SQLITE_SCHEMA_VERSION + 1])
 def test_unsupported_schema_request_rejects_before_filesystem_access(
     tmp_path: Path, version: Any
 ) -> None:
@@ -86,7 +86,7 @@ def test_migration_build_verify_and_retry_remain_v4_when_runtime_current_changes
 
     # A future current-version bump must not change existing adapter policy semantics.
     # Simulate an unsupported future runtime version.
-    monkeypatch.setattr(schema, "SQLITE_SCHEMA_VERSION", 7)
+    monkeypatch.setattr(schema, "SQLITE_SCHEMA_VERSION", schema.SQLITE_SCHEMA_VERSION + 1)
     assert migration_schema_version(policy) == 4
     with pytest.raises(RepositoryVersionError):
         RepositoryReader(GenerationPaths(candidate).database)

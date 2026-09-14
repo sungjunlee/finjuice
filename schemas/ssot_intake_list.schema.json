@@ -1,0 +1,31 @@
+{
+  "$id": "ssot_intake_list.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "dataset_generation": {
+      "type": "string"
+    },
+    "dataset_revision": {
+      "type": "integer"
+    },
+    "decisions": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "dataset_generation",
+    "dataset_revision",
+    "decisions"
+  ],
+  "title": "ssot intake list output",
+  "type": "object"
+}
