@@ -149,3 +149,91 @@ def account_ownership(
         )
     except Exception as exc:
         _error(exc, "ssot account ownership", json_output)
+
+
+@account_app.command("preview")
+def account_preview(
+    ctx: typer.Context,
+    request: Path = typer.Argument(...),
+    corrects: str | None = typer.Option(None, "--corrects"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Preview binding impact; pass its generation/revision to confirm or correct."""
+    try:
+        payload = json.loads(read_regular_bytes(request))
+        command = AccountBindingConfirmation(**payload, supersedes_binding_id=corrects)
+        preview = _facade(ctx).preview_account_binding(command)
+        emit(dict(preview.result), json_output, _render_decision, command="ssot account preview")
+    except Exception as exc:
+        _error(exc, "ssot account preview", json_output)
+
+
+def _render_decision(payload: dict[str, Any]) -> None:
+    if "observed_scope" in payload:
+        info(f"계좌 연결 미리보기: 관측 근거 {len(payload['observed_scope'])}건")
+        info("기존 거래·자산은 변경하지 않습니다. 새 import에만 적용됩니다.")
+        info(f"확인에 사용할 generation: {payload['expected_generation']}")
+        info(f"확인에 사용할 revision: {payload['expected_revision']}")
+    else:
+        info(f"소유권 확정: {payload['assertion_id']}")
+        info(f"교정 대상: {payload['supersedes_assertion_id']}")
+    info(json.dumps(payload, ensure_ascii=False))
+
+
+def _ownership_decision(
+    ctx: typer.Context, request: Path, previous: str | None, json_output: bool
+) -> None:
+    from finjuice.pipeline.storage.sqlite.account_decisions import (
+        OwnershipDecision,
+        OwnershipShareDecision,
+    )
+
+    name = "ssot account ownership-correct" if previous else "ssot account ownership-confirm"
+    try:
+        payload = json.loads(read_regular_bytes(request))
+        shares = tuple(OwnershipShareDecision(**share) for share in payload.pop("shares"))
+        command = OwnershipDecision(**payload, shares=shares, supersedes_assertion_id=previous)
+        options = get_mutation_options(ctx)
+        if (
+            options.expected_generation is None
+            or options.expected_revision is None
+            or options.idempotency_key is None
+        ):
+            raise ValueError(
+                "Confirmation requires explicit generation, revision and idempotency key."
+            )
+        identity = mutation_identity(
+            options.idempotency_key, options.expected_generation, options.expected_revision
+        )
+        receipt = _facade(ctx).confirm_ownership(command, identity=identity)
+        emit(
+            {**receipt.result, **mutation_metadata(identity, receipt)},
+            json_output,
+            _render_decision,
+            command=name,
+        )
+    except Exception as exc:
+        _error(exc, name, json_output)
+
+
+@account_app.command("ownership-confirm")
+@with_mutation_options
+def ownership_confirm(
+    ctx: typer.Context,
+    request: Path = typer.Argument(...),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Confirm exact party shares, effective dates and explicit evidence from JSON."""
+    _ownership_decision(ctx, request, None, json_output)
+
+
+@account_app.command("ownership-correct")
+@with_mutation_options
+def ownership_correct(
+    ctx: typer.Context,
+    assertion_id: str = typer.Argument(...),
+    request: Path = typer.Argument(...),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Correct ownership by appending a confirmed successor; retain prior evidence."""
+    _ownership_decision(ctx, request, assertion_id, json_output)

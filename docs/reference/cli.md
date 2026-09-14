@@ -981,10 +981,13 @@ finjuice --version
 │ --help          Show this message and exit.                                                                          │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ list        List accounts, exact source candidates and immutable confirmation history.                               │
-│ confirm     Confirm an exact source binding from an explicit JSON request file.                                      │
-│ correct     Append a correction of the named current binding; retain the original evidence.                          │
-│ ownership   Read exact confirmed ownership as of a date without household aggregation.                               │
+│ list                List accounts, exact source candidates and immutable confirmation history.                       │
+│ confirm             Confirm an exact source binding from an explicit JSON request file.                              │
+│ correct             Append a correction of the named current binding; retain the original evidence.                  │
+│ ownership           Read exact confirmed ownership as of a date without household aggregation.                       │
+│ preview             Preview binding impact; pass its generation/revision to confirm or correct.                      │
+│ ownership-confirm   Confirm exact party shares, effective dates and explicit evidence from JSON.                     │
+│ ownership-correct   Correct ownership by appending a confirmed successor; retain prior evidence.                     │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```
@@ -1062,6 +1065,68 @@ finjuice --version
 │ *  --as-of        TEXT  [required]                                                                                   │
 │    --json                                                                                                            │
 │    --help               Show this message and exit.                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot account preview`
+
+```
+
+ Usage: finjuice ssot account preview [OPTIONS] REQUEST
+
+ Preview binding impact; pass its generation/revision to confirm or correct.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    request      PATH  [required]                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --corrects        TEXT                                                                                               │
+│ --json                                                                                                               │
+│ --help                  Show this message and exit.                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot account ownership-confirm`
+
+```
+
+ Usage: finjuice ssot account ownership-confirm [OPTIONS] REQUEST
+
+ Confirm exact party shares, effective dates and explicit evidence from JSON.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    request      PATH  [required]                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot account ownership-correct`
+
+```
+
+ Usage: finjuice ssot account ownership-correct [OPTIONS] ASSERTION_ID REQUEST
+
+ Correct ownership by appending a confirmed successor; retain prior evidence.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    assertion_id      TEXT  [required]                                                                              │
+│ *    request           PATH  [required]                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```
