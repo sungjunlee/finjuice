@@ -121,11 +121,19 @@ def _load_report_filters_for_export(
     return load_report_filters(config.rules_file)
 
 
+def _configured_sqlite_frame() -> pl.DataFrame | None:
+    """Return the SQLite export frame, or ``None`` in CSV mode."""
+    from finjuice.pipeline.query import configured_source_frame
+
+    return configured_source_frame()
+
+
 def _load_filtered_report_export_source(
     ctx: Any,
     config: Any,
     *,
     json_output: bool,
+    source_frame: pl.DataFrame | None = None,
     format_lower: str,
     period: Optional[str],
 ) -> tuple[pl.DataFrame | None, int]:
@@ -135,12 +143,17 @@ def _load_filtered_report_export_source(
         config,
         json_output=json_output,
     )
+    sqlite_frame = source_frame
     if report_filters.is_empty():
-        return None, 0
+        return sqlite_frame, 0
 
     from finjuice.pipeline.storage import csv_transactions
 
-    source_df = csv_transactions.get_all_transactions(config.csv_base_dir)
+    source_df = (
+        sqlite_frame
+        if sqlite_frame is not None
+        else csv_transactions.get_all_transactions(config.csv_base_dir)
+    )
     if source_df.is_empty():
         return source_df, 0
 
@@ -183,8 +196,13 @@ def _resolve_transaction_count(
     """Resolve the transaction count for the export result payload."""
     if transaction_count is not None:
         return transaction_count
-    if run.report_source_df is not None:
-        return len(run.report_source_df)
+    count_df = run.report_source_df
+    if count_df is None:
+        count_df = run.full_source_df
+    if count_df is not None:
+        if format_lower in {"html", "md"} and run.period is not None:
+            count_df = count_df.filter(pl.col("date").str.starts_with(run.period))
+        return len(count_df)
     if format_lower in {"html", "md"} and run.period is not None:
         from finjuice.pipeline.export.aggregations import load_transactions
 
@@ -228,18 +246,35 @@ def _compute_export_result(  # noqa: PLR0913 - moved helper keeps the existing p
             repository_metadata=source.metadata,
         )
         return _repository_export(run, source, format_lower, auto_open, dry_run)
+    from finjuice.pipeline.query import configured_snapshot, write_derived_outputs
+
+    detached = configured_snapshot()
+    detached_frame = detached.frame if detached is not None else None
+    if detached is not None and not dry_run:
+        write_derived_outputs(detached)
     report_source_df, filters_applied = _load_filtered_report_export_source(
         ctx,
         config,
         json_output=not emit_text,
         format_lower=format_lower,
         period=period,
+        source_frame=detached_frame,
     )
 
     paths = _build_export_paths(config)
 
     if dry_run:
         plan = build_export_plan(config.data_dir, config.csv_base_dir, format_lower, period)
+        sqlite_frame = detached_frame
+        if sqlite_frame is not None:
+            count_df = sqlite_frame
+            if format_lower in {"html", "md"} and period is not None:
+                count_df = count_df.filter(pl.col("date").str.starts_with(period))
+            snapshot_count = len(count_df)
+            plan["transaction_count"] = snapshot_count
+            for item in plan["output_files"]:
+                if item.get("row_count") is not None:
+                    item["row_count"] = snapshot_count
         return {
             "command": "export",
             "dry_run": True,
@@ -256,6 +291,7 @@ def _compute_export_result(  # noqa: PLR0913 - moved helper keeps the existing p
         report_source_df=report_source_df,
         emit_text=emit_text,
         online=online,
+        full_source_df=detached_frame,
     )
 
     return _generate_export_result(run, format_lower, auto_open, filters_applied)

@@ -95,8 +95,13 @@ def read_transactions_frame(database: Path) -> pl.DataFrame:
         to ``List(Utf8)``, sorted ascending by ``datetime`` (stable).
     """
     with RepositoryReader(database) as reader:
-        transactions = reader.rows("transactions")
-        context = _ReadContext.build(reader)
+        return frame_from_reader(reader)
+
+
+def frame_from_reader(reader: RepositoryReader) -> pl.DataFrame:
+    """Project rows while the caller retains the same identity-bearing read snapshot."""
+    transactions = reader.rows("transactions")
+    context = _ReadContext.build(reader)
     rows = [_project_row(transaction, context) for transaction in transactions]
     return _build_frame(rows).sort("datetime")
 

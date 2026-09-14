@@ -4,7 +4,7 @@ GitHub 이슈가 명세·AC·상태의 정본이다. 전체 목표는 `goals/fin
 
 ## 현재 코드와 PR
 
-- main 진입 PR #463: `codex/ssot-m2-mutations`. 최신 통합 소스 `6da728f`는 PR #519 최종 검증 소스 `9e945e8`과 전체 파일 tree가 같다. 필수 비작성자 approving review가 남아 있으며 main에는 아직 반영하지 않았다.
+- main 진입 PR #463: `codex/ssot-m2-mutations`. 월 마감 통합 소스 `6da728f`는 PR #519 최종 검증 소스 `9e945e8`과 전체 파일 tree가 같다. 필수 비작성자 approving review가 남아 있으며 main에는 아직 반영하지 않았다.
 - 작업 브랜치 PR #517 → #516 → #481은 CI 확인 후 순서대로 squash merge했다. 계좌·자산·증빙 입력·보존 이전·정본 소비·managed recovery/delivery가 이제 #463에 함께 있다. 저장소가 허용하지 않는 merge commit 대신 허용된 squash 방식으로 통합했다.
 - `codex/ssot-intake-reconcile`에서 #444 제안 수정·철회와 추출 자산 관측, #446 schema8 정본 구매/할부 대사를 통합했다. 기준은 `47f7734`이며 두 독립 writer의 delta만 반영했다. 공유 mutation/facade/schema 생성기 충돌을 해결하고 자산 정정 대상은 불변 계보의 마지막 assertion, 보고/동일 증빙 재사용은 최신 확정 assertion으로 구분했다.
 - 기능 소유자 검증: lifecycle10, 자산 관측10, 대사 핵심75+catalog8 통과. 실패는 해당 노드만 재실행했다. 통합 실제 흐름4 PASS/13.50초, 변경 source17 mypy와 Ruff 통과. 원본→수정/확정→다른 XLSX→capture/restore/query 포함. 기존 전체 검사는 반복하지 않았다.
@@ -12,8 +12,15 @@ GitHub 이슈가 명세·AC·상태의 정본이다. 전체 목표는 `goals/fin
 - #447 정본 월 마감/재개방 구현을 Opus5 high가1192.49초/exit0에 마쳤다. 관련296PASS1fixtureFAIL(260.78초), root가 v5캡처→현행clone upgrade fixture로 실패1개를 수정해4.99초에PASS. 초기9 close/raw4–8복원 검사는 통과했으며 이를 반복하지 않았다.
 - `codex/ssot-close-adapter`는 최신ebfaa0c에서 #447 delta를 통합했다. 원본 writer의 마지막 소스와 snapshot hash가 같음을 확인했다. GPT 교차 검토에서 정밀 금액·이체 판단·원본 자산 단순합계·역사 재생성·미대사 상태·mutation manifest를 보완했다. 실제 수정 회귀3PASS/9.88초(최초2fixture실패 후 해당2+새미대사1만 검사), 추가기존 close→restore1PASS. 새 계산은cash.v1만 지원하고 자산에는 명시party/currency/source범위를 요구한다. 원본 close에는 당시 exact거래/자산판단/대사 입력을 보존해 history에서 재계산·digest를 검사한다.
 - PR #519는 CI 확인 후15:54 KST 정상 squash merge했다(6da728f). 최종9e945e8 설치 실제 close/이체판단/재생성/복원 및 자산 정정2 PASS/3.88초, 설치 origins534, package728개 source/wheel/installed bytes 일치. wheel SHA `81e49b606f8776b83bc3563303737bb7e99ed3fc76a0c1cdf984f30c186332d4`. 소스/검증 원장은 `/tmp/finjuice-canonical-close/root-checkpoint.json`이다. 기존 검사를 재실행하지 않는다.
-- #447 최초 writer `codex/ssot-canonical-close`는 동결됐다. #448 추가 JSON 정본 입력은 `codex/ssot-canonical-adapter`에서 Cursor Grok4.6 high가 계속 구현 중이다. 해당 실행 handle은86607이며 `/tmp/finjuice-canonical-adapter/`에 로그가 있다. 관측 없이 재시작하지 않는다.
+- #447 최초 writer `codex/ssot-canonical-close`는 동결됐다. #448 Cursor 최초 시도는 timeout으로 끝났으며 아래 새 Opus fallback 상태를 따른다.
 - 기본 active checkout을 writer로 가정하지 않는다. 정확한 경로는 `git worktree list`로 확인한다. 이미 완료된 Cursor 리뷰/설치 검증은 재시작하지 않는다.
+
+## 새 main 조회 통합과 추가 입력 실행
+
+- main에 새로 머지된 #514(`56b2589`)를 확인해 #463 작업 브랜치에 통합했다. 활성 provider/정본 읽기를 우선하고, detached locator frame은 기존 정본 선택을 대체하지 않는다. 새 query package API와 legacy-mode query/show/status/template/export 호환은 유지했다.
+- QuerySnapshot identity와 frame은 같은 RepositoryReader snapshot에서 읽도록 변경했다. export의 detached 파생/마스터/보고서도 동일한 captured frame을 사용하며 활성 정본 export의 guard·deterministic artifact는 보존했다. 관련52node 중51PASS/1구조위치FAIL(13.74초); export의 authority guard 이후 공통 구현으로 이동한 경계를 반영하고 실패노드만 확인했다. 변경17source mypy/Ruff 통과. 설치본은 이후 최종 adapter 묶음에서 검증한다.
+- #436은 #514의 자동 종료로 다시 닫혔으나 활성 정본 구현이 아직 #463에 있어 재개했다. 원래 AC/범위를 줄이지 않는다.
+- Cursor adapter86607은30분 hard deadline에서 SIGTERM/exit143로 종료됐고 git 변경이 없었다. `/tmp/finjuice-canonical-adapter/failure-report.json`에 근거가 있다. 재시작하지 않는다. #448은 최신98d266b 기반 `codex/ssot-json-adapter`에서 기존 Opus context를 fork해 직렬 fallback 중이다. 실행 handle7132, 로그 `/tmp/finjuice-json-adapter/`. 원래 close agent는 terminal이며 재시작하지 않았다.
 
 ## 완료된 검사 — 재실행하지 않을 것
 

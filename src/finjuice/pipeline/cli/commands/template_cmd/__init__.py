@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import typer
 
@@ -21,6 +21,7 @@ from finjuice.pipeline.cli.report_filters import (
     count_matched_report_filters,
     load_cli_report_filters,
 )
+from finjuice.pipeline.query import configured_source_frame
 
 from .execution import (
     TemplateExecutionDependencies,
@@ -57,10 +58,22 @@ template_app = typer.Typer(
 )
 
 
+def _sqlite_aware_analytics(*args: Any, **kwargs: Any) -> DuckDBAnalytics:
+    """Construct DuckDB analytics, injecting the SQLite frame when located."""
+    if "source_frame" not in kwargs:
+        data_dir = args[0] if args else kwargs.get("data_dir")
+        frame = configured_source_frame(data_dir, kwargs.get("evidence_provider"))
+        if frame is not None:
+            kwargs["source_frame"] = frame
+    if kwargs.get("source_frame") is not None:
+        kwargs.setdefault("require_transactions", False)
+    return DuckDBAnalytics(*args, **kwargs)
+
+
 def _dependencies() -> TemplateExecutionDependencies:
     """Build dependencies from package globals for testability."""
     return TemplateExecutionDependencies(
-        duckdb_analytics=DuckDBAnalytics,
+        duckdb_analytics=_sqlite_aware_analytics,
         validate_readonly_sql=validate_readonly_sql,
         load_cli_report_filters=load_cli_report_filters,
         count_matched_report_filters=count_matched_report_filters,

@@ -9,7 +9,7 @@ follow-on.
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import polars as pl
 import typer
@@ -23,6 +23,9 @@ from finjuice.pipeline.cli.utils import get_activation_evidence_provider, get_co
 from finjuice.pipeline.config import Config
 from finjuice.pipeline.storage.read_facade import read_transaction_snapshot, snapshot_metadata
 from finjuice.pipeline.storage.sqlite.transaction_scopes import READ_SCOPE_POLICY
+
+if TYPE_CHECKING:
+    from finjuice.pipeline.query import QuerySnapshot
 
 logger = logging.getLogger(__name__)
 
@@ -66,10 +69,45 @@ def _load_all_partitions(csv_base_dir: Path) -> tuple[Optional[pl.DataFrame], in
     return get_all_transactions(csv_base_dir), len(partitions)
 
 
+def _load_detached_show(
+    snapshot: "QuerySnapshot",
+    month: str | None,
+    *,
+    search_all: bool,
+    json_output: bool,
+) -> tuple[pl.DataFrame, str, str]:
+    """Select a compatibility display scope only after the active-authority path declined."""
+    from finjuice.pipeline.query import distinct_month_count, filter_month_frame, latest_month_label
+
+    frame = snapshot.frame
+    selected_month = (
+        month if month is not None else (None if search_all else latest_month_label(frame))
+    )
+    if selected_month is not None:
+        year, mon = (int(part) for part in selected_month.split("-"))
+        frame = filter_month_frame(frame, year, mon)
+    if frame.is_empty():
+        emit_error(
+            f"No data for {month}" if month else "No transaction data found",
+            error_code=ErrorCode.NO_DATA,
+            exit_code=ExitCode.NO_DATA,
+            json_output=json_output,
+            command="show",
+        )
+    title = f"Transactions ({selected_month})" if selected_month else "Transactions"
+    hint = f" across {distinct_month_count(frame)} month scopes" if search_all and not month else ""
+    return frame, title, hint
+
+
 def _load_legacy_show(
     config: Config, month: str | None, *, search_all: bool, json_output: bool
 ) -> tuple[pl.DataFrame, str, str]:
     """Keep the existing CSV month selection and missing-data behavior."""
+    from finjuice.pipeline.query import configured_snapshot
+
+    detached = configured_snapshot()
+    if detached is not None:
+        return _load_detached_show(detached, month, search_all=search_all, json_output=json_output)
     table_title = "Transactions"
     scope_hint = ""
     df: pl.DataFrame | None

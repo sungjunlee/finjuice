@@ -27,8 +27,8 @@ TAG_EXPORT_COLUMNS = ("tags_rule", "tags_ai", "tags_manual", "tags_final")
 def export_master_xlsx(
     csv_base_dir: Path,
     output_path: Path,
-    *,
     source_df: pl.DataFrame | None = None,
+    *,
     deterministic: bool = False,
 ) -> int:
     """

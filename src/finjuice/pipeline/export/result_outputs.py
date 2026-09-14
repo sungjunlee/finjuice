@@ -37,6 +37,8 @@ def _generate_xlsx_outputs(run: ExportRunContext) -> tuple[int, list[dict[str, A
     kwargs: dict[str, Any] = (
         {"source_df": run.full_source_df, "deterministic": True} if repository else {}
     )
+    if not repository and run.full_source_df is not None:
+        kwargs["source_df"] = run.full_source_df
     row_count = export_master_xlsx(run.config.csv_base_dir, master_path, **kwargs)
     generated_artifacts = (
         [

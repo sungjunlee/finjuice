@@ -23,6 +23,7 @@ from finjuice.pipeline.cli.report_filters import (
 )
 from finjuice.pipeline.cli.utils import get_activation_evidence_provider, get_config
 from finjuice.pipeline.config import Config
+from finjuice.pipeline.query import configured_source_frame
 from finjuice.pipeline.storage.read_facade import snapshot_metadata
 from finjuice.pipeline.storage.sqlite.transaction_reads import TransactionReadSnapshot
 from finjuice.pipeline.tagging.rules import ReportFilters
@@ -151,6 +152,9 @@ def query_command(
             config.data_dir,
             require_transactions=False,
             evidence_provider=get_activation_evidence_provider(ctx),
+            source_frame=configured_source_frame(
+                config.data_dir, get_activation_evidence_provider(ctx)
+            ),
         ) as analytics:
             report_filters, meta_extras = _read_context(
                 ctx, config, analytics.repository_snapshot, structured_output
