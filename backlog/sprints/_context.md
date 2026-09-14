@@ -95,3 +95,10 @@ GitHub 이슈가 명세·AC·상태의 정본이다. 전체 목표는 `goals/fin
 - PR #522 head `67839ba` fixes the sole failure in the prior full CI (4846 passed, 4 skipped): an analytics test mock lacked the new typed scope evidence. The corrected six-test file passes; package sources and the installed artifact are unchanged. Exact-head CI 34867296195 is running.
 - `codex/portfolio-consumer-projection` adds investment/loan display and a single-snapshot native-aware bundle. Preserved unsupported native overview projections now contribute to incomplete readiness rather than disappearing from coverage. Initial 39 focused tests passed. Five cross-family findings were fixed; the final focused set of 37 tests, changed-source Ruff/mypy, and diff checks pass. Full Ruff/mypy (609 sources) also passed before those localized review corrections.
 - Historical compatibility, operating cutover, new-record recovery, and confirmed family ownership remain separate gates. No operating source or service was changed by this implementation.
+
+## 2026-09-15 승인 후 진행
+
+- #522 관리자 squash merge 완료: `f011526`, 정확한 head CI34867296195 PASS. 사용자는 목표 범위의 후속 교차 리뷰·필수 CI 통과 PR에 대한 관리자 머지와 계속 진행을 승인했다.
+- #523을 최신 main에 재배치하고 ready 처리했다: `c1a10eb`, CI34871798225 진행. source package bytes는 기존 검증 artifact와 동일하다.
+- #434는 기존 AC 검증과 #463 실제 머지를 확인해 COMPLETED로 정리했다. 다른 운영/실사용 이슈는 미완료다.
+- 독립 private staging 작업: rate 단독 미확정은 비율 unknown으로 명시하는 부분 보고, 서비스와 수동 소비자의 동일 authority 강제. 실제 운영 적용은 아직 하지 않았다.

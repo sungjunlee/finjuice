@@ -126,16 +126,7 @@ def materialize_portfolio_consumer_bundle(
             "byte_count": len(overlay[0]),
             "as_of": None,
         }
-    native_occurrences = {
-        row["entity_id"]
-        for row in snapshot.evidence["source_occurrences"]
-        if row["occurrence_kind"] != "legacy_capture"
-    }
-    provenance = {row["provenance_id"]: row for row in snapshot.evidence["record_provenance"]}
-    uncovered_assets = sum(
-        provenance[row["provenance_id"]]["source_occurrence_id"] in native_occurrences
-        for row in snapshot.asset_snapshots
-    )
+    uncovered_assets = _uncovered_native_assets(snapshot)
     domain_ready = all(domain["readiness"] == "usable" for domain in domains.values())
     usable = domain_ready and uncovered_assets == 0
     manifest = {
@@ -170,6 +161,19 @@ def materialize_portfolio_consumer_bundle(
         return _reuse_complete(output, snapshot, files, manifest)
     _publish(output, files, manifest)
     return _bundle(output, files, manifest)
+
+
+def _uncovered_native_assets(snapshot: PortfolioReadSnapshot) -> int:
+    native_occurrences = {
+        row["entity_id"]
+        for row in snapshot.evidence["source_occurrences"]
+        if row["occurrence_kind"] != "legacy_capture"
+    }
+    provenance = {row["provenance_id"]: row for row in snapshot.evidence["record_provenance"]}
+    return sum(
+        provenance[row["provenance_id"]]["source_occurrence_id"] in native_occurrences
+        for row in snapshot.asset_snapshots
+    )
 
 
 def _readiness(kind: str, rows: list[dict[str, Any]], amounts: tuple[str, ...]) -> set[str]:
