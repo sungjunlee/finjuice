@@ -147,7 +147,7 @@ def _render_full_pipeline_result(result: dict[str, Any], config: Any) -> None:
     if export.get("manifest_path"):
         output.info(f"   산출물: {len(export['output_files'])}개 파일 생성")
         output.success(f"📁 결과 확인: {Path(export['manifest_path']).parent}")
-        output.info(f"   Manifest: {export['manifest_path']}")
+        output.info(f"   Manifest: {Path(export['manifest_path']).name}")
     else:
         output.info(f"   리포트: {REPORTS_COUNT}개 파일 생성")
         output.success(f"📁 결과 확인: {config.data_dir / 'exports'}")

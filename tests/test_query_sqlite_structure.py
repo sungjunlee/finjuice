@@ -352,7 +352,7 @@ def test_export_master_xlsx_uses_unfiltered_sqlite_snapshot(
     assert "스타벅스" in master_df["merchant_raw"].to_list()
 
 
-def test_query_ignores_stale_live_csv_when_sqlite_is_selected(
+def test_explicit_sqlite_query_ignores_csv_while_cli_preserves_selected_legacy(
     mirrored_dataset: dict[str, Path],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -365,12 +365,14 @@ def test_query_ignores_stale_live_csv_when_sqlite_is_selected(
     )
     monkeypatch.setenv(GENERATION_ENV_VAR, str(mirrored_dataset["database"].parent))
 
-    payload = _invoke_query_json(
-        data_dir,
-        "SELECT merchant_raw FROM transactions WHERE row_hash = 'abc1234567890001'",
-    )
-
-    assert payload["rows"] == [{"merchant_raw": "스타벅스"}]
+    sql = "SELECT merchant_raw FROM transactions WHERE row_hash = 'abc1234567890001'"
+    selected = load_query_snapshot(mirrored_dataset["database"])
+    with open_analytics(data_dir, source_frame=selected.frame) as analytics:
+        rows = analytics.query_readonly(sql).pl().to_dicts()
+    assert rows == [{"merchant_raw": "스타벅스"}]
+    # A detached locator is not activation evidence for the CLI's selected legacy dataset.
+    payload = _invoke_query_json(data_dir, sql)
+    assert payload["rows"] == [{"merchant_raw": "STALE"}]
     frame = configured_source_frame()
     assert frame is not None
     assert "STALE" not in frame["merchant_raw"].to_list()

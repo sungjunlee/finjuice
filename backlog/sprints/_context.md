@@ -4,7 +4,7 @@ GitHub 이슈가 명세·AC·상태의 정본이다. 전체 목표는 `goals/fin
 
 ## 현재 코드와 PR
 
-- main 진입 PR #463: `codex/ssot-m2-mutations`. 월 마감 통합 소스 `6da728f`는 PR #519 최종 검증 소스 `9e945e8`과 전체 파일 tree가 같다. 필수 비작성자 approving review가 남아 있으며 main에는 아직 반영하지 않았다.
+- main 진입 PR #463: `codex/ssot-m2-mutations`. 월 마감 통합 소스 `6da728f`는 PR #519 최종 검증 소스 `9e945e8`과 전체 파일 tree가 같다. 사용자의 개인 프로젝트 관리자 머지 승인에 따라 PR #463을 squash merge했다(main `4ced76d`, 2026-09-14 17:34 KST). 이전 비작성자 승인 대기는 해소됐다.
 - 작업 브랜치 PR #517 → #516 → #481은 CI 확인 후 순서대로 squash merge했다. 계좌·자산·증빙 입력·보존 이전·정본 소비·managed recovery/delivery가 이제 #463에 함께 있다. 저장소가 허용하지 않는 merge commit 대신 허용된 squash 방식으로 통합했다.
 - `codex/ssot-intake-reconcile`에서 #444 제안 수정·철회와 추출 자산 관측, #446 schema8 정본 구매/할부 대사를 통합했다. 기준은 `47f7734`이며 두 독립 writer의 delta만 반영했다. 공유 mutation/facade/schema 생성기 충돌을 해결하고 자산 정정 대상은 불변 계보의 마지막 assertion, 보고/동일 증빙 재사용은 최신 확정 assertion으로 구분했다.
 - 기능 소유자 검증: lifecycle10, 자산 관측10, 대사 핵심75+catalog8 통과. 실패는 해당 노드만 재실행했다. 통합 실제 흐름4 PASS/13.50초, 변경 source17 mypy와 Ruff 통과. 원본→수정/확정→다른 XLSX→capture/restore/query 포함. 기존 전체 검사는 반복하지 않았다.
@@ -70,3 +70,10 @@ GitHub 이슈가 명세·AC·상태의 정본이다. 전체 목표는 `goals/fin
 - 55668c5 보안gate 수정: fixed TABLE_KEYS와 실제 pragma_table_info 컬럼 검증 뒤 insert하며 값은 bound placeholder를 유지한다. 정적SQL15지점의 검토근거를 baseline에 기록했고 per-site 중복 개수를 유지했다. Bandit43covered PASS, 대사/close17PASS16.64초. 해당CI Security Baselines/Lint/Package Artifacts PASS를 확인했다.
 - 122815f에서 query/explain/source-frame/export도 선택된 기존CSV를 locator환경으로 대체하지 않도록 했고 남은 실제 migration 편집 fixture는 명시clone upgrade 후 실행한다. 관련 실패6PASS3.42초.
 - 하이픈 CLI 명령6개의 생성schema에 x-command를 추가해 tool manifest의 출력schema 연결을 복원했다. 실제 generator와 doc/tools를 재생성했고 실패한 tool schema1PASS0.39초. 전체 Ruff/mypy606 및 complexity PASS. 마지막 source 패키지를 동결해 설치검사를 이어가며 과거475ec70 wheel을 최종으로 재표시하지 않는다.
+
+## PR #463 머지 후 CI 수정
+
+- main `4ced76d` CI 34823421584 종료: 4789 PASS, 6 FAIL, 4 SKIP. Lint/Security/Package는 통과했다. 기존 full run을 재시작하지 않는다.
+- 최신 main 기반 `codex/ssot-final-fixes`에서 실패 원인을 묶어 수정했다: 긴 경로의 refresh manifest 이름 줄바꿈, HTML/MD dry-run 기간별 거래 수, 철회 상태 fixture 오기, detached SQLite API와 legacy CLI 선택 계약을 혼동한 테스트.
+- 관련 9개 회귀 PASS(16.12초), Ruff/mypy 606개/complexity 통과. 원래 main full CI 성공으로 잘못 표기하지 않는다. 최종 수정 소스의 CI와 설치 artifact 확인 후 실제 배포로 진행한다.
+- 실제 운영 전환·첫 사용·전환 후 장비 밖 복원 및 M4/M5 실제 수용 증거는 여전히 남아 있다. 목표 전체를 완료 처리하지 않는다.
