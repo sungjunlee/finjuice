@@ -447,3 +447,23 @@ def test_close_resume_reactivate_refences_csv_trees(tmp_path: Path) -> None:
     with pytest.raises(LegacyCsvWriteBlockedError):
         resumed.attempt_direct_csv_write(understands_lock_file=False)
     resumed.close()
+
+
+def test_applied_overlay_cannot_rebind_to_a_different_pin(tmp_path: Path) -> None:
+    """An applied overlay keeps its baseline and cannot be rebound to another pin."""
+    target = tmp_path / "target"
+    pin = _pin()
+    other = DatasetPin(dataset_generation=str(uuid4()), dataset_revision=pin.dataset_revision + 1)
+    with IsolatedCutover(target, pin, overlay_bytes=SYNTHETIC_OVERLAY) as session:
+        applied = session.apply_overlay_corrections("overlay-baseline-v1")
+        with pytest.raises(ConsumerCutoverError, match="different dataset revision"):
+            IsolatedCutover(target, other, overlay_bytes=SYNTHETIC_OVERLAY)
+        resumed = IsolatedCutover.resume(target)
+        retry = resumed.apply_overlay_corrections("overlay-baseline-v1")
+
+    assert applied.status == "applied"
+    assert retry.status == "already_applied"
+    assert resumed.pin == pin
+    assert resumed.overlay is not None
+    assert resumed.overlay.baseline_revision == pin.dataset_revision
+    assert (target / "overlay.yaml").read_bytes() == SYNTHETIC_OVERLAY
