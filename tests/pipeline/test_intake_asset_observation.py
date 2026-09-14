@@ -201,3 +201,84 @@ def test_retransmission_cannot_undo_explicit_meaning_correction(asset_repo):
     )
     with pytest.raises(MutationConflictError):
         _apply(asset_repo, "old-evidence-retransmitted")
+
+
+@pytest.mark.parametrize("pending_state", ["unconfirmed", "rejected"])
+def test_pending_meaning_successor_does_not_block_intake_revision(asset_repo, pending_state):
+    from dataclasses import asdict, replace
+
+    from finjuice.pipeline.storage.sqlite.intake_lifecycle import IntakeRevision
+    from finjuice.pipeline.storage.sqlite.intake_queries import intake_decision_view
+
+    applied, _, _ = _apply(asset_repo, "original")
+    paths, generation, service, account, resource = asset_repo
+    original = applied.result["applied"]
+    database = paths.generation(generation).database
+
+    def current_revision():
+        with sqlite3.connect(database) as connection:
+            return connection.execute("SELECT dataset_revision FROM repository_meta").fetchone()[0]
+
+    meaning = AssetMeaningDecision(
+        source_entity_id=original["source_entity_id"],
+        value_id=original["value_id"],
+        account_id=account,
+        resource_id=resource,
+        measure_kind="valuation",
+        source_kind="screenshot",
+        as_of="2026-09-01",
+        scope_state="complete",
+        evidence={"review": "pending interpretation"},
+        original_currency="KRW",
+        confirmation_state=pending_state,
+        supersedes_assertion_id=original["assertion_id"],
+    )
+    service.execute(
+        MutationRequest(
+            "synthetic.meaning", "pending", {}, generation, current_revision(), "human"
+        ),
+        lambda context: MutationOutcome(context.confirm_asset_meaning(meaning)),
+    )
+    proposal = {
+        "change_kind": "account_fact",
+        "operation": "asset_meaning",
+        "decision": asdict(replace(meaning, confirmation_state="confirmed")),
+    }
+    submitted = submit_intake(
+        service,
+        _submission(
+            generation,
+            proposal=proposal,
+            expected_revision=current_revision(),
+            idempotency_key="meaning-proposal",
+        ),
+    )
+    with sqlite3.connect(database) as connection:
+        connection.execute("BEGIN")
+        parent = next(
+            row
+            for row in intake_decision_view(connection)["decisions"]
+            if row["proposal_id"] == submitted.result["proposal_id"]
+        )
+    revision = IntakeRevision(
+        parent_proposal_id=parent["proposal_id"],
+        parent_payload_digest=parent["payload_digest"],
+        proposal=proposal,
+        evidence={"reason": "retain current confirmed head"},
+        revised_at=NOW,
+        uncertainties=(),
+        resolutions={},
+    )
+    request = MutationRequest(
+        "agent.intake.revise",
+        "revise-meaning",
+        asdict(revision),
+        generation,
+        current_revision(),
+        "human",
+    )
+    result = service.execute(
+        request, lambda context: MutationOutcome(context.revise_intake(revision, request))
+    )
+    assert result.result["parent_proposal_id"] == parent["proposal_id"]
+    assert result.result["proposal_id"] != parent["proposal_id"]
