@@ -307,6 +307,7 @@ class IsolatedCutover:
         self.overlay_bytes = overlay_bytes
         self.overlay: OverlayBinding | None = None
         self.fence_enabled = False
+        self._owns_fence = False
         self._remembered_modes: dict[Path, int] = {}
         self.data_dir.mkdir(parents=True, exist_ok=True)
         if overlay_bytes:
@@ -344,6 +345,9 @@ class IsolatedCutover:
     def persist(self) -> Path:
         """Write restartable session state without financial row payloads."""
         self._adopt_disk_state()
+        return self._write_state()
+
+    def _write_state(self) -> Path:
         payload = {
             "schema_version": SCHEMA_VERSION,
             "mode": self.mode,
@@ -528,6 +532,7 @@ class IsolatedCutover:
             remembered.update(_chmod_tree_readonly(self.data_dir / name))
         self._remembered_modes = remembered
         self.fence_enabled = True
+        self._owns_fence = True
         self.persist()
         return lock_path
 
@@ -549,12 +554,16 @@ class IsolatedCutover:
     def close(self) -> None:
         """Restore chmod'd trees so isolated fixtures can be deleted.
 
-        Resumed sessions restore the modes persisted with the fence. They must
-        not fall back to 0o755/0o644, which would widen a fenced tree.
+        Persist fence_enabled=False so resume does not claim a live fence
+        after permissions have been restored.
         """
         if self._remembered_modes:
             _restore_modes(self._remembered_modes)
             self._remembered_modes = {}
+        if self._owns_fence and self.fence_enabled:
+            self.fence_enabled = False
+            self._owns_fence = False
+            self._write_state()
 
     def _adopt_disk_state(self) -> None:
         """Keep newer overlay and fence state if a stale handle writes."""

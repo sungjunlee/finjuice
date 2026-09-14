@@ -428,3 +428,22 @@ def test_mismatched_overlay_digest_does_not_adopt_disk_correction(tmp_path: Path
     assert resumed.overlay is not None
     assert resumed.overlay.digest == overlay_digest(SYNTHETIC_OVERLAY)
     assert resumed.overlay.applied_correction_id == "overlay-baseline-v1"
+
+
+def test_close_resume_reactivate_refences_csv_trees(tmp_path: Path) -> None:
+    """After close, resume must not claim a live fence until re-activated."""
+    csv_relative = "transactions/2024/01/transactions.csv"
+    target = tmp_path / "target"
+    pin = _pin()
+    session = IsolatedCutover(target, pin)
+    seed = session.data_dir / csv_relative
+    seed.parent.mkdir(parents=True, exist_ok=True)
+    seed.write_text("row_hash,amount\nsynthetic,0\n", encoding="utf-8")
+    session.activate_legacy_csv_fence()
+    session.close()
+    resumed = IsolatedCutover.resume(target)
+    assert resumed.fence_enabled is False
+    resumed.activate_legacy_csv_fence()
+    with pytest.raises(LegacyCsvWriteBlockedError):
+        resumed.attempt_direct_csv_write(understands_lock_file=False)
+    resumed.close()
