@@ -20,7 +20,7 @@ repo = _repo_fixture
 
 def test_actual_migration_primary_only_empty_month_exact_and_detached(tmp_path: Path) -> None:
     database = _candidate(tmp_path, extra_root=True)
-    with RepositoryReader(database) as reader:
+    with RepositoryReader(database, expected_schema_version=5) as reader:
         snapshot = reader.portfolio_snapshot()
     (tmp_path / "source/assets/snapshots/2026/01/snapshots.csv").write_text("changed")
     display = PortfolioDisplay(snapshot)
@@ -46,7 +46,7 @@ def test_actual_migration_primary_only_empty_month_exact_and_detached(tmp_path: 
 
 
 def test_path_month_is_not_rewritten_to_row_date(tmp_path: Path) -> None:
-    with RepositoryReader(_candidate(tmp_path)) as reader:
+    with RepositoryReader(_candidate(tmp_path), expected_schema_version=5) as reader:
         snapshot = reader.portfolio_snapshot()
     row = {**snapshot.asset_snapshots[0], "snapshot_date": "2025-12-31"}
     display = PortfolioDisplay(replace(snapshot, asset_snapshots=(row,)))
@@ -67,7 +67,7 @@ def test_schema_capability_does_not_hide_unmaterialized_report(tmp_path: Path) -
 
 
 def test_missing_asset_counterpart_and_float_overflow_are_static_errors(tmp_path: Path) -> None:
-    with RepositoryReader(_candidate(tmp_path)) as reader:
+    with RepositoryReader(_candidate(tmp_path), expected_schema_version=5) as reader:
         snapshot = reader.portfolio_snapshot()
     with pytest.raises(PortfolioDisplayError, match="lack typed"):
         PortfolioDisplay(replace(snapshot, asset_snapshots=())).snapshot_partition("2026-01")

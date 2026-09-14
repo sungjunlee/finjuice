@@ -109,7 +109,7 @@ def test_mixed_capture_cli_preserves_independent_expected_values(tmp_path: Path)
         jsonschema.Draft202012Validator(schema, registry=registry).validate(payload)
         for private in (str(tmp_path), "synthetic-account", "transactions.csv", row[6]):
             assert private not in result.output
-    with RepositoryReader(candidate / "finjuice.sqlite3") as reader:
+    with RepositoryReader(candidate / "finjuice.sqlite3", expected_schema_version=5) as reader:
         transactions = reader.rows("transactions")
         assert len(transactions) == 2
         assert len({item["entity_id"] for item in transactions}) == 2
@@ -187,7 +187,7 @@ def test_cross_file_overview_preservation_seam(
     candidate = tmp_path / "candidate"
     build_migration(plan, candidate, active_data_dir=source)
     assert verify_migration(candidate).to_dict()["cutover_ready"] is False
-    with RepositoryReader(candidate / "finjuice.sqlite3") as reader:
+    with RepositoryReader(candidate / "finjuice.sqlite3", expected_schema_version=5) as reader:
         _assert_overview_file_evidence(reader, candidate, expected_files)
         facts = reader.rows("overview_facts")
         assert len(facts) == len(expected_numbers)
@@ -209,9 +209,9 @@ def test_cross_file_overview_preservation_seam(
         assert reader.rows("transactions") == []
     replay = tmp_path / "replay"
     build_migration(plan, replay, active_data_dir=source)
-    assert semantic_snapshot(candidate / "finjuice.sqlite3") == semantic_snapshot(
-        replay / "finjuice.sqlite3"
-    )
+    assert semantic_snapshot(
+        candidate / "finjuice.sqlite3", expected_schema_version=5
+    ) == semantic_snapshot(replay / "finjuice.sqlite3", expected_schema_version=5)
     assert before == (tree_inventory(source), tree_inventory(capture))
 
 

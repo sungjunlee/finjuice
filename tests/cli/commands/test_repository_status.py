@@ -232,6 +232,11 @@ def test_status_preserves_migrated_history_before_native_import(
     )
     plan_migration(capture, output=plan, active_data_dir=query_root.legacy)
     build_migration(plan, candidate, active_data_dir=query_root.legacy)
+    from finjuice.pipeline.storage.sqlite import GenerationPaths, upgrade_repository
+
+    upgraded = GenerationPaths(tmp_path / "upgraded-status")
+    upgrade_repository(candidate / "finjuice.sqlite3", upgraded)
+    candidate = upgraded.root
     with RepositoryReader(candidate / "finjuice.sqlite3") as reader:
         generation = reader.info.dataset_generation
     root = tmp_path / "active2"

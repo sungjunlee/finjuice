@@ -67,7 +67,7 @@ def test_portfolio_heads_select_only_primary_exact_paths_and_preserve_all_bytes(
     ) == len(expected)
     candidate = tmp_path / "candidate"
     build_migration(path, candidate, active_data_dir=source)
-    with RepositoryReader(candidate / "finjuice.sqlite3") as reader:
+    with RepositoryReader(candidate / "finjuice.sqlite3", expected_schema_version=5) as reader:
         assert reader.info.schema_version == 5
         revisions = {
             row["entity_id"]: row
@@ -111,9 +111,9 @@ def test_portfolio_heads_select_only_primary_exact_paths_and_preserve_all_bytes(
     assert tree_inventory(candidate) == stable
     replay = tmp_path / "replay"
     build_migration(path, replay, active_data_dir=source)
-    assert semantic_snapshot(replay / "finjuice.sqlite3") == semantic_snapshot(
-        candidate / "finjuice.sqlite3"
-    )
+    assert semantic_snapshot(
+        replay / "finjuice.sqlite3", expected_schema_version=5
+    ) == semantic_snapshot(candidate / "finjuice.sqlite3", expected_schema_version=5)
     assert before == (tree_inventory(source), tree_inventory(extra), tree_inventory(capture))
 
 
@@ -159,8 +159,8 @@ def test_v5_inherits_v4_report_and_manual_state_without_reclassification(tmp_pat
     old = tmp_path / "old"
     build_migration(plan_path, old, active_data_dir=source)
     with (
-        RepositoryReader(old / "finjuice.sqlite3") as previous,
-        RepositoryReader(new / "finjuice.sqlite3") as current,
+        RepositoryReader(old / "finjuice.sqlite3", expected_schema_version=5) as previous,
+        RepositoryReader(new / "finjuice.sqlite3", expected_schema_version=5) as current,
     ):
         assert previous.table_names == current.table_names
         assert previous.info.dataset_generation != current.info.dataset_generation

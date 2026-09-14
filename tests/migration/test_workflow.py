@@ -65,11 +65,11 @@ def test_build_verify_and_retry_preserve_source(capture: tuple[Path, Path, Path]
     )
     second = tmp_path / "second"
     build_migration(plan, second, active_data_dir=source)
-    assert semantic_snapshot(target / "finjuice.sqlite3") == semantic_snapshot(
-        second / "finjuice.sqlite3"
-    )
+    assert semantic_snapshot(
+        target / "finjuice.sqlite3", expected_schema_version=5
+    ) == semantic_snapshot(second / "finjuice.sqlite3", expected_schema_version=5)
     assert original == (tree_inventory(source), tree_inventory(backup))
-    with RepositoryReader(target / "finjuice.sqlite3") as reader:
+    with RepositoryReader(target / "finjuice.sqlite3", expected_schema_version=5) as reader:
         revisions = reader.rows("config_revisions")
         assert len(revisions) == 1
         assert (
@@ -194,7 +194,9 @@ def test_rehashed_database_tamper_fails_source_parity(capture, tmp_path):
     manifest = json.loads(location.read_text())
     manifest.pop("canonical_digest")
     manifest["database_digest"] = file_digest(target / "finjuice.sqlite3")
-    manifest["semantic_digest"] = semantic_snapshot(target / "finjuice.sqlite3")
+    manifest["semantic_digest"] = semantic_snapshot(
+        target / "finjuice.sqlite3", expected_schema_version=5
+    )
     manifest = seal(manifest)
     location.write_text(canonical(manifest))
     (target / MARKER).write_text(manifest["canonical_digest"] + "\n")

@@ -61,3 +61,7 @@ GitHub 이슈가 명세·AC·상태의 정본이다. 전체 목표는 `goals/fin
 - 475ec70 wheel build 완료. 설치본 adapter exact금액·수동정정·capture/restore와 canonical query 검사를 실행했다. 상세 결과 `/tmp/finjuice-json-adapter/final-installed.log`, origins JSON 및 wheel bytes JSON. source/wheel/installed739개 bytes 일치, wheel SHA `8f762f96316ba0dd8e3128f3b3fe24076e73405f098ba77de5d32c93d6dd5612`.
 - PR463 필수 비작성자 승인은 여전히 REVIEW_REQUIRED이며 충돌 없이 BLOCKED다. 실제 운영 배포/전환 및25이슈 완료는 아직 증명되지 않았다. 이전 status-only 응답은 no-progress였으며 이번 turn에는 설치본 증거와 연속성 기록을 추가했다.
 - Claude quota16:12 KST: provider Claude(계정 label 미제공), source claude, confidence percentOnly. 5시간64%사용/36%잔여,16:30 reset, pace상 reset까지 유지. 주간33%사용/67%잔여,9월20일01:00 reset, 예상소진3일7시간. 월간 unknown. 새 위임 없음.
+
+- e6c74f1에서 CI complexity 실패를 수정했다. 대사 원본 계획/개별 검증, 백업 domain facts, catalog/복원 assertion을 분리했다. 분기/문장 제한을 유지하고 명시 CLI/레코드 인자 수7건만 rationale과 함께 baseline에 기록했다. 전체 mypy606/Ruff/complexity PASS. 관련19PASS, lifecycle 기대상태2개를 revised로 바로잡아 실패2+환경authority6=8PASS/10.41초. 환경locator가 기존CSV가 있는 선택 데이터셋의 show/status를 바꾸지 않도록 했다. e6c74f1 Public PR Gate PASS/2분29초.
+- 전체37396 실행은 계속 살아 있으며 현재 source가 수집 시작 시점과 달라졌으므로 final exact-source 결과로 과장하지 않는다. 최종 head의 CI full 결과와 변경 delta를 함께 회수한다. 새 전체 실행은 시작하지 않는다.
+- 발견된 migration 실패는 v5정책 사본을 reader기본v9로 읽는 테스트 경계였다. 정책/프로덕션 reader는 바꾸지 않고 사본 reader/semantic_snapshot에v5를 명시했다. 실제 활성 status 사례는 명시clone upgrade 후 실행한다. 마이그레이션56PASS/23.34초, status2개 import경로 교정 후2PASS/1.95초, portfolio display6PASS/4초. 진행 상세는 `/tmp/finjuice-json-adapter/`에 있다. 아직 final 전체 성공·운영 배포·25개AC 완료로 간주하지 않는다.

@@ -157,7 +157,7 @@ def test_five_report_roles_preserve_values_without_claiming_fact_resolution(tmp_
     )
     build_migration(plan, candidate, active_data_dir=source)
     assert verify_migration(candidate).to_dict()["cutover_ready"] is False
-    with RepositoryReader(candidate / "finjuice.sqlite3") as reader:
+    with RepositoryReader(candidate / "finjuice.sqlite3", expected_schema_version=5) as reader:
         assert reader.info.schema_version == 5
         reports = {row["report_kind"]: row for row in reader.rows("legacy_overview_reports")}
         assert set(reports) == {"balance", "cashflow", "insurance", "investment", "loan"}
@@ -232,9 +232,9 @@ def test_five_report_roles_preserve_values_without_claiming_fact_resolution(tmp_
     )
     replay = tmp_path / "replay"
     build_migration(plan, replay, active_data_dir=source)
-    assert semantic_snapshot(candidate / "finjuice.sqlite3") == semantic_snapshot(
-        replay / "finjuice.sqlite3"
-    )
+    assert semantic_snapshot(
+        candidate / "finjuice.sqlite3", expected_schema_version=5
+    ) == semantic_snapshot(replay / "finjuice.sqlite3", expected_schema_version=5)
     assert tree_inventory(candidate) == original_candidate
     assert (tree_inventory(source), tree_inventory(capture)) == before
 
@@ -274,7 +274,7 @@ def test_unmapped_fact_shaped_rows_do_not_abort_report_build(tmp_path: Path) -> 
     plan_migration(capture, output=plan, active_data_dir=source)
     build_migration(plan, candidate, active_data_dir=source)
     assert verify_migration(candidate).to_dict()["status"] == "ok"
-    with RepositoryReader(candidate / "finjuice.sqlite3") as reader:
+    with RepositoryReader(candidate / "finjuice.sqlite3", expected_schema_version=5) as reader:
         assert len(reader.rows("legacy_overview_reports")) == 5
         assert len(reader.rows("legacy_overview_reference_candidates")) == 4
         assert (
@@ -313,7 +313,7 @@ def test_report_paths_in_separate_capture_roots_keep_separate_occurrences(tmp_pa
     plan_migration(capture, output=plan, active_data_dir=source)
     build_migration(plan, candidate, active_data_dir=source)
     assert verify_migration(candidate).to_dict()["status"] == "ok"
-    with RepositoryReader(candidate / "finjuice.sqlite3") as reader:
+    with RepositoryReader(candidate / "finjuice.sqlite3", expected_schema_version=5) as reader:
         reports = reader.rows("legacy_overview_reports")
         assert len(reports) == 10
         assert len({row["observation_id"] for row in reports}) == 10

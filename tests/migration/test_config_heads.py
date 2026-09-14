@@ -88,7 +88,7 @@ def test_canonical_heads_preserve_every_revision_and_replay(
         == "already_complete"
     )
     assert tree_inventory(candidate) == candidate_before
-    with RepositoryReader(paths.database) as reader:
+    with RepositoryReader(paths.database, expected_schema_version=5) as reader:
         revisions = [
             row for row in reader.rows("config_revisions") if row["config_kind"] != "other"
         ]
@@ -134,7 +134,9 @@ def test_canonical_heads_preserve_every_revision_and_replay(
         )
     replay = tmp_path / "replay"
     build_migration(plan_path, replay, active_data_dir=source)
-    assert semantic_snapshot(GenerationPaths(replay).database) == semantic_snapshot(paths.database)
+    assert semantic_snapshot(
+        GenerationPaths(replay).database, expected_schema_version=5
+    ) == semantic_snapshot(paths.database, expected_schema_version=5)
     assert before == (tree_inventory(source), tree_inventory(external), tree_inventory(capture))
 
 
@@ -158,7 +160,9 @@ def test_legacy_plan_keeps_absent_heads_and_unknown_policy_is_rejected(tmp_path:
     build_migration(path, candidate, active_data_dir=source)
     with RepositoryReader(GenerationPaths(candidate).database, expected_schema_version=4) as reader:
         assert reader.rows("config_heads") == []
-        with RepositoryReader(GenerationPaths(modern).database) as current:
+        with RepositoryReader(
+            GenerationPaths(modern).database, expected_schema_version=5
+        ) as current:
             assert reader.rows("repository_meta") != current.rows("repository_meta")
             assert reader.rows("source_occurrences") == current.rows("source_occurrences")
             assert reader.rows("config_revisions") == current.rows("config_revisions")

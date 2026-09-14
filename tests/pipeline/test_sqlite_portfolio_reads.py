@@ -80,7 +80,7 @@ def _candidate(tmp_path: Path, policy: str | None = None, *, extra_root: bool = 
 
 def test_actual_migration_exact_values_configs_and_detachment(tmp_path: Path) -> None:
     database = _candidate(tmp_path)
-    with RepositoryReader(database) as reader:
+    with RepositoryReader(database, expected_schema_version=5) as reader:
         snapshot = reader.portfolio_snapshot()
     assert isinstance(snapshot.asset_snapshots, tuple)
     assert snapshot.assets.head is not None
@@ -145,7 +145,9 @@ def test_authority_and_same_reader_config_revision(query_root: QueryRoot, tmp_pa
 
 
 def test_multiple_roots_reference_candidates_and_scope_exclusions(tmp_path: Path) -> None:
-    with RepositoryReader(_candidate(tmp_path, extra_root=True)) as reader:
+    with RepositoryReader(
+        _candidate(tmp_path, extra_root=True), expected_schema_version=5
+    ) as reader:
         snapshot = reader.portfolio_snapshot()
     reports = snapshot.legacy_overview_reports
     assert len(reports["legacy_overview_reports"]) == 10

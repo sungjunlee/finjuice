@@ -116,7 +116,7 @@ def test_blank_snapshot_and_extra_cashflow_currency_preserve_without_build_failu
     plan_migration(capture, output=plan, active_data_dir=source)
     build_migration(plan, candidate, active_data_dir=source)
     assert verify_migration(candidate).to_dict()["status"] == "ok"
-    with RepositoryReader(GenerationPaths(candidate).database) as reader:
+    with RepositoryReader(GenerationPaths(candidate).database, expected_schema_version=5) as reader:
         reports = list(reader.rows("legacy_overview_reports"))
         values = list(reader.rows("exact_values"))
         issues = list(reader.rows("preservation_issues"))
