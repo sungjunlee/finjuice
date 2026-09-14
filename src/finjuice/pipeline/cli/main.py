@@ -55,6 +55,7 @@ from finjuice.pipeline.cli.commands.ssot_close import close_app
 from finjuice.pipeline.cli.commands.ssot_intake import intake_app
 from finjuice.pipeline.cli.commands.ssot_migrate import ssot_app
 from finjuice.pipeline.cli.commands.ssot_reconcile import reconcile_app
+from finjuice.pipeline.cli.commands.ssot_statement import import_json, statement_evidence
 from finjuice.pipeline.cli.commands.tag import tag_command
 from finjuice.pipeline.cli.commands.template_cmd import template_app
 from finjuice.pipeline.cli.commands.transfer import transfer_command
@@ -213,6 +214,8 @@ ssot_app.add_typer(canonical_assets_app, name="assets")
 ssot_app.add_typer(intake_app, name="intake")
 ssot_app.add_typer(reconcile_app, name="reconcile")
 ssot_app.add_typer(close_app, name="close")
+ssot_app.command("import-json")(import_json)
+ssot_app.command("statement-evidence")(statement_evidence)
 app.add_typer(ssot_app, name="ssot", rich_help_panel="Admin")
 
 

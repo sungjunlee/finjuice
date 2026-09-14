@@ -190,6 +190,8 @@ def generate_cli_docs() -> None:
         "ssot": [
             "close",
             "close run",
+            "import-json",
+            "statement-evidence",
             "close reopen",
             "close history",
             "reconcile",

@@ -962,14 +962,16 @@ finjuice --version
 │ --help          Show this message and exit.                                                                          │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ migrate     Plan, build, and verify preservation migrations.                                                         │
-│ backup      Create snapshots, capture a local recovery graph, retain a managed store, and restore inactive           │
-│             workspaces.                                                                                              │
-│ account     Inspect canonical accounts and explicitly bind source identities.                                        │
-│ assets      Confirm source-backed asset meanings and report exact scoped ownership.                                  │
-│ intake      Preserve original evidence and review explicitly supplied extraction and proposals.                      │
-│ reconcile   Preserve purchase evidence and review exact N:M ledger settlements.                                      │
-│ close       Record immutable month close revisions and explicit reopen lineage.                                      │
+│ import-json          Preserve exact statement bytes and apply only explicitly decided economic records.              │
+│ statement-evidence   Read every preserved statement record, its canonical mapping and pending state.                 │
+│ migrate              Plan, build, and verify preservation migrations.                                                │
+│ backup               Create snapshots, capture a local recovery graph, retain a managed store, and restore inactive  │
+│                      workspaces.                                                                                     │
+│ account              Inspect canonical accounts and explicitly bind source identities.                               │
+│ assets               Confirm source-backed asset meanings and report exact scoped ownership.                         │
+│ intake               Preserve original evidence and review explicitly supplied extraction and proposals.             │
+│ reconcile            Preserve purchase evidence and review exact N:M ledger settlements.                             │
+│ close                Record immutable month close revisions and explicit reopen lineage.                             │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```
@@ -1016,6 +1018,50 @@ finjuice --version
 │    --expected-generation        TEXT     Expected active dataset generation                                          │
 │    --expected-revision          INTEGER  Expected active dataset revision                                            │
 │    --help                                Show this message and exit.                                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot import-json`
+
+```
+
+ Usage: finjuice ssot import-json [OPTIONS] DOCUMENT
+
+ Preserve exact statement bytes and apply only explicitly decided economic records.
+
+ The envelope must carry source_identity, schema_version, parser_version,
+ original_hash, as_of, collected_at, coverage, currency and idempotency_key.
+ A record becomes a transaction only with an explicit create decision over a
+ confirmed account source binding; everything else stays pending evidence.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    document      PATH  Canonical JSON statement document [required]                                                │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│    --original                   PATH     Upstream original bytes to preserve                                         │
+│ *  --imported-at                TEXT     Timezone-aware import timestamp [required]                                  │
+│    --json                                                                                                            │
+│    --idempotency-key            TEXT     Stable retry key for an authoritative mutation                              │
+│    --expected-generation        TEXT     Expected active dataset generation                                          │
+│    --expected-revision          INTEGER  Expected active dataset revision                                            │
+│    --help                                Show this message and exit.                                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot statement-evidence`
+
+```
+
+ Usage: finjuice ssot statement-evidence [OPTIONS]
+
+ Read every preserved statement record, its canonical mapping and pending state.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --source-identity        TEXT                                                                                        │
+│ --json                                                                                                               │
+│ --help                         Show this message and exit.                                                           │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```

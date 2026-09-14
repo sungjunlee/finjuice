@@ -63,6 +63,7 @@ if TYPE_CHECKING:
         AllocationWithdrawal,
         EvidenceSubmission,
     )
+    from finjuice.pipeline.statements.canonical import StatementImport
     from finjuice.pipeline.storage.sqlite.intake_lifecycle import IntakeRevision, IntakeWithdrawal
 
 if TYPE_CHECKING:
@@ -335,6 +336,30 @@ class StorageMutationFacade:
             _RequestSpec("close.period.reopen", asdict(command), identity, "cli", command.reason),
             lambda context: MutationOutcome(context.reopen_period(command)),
         )
+
+    def import_statement(
+        self, command: StatementImport, *, identity: MutationIdentity
+    ) -> MutationReceipt:
+        """Publish one canonical JSON statement through the audited mutation boundary."""
+        return self._execute(
+            _RequestSpec("statement.json.import", command.payload(), identity, "cli", None),
+            lambda context: MutationOutcome(context.import_statement(command)),
+        )
+
+    def read_statement_evidence(self, *, source_identity: str | None = None) -> dict[str, Any]:
+        """Read preserved statement evidence from one authority-pinned snapshot."""
+        from finjuice.pipeline.storage.authority import (
+            require_repository_authority,
+            shared_write_lease,
+        )
+        from finjuice.pipeline.storage.sqlite.repository import RepositoryReader
+
+        dispatch, _ = self._repository_dispatch()
+        assert dispatch.evidence is not None
+        with shared_write_lease(dispatch.paths):
+            authority = require_repository_authority(dispatch.paths, dispatch.evidence)
+            with RepositoryReader(authority.paths.database) as reader:
+                return reader.statement_evidence(source_identity=source_identity)
 
     def read_close_history(self, *, period: str | None = None) -> dict[str, Any]:
         """Read immutable close revisions from one authority-pinned repository snapshot."""

@@ -682,6 +682,19 @@ class RepositoryReader(AbstractContextManager["RepositoryReader"]):
             if owns_snapshot:
                 self._connection.execute("ROLLBACK")
 
+    def statement_evidence(self, *, source_identity: str | None = None) -> dict[str, Any]:
+        """Read canonical JSON statement evidence from this pinned snapshot."""
+        from finjuice.pipeline.statements.canonical import statement_evidence
+
+        owns_snapshot = not self._connection.in_transaction
+        if owns_snapshot:
+            self._connection.execute("BEGIN")
+        try:
+            return statement_evidence(self._connection, source_identity=source_identity)
+        finally:
+            if owns_snapshot:
+                self._connection.execute("ROLLBACK")
+
     def close_history(self, *, period: str | None = None) -> dict[str, Any]:
         """Read immutable close revisions and period state from this pinned snapshot."""
         from finjuice.pipeline.close.canonical import close_view

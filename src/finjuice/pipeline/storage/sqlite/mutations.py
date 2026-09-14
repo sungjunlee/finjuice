@@ -104,6 +104,7 @@ if TYPE_CHECKING:
         AllocationWithdrawal,
         EvidenceSubmission,
     )
+    from finjuice.pipeline.statements.canonical import StatementImport
     from finjuice.pipeline.storage.sqlite.intake_lifecycle import IntakeRevision, IntakeWithdrawal
 
 
@@ -1015,6 +1016,12 @@ class MutationContext:
         from finjuice.pipeline.close.canonical import reopen_period
 
         return reopen_period(self.__connection, self, command)
+
+    def import_statement(self, command: StatementImport) -> Mapping[str, Any]:
+        """Preserve one canonical JSON statement inside this atomic mutation."""
+        from finjuice.pipeline.statements.canonical import import_statement
+
+        return import_statement(self.__connection, self, command)
 
     def find_intake_artifact(self, source_artifact_id: str) -> Mapping[str, Any] | None:
         """Find existing canonical intake evidence for one immutable source artifact."""

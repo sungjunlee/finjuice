@@ -112,6 +112,7 @@ command/code/exit-code combinations against this schema.
 | `schemas/ssot_close_history.schema.json` | ssot close history output | `revisions`, `periods` |
 | `schemas/ssot_close_reopen.schema.json` | ssot close reopen output | `close_id`, `period`, `close_revision`, `replayed` |
 | `schemas/ssot_close_run.schema.json` | ssot close run output | `close`, `close_id`, `report_digest`, `diff`, `reclosed`, `replayed` |
+| `schemas/ssot_import_json.schema.json` | ssot import-json output | `artifact_id`, `occurrence_id`, `source_identity`, `coverage`, `record_count`, `counts`, `noop`, `replayed` |
 | `schemas/ssot_intake_confirm.schema.json` | ssot intake confirm output | `proposal_id`, `confirmation_id`, `applied`, `committed_revision`, `replayed` |
 | `schemas/ssot_intake_list.schema.json` | ssot intake list output | `dataset_generation`, `dataset_revision`, `decisions` |
 | `schemas/ssot_intake_revise.schema.json` | ssot intake revise output | `proposal_id`, `parent_proposal_id`, `parent_status`, `application_key`, `expected_generation`, `expected_revision`, `committed_revision`, `replayed` |
@@ -124,6 +125,7 @@ command/code/exit-code combinations against this schema.
 | `schemas/ssot_reconcile_confirm.schema.json` | ssot reconcile confirm output | `allocation_id`, `status`, `residual`, `currency`, `replayed` |
 | `schemas/ssot_reconcile_submit.schema.json` | ssot reconcile submit output | `evidence_ids`, `source_artifact_id`, `inserted_count`, `replayed` |
 | `schemas/ssot_reconcile_withdraw.schema.json` | ssot reconcile withdraw output | `allocation_id`, `withdrawal_id`, `status`, `replayed` |
+| `schemas/ssot_statement_evidence.schema.json` | ssot statement-evidence output | `records`, `occurrence_ids`, `pending_external_ids`, `record_count` |
 | `schemas/status.schema.json` | status --json output | `data_directory`, `transactions`, `last_import`, `terminology`, `tagging`, `rules_file`, `health`, `actionable`, `signals`, `next_steps` |
 | `schemas/tag.schema.json` | tag --json output | `status` |
 | `schemas/template_list.schema.json` | template list --json output | `templates` |
@@ -8937,6 +8939,124 @@ ssot close run output
 }
 ```
 
+## `schemas/ssot_import_json.schema.json`
+
+ssot import-json output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `artifact_id` | `string` | yes |
+| `as_of` | `string` | no |
+| `collected_at` | `string` | no |
+| `committed_revision` | `integer` | no |
+| `counts` | `object` | yes |
+| `coverage` | `string` | yes |
+| `created_transaction_ids` | `array`[`string`] | no |
+| `currency` | `string` | no |
+| `linked_transaction_ids` | `array`[`string`] | no |
+| `noop` | `boolean` | yes |
+| `occurrence_id` | `string` | yes |
+| `original_artifact_id` | `string` \| `null` | no |
+| `pending_external_ids` | `array`[`string`] | no |
+| `record_count` | `integer` | yes |
+| `replayed` | `boolean` | yes |
+| `reused_external_ids` | `array`[`string`] | no |
+| `source_identity` | `string` | yes |
+
+```json
+{
+  "$id": "ssot_import_json.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "artifact_id": {
+      "type": "string"
+    },
+    "as_of": {
+      "type": "string"
+    },
+    "collected_at": {
+      "type": "string"
+    },
+    "committed_revision": {
+      "type": "integer"
+    },
+    "counts": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "coverage": {
+      "type": "string"
+    },
+    "created_transaction_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "currency": {
+      "type": "string"
+    },
+    "linked_transaction_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "noop": {
+      "type": "boolean"
+    },
+    "occurrence_id": {
+      "type": "string"
+    },
+    "original_artifact_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "pending_external_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "record_count": {
+      "type": "integer"
+    },
+    "replayed": {
+      "type": "boolean"
+    },
+    "reused_external_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "source_identity": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "artifact_id",
+    "occurrence_id",
+    "source_identity",
+    "coverage",
+    "record_count",
+    "counts",
+    "noop",
+    "replayed"
+  ],
+  "title": "ssot import-json output",
+  "type": "object"
+}
+```
+
 ## `schemas/ssot_intake_confirm.schema.json`
 
 ssot intake confirm output
@@ -9698,6 +9818,62 @@ ssot reconcile withdraw output
     "replayed"
   ],
   "title": "ssot reconcile withdraw output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_statement_evidence.schema.json`
+
+ssot statement-evidence output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `occurrence_ids` | `array`[`string`] | yes |
+| `pending_external_ids` | `array`[`string`] | yes |
+| `record_count` | `integer` | yes |
+| `records` | `array`[`object`] | yes |
+
+```json
+{
+  "$id": "ssot_statement_evidence.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "occurrence_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "pending_external_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "record_count": {
+      "type": "integer"
+    },
+    "records": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "records",
+    "occurrence_ids",
+    "pending_external_ids",
+    "record_count"
+  ],
+  "title": "ssot statement-evidence output",
   "type": "object"
 }
 ```

@@ -1,0 +1,90 @@
+{
+  "$id": "ssot_import_json.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "artifact_id": {
+      "type": "string"
+    },
+    "as_of": {
+      "type": "string"
+    },
+    "collected_at": {
+      "type": "string"
+    },
+    "committed_revision": {
+      "type": "integer"
+    },
+    "counts": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "coverage": {
+      "type": "string"
+    },
+    "created_transaction_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "currency": {
+      "type": "string"
+    },
+    "linked_transaction_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "noop": {
+      "type": "boolean"
+    },
+    "occurrence_id": {
+      "type": "string"
+    },
+    "original_artifact_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "pending_external_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "record_count": {
+      "type": "integer"
+    },
+    "replayed": {
+      "type": "boolean"
+    },
+    "reused_external_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "source_identity": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "artifact_id",
+    "occurrence_id",
+    "source_identity",
+    "coverage",
+    "record_count",
+    "counts",
+    "noop",
+    "replayed"
+  ],
+  "title": "ssot import-json output",
+  "type": "object"
+}
