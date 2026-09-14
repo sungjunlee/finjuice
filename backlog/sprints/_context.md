@@ -20,7 +20,7 @@ GitHub 이슈가 명세·AC·상태의 정본이다. 전체 목표는 `goals/fin
 - main에 새로 머지된 #514(`56b2589`)를 확인해 #463 작업 브랜치에 통합했다. 활성 provider/정본 읽기를 우선하고, detached locator frame은 기존 정본 선택을 대체하지 않는다. 새 query package API와 legacy-mode query/show/status/template/export 호환은 유지했다.
 - QuerySnapshot identity와 frame은 같은 RepositoryReader snapshot에서 읽도록 변경했다. export의 detached 파생/마스터/보고서도 동일한 captured frame을 사용하며 활성 정본 export의 guard·deterministic artifact는 보존했다. 관련52node 중51PASS/1구조위치FAIL(13.74초); export의 authority guard 이후 공통 구현으로 이동한 경계를 반영하고 실패노드만 확인했다. 변경17source mypy/Ruff 통과. 설치본은 이후 최종 adapter 묶음에서 검증한다.
 - #436은 #514의 자동 종료로 다시 닫혔으나 활성 정본 구현이 아직 #463에 있어 재개했다. 원래 AC/범위를 줄이지 않는다.
-- Cursor adapter86607은30분 hard deadline에서 SIGTERM/exit143로 종료됐고 git 변경이 없었다. `/tmp/finjuice-canonical-adapter/failure-report.json`에 근거가 있다. 재시작하지 않는다. #448은 최신98d266b 기반 `codex/ssot-json-adapter`에서 기존 Opus context를 fork해 직렬 fallback 중이다. 실행 handle7132, 로그 `/tmp/finjuice-json-adapter/`. 원래 close agent는 terminal이며 재시작하지 않았다.
+- Cursor adapter86607은30분 hard deadline에서 SIGTERM/exit143로 종료됐고 git 변경이 없었다. `/tmp/finjuice-canonical-adapter/failure-report.json`에 근거가 있다. 재시작하지 않는다. #448은 최신98d266b 기반 `codex/ssot-json-adapter`에서 기존 Opus context를 fork해 직렬 fallback 중이다. 실행7132는529.9초/exit0으로 완료됐다. 로그 `/tmp/finjuice-json-adapter/`. 원래 close agent는 terminal이며 재시작하지 않았다.
 
 ## 완료된 검사 — 재실행하지 않을 것
 
@@ -52,3 +52,12 @@ GitHub 이슈가 명세·AC·상태의 정본이다. 전체 목표는 `goals/fin
 - 살아 있는 실행은 handle로 회수한다. 관측 timeout은 종료가 아니며 같은 작업을 재시작하지 않는다. 실패 수정은 해당 회귀만 재확인하고 결과 적용 소스를 구분한다.
 - private 데이터·금융 값·계좌/소유자·호스트 상세 경로는 공개 문서/PR/CI에 넣지 않는다. 원본과 수동 기록을 보존하며 운영 원장에 합성 거래를 넣지 않는다.
 - quota는 큰 dispatch 결정 시 확인한다. unknown을 소진으로 간주하지 않고 공유 quota만 합산한다. credit reset/결제는 승인되지 않았다.
+
+## 최신 최종 통합 checkpoint
+
+- main514 통합0ffe93b 이후 #448 JSON adapter를 e62f6d5로 통합했다. 명시 create/link/pending, exact 문자열 금액, 원본 보존, 다른 요청 key 재수입·교차 출처 매핑을 schema9 정본에 연결했다. GPT 교차 검토로 기존 외부ID의 다른 거래 재지정 거절, 처리 완료된 pending 목록 제거, mutating/idempotency manifest와 생성 CLI 문서를 보완했다. 관련15PASS/11.06초, 변경3source mypy 및 Ruff 통과.
+- 최종 통합 전체 pytest는 handle37396에서 실행 중이다. 로그 `/tmp/finjuice-json-adapter/final-integrated-pytest.log`. 중단/재개 시 같은 handle부터 회수하고 새 전체 검사를 시작하지 않는다. 최종 검사가 완료됐다고 주장하지 않는다.
+- 전체 Ruff PASS. 전체 mypy606에서 main514 통합의 StatusFacts optional annotation1건이 발견돼475ec70에서 수정했다. 변경 status12source mypy PASS; 전체 pytest 실행 중 변경은 이 annotation 한 줄뿐이며 관련 결과를 구분한다.
+- 475ec70 wheel build 완료. 설치본 adapter exact금액·수동정정·capture/restore와 canonical query 검사를 실행했다. 상세 결과 `/tmp/finjuice-json-adapter/final-installed.log`, origins JSON 및 wheel bytes JSON. source/wheel/installed739개 bytes 일치, wheel SHA `8f762f96316ba0dd8e3128f3b3fe24076e73405f098ba77de5d32c93d6dd5612`.
+- PR463 필수 비작성자 승인은 여전히 REVIEW_REQUIRED이며 충돌 없이 BLOCKED다. 실제 운영 배포/전환 및25이슈 완료는 아직 증명되지 않았다. 이전 status-only 응답은 no-progress였으며 이번 turn에는 설치본 증거와 연속성 기록을 추가했다.
+- Claude quota16:12 KST: provider Claude(계정 label 미제공), source claude, confidence percentOnly. 5시간64%사용/36%잔여,16:30 reset, pace상 reset까지 유지. 주간33%사용/67%잔여,9월20일01:00 reset, 예상소진3일7시간. 월간 unknown. 새 위임 없음.
