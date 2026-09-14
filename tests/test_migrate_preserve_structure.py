@@ -209,6 +209,10 @@ def _frozen_dataset(root: Path) -> Path:
     (source / "metadata" / "import_history.csv").write_text(
         "file_id,filename\n240115_1,2024-01.xlsx\n", encoding="utf-8"
     )
+    (source / "metadata" / "workspaces.yaml").write_text("workspace: synthetic\n", encoding="utf-8")
+    (source / "transactions" / "2024" / "01" / "notes.txt").write_text(
+        "not a csv\n", encoding="utf-8"
+    )
     return source
 
 
@@ -284,6 +288,12 @@ def _assert_hidden_override_and_unknown_fields(staging: Path) -> None:
             if row["disposition"] == "preserved_opaque"
         ]
         assert opaque
+        quarantined = [
+            row
+            for row in reader.rows("migration_dispositions")
+            if row["disposition"] == "quarantined"
+        ]
+        assert quarantined
         assert reader.rows("overview_facts")
         assert reader.rows("overview_balances")
         roles = {row["occurrence_kind"] for row in reader.rows("source_occurrences")}

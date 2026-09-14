@@ -106,6 +106,7 @@ _FILE_ROLE_ORDER = (
     "overview_loan",
     "asset_snapshot",
     "transaction_partition",
+    "unclassified",
 )
 
 
@@ -228,6 +229,15 @@ def _apply_files(state: BuildState, capture: CaptureManifest) -> None:
         handler = _CSV_HANDLERS.get(entry.logical_role)
         if handler is not None:
             map_csv_entry(state, capture, entry, handler)
+            continue
+        if entry.logical_role == "unclassified":
+            map_opaque_file(
+                state,
+                capture,
+                entry,
+                reason="Unclassified frozen file quarantined with a cause.",
+                disposition="quarantined",
+            )
             continue
         map_opaque_file(
             state,

@@ -124,12 +124,17 @@ def classify_relative_path(relative: str) -> str | None:
         if relative.startswith(prefix):
             matched = role
             break
+    if matched is None:
+        return "unclassified"
     if matched == "source_workbook":
         suffix = Path(relative).suffix.lower()
-        return matched if suffix in _WORKBOOK_SUFFIXES else None
+        return matched if suffix in _WORKBOOK_SUFFIXES else "unclassified"
     if matched == "audit_history":
         suffix = Path(relative).suffix.lower()
-        return matched if suffix in _AUDIT_SUFFIXES else None
+        return matched if suffix in _AUDIT_SUFFIXES else "unclassified"
+    if matched in CSV_ROLES:
+        suffix = Path(relative).suffix.lower()
+        return matched if suffix == ".csv" else "unclassified"
     return matched
 
 
@@ -151,7 +156,7 @@ def _scan_tree(root: Path) -> list[CaptureEntry]:
             relative = _relative_of(root, path)
             role = classify_relative_path(relative)
             if role is None:
-                continue
+                role = "unclassified"
             identity, digest = fingerprint_file(path)
             entries.append(
                 CaptureEntry(
@@ -396,7 +401,9 @@ def expand_planned_inputs(manifest: CaptureManifest) -> list[PlannedInput]:
                 )
             continue
         expected: Disposition = "preserved_opaque"
-        if entry.logical_role in {"rules", "goals", "assets", "scenarios", "overlay"}:
+        if entry.logical_role == "unclassified":
+            expected = "quarantined"
+        elif entry.logical_role in {"rules", "goals", "assets", "scenarios", "overlay"}:
             expected = "migrated"
         inputs.append(_file_input(entry, expected=expected))
     return inputs

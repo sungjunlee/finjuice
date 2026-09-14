@@ -33,7 +33,12 @@ from finjuice.pipeline.migrate.records import (
     row_locator,
     stable_id,
 )
-from finjuice.pipeline.migrate.types import PARSER_VERSION, CaptureEntry, CaptureManifest
+from finjuice.pipeline.migrate.types import (
+    PARSER_VERSION,
+    CaptureEntry,
+    CaptureManifest,
+    Disposition,
+)
 from finjuice.pipeline.storage.sqlite import ConfigRevisionRecord, TransactionRecord
 
 
@@ -61,6 +66,7 @@ def map_opaque_file(
     entry: CaptureEntry,
     *,
     reason: str,
+    disposition: Disposition = "preserved_opaque",
 ) -> str:
     """Preserve one file as source bytes without pretending it is typed history."""
     occurrence_id = publish_entry(state, manifest, entry)
@@ -85,7 +91,7 @@ def map_opaque_file(
             "sha256": entry.sha256,
         },
         locator,
-        ("preserved_opaque", reason),
+        (disposition, reason),
     )
     return occurrence_id
 
