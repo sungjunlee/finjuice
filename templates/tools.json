@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft-07/schema#",
   "name": "finjuice",
   "version": "0.8.3",
-  "generated_at": "2026-09-14T06:20:32+00:00",
+  "generated_at": "2026-09-14T06:42:24+00:00",
   "tools": [
     {
       "name": "assets.balance",
@@ -3815,6 +3815,202 @@
           "snapshot_revision",
           "snapshot_schema_version",
           "wheel_basename"
+        ]
+      }
+    },
+    {
+      "name": "ssot.close.history",
+      "description": "Regenerate stored close reports from frozen facts and read their history.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "period": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          },
+          "json": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "ssot close history output",
+        "top_level_keys": [
+          "_meta",
+          "periods",
+          "revisions"
+        ]
+      }
+    },
+    {
+      "name": "ssot.close.reopen",
+      "description": "Reopen the newest close revision without undoing later recorded transactions.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "period": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "reopened_at": {
+            "type": "string"
+          },
+          "json": {
+            "type": "boolean",
+            "default": false
+          },
+          "idempotency_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Stable retry key for an authoritative mutation",
+            "default": null
+          },
+          "expected_generation": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Expected active dataset generation",
+            "default": null
+          },
+          "expected_revision": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Expected active dataset revision",
+            "default": null
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "period",
+          "reason",
+          "reopened_at"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "ssot close reopen output",
+        "top_level_keys": [
+          "_meta",
+          "close_id",
+          "close_revision",
+          "committed_revision",
+          "period",
+          "replayed"
+        ]
+      }
+    },
+    {
+      "name": "ssot.close.run",
+      "description": "Freeze exact per-currency totals; a still-closed month must be reopened first.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "period": {
+            "type": "string",
+            "description": "Closed month as YYYY-MM"
+          },
+          "source_as_of": {
+            "type": "string",
+            "description": "Timezone-aware source as-of"
+          },
+          "calculation_policy": {
+            "type": "string"
+          },
+          "closed_at": {
+            "type": "string",
+            "description": "Timezone-aware close timestamp"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "asset_scope": {
+            "type": "string",
+            "default": "transactions_only"
+          },
+          "party_id": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": []
+          },
+          "source_id": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": []
+          },
+          "valuation_currency": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          },
+          "json": {
+            "type": "boolean",
+            "default": false
+          },
+          "idempotency_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Stable retry key for an authoritative mutation",
+            "default": null
+          },
+          "expected_generation": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Expected active dataset generation",
+            "default": null
+          },
+          "expected_revision": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Expected active dataset revision",
+            "default": null
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "period",
+          "source_as_of",
+          "calculation_policy",
+          "closed_at",
+          "reason"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "description": "ssot close run output",
+        "top_level_keys": [
+          "_meta",
+          "close",
+          "close_id",
+          "committed_revision",
+          "diff",
+          "reclosed",
+          "replayed",
+          "report_digest"
         ]
       }
     },

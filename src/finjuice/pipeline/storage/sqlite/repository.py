@@ -149,6 +149,13 @@ _READ_TABLE_SQL_V5: Final = {
 def _read_table_sql(schema_version: int) -> Mapping[str, str]:
     """Return exactly the authoritative table surface of the selected schema."""
     _resolve_schema_version(schema_version)
+    if schema_version == 9:
+        from finjuice.pipeline.storage.sqlite.schema_v9 import TABLE_KEYS as V9_TABLE_KEYS
+
+        return {
+            **_read_table_sql(8),
+            **{table: f"SELECT * FROM {table}" for table in V9_TABLE_KEYS},
+        }
     if schema_version == 8:
         from finjuice.pipeline.storage.sqlite.schema_v8 import TABLE_KEYS
 
@@ -671,6 +678,19 @@ class RepositoryReader(AbstractContextManager["RepositoryReader"]):
             self._connection.execute("BEGIN")
         try:
             return reconcile_view(self._connection, self._repository_paths, window_days=window_days)
+        finally:
+            if owns_snapshot:
+                self._connection.execute("ROLLBACK")
+
+    def close_history(self, *, period: str | None = None) -> dict[str, Any]:
+        """Read immutable close revisions and period state from this pinned snapshot."""
+        from finjuice.pipeline.close.canonical import close_view
+
+        owns_snapshot = not self._connection.in_transaction
+        if owns_snapshot:
+            self._connection.execute("BEGIN")
+        try:
+            return close_view(self._connection, period=period)
         finally:
             if owns_snapshot:
                 self._connection.execute("ROLLBACK")

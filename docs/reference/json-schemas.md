@@ -109,6 +109,9 @@ command/code/exit-code combinations against this schema.
 | `schemas/ssot_backup_store_restore.schema.json` | ssot backup store restore --json output | `restore_id`, `descriptor_digest`, `dataset_generation`, `initial_database_digest`, `source_manifest_digest`, `initial_dataset_revision`, `sqlite_schema_version` |
 | `schemas/ssot_backup_store_verify.schema.json` | ssot backup store verify --json output | `kind`, `graph_digest`, `activation_sha256`, `wheel_basename`, `snapshot_generation`, `snapshot_backup_id`, `snapshot_manifest_digest`, `capsule_digest`, `snapshot_schema_version`, `snapshot_revision`, `activation_revision`, `file_count` |
 | `schemas/ssot_backup_verify_bundle.schema.json` | ssot backup verify-bundle --json output | `kind`, `graph_digest`, `activation_sha256`, `wheel_basename`, `snapshot_generation`, `snapshot_backup_id`, `snapshot_manifest_digest`, `capsule_digest`, `snapshot_schema_version`, `snapshot_revision`, `activation_revision`, `file_count` |
+| `schemas/ssot_close_history.schema.json` | ssot close history output | `revisions`, `periods` |
+| `schemas/ssot_close_reopen.schema.json` | ssot close reopen output | `close_id`, `period`, `close_revision`, `replayed` |
+| `schemas/ssot_close_run.schema.json` | ssot close run output | `close`, `close_id`, `report_digest`, `diff`, `reclosed`, `replayed` |
 | `schemas/ssot_intake_confirm.schema.json` | ssot intake confirm output | `proposal_id`, `confirmation_id`, `applied`, `committed_revision`, `replayed` |
 | `schemas/ssot_intake_list.schema.json` | ssot intake list output | `dataset_generation`, `dataset_revision`, `decisions` |
 | `schemas/ssot_intake_revise.schema.json` | ssot intake revise output | `proposal_id`, `parent_proposal_id`, `parent_status`, `application_key`, `expected_generation`, `expected_revision`, `committed_revision`, `replayed` |
@@ -8775,6 +8778,162 @@ ssot backup verify-bundle --json output
   "title": "ssot backup verify-bundle --json output",
   "type": "object",
   "x-command": "ssot.backup.verify-bundle"
+}
+```
+
+## `schemas/ssot_close_history.schema.json`
+
+ssot close history output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `periods` | `object` | yes |
+| `revisions` | `array`[`object`] | yes |
+
+```json
+{
+  "$id": "ssot_close_history.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "periods": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "revisions": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "revisions",
+    "periods"
+  ],
+  "title": "ssot close history output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_close_reopen.schema.json`
+
+ssot close reopen output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `close_id` | `string` | yes |
+| `close_revision` | `integer` | yes |
+| `committed_revision` | `integer` | no |
+| `period` | `string` | yes |
+| `replayed` | `boolean` | yes |
+
+```json
+{
+  "$id": "ssot_close_reopen.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "close_id": {
+      "type": "string"
+    },
+    "close_revision": {
+      "type": "integer"
+    },
+    "committed_revision": {
+      "type": "integer"
+    },
+    "period": {
+      "type": "string"
+    },
+    "replayed": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "_meta",
+    "close_id",
+    "period",
+    "close_revision",
+    "replayed"
+  ],
+  "title": "ssot close reopen output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_close_run.schema.json`
+
+ssot close run output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `close` | `object` | yes |
+| `close_id` | `string` | yes |
+| `committed_revision` | `integer` | no |
+| `diff` | `array`[`object`] | yes |
+| `reclosed` | `boolean` | yes |
+| `replayed` | `boolean` | yes |
+| `report_digest` | `string` | yes |
+
+```json
+{
+  "$id": "ssot_close_run.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "close": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "close_id": {
+      "type": "string"
+    },
+    "committed_revision": {
+      "type": "integer"
+    },
+    "diff": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "reclosed": {
+      "type": "boolean"
+    },
+    "replayed": {
+      "type": "boolean"
+    },
+    "report_digest": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "close",
+    "close_id",
+    "report_digest",
+    "diff",
+    "reclosed",
+    "replayed"
+  ],
+  "title": "ssot close run output",
+  "type": "object"
 }
 ```
 

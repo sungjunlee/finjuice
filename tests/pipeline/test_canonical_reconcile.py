@@ -302,7 +302,7 @@ def test_identity_conflict_hierarchy_and_reviewed_residual_fences(tmp_path: Path
     assert env.revision() == revision
 
 
-@pytest.mark.parametrize("version", [4, 5, 6, 7])
+@pytest.mark.parametrize("version", [4, 5, 6, 7, 8])
 def test_old_raw_restore_and_explicit_clone_upgrade(tmp_path: Path, version: int) -> None:
     source = GenerationPaths(tmp_path / "source")
     with RepositoryBuilder(source, new_entity_id(), expected_schema_version=version) as builder:
@@ -316,7 +316,7 @@ def test_old_raw_restore_and_explicit_clone_upgrade(tmp_path: Path, version: int
     upgrade = GenerationPaths(tmp_path / "upgraded")
     upgrade_repository(raw.database, upgrade)
     with RepositoryReader(upgrade.database) as reader:
-        assert reader.info.schema_version == SQLITE_SCHEMA_VERSION == 8
+        assert reader.info.schema_version == SQLITE_SCHEMA_VERSION == 9
         assert reader.rows("reconcile_evidence") == []
     assert source.database.read_bytes() == raw_before
 

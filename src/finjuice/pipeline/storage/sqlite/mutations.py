@@ -98,6 +98,7 @@ from finjuice.pipeline.storage.sqlite.schema_v8 import validate_v8_invariants
 from finjuice.pipeline.storage.sqlite.writes import TypedRowWriter
 
 if TYPE_CHECKING:
+    from finjuice.pipeline.close.canonical import CloseCommand, ReopenCommand
     from finjuice.pipeline.reconcile.canonical import (
         AllocationConfirmation,
         AllocationWithdrawal,
@@ -1002,6 +1003,18 @@ class MutationContext:
         from finjuice.pipeline.reconcile.canonical import withdraw_allocation
 
         return withdraw_allocation(self.__connection, self, command)
+
+    def close_period(self, command: CloseCommand) -> Mapping[str, Any]:
+        """Freeze one immutable canonical close revision inside this atomic mutation."""
+        from finjuice.pipeline.close.canonical import close_period
+
+        return close_period(self.__connection, self, command)
+
+    def reopen_period(self, command: ReopenCommand) -> Mapping[str, Any]:
+        """Append an explicit reopen without undoing any later recorded transaction."""
+        from finjuice.pipeline.close.canonical import reopen_period
+
+        return reopen_period(self.__connection, self, command)
 
     def find_intake_artifact(self, source_artifact_id: str) -> Mapping[str, Any] | None:
         """Find existing canonical intake evidence for one immutable source artifact."""

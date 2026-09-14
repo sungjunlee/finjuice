@@ -26,10 +26,11 @@ from finjuice.pipeline.storage.sqlite.schema_v5 import apply_schema_v5, validate
 from finjuice.pipeline.storage.sqlite.schema_v6 import apply_schema_v6, validate_v6_invariants
 from finjuice.pipeline.storage.sqlite.schema_v7 import apply_schema_v7, validate_v7_invariants
 from finjuice.pipeline.storage.sqlite.schema_v8 import apply_schema_v8, validate_v8_invariants
+from finjuice.pipeline.storage.sqlite.schema_v9 import apply_schema_v9, validate_v9_invariants
 from finjuice.pipeline.storage.sqlite.snapshot import inspection_snapshot
 
 SQLITE_APPLICATION_ID: Final = 0x464A5353  # "FJSS"
-SQLITE_SCHEMA_VERSION: Final = 8
+SQLITE_SCHEMA_VERSION: Final = 9
 _OWNERSHIP_SHARE_UNIT: Final = "ownership_share.v1"
 _SCHEMA_V1: Final = 1
 _SCHEMA_V2: Final = 2
@@ -954,7 +955,7 @@ def _immutable_trigger_sql() -> str:
 def _resolve_schema_version(expected_schema_version: int | None) -> int:
     """Select an implemented exact schema; omission retains the runtime current contract."""
     version = SQLITE_SCHEMA_VERSION if expected_schema_version is None else expected_schema_version
-    if type(version) is not int or version not in {4, 5, 6, 7, 8}:
+    if type(version) is not int or version not in {4, 5, 6, 7, 8, 9}:
         raise RepositoryVersionError("Unsupported requested SQLite schema version.")
     return version
 
@@ -988,6 +989,16 @@ def _initialize_schema(
             apply_schema_v6,
             apply_schema_v7,
             apply_schema_v8,
+        ),
+        9: (
+            _apply_schema_v2,
+            _apply_schema_v3,
+            _apply_schema_v4,
+            apply_schema_v5,
+            apply_schema_v6,
+            apply_schema_v7,
+            apply_schema_v8,
+            apply_schema_v9,
         ),
     }[schema_version]
     _apply_schema_v1(connection, dataset_generation, dataset_revision=dataset_revision)
@@ -1285,6 +1296,8 @@ def _upgrade_schema_to_current(connection: sqlite3.Connection, source_version: i
         apply_schema_v7(connection)
     if source_version <= 7:
         apply_schema_v8(connection)
+    if source_version <= 8:
+        apply_schema_v9(connection)
 
 
 def _apply_schema_v4(connection: sqlite3.Connection) -> None:
@@ -1461,6 +1474,8 @@ def _validate_application_invariants(
         validate_v7_invariants(connection)
     if schema_version >= 8:
         validate_v8_invariants(connection)
+    if schema_version >= 9:
+        validate_v9_invariants(connection)
 
 
 def _validate_v4_application_invariants(connection: sqlite3.Connection) -> None:

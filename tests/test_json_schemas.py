@@ -25,6 +25,9 @@ CATALOGUED_COMMANDS = [
     ("ssot reconcile candidates", [], "ssot_reconcile_candidates.schema.json"),
     ("ssot reconcile confirm", [], "ssot_reconcile_confirm.schema.json"),
     ("ssot reconcile withdraw", [], "ssot_reconcile_withdraw.schema.json"),
+    ("ssot close run", [], "ssot_close_run.schema.json"),
+    ("ssot close reopen", [], "ssot_close_reopen.schema.json"),
+    ("ssot close history", [], "ssot_close_history.schema.json"),
     ("ssot intake list", [], "ssot_intake_list.schema.json"),
     ("ssot intake submit", [], "ssot_intake_submit.schema.json"),
     ("ssot intake confirm", [], "ssot_intake_confirm.schema.json"),
@@ -777,6 +780,12 @@ def test_command_output_validates_against_schema(
             label.split()[-1]
         ]
         _validator_for(_load_schema(schema_file)).validate(payload)
+        return
+    if label.startswith("ssot close "):
+        from tests.pipeline.test_canonical_close import close_catalog_outputs
+
+        outputs = close_catalog_outputs(schema_data_dir.parent / "canonical-close")
+        _validator_for(_load_schema(schema_file)).validate(outputs[label.replace(" ", "_")])
         return
     if label.startswith("ssot intake "):
         from tests.pipeline.test_canonical_intake_cli import intake_catalog_outputs
