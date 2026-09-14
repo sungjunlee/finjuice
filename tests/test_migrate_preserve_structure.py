@@ -478,3 +478,28 @@ def test_verify_uses_ordinal_when_row_hash_and_source_row_collide(tmp_path: Path
     assert result.status == "ok"
     verified = migrate.verify_migration(staging)
     assert verified.status == "ok"
+
+
+def test_empty_csv_partitions_plan_build_verify(tmp_path: Path) -> None:
+    """Header-only and zero-byte CSV partitions still verify."""
+    source = _frozen_dataset(tmp_path)
+    header_only = source / "banksalad" / "cashflow" / "2024" / "01" / "cashflow.csv"
+    header_only.parent.mkdir(parents=True)
+    header_only.write_text("snapshot_date,amount\n", encoding="utf-8")
+    empty = source / "banksalad" / "loans" / "2024" / "01" / "loans.csv"
+    empty.parent.mkdir(parents=True)
+    empty.write_bytes(b"")
+    overlay = tmp_path / "overlay.yaml"
+    overlay.write_text("overlay: true\n", encoding="utf-8")
+    capture = migrate.capture_frozen_inputs(source, extra_roots={"overlay": overlay})
+    capture_path = tmp_path / "capture.json"
+    migrate.write_capture_manifest(capture, capture_path)
+    plan = migrate.plan_migration(capture_path)
+    plan_path = tmp_path / "plan.json"
+    migrate.write_plan(plan, plan_path)
+    staging = tmp_path / "empty-csv"
+    result = migrate.build_migration(plan_path, staging, active_data_dir=source)
+    assert result.status == "ok"
+    assert result.unexplained_loss_count == 0
+    verified = migrate.verify_migration(staging)
+    assert verified.status == "ok"

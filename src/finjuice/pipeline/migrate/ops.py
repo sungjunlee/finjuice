@@ -303,6 +303,17 @@ def _write_migration_manifest(
         "capture_path": str(plan.capture_path) if plan.capture_path else None,
         "candidate_digest": result.candidate_digest,
         "input_count": result.input_count,
+        "inputs": [
+            {
+                "logical_role": item.logical_role,
+                "relative_path": item.relative_path,
+                "record_kind": item.record_kind,
+                "ordinal": item.ordinal,
+                "expected_disposition": item.expected_disposition,
+                "sha256": item.sha256,
+            }
+            for item in plan.inputs
+        ],
         "dispositions": result.dispositions,
         "unexplained_loss_count": result.unexplained_loss_count,
         "issue_count": result.issue_count,
@@ -575,6 +586,8 @@ def _preservation_checks(
 
 def _matches_planned_locator(item: PlannedInput, locator: dict[str, Any]) -> bool:
     if item.expected_disposition == "intentionally_absent":
+        if item.relative_path:
+            return locator.get("relative_path") == item.relative_path and "ordinal" not in locator
         return (
             locator.get("logical_role") == item.logical_role
             and locator.get("state") == "intentionally_absent"
@@ -587,8 +600,30 @@ def _matches_planned_locator(item: PlannedInput, locator: dict[str, Any]) -> boo
     return locator.get("relative_path") == item.relative_path and "ordinal" not in locator
 
 
-def _locator_coverage(capture: CaptureManifest, snapshot: dict[str, Any]) -> tuple[bool, int, int]:
-    planned = expand_planned_inputs(capture)
+def _planned_inputs_from_manifest(payload: dict[str, Any]) -> list[PlannedInput]:
+    raw_inputs = payload.get("inputs")
+    if not isinstance(raw_inputs, list) or not raw_inputs:
+        raise invalid("Migration candidate is missing frozen planned locators.")
+    planned: list[PlannedInput] = []
+    for item in raw_inputs:
+        if not isinstance(item, dict):
+            raise invalid("Migration candidate has an invalid planned locator.")
+        planned.append(
+            PlannedInput(
+                logical_role=str(item["logical_role"]),
+                relative_path=item.get("relative_path"),
+                record_kind=str(item.get("record_kind") or ""),
+                ordinal=None if item.get("ordinal") is None else int(item["ordinal"]),
+                expected_disposition=item["expected_disposition"],
+                sha256=item.get("sha256"),
+            )
+        )
+    return planned
+
+
+def _locator_coverage(
+    planned: list[PlannedInput], snapshot: dict[str, Any]
+) -> tuple[bool, int, int]:
     provenances: list[tuple[str, dict[str, Any]]] = []
     for row in snapshot["record_provenance"]:
         provenances.append((row["provenance_id"], json.loads(row["legacy_locator_json"])))
@@ -646,7 +681,9 @@ def verify_migration(candidate: Path) -> MigrationResult:
     owner_inferred = [row for row in accounts if row["ownership_state"] != "unknown"]
     if owner_inferred:
         raise invalid("Baseline ownership was inferred; migration must keep ownership unknown.")
-    covered, unexplained, planned_count = _locator_coverage(capture, snapshot)
+    covered, unexplained, planned_count = _locator_coverage(
+        _planned_inputs_from_manifest(payload), snapshot
+    )
     checks = _preservation_checks(capture, snapshot, transactions, accounts) + (
         _check("I01", status="pass" if covered else "fail", checked_count=planned_count),
     )
