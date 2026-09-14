@@ -503,3 +503,21 @@ def test_direct_csv_write_rejects_symlink_escape(tmp_path: Path) -> None:
         )
     assert outside.read_text(encoding="utf-8") == "keep\n"
     session.close()
+
+
+def test_owner_close_does_not_drop_applied_overlay(tmp_path: Path) -> None:
+    """Owner close must merge disk overlay apply-once instead of nulling it."""
+    target = tmp_path / "target"
+    pin = _pin()
+    owner = IsolatedCutover(target, pin)
+    owner.activate_legacy_csv_fence()
+    other = IsolatedCutover(target, pin, overlay_bytes=SYNTHETIC_OVERLAY)
+    applied = other.apply_overlay_corrections("overlay-baseline-v1")
+    other.close()
+    owner.close()
+    resumed = IsolatedCutover.resume(target)
+    retry = resumed.apply_overlay_corrections("overlay-baseline-v1")
+    assert applied.status == "applied"
+    assert retry.status == "already_applied"
+    assert resumed.overlay is not None
+    assert resumed.overlay.applied_correction_id == "overlay-baseline-v1"

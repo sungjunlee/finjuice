@@ -562,6 +562,9 @@ class IsolatedCutover:
             _restore_modes(self._remembered_modes)
             self._remembered_modes = {}
         if restored or self._owns_fence:
+            existing = self._read_disk_state()
+            if existing is not None:
+                self._adopt_disk_overlay_payload(existing.get("overlay"))
             self.fence_enabled = False
             self._owns_fence = False
             self._write_state()
