@@ -16,8 +16,10 @@ from finjuice.pipeline.analytics.duckdb_layer import DuckDBAnalytics
 from finjuice.pipeline.cli.main import app
 from finjuice.pipeline.query import (
     CALCULATION_POLICY,
+    CATEGORY_REPORT_CSV,
     DERIVED_FORMAT,
     GENERATION_ENV_VAR,
+    TRANSACTIONS_CSV,
     QuerySnapshot,
     QuerySourceError,
     classify_derived,
@@ -421,3 +423,65 @@ def test_foreign_generation_derived_is_not_fresh(
     )
 
     assert classify_derived(bundle.directory, foreign) == "foreign_generation"
+
+
+def test_classify_derived_empty_or_missing_required_files_is_not_fresh(
+    mirrored_dataset: dict[str, Path],
+    tmp_path: Path,
+) -> None:
+    """An empty or incomplete derived manifest must not be reported fresh."""
+    snapshot = load_query_snapshot(mirrored_dataset["database"])
+    bundle = write_derived_outputs(snapshot, tmp_path / "derived")
+    manifest = json.loads(bundle.manifest_path.read_text(encoding="utf-8"))
+    assert classify_derived(bundle.directory, snapshot) == "fresh"
+
+    empty_files = {**manifest, "files": {}}
+    bundle.manifest_path.write_text(
+        json.dumps(empty_files, sort_keys=True, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    assert classify_derived(bundle.directory, snapshot) in {"invalid", "stale"}
+
+    partial_files = {
+        **manifest,
+        "files": {TRANSACTIONS_CSV: manifest["files"][TRANSACTIONS_CSV]},
+    }
+    bundle.manifest_path.write_text(
+        json.dumps(partial_files, sort_keys=True, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    assert classify_derived(bundle.directory, snapshot) in {"invalid", "stale"}
+    assert CATEGORY_REPORT_CSV not in partial_files["files"]
+
+
+@pytest.mark.parametrize("format_lower", ["html", "md"])
+def test_export_html_md_transaction_count_honors_period_when_filters_empty(
+    mirrored_dataset: dict[str, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    format_lower: str,
+) -> None:
+    """SQLite html/md export counts the --period slice, not the full snapshot."""
+    data_dir = mirrored_dataset["data_dir"]
+    monkeypatch.setenv(GENERATION_ENV_VAR, str(mirrored_dataset["database"].parent))
+    snapshot = read_transactions_frame(mirrored_dataset["database"])
+    period_count = snapshot.filter(pl.col("date").str.starts_with("2024-10")).height
+    assert snapshot.height > period_count > 0
+
+    result = runner.invoke(
+        app,
+        [
+            "--data-dir",
+            str(data_dir),
+            "export",
+            "--format",
+            format_lower,
+            "--period",
+            "2024-10",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["transaction_count"] == period_count
+    assert payload["_meta"]["filters_applied"] == 0

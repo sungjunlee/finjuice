@@ -185,11 +185,13 @@ def _resolve_transaction_count(
     """Resolve the transaction count for the export result payload."""
     if transaction_count is not None:
         return transaction_count
-    if run.report_source_df is not None:
-        return len(run.report_source_df)
-    sqlite_frame = _configured_sqlite_frame()
-    if sqlite_frame is not None:
-        return len(sqlite_frame)
+    count_df = run.report_source_df
+    if count_df is None:
+        count_df = _configured_sqlite_frame()
+    if count_df is not None:
+        if format_lower in {"html", "md"} and run.period is not None:
+            count_df = count_df.filter(pl.col("date").str.starts_with(run.period))
+        return len(count_df)
     if format_lower in {"html", "md"} and run.period is not None:
         from finjuice.pipeline.export.aggregations import load_transactions
 

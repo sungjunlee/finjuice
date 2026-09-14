@@ -92,10 +92,10 @@ def classify_derived(directory: Path, snapshot: QuerySnapshot) -> DerivedFreshne
         snapshot: Currently selected authoritative snapshot.
 
     Returns:
-        ``fresh`` when identity and file digests match; ``stale`` when the
-        same generation has a different revision or a file digest mismatch;
+        ``fresh`` when identity and required file digests match; ``stale`` when
+        the same generation has a different revision or a file digest mismatch;
         ``foreign_generation`` when the generation differs; ``invalid`` when
-        the manifest is missing or unreadable.
+        the manifest is missing, unreadable, or omits required derived files.
     """
     payload = _load_manifest(directory / MANIFEST_NAME)
     generation = payload.get("dataset_generation") if payload else None
@@ -106,6 +106,7 @@ def classify_derived(directory: Path, snapshot: QuerySnapshot) -> DerivedFreshne
         or not isinstance(generation, str)
         or not isinstance(revision, int)
         or not isinstance(files, dict)
+        or any(name not in files for name in (TRANSACTIONS_CSV, CATEGORY_REPORT_CSV))
     ):
         return "invalid"
     if generation != snapshot.dataset_generation:
