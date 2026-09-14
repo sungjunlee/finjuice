@@ -549,9 +549,46 @@ def _preservation_checks(
             status="pass" if _unknown_fields_match(frozen_rows, payloads) else "fail",
             checked_count=unknown_count,
         ),
-        _check("I01", status="pass", checked_count=len(snapshot["migration_identities"])),
         _check("H01", status="pass", checked_count=len(accounts)),
     )
+
+
+def _matches_planned_locator(item: PlannedInput, locator: dict[str, Any]) -> bool:
+    if item.expected_disposition == "intentionally_absent":
+        return (
+            locator.get("logical_role") == item.logical_role
+            and locator.get("state") == "intentionally_absent"
+        )
+    if item.ordinal is not None:
+        return (
+            locator.get("relative_path") == item.relative_path
+            and locator.get("ordinal") == item.ordinal
+        )
+    return locator.get("relative_path") == item.relative_path and "ordinal" not in locator
+
+
+def _locator_coverage(capture: CaptureManifest, snapshot: dict[str, Any]) -> tuple[bool, int, int]:
+    planned = expand_planned_inputs(capture)
+    provenances: list[tuple[str, dict[str, Any]]] = []
+    for row in snapshot["record_provenance"]:
+        provenances.append((row["provenance_id"], json.loads(row["legacy_locator_json"])))
+    disposed = {row["provenance_id"] for row in snapshot["migration_dispositions"]}
+    used: set[str] = set()
+    missing = 0
+    for item in planned:
+        found: str | None = None
+        for provenance_id, locator in provenances:
+            if provenance_id in used or provenance_id not in disposed:
+                continue
+            if not _matches_planned_locator(item, locator):
+                continue
+            found = provenance_id
+            break
+        if found is None:
+            missing += 1
+            continue
+        used.add(found)
+    return missing == 0, missing, len(planned)
 
 
 def verify_migration(candidate: Path) -> MigrationResult:
@@ -589,8 +626,10 @@ def verify_migration(candidate: Path) -> MigrationResult:
     owner_inferred = [row for row in accounts if row["ownership_state"] != "unknown"]
     if owner_inferred:
         raise invalid("Baseline ownership was inferred; migration must keep ownership unknown.")
-    unexplained = int(payload.get("unexplained_loss_count", 0))
-    checks = _preservation_checks(capture, snapshot, transactions, accounts)
+    covered, unexplained, planned_count = _locator_coverage(capture, snapshot)
+    checks = _preservation_checks(capture, snapshot, transactions, accounts) + (
+        _check("I01", status="pass" if covered else "fail", checked_count=planned_count),
+    )
     if unexplained:
         raise invalid("Unexplained legacy inputs were not given a disposition.")
     failed = [item for item in checks if item["status"] == "fail"]
