@@ -964,6 +964,392 @@ finjuice --version
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ migrate   Plan, build, and verify preservation migrations.                                                           │
 │ backup    Create snapshots, capture a local recovery graph, retain a managed store, and restore inactive workspaces. │
+│ account   Inspect canonical accounts and explicitly bind source identities.                                          │
+│ assets    Confirm source-backed asset meanings and report exact scoped ownership.                                    │
+│ intake    Preserve original evidence and review explicitly supplied extraction and proposals.                        │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot intake`
+
+```
+
+ Usage: finjuice ssot intake [OPTIONS] COMMAND [ARGS]...
+
+ Preserve original evidence and review explicitly supplied extraction and proposals.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ submit    Preserve source bytes and supplied metadata; never infer OCR or account meaning.                           │
+│ list      Read one authority-bound snapshot including pending, stale and uncertain decisions.                        │
+│ confirm   Apply exactly the stored proposal with its explicit application identity.                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot intake submit`
+
+```
+
+ Usage: finjuice ssot intake submit [OPTIONS] SOURCE METADATA
+
+ Preserve source bytes and supplied metadata; never infer OCR or account meaning.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    source        PATH  Original description/image/workbook file [required]                                         │
+│ *    metadata      PATH  Explicit extraction and proposal JSON document [required]                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot intake list`
+
+```
+
+ Usage: finjuice ssot intake list [OPTIONS]
+
+ Read one authority-bound snapshot including pending, stale and uncertain decisions.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot intake confirm`
+
+```
+
+ Usage: finjuice ssot intake confirm [OPTIONS] PROPOSAL_ID
+
+ Apply exactly the stored proposal with its explicit application identity.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    proposal_id      TEXT  [required]                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --confirmed-at               TEXT     Explicit confirmation timestamp [required]                                  │
+│    --json                                                                                                            │
+│    --idempotency-key            TEXT     Stable retry key for an authoritative mutation                              │
+│    --expected-generation        TEXT     Expected active dataset generation                                          │
+│    --expected-revision          INTEGER  Expected active dataset revision                                            │
+│    --help                                Show this message and exit.                                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot assets`
+
+```
+
+ Usage: finjuice ssot assets [OPTIONS] COMMAND [ARGS]...
+
+ Confirm source-backed asset meanings and report exact scoped ownership.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ list               List original source identities, pending meanings and immutable decision history.                 │
+│ confirm            Record explicit meaning/scope/date/evidence for one existing source value.                        │
+│ correct            Append a source meaning correction; retain its earlier assertion and raw source.                  │
+│ relation-confirm   Explicitly include/overlap two existing source entities with review evidence.                     │
+│ relation-correct   Correct an inclusion/overlap decision without deleting its previous evidence.                     │
+│ report             Report exact owned values in an explicit party/source scope; surface unknowns.                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot assets list`
+
+```
+
+ Usage: finjuice ssot assets list [OPTIONS]
+
+ List original source identities, pending meanings and immutable decision history.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot assets confirm`
+
+```
+
+ Usage: finjuice ssot assets confirm [OPTIONS] REQUEST
+
+ Record explicit meaning/scope/date/evidence for one existing source value.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    request      PATH  [required]                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot assets correct`
+
+```
+
+ Usage: finjuice ssot assets correct [OPTIONS] ASSERTION_ID REQUEST
+
+ Append a source meaning correction; retain its earlier assertion and raw source.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    assertion_id      TEXT  [required]                                                                              │
+│ *    request           PATH  [required]                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot assets relation-confirm`
+
+```
+
+ Usage: finjuice ssot assets relation-confirm [OPTIONS] REQUEST
+
+ Explicitly include/overlap two existing source entities with review evidence.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    request      PATH  [required]                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot assets relation-correct`
+
+```
+
+ Usage: finjuice ssot assets relation-correct [OPTIONS] ASSERTION_ID REQUEST
+
+ Correct an inclusion/overlap decision without deleting its previous evidence.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    assertion_id      TEXT  [required]                                                                              │
+│ *    request           PATH  [required]                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot assets report`
+
+```
+
+ Usage: finjuice ssot assets report [OPTIONS]
+
+ Report exact owned values in an explicit party/source scope; surface unknowns.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --as-of             TEXT                  [required]                                                              │
+│ *  --currency          TEXT                  [required]                                                              │
+│ *  --party             TEXT                  [required]                                                              │
+│    --source            TEXT                                                                                          │
+│    --stale-days        INTEGER RANGE [x>=0]  [default: 30]                                                           │
+│    --json                                                                                                            │
+│    --help                                    Show this message and exit.                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot account`
+
+```
+
+ Usage: finjuice ssot account [OPTIONS] COMMAND [ARGS]...
+
+ Inspect canonical accounts and explicitly bind source identities.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ list                List accounts, exact source candidates and immutable confirmation history.                       │
+│ confirm             Confirm an exact source binding from an explicit JSON request file.                              │
+│ correct             Append a correction of the named current binding; retain the original evidence.                  │
+│ ownership           Read exact confirmed ownership as of a date without household aggregation.                       │
+│ preview             Preview binding impact; pass its generation/revision to confirm or correct.                      │
+│ ownership-confirm   Confirm exact party shares, effective dates and explicit evidence from JSON.                     │
+│ ownership-correct   Correct ownership by appending a confirmed successor; retain prior evidence.                     │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot account list`
+
+```
+
+ Usage: finjuice ssot account list [OPTIONS]
+
+ List accounts, exact source candidates and immutable confirmation history.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot account confirm`
+
+```
+
+ Usage: finjuice ssot account confirm [OPTIONS] REQUEST
+
+ Confirm an exact source binding from an explicit JSON request file.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    request      PATH  [required]                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot account correct`
+
+```
+
+ Usage: finjuice ssot account correct [OPTIONS] BINDING_ID REQUEST
+
+ Append a correction of the named current binding; retain the original evidence.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    binding_id      TEXT  [required]                                                                                │
+│ *    request         PATH  [required]                                                                                │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot account ownership`
+
+```
+
+ Usage: finjuice ssot account ownership [OPTIONS] ACCOUNT_ID
+
+ Read exact confirmed ownership as of a date without household aggregation.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    account_id      TEXT  [required]                                                                                │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --as-of        TEXT  [required]                                                                                   │
+│    --json                                                                                                            │
+│    --help               Show this message and exit.                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot account preview`
+
+```
+
+ Usage: finjuice ssot account preview [OPTIONS] REQUEST
+
+ Preview binding impact; pass its generation/revision to confirm or correct.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    request      PATH  [required]                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --corrects        TEXT                                                                                               │
+│ --json                                                                                                               │
+│ --help                  Show this message and exit.                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot account ownership-confirm`
+
+```
+
+ Usage: finjuice ssot account ownership-confirm [OPTIONS] REQUEST
+
+ Confirm exact party shares, effective dates and explicit evidence from JSON.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    request      PATH  [required]                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot account ownership-correct`
+
+```
+
+ Usage: finjuice ssot account ownership-correct [OPTIONS] ASSERTION_ID REQUEST
+
+ Correct ownership by appending a confirmed successor; retain prior evidence.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    assertion_id      TEXT  [required]                                                                              │
+│ *    request           PATH  [required]                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```

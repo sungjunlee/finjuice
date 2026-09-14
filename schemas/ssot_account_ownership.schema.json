@@ -1,0 +1,27 @@
+{
+  "$id": "ssot_account_ownership.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "account_id": {
+      "type": "string"
+    },
+    "as_of": {
+      "type": "string"
+    },
+    "dataset_revision": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "_meta",
+    "dataset_revision",
+    "account_id",
+    "as_of"
+  ],
+  "title": "ssot account ownership output",
+  "type": "object"
+}

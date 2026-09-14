@@ -23,10 +23,12 @@ from finjuice.pipeline.storage.sqlite.ids import migration_entity_id, validate_e
 from finjuice.pipeline.storage.sqlite.objects import SourceObjectStore, _mkdir_checked
 from finjuice.pipeline.storage.sqlite.paths import GenerationPaths
 from finjuice.pipeline.storage.sqlite.schema_v5 import apply_schema_v5, validate_v5_invariants
+from finjuice.pipeline.storage.sqlite.schema_v6 import apply_schema_v6, validate_v6_invariants
+from finjuice.pipeline.storage.sqlite.schema_v7 import apply_schema_v7, validate_v7_invariants
 from finjuice.pipeline.storage.sqlite.snapshot import inspection_snapshot
 
 SQLITE_APPLICATION_ID: Final = 0x464A5353  # "FJSS"
-SQLITE_SCHEMA_VERSION: Final = 5
+SQLITE_SCHEMA_VERSION: Final = 7
 _OWNERSHIP_SHARE_UNIT: Final = "ownership_share.v1"
 _SCHEMA_V1: Final = 1
 _SCHEMA_V2: Final = 2
@@ -951,7 +953,7 @@ def _immutable_trigger_sql() -> str:
 def _resolve_schema_version(expected_schema_version: int | None) -> int:
     """Select an implemented exact schema; omission retains the runtime current contract."""
     version = SQLITE_SCHEMA_VERSION if expected_schema_version is None else expected_schema_version
-    if type(version) is not int or version not in {4, 5}:
+    if type(version) is not int or version not in {4, 5, 6, 7}:
         raise RepositoryVersionError("Unsupported requested SQLite schema version.")
     return version
 
@@ -968,6 +970,15 @@ def _initialize_schema(
     steps = {
         4: (_apply_schema_v2, _apply_schema_v3, _apply_schema_v4),
         5: (_apply_schema_v2, _apply_schema_v3, _apply_schema_v4, apply_schema_v5),
+        6: (_apply_schema_v2, _apply_schema_v3, _apply_schema_v4, apply_schema_v5, apply_schema_v6),
+        7: (
+            _apply_schema_v2,
+            _apply_schema_v3,
+            _apply_schema_v4,
+            apply_schema_v5,
+            apply_schema_v6,
+            apply_schema_v7,
+        ),
     }[schema_version]
     _apply_schema_v1(connection, dataset_generation, dataset_revision=dataset_revision)
     for apply_schema in steps:
@@ -1002,12 +1013,14 @@ def inspect_repository(
     database: Path,
     *,
     scratch_root: Path | None = None,
+    expected_schema_version: int | None = None,
 ) -> RepositoryInfo:
     """Inspect the latest stable DB/WAL state without SQLite-opening the original files."""
+    version = _resolve_schema_version(expected_schema_version)
     with inspection_snapshot(database, scratch_root=scratch_root) as snapshot:
         connection = _connect_snapshot(snapshot)
         try:
-            return _read_info(connection)
+            return _read_info(connection, expected_schema_version=version)
         finally:
             connection.close()
 
@@ -1256,6 +1269,10 @@ def _upgrade_schema_to_current(connection: sqlite3.Connection, source_version: i
         _apply_schema_v4(connection)
     if source_version <= _SCHEMA_V4:
         apply_schema_v5(connection)
+    if source_version <= 5:
+        apply_schema_v6(connection)
+    if source_version <= 6:
+        apply_schema_v7(connection)
 
 
 def _apply_schema_v4(connection: sqlite3.Connection) -> None:
@@ -1424,8 +1441,12 @@ def _validate_application_invariants(
 ) -> None:
     _resolve_schema_version(schema_version)
     _validate_v4_application_invariants(connection)
-    if schema_version == 5:
+    if schema_version >= 5:
         validate_v5_invariants(connection)
+    if schema_version >= 6:
+        validate_v6_invariants(connection)
+    if schema_version >= 7:
+        validate_v7_invariants(connection)
 
 
 def _validate_v4_application_invariants(connection: sqlite3.Connection) -> None:

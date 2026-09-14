@@ -1,0 +1,35 @@
+{
+  "$id": "ssot_account_correct.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "account_id": {
+      "type": "string"
+    },
+    "binding_id": {
+      "type": "string"
+    },
+    "committed_revision": {
+      "type": "integer"
+    },
+    "replayed": {
+      "type": "boolean"
+    },
+    "supersedes_binding_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "binding_id",
+    "account_id",
+    "supersedes_binding_id",
+    "committed_revision",
+    "replayed"
+  ],
+  "title": "ssot account correct output",
+  "type": "object"
+}

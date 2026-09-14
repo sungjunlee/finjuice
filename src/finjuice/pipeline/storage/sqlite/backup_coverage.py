@@ -29,7 +29,7 @@ from finjuice.pipeline.storage.sqlite.backup_verify import resolve_backup_input
 from finjuice.pipeline.storage.sqlite.errors import BackupVerificationError
 from finjuice.pipeline.storage.sqlite.objects import _assert_no_symlink_ancestors
 from finjuice.pipeline.storage.sqlite.recovery_bundle import ExpectedRecoveryGraph
-from finjuice.pipeline.storage.sqlite.schema import SQLITE_SCHEMA_VERSION
+from finjuice.pipeline.storage.sqlite.schema import SQLITE_SCHEMA_VERSION, _resolve_schema_version
 
 _ERROR = "Committed backup coverage could not be verified."
 _CHUNK = 256
@@ -40,7 +40,7 @@ CoverageStatus = Literal[
     "unknown",
     "transfer_failed",
 ]
-FactKind = Literal["receipt", "changeset", "entry", "audit"]
+FactKind = Literal["receipt", "changeset", "entry", "audit", "asset_meaning"]
 
 
 @dataclass(frozen=True)
@@ -211,6 +211,13 @@ def _load_facts(connection: sqlite3.Connection) -> tuple[CommittedFact, ...]:
         ("",),
     )
     facts: list[CommittedFact] = []
+    if connection.execute("PRAGMA user_version").fetchone()[0] >= 7:
+        cursor = connection.execute("SELECT * FROM asset_meaning_assertions ORDER BY assertion_id")
+        names = [column[0] for column in cursor.description]
+        for row in cursor:
+            content = dict(zip(names, row, strict=True))
+            content["changeset_id"] = content["created_changeset_id"]
+            facts.append(_fact("asset_meaning", {"assertion_id": content["assertion_id"]}, content))
     receipt_changes = set()
     for row in receipts:
         receipt_changes.add(row[0])
@@ -290,7 +297,10 @@ def _coverage_digest(facts: tuple[CommittedFact, ...]) -> str:
     return _sha(_canonical(body))
 
 
-def _read_commit_set(database: Path) -> CommitObservation:
+def _read_commit_set(
+    database: Path, *, schema_version: int = SQLITE_SCHEMA_VERSION
+) -> CommitObservation:
+    _resolve_schema_version(schema_version)
     connection = _connect_reader(database)
     try:
         connection.execute("BEGIN")
@@ -298,7 +308,7 @@ def _read_commit_set(database: Path) -> CommitObservation:
             "SELECT dataset_generation, schema_version, dataset_revision "
             "FROM repository_meta WHERE singleton = 1"
         ).fetchone()
-        if row is None or row[1] != SQLITE_SCHEMA_VERSION:
+        if row is None or row[1] != schema_version:
             raise BackupVerificationError(_ERROR)
         facts = _load_facts(connection)
         observed_at = _utc_now()
@@ -370,7 +380,9 @@ def read_graph_commits(
 ) -> CommitObservation:
     """Read committed facts from one graph snapshot already verified by the caller."""
     selected, _manifest, _layout = resolve_backup_input(bundle / "snapshot")
-    observed = _read_commit_set(selected / DATABASE_BASENAME)
+    observed = _read_commit_set(
+        selected / DATABASE_BASENAME, schema_version=snapshot_schema_version
+    )
     if (
         observed.generation != snapshot_generation
         or observed.schema_version != snapshot_schema_version

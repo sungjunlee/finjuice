@@ -49,6 +49,9 @@ from finjuice.pipeline.cli.commands.refresh_cmd import refresh_command
 from finjuice.pipeline.cli.commands.review import review_command
 from finjuice.pipeline.cli.commands.rules import rules_app
 from finjuice.pipeline.cli.commands.sqlite_backup import ssot_backup_app
+from finjuice.pipeline.cli.commands.ssot_accounts import account_app
+from finjuice.pipeline.cli.commands.ssot_assets import assets_app as canonical_assets_app
+from finjuice.pipeline.cli.commands.ssot_intake import intake_app
 from finjuice.pipeline.cli.commands.ssot_migrate import ssot_app
 from finjuice.pipeline.cli.commands.tag import tag_command
 from finjuice.pipeline.cli.commands.template_cmd import template_app
@@ -203,6 +206,9 @@ app.add_typer(budget_app, name="budget", rich_help_panel="Analysis")
 app.add_typer(journal_app, name="journal", rich_help_panel="Commands")
 app.add_typer(backup_app, name="backup", rich_help_panel="Admin")
 ssot_app.add_typer(ssot_backup_app, name="backup")
+ssot_app.add_typer(account_app, name="account")
+ssot_app.add_typer(canonical_assets_app, name="assets")
+ssot_app.add_typer(intake_app, name="intake")
 app.add_typer(ssot_app, name="ssot", rich_help_panel="Admin")
 
 

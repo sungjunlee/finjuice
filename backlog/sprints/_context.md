@@ -6,8 +6,9 @@ GitHub 이슈가 명세·AC·상태의 정본이다. 전체 목표는 `goals/fin
 
 - 기반 PR #463: `codex/ssot-m2-mutations`, `c2864aa`. 기존 main75e의 38개 additive 파일에 이어 main `cf109f5`(#515)의 3개 추가 파일을 무충돌 병합했다. 필수 non-author approving review가 남았으며 저장소는 auto-merge를 허용하지 않는다. 보호 규칙을 우회하지 않는다.
 - 통합 PR #481: `codex/ssot-m2-migrate`, 최신 기능 검증 소스 `c6b509b`, 기반 동기화 `bacf7bd`는 같은 파일 tree다. draft를 해제했다. 보존 이전·정본 소비·managed recovery store·immutable commit coverage·실제 postcommit filesystem delivery를 포함한다.
-- 계좌 기능: `codex/ssot-account-binding`, `8c046e9`(기능 commit `15e98a6`), #481 위 PR #516. schema6의 명시 source binding 확인/교정, 서로 다른 XLSX의 stable account 유지, `ssot account list|confirm|correct|ownership`과 exact as-of 지분/근거 조회를 구현했다. Grok read-only 교차 리뷰 exit0/P1·P2 없음으로 ready for review다.
-- 다음 writer: `codex/ssot-account-decisions`, 위 `8c046e9` 기반 별도 worktree. native `pr512_integration_map`가 영향 preview와 기존 canonical ownership assertion 확정/교정 CLI를 구현·동결했다. root가 최종 인계를 회수한다. 다른 작업 공간은 수정하지 않는다.
+- 계좌 기능: `codex/ssot-account-binding`, `228b943`(검증 기능 소스 `fbaec52`, 동일 tree), #481 위 PR #516. schema6의 명시 source binding 확인/교정, 서로 다른 XLSX의 stable account 유지, `ssot account list|preview|confirm|correct|ownership-confirm|ownership-correct|ownership`의 실제 확인·교정 흐름과 exact as-of 지분/근거 조회를 구현했다. Grok read-only 교차 리뷰 exit0/P1·P2 없음으로 ready for review다.
+- 자산·증빙 정본 연결 PR #517: `codex/ssot-canonical-assets`, `5d2d324`, #516 위 draft. schema7 자산 의미/포함 교정과 명시 가계 범위의 정확 합계, 실제 `ssot assets` 및 `ssot intake submit/list/confirm`, 일회 정정/반복 규칙의 정본 적용을 포함한다. Cursor/Grok 교차 리뷰는 exit0/P1 없음으로 완료됐고, 대기 목록 누락과 순환 포함 소계 P2 두 건은 후속 교정했다. 해당 실제 human/JSON 회귀3개가 통과했다.
+- 다음 #444 제안 철회·재작성/타입별 교정 작업은 `codex/ssot-intake-decisions`에서 `5d2d324` 기반으로 진행한다. 기존 원본·추출·제안·적용 기록을 보존한다. #517 소스와 검증을 다시 시작하지 않는다. 머지/운영 게이트와 원래 M5 범위도 유지한다.
 - 작업 공간의 정확한 절대 경로는 `git worktree list`로 확인한다. 기본 active checkout을 writer로 가정하지 않는다.
 
 ## 완료된 검사 — 재실행하지 않을 것
@@ -17,12 +18,16 @@ GitHub 이슈가 명세·AC·상태의 정본이다. 전체 목표는 `goals/fin
 - 실제 wheel로 same-revision no-op257개의 대기→송수신 coverage를 확인했다. 자체 synthetic 원본/candidate/release/sender를 제거한 뒤 receiver-only restore→mutation→rebackup→second restore PASS, installed origins481. 로컬 합성 검증이며 장비 밖/운영 성공을 뜻하지 않는다.
 - `8c046e9`: 관련 binding/import/schema/ownership 회귀와 실제 CLI 확인 후 whole Ruff/mypy576/build/package checks PASS. 별도 full은 시작하지 않았다.
 - 계좌 설치 wheel 핵심 **8 PASS / 7.05초**, installed origins505, package686개 source/wheel/installed bytes 일치. 실제 다른 XLSX→stable ID→복원/교정과 schema5 raw restore→명시 clone upgrade 포함. wheel SHA `035f4c3e70c627bcd9ea00e0dbd69699c15b9a491cd05daa995e14ea833c1dbd`.
+- 최종 계좌 흐름 fbaec52: 설치7PASS/7.90초,508origins,692package bytes, wheel SHA `2cfc029906326322a4b25806faf14a261290c905b53c8a3516aede92fa26d9f7`. 전체 Ruff/mypy579 및 최종delta PASS. 두 번째 Grok 범위리뷰도 exit0/P1·P2 없음. `/tmp/finjuice-account-decisions-review/`의 결과를 재사용한다.
+- 새main #515의 flat-path 불일치는 `7f1091e`(#481), `fbaec52`(계좌 소스)에서 immutable attempt 선택/lease로 수정했다. 실패4개+pointer교체1개 및 통합tree8개 PASS, 설치포인터교체도 PASS. 직접 SQL correction 보조함수는 여전히 canonical 변경 증거가 아니다.
 - 로컬 상세 근거는 `/tmp/finjuice-backup-delivery/final/` 및 `/tmp/finjuice-account-binding-review/`. Cursor 원본 delivery 실행은 이미 terminal이며 재시작하지 않는다. 새 리뷰는 account-binding 전용 실행이다.
+
+- `5d2d324`: 설치 실제 자산 human/JSON capture→restore→query, 증빙 submit→confirm→retry, 반복 규칙 교정·제거, catalog 회귀 **6 PASS / 17.71초**. 설치 origins524, package710개 소스/wheel/설치본 bytes 일치. wheel SHA `b9f6d36d40219c86c782fcf85716cd8d214f0b8d6972c529d5a910aed2729a55`. 관련 source 회귀와 Ruff/mypy, 패키지 구성 검사 통과. full 재실행 없음. 근거 `/tmp/finjuice-canonical-assets-review/`, `/tmp/finjuice-canonical-assets/handoff.md`.
 
 ## 남은 실제 완료 조건
 
 - M1은 #449–452로 당시 legacy 캡처·Linux/장비 밖 복원을 마쳤다. 당시 버전의 증거를 현재 SQLite cutover 증거로 대체하지 않는다.
-- 현재 계좌 묶음은 기존 행 소급 재연결, 가계 집계, 일반 agent intake 전체, 운영 schema upgrade/cutover를 완료하지 않았다. 기존 main의 in-memory registry/별도 JSON ledger를 canonical DB 기능 완료로 취급하지 않는다.
+- 현재 묶음은 기존 행 소급 재연결, 미확인 자료까지 포함한 실제 가족 재산 확인, 일반 agent intake 전체, 운영 schema upgrade/cutover를 완료하지 않았다. 기존 main의 in-memory registry/별도 JSON ledger를 canonical DB 기능 완료로 취급하지 않는다.
 - 운영 배포는 머지된 release artifact 기준이다. 최신 관측 운영 설치본0.8.3에는 현재 authority/recovery 기능이 없었다. 실제 배포·writer 차단·최종 기준선·cutover·첫 실제 사용이 필요하다.
 - 장비 밖 destination 배치·키 복구·정기 실행의 첫 결과·용량·측정 RPO/RTO·새 기록 포함 복원이 남는다. 로컬 전달 성공으로 닫지 않는다.
 - 보존된 과거 M1 사본의 실제 이전과 independent v4 검사는 완료했다: 1605234 checks/0 diff/41752 unresolved/6 notchecked. installed consumer-v3는 627953 checks/0 diff/3 unresolved/6 notchecked. 이는 새 stopped-writer 기준선이나 full family/FX/forecast 운영 증거가 아니다. 반복 이전/진단 확장을 하지 말고 남은 실제 기능·운영 연결을 수행한다.

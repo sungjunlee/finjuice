@@ -1,5 +1,9 @@
 """Authoritative SQLite storage foundation with immutable source objects."""
 
+from finjuice.pipeline.storage.sqlite.account_bindings import (
+    AccountBindingConfirmation,
+    AccountBindingResolution,
+)
 from finjuice.pipeline.storage.sqlite.errors import (
     AuthorityConflictError,
     AuthorityError,
@@ -74,6 +78,8 @@ __all__ = [
     "SQLITE_APPLICATION_ID",
     "SQLITE_SCHEMA_VERSION",
     "AccountRecord",
+    "AccountBindingConfirmation",
+    "AccountBindingResolution",
     "AgentIntakeApplicationRecord",
     "AgentIntakeArtifactRecord",
     "AgentIntakeConfirmationRecord",

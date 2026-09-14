@@ -138,7 +138,7 @@ def _live(tmp_path: Path):
     data_dir.mkdir(mode=0o700)
     (data_dir / ".finjuice").mkdir(mode=0o700)
     paths = AuthorityPaths.for_data_dir(data_dir)
-    info = inspect_repository(candidate / "finjuice.sqlite3")
+    info = inspect_repository(candidate / "finjuice.sqlite3", expected_schema_version=5)
     assert info.dataset_generation is not None
     generation = info.dataset_generation
     upgrade_repository(candidate / "finjuice.sqlite3", paths.generation(generation))

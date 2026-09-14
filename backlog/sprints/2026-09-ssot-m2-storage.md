@@ -618,3 +618,9 @@ Claude Opus5high 교차 리뷰는 exit0/577.7s, 근거 있는 P1/P2 없음이다
 - 기반 #463은 main75e를7708df2로 병합해 behind를 해소했다. 필수리뷰는 남고 auto-merge는 저장소에서 금지됐다. #481의 기반동기화bacf7bd는 검증소스c6b509b와 동일tree이며 #481은 ready for review다.
 - 계좌 source binding/schema6/as-of ownership 구현15e98a6, 동기화8c046e9: 관련 회귀 및 설치 핵심8PASS/7.05초,505origins,686package bytes, Ruff/mypy576/build PASS. Grok 교차리뷰 회수 후 별도 stacked PR에 결과를 확정한다. 다음 계좌영향preview/ownership확정 CLI는 별도account-decisions tree에서 작성 중이다.
 - 사용자의 속도 지시에 따라 이번 완료 full은 반복하지 않으며 다음 변경은 관련 회귀로 진행한다. 최신 재개점과 실제 남은 범위는 _context.md를 따른다.
+
+### 계좌 확인 workflow 게시 완료
+
+- PR516에 영향preview·exact ownership 확정/교정·조회까지 통합했다. source fbaec52와 integration228b943의 tree 일치를 확인했다. 최신 설치7PASS/508origins/692package bytes, Grok 두 번째 좁은리뷰 P1/P2없음. 새 full은 반복하지 않았다.
+- maincf109f5/#515 반영 중 versioned backup container와 새wrapper의 flat-path 불일치4건을 재현·수정했다. immutable receipt attempt/lease 및 pointer교체회귀 확인, 통합branch8PASS. 수정7f1091e는 #481에도 게시했다.
+- #463은 c2864aa, #481은7f1091e, #516은228b943 기능checkpoint다. 필수 GitHub non-author review/실제머지·운영·M4나머지·M5는 남는다. 계좌 기능완료를 전체목표완료로 바꾸지 않는다.

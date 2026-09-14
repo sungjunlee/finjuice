@@ -404,11 +404,12 @@ def _verify_snapshot(
     try:
         restored = restore_backup(root / "snapshot", scratch / "generation")
         _require(restored.manifest_digest == snapshot.manifest_digest)
-        info = inspect_repository(restored.database)
+        info = inspect_repository(
+            restored.database, expected_schema_version=activation.sqlite_schema_version
+        )
         generation, revision = _generation_revision(info)
         _require(generation == activation.dataset_generation)
         _require(info.schema_version == activation.sqlite_schema_version)
-        _require(info.schema_version == SQLITE_SCHEMA_VERSION)
         _require(revision >= activation.dataset_revision)
         _require(generation == payload["snapshot_generation"])
         _require(payload["snapshot_generation"] == snapshot.source_generation)
