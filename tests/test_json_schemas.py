@@ -35,6 +35,8 @@ CATALOGUED_COMMANDS = [
     ("ssot backup store protect", [], "ssot_backup_store_protect.schema.json"),
     ("ssot backup store plan", [], "ssot_backup_store_plan.schema.json"),
     ("ssot backup store prune", [], "ssot_backup_store_prune.schema.json"),
+    ("ssot backup deliver status", [], "ssot_backup_deliver_status.schema.json"),
+    ("ssot backup deliver run", [], "ssot_backup_deliver_run.schema.json"),
     ("ssot migrate plan", [], "ssot_migrate_plan.schema.json"),
     ("ssot migrate build", [], "ssot_migrate_build.schema.json"),
     ("ssot migrate verify", [], "ssot_migrate_verify.schema.json"),
@@ -506,6 +508,8 @@ def _materialize_sqlite_backup_catalog_args(schema_data_dir: Path, label: str) -
         return _materialize_recovery_bundle_catalog_args(schema_data_dir, label)
     if label.startswith("ssot backup store "):
         return _materialize_recovery_store_catalog_args(schema_data_dir, label)
+    if label.startswith("ssot backup deliver "):
+        return _materialize_backup_deliver_catalog_args(schema_data_dir, label)
     from finjuice.pipeline.storage.sqlite.backup import create_backup
     from tests.pipeline.test_sqlite_backup import _build_generation
 
@@ -626,6 +630,58 @@ def _materialize_recovery_store_catalog_args(schema_data_dir: Path, label: str) 
         "ssot backup store prune": ["prune"],
     }[label]
     return [*prefix, *action, *shared]
+
+
+def _materialize_backup_deliver_catalog_args(schema_data_dir: Path, label: str) -> list[str]:
+    """Prepare sender/destination stores for delivery status and run catalog cases."""
+    from finjuice.pipeline.storage.sqlite.recovery_store import (
+        capture_into_store,
+        initialize_recovery_store,
+    )
+    from tests.cli.test_sqlite_recovery_bundle import _write_expected
+    from tests.pipeline.test_recovery_bundle import _live
+
+    root = schema_data_dir.parent / "backup-deliver-live"
+    source, expected, *_ = _live(root)
+    expected_path = _write_expected(root / "enrolled.json", expected)
+    sender = root / "sender"
+    destination = root / "destination"
+    control = root / "control"
+    initialize_recovery_store(sender, expected)
+    initialize_recovery_store(destination, expected)
+    capture_into_store(sender, source, expected)
+    paths = source.release_paths
+    shared = [
+        "ssot",
+        "backup",
+        "deliver",
+        "status" if label.endswith("status") else "run",
+        "--source-data-dir",
+        str(source.data_dir),
+        "--expected",
+        str(expected_path),
+        "--sender-store",
+        str(sender),
+        "--destination-store",
+        str(destination),
+        "--control-dir",
+        str(control),
+        "--json",
+    ]
+    if label.endswith("run"):
+        shared.extend(
+            [
+                "--wheel",
+                str(paths.wheel),
+                "--dependency-lock",
+                str(paths.dependency_lock),
+                "--binding",
+                str(paths.binding),
+                "--migration-candidate",
+                str(source.migration_candidate),
+            ]
+        )
+    return shared
 
 
 @pytest.mark.parametrize(("label", "cmd_args", "schema_file"), CATALOGUED_COMMANDS)

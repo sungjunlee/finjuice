@@ -64,6 +64,17 @@ class BackupVerificationError(RepositoryBackupError):
     reason = "verification_failed"
 
 
+class BackupDeliveryError(RepositoryBackupError):
+    """A post-commit backup delivery attempt failed without changing domain commit."""
+
+    reason = "delivery_failed"
+
+    def __init__(self, reason: str, report: dict[str, object] | None = None) -> None:
+        self.reason = reason
+        self.report = report or {}
+        super().__init__("Backup delivery could not be completed.")
+
+
 class ObjectCorruptionError(ObjectStoreError):
     """An existing content-addressed object does not match its identity."""
 

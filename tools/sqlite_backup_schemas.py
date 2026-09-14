@@ -119,6 +119,48 @@ def sqlite_backup_schemas() -> dict[str, JsonSchema]:
         "plan_digest": text,
         **dict.fromkeys(("deleted_ids", "kept_ids"), {"type": "array", "items": text}),
     }
+    recording = {
+        "type": ["object", "null"],
+        "properties": {
+            "status": {"enum": ["committed", "unknown"], "type": "string"},
+            "changeset_id": text,
+            "committed_revision": count,
+            "replayed": {"type": "boolean"},
+        },
+    }
+    backup_lanes = {
+        "type": "object",
+        "properties": {
+            "destination": {
+                "enum": [
+                    "covered",
+                    "pending",
+                    "transfer_failed",
+                    "verification_failed",
+                    "unknown",
+                ],
+                "type": "string",
+            },
+            "local": {
+                "enum": ["covered", "pending", "verification_failed", "unknown"],
+                "type": "string",
+            },
+        },
+        "required": ["destination", "local"],
+    }
+    deliver: dict[str, JsonSchema] = {
+        "kind": {"enum": ["backup_delivery_status", "backup_delivery_run"], "type": "string"},
+        "job_id": text,
+        "recording": recording,
+        "backup": backup_lanes,
+        "source_observed_revision": {"type": ["integer", "null"], "minimum": 0},
+        "coverage_as_of": {"type": ["string", "null"]},
+        "pending_commit_count": {"type": ["integer", "null"], "minimum": 0},
+        "last_verified_at": {"type": ["string", "null"]},
+        "last_attempt_error_code": {"type": ["string", "null"]},
+        "history_unknown": {"type": "boolean"},
+        "attempt": {"type": ["object", "null"]},
+    }
     contracts = (
         ("create", create),
         ("restore", restore),
@@ -134,6 +176,8 @@ def sqlite_backup_schemas() -> dict[str, JsonSchema]:
         ("store protect", store_protect),
         ("store plan", store_plan),
         ("store prune", store_prune),
+        ("deliver status", deliver),
+        ("deliver run", deliver),
     )
     schemas: dict[str, JsonSchema] = {}
     for action, properties in contracts:
@@ -144,6 +188,14 @@ def sqlite_backup_schemas() -> dict[str, JsonSchema]:
             properties,
             list(properties),
         )
+        if action.startswith("deliver "):
+            schema["$defs"] = {
+                "projection": {
+                    "type": "object",
+                    "properties": properties,
+                    "required": list(properties),
+                }
+            }
         if "-" in action or " " in action:
             schema["x-command"] = "ssot.backup." + action.replace(" ", ".")
         schemas[filename] = schema

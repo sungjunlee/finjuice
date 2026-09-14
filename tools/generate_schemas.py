@@ -1424,10 +1424,11 @@ tag_schema = command_schema(
     "tag.schema.json",
     "tag --json output",
     {
+        "backup_delivery": {"$ref": "ssot_backup_deliver_run.schema.json#/$defs/projection"},
         "coverage_pct": number,
         "dry_run": boolean,
         "operation": string,
-        "partition": object_any,
+        "partition": {"type": ["object", "null"]},
         "row_hash": string,
         "status": string,
         "tagged": integer,

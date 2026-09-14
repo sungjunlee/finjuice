@@ -8,6 +8,7 @@ and human rendering for manual edits. Bulk rule tagging stays in
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -18,7 +19,7 @@ from finjuice.pipeline.cli.output import info, success
 from finjuice.pipeline.cli.utils import mutation_metadata
 from finjuice.pipeline.constants import HASH_LENGTH_CHARS
 from finjuice.pipeline.storage.mutation_facade import MutationIdentity, StorageMutationFacade
-from finjuice.pipeline.storage.sqlite.mutations import ManualTransactionEdit
+from finjuice.pipeline.storage.sqlite.mutations import ManualTransactionEdit, MutationReceipt
 from finjuice.pipeline.tagging.manual import (
     build_manual_tags,
     merge_final_tags,
@@ -108,6 +109,7 @@ def _compute_tag_edit(
     *,
     facade: StorageMutationFacade | None = None,
     identity: MutationIdentity = MutationIdentity(),
+    after_commit: Callable[[MutationReceipt], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Load, optionally mutate, and return a single transaction by row_hash."""
     if facade is not None:
@@ -115,6 +117,7 @@ def _compute_tag_edit(
             facade,
             identity,
             request,
+            after_commit,
         )
 
     from finjuice.pipeline.storage import csv_transactions
@@ -221,6 +224,7 @@ def _compute_repository_tag_edit(
     facade: StorageMutationFacade,
     identity: MutationIdentity,
     request: TagEditRequest,
+    after_commit: Callable[[MutationReceipt], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Inspect or mutate one transaction through the active repository authority."""
     identifier = request.identifier
@@ -263,6 +267,8 @@ def _compute_repository_tag_edit(
     result["updated"] = receipt.state_changed
     result["would_update"] = receipt.state_changed
     result.update(mutation_metadata(identity, receipt))
+    if after_commit is not None:
+        result["backup_delivery"] = after_commit(receipt)
     return result
 
 
