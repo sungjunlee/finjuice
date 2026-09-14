@@ -376,7 +376,7 @@ def test_stale_session_cannot_apply_a_second_correction(tmp_path: Path) -> None:
 
 
 def test_stale_persist_does_not_drop_fence_modes(tmp_path: Path) -> None:
-    """A stale handle must not clobber fence_enabled or remembered modes."""
+    """A stale handle must not poison remembered modes; restoring them clears the fence."""
     csv_relative = "transactions/2024/01/transactions.csv"
     target = tmp_path / "target"
     pin = _pin()
@@ -391,7 +391,7 @@ def test_stale_persist_does_not_drop_fence_modes(tmp_path: Path) -> None:
         stale.close()
         resumed = IsolatedCutover.resume(target)
         resumed.close()
-        assert resumed.fence_enabled is True
+        assert resumed.fence_enabled is False
         assert stat.S_IMODE(seed.stat().st_mode) == original_file_mode
 
 
@@ -467,3 +467,39 @@ def test_applied_overlay_cannot_rebind_to_a_different_pin(tmp_path: Path) -> Non
     assert resumed.overlay is not None
     assert resumed.overlay.baseline_revision == pin.dataset_revision
     assert (target / "overlay.yaml").read_bytes() == SYNTHETIC_OVERLAY
+
+
+def test_resume_close_clears_fence_flag(tmp_path: Path) -> None:
+    """A resumed handle that restores modes must persist fence_enabled=False."""
+    csv_relative = "transactions/2024/01/transactions.csv"
+    target = tmp_path / "target"
+    pin = _pin()
+    session = IsolatedCutover(target, pin)
+    seed = session.data_dir / csv_relative
+    seed.parent.mkdir(parents=True, exist_ok=True)
+    seed.write_text("row_hash,amount\nsynthetic,0\n", encoding="utf-8")
+    session.activate_legacy_csv_fence()
+    resumed = IsolatedCutover.resume(target)
+    resumed.close()
+    payload = json.loads((target / "cutover-state.json").read_text(encoding="utf-8"))
+    assert payload["fence_enabled"] is False
+    session.close()
+
+
+def test_direct_csv_write_rejects_symlink_escape(tmp_path: Path) -> None:
+    """A symlink inside the data dir cannot write outside the target root."""
+    target = tmp_path / "target"
+    outside = tmp_path / "outside.csv"
+    outside.write_text("keep\n", encoding="utf-8")
+    session = IsolatedCutover(target, _pin())
+    link = session.data_dir / "transactions" / "escape.csv"
+    link.parent.mkdir(parents=True, exist_ok=True)
+    link.symlink_to(outside)
+    with pytest.raises(ConsumerCutoverError, match="inside the target root"):
+        session.attempt_direct_csv_write(
+            "transactions/escape.csv",
+            b"escaped\n",
+            understands_lock_file=False,
+        )
+    assert outside.read_text(encoding="utf-8") == "keep\n"
+    session.close()

@@ -238,8 +238,8 @@ def _reject_escape(root: Path, candidate: Path) -> Path:
     absolute = candidate.expanduser()
     if not absolute.is_absolute():
         absolute = (root / candidate).expanduser()
-    resolved_root = root.expanduser().absolute()
-    resolved = absolute.absolute()
+    resolved_root = root.expanduser().resolve()
+    resolved = absolute.resolve()
     if resolved != resolved_root and resolved_root not in resolved.parents:
         raise ConsumerCutoverError("Consumer path must stay inside the target root.")
     return resolved
@@ -557,10 +557,11 @@ class IsolatedCutover:
         Persist fence_enabled=False so resume does not claim a live fence
         after permissions have been restored.
         """
+        restored = bool(self._remembered_modes)
         if self._remembered_modes:
             _restore_modes(self._remembered_modes)
             self._remembered_modes = {}
-        if self._owns_fence and self.fence_enabled:
+        if restored or self._owns_fence:
             self.fence_enabled = False
             self._owns_fence = False
             self._write_state()
