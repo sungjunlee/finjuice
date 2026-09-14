@@ -23,8 +23,8 @@ GitHub Issues가 명세·AC·상태의 정본이다. 실행 권한과 완료 조
 
 ## 다음 행동
 
-1. 기반 PR463 갱신은 별도 codex/ssot-base-main506의 36f4b25에 커밋됐다(5083f34 + main fbc1682). 전체 3,254 PASS/1 SKIP, 설치 115 PASS, runtime 18 SHA 및 동결 23파일 검증 완료. 최종 Opus 5 high supervisor PID37904가 진행 중이며 /tmp/finjuice-base-main506-checkpoint/에서 type=result를 회수한다. 완료 전 재시작하지 않는다. 현재 migrate와 merge-tree 결과의 tree diff는 0이며, 검토 완료 후 기반 push 및 ancestry 통합만 필요하다.
-2. 복구 기능49add1b의 전체/설치/실제wheel복원 및 GPT 교차검토는 완료됐다. 새 근거 없이 반복하지 않는다. 기반 PR463는 최신main보다뒤처져갱신중이며GitHub필수승인1건이여전히필요하다.
+1. 기반 PR463는 main fbc1682와 adapter 통합 36f4b25, 최종 Opus 발견 P2 보완 f7421c7까지 검증 완료했다. 전체 3,257 PASS/1 SKIP(89.22%,106.52초), 설치 118 PASS/400 origins/runtime 18 SHA 일치. Opus 549.07초/exit0의 고정 temp finding은 기존 안전한 primitive 재사용과 보존 회귀로 수정했다. 근거 /tmp/finjuice-base-main506-checkpoint/.
+2. migrate는 기반을 9a01a4a로 ancestry 통합했다. 기존 검증 acf0cc1 대비 코드 차이는 close ledger와 회귀 테스트 2파일이며 관련 61 PASS. 복구 기능의 전체 4,486 PASS 및 설치/실제 wheel 복원 증거는 이전 checkpoint의 증거로 유지한다. PR463 main 병합에는 GitHub 비작성자 승인 1건이 필요하며 우회하지 않는다. 열린 PR507–512는 미머지 상태; PR512는 기존 migration 계약과 달라 전체 채택하지 않았다.
 3. 다음 retention/운영 연결은 PR507 작성 세션이 미확인이다. 네 제안 파일을 덮어쓰지 않는다. 읽기전용 연결점 지도는 `/tmp/finjuice-recovery-operator-checkpoint/pr507-bridge-map.md`; 실제graph/독립key/운영증거와 순수정책·상태계산을 구분한다.
 4. Durable reference retention, private 전수 보존/성능, 실제 배포·cutover·첫 사용, 장비 밖 사본·키 복구·용량·RPO/RTO와 M4/M5 실제 사례는 아직 미완료다. 동작하지 않은 CLI나 운영 증거를 만들지 않는다.
 
