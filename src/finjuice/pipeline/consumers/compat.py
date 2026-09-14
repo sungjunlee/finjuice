@@ -474,6 +474,7 @@ class IsolatedCutover:
 
     def apply_overlay_corrections(self, correction_id: str) -> OverlayApplyResult:
         """Apply overlay corrections once; retries do not duplicate the baseline."""
+        self._adopt_disk_overlay()
         if self.overlay is None:
             raise ConsumerCutoverError("Overlay is not bound to a canonical revision.")
         if self.overlay.baseline_revision != self.pin.dataset_revision:

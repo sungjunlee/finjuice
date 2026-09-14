@@ -358,3 +358,18 @@ def test_stale_session_persist_does_not_drop_applied_overlay(tmp_path: Path) -> 
     assert retry.status == "already_applied"
     assert resumed.overlay is not None
     assert resumed.overlay.applied_correction_id == "overlay-baseline-v1"
+
+
+def test_stale_session_cannot_apply_a_second_correction(tmp_path: Path) -> None:
+    """A stale handle must not apply a different correction over disk state."""
+    target = tmp_path / "target"
+    pin = _pin()
+    with IsolatedCutover(target, pin, overlay_bytes=SYNTHETIC_OVERLAY) as session:
+        applied = session.apply_overlay_corrections("overlay-baseline-v1")
+        stale = IsolatedCutover(target, pin, overlay_bytes=SYNTHETIC_OVERLAY)
+        with pytest.raises(OverlayAlreadyAppliedError):
+            stale.apply_overlay_corrections("overlay-other-v1")
+        retry = IsolatedCutover.resume(target).apply_overlay_corrections("overlay-baseline-v1")
+
+    assert applied.status == "applied"
+    assert retry.status == "already_applied"
