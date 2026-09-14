@@ -179,8 +179,7 @@ def apply_copy_correction(
             (entity_id, _CORRECTION_KIND, display_name),
         )
         connection.execute(
-            "UPDATE repository_meta SET dataset_revision = dataset_revision + 1 "
-            "WHERE singleton = 1"
+            "UPDATE repository_meta SET dataset_revision = dataset_revision + 1 WHERE singleton = 1"
         )
         connection.commit()
         revision = int(
