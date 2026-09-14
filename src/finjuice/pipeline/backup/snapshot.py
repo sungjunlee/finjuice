@@ -26,9 +26,9 @@ from finjuice.pipeline.storage.sqlite import backup as sqlite_backup
 from finjuice.pipeline.storage.sqlite.backup import (
     DATABASE_BASENAME,
     BackupResult,
-    backup_status,
     resolve_generation_database,
 )
+from finjuice.pipeline.storage.sqlite.backup_verify import resolve_backup_input, verify_payload
 from finjuice.pipeline.storage.sqlite.errors import (
     BackupIncompleteError,
     BackupTransferError,
@@ -37,6 +37,7 @@ from finjuice.pipeline.storage.sqlite.errors import (
     RepositoryPathError,
 )
 from finjuice.pipeline.storage.sqlite.paths import GenerationPaths
+from finjuice.pipeline.storage.sqlite.recovery_store_lock import managed_read_lease
 
 SNAPSHOT_KIND: Final = "finjuice.sqlite.pinned-snapshot"
 PIN_DIRNAME: Final = ".finjuice-backup-pins"
@@ -259,19 +260,15 @@ def gc_unpinned_objects(generation_root: Path, pin: ReferencePin | None = None) 
 def snapshot_status(backup_root: Path) -> SnapshotResult:
     """Re-verify a backup directory without treating incompleteness as success."""
     root = Path(backup_root).expanduser().absolute()
-    status = backup_status(root)
-    if not status.complete:
-        return SnapshotResult(
-            status="incomplete_backup",
-            complete=False,
-            record_commit=_RECORD_COMMIT_OK,
-            reason=status.reason,
-            backup_root=root,
-            pin_count=0,
-        )
-    references = collect_snapshot_references(root)
-    manifest = status.manifest
-    assert manifest is not None
+    with managed_read_lease(root):
+        try:
+            payload_root, manifest, _ = resolve_backup_input(root)
+            verify_payload(payload_root, manifest)
+            references = _read_snapshot_references(payload_root)
+        except RepositoryBackupError as exc:
+            return _incomplete_result(root, pin_count=0, reason=exc.reason)
+        except (OSError, RepositoryPathError):
+            return _incomplete_result(root, pin_count=0, reason="incomplete_backup")
     database_digest = next(
         (entry.sha256 for entry in manifest.files if entry.path == DATABASE_BASENAME),
         None,
@@ -297,7 +294,14 @@ def snapshot_status(backup_root: Path) -> SnapshotResult:
 
 def collect_snapshot_references(backup_root: Path) -> SnapshotReferences:
     """Read config/release evidence from the captured snapshot database."""
-    database = Path(backup_root).expanduser().absolute() / DATABASE_BASENAME
+    root = Path(backup_root).expanduser().absolute()
+    with managed_read_lease(root):
+        payload_root, _, _ = resolve_backup_input(root)
+        return _read_snapshot_references(payload_root)
+
+
+def _read_snapshot_references(payload_root: Path) -> SnapshotReferences:
+    database = payload_root / DATABASE_BASENAME
     connection = _connect_readonly(database)
     try:
         meta = connection.execute(
@@ -386,7 +390,7 @@ def _complete_result(inner: BackupResult, pin: ReferencePin) -> SnapshotResult:
             pin_count=len(pin.artifacts),
             reason="incomplete_backup",
         )
-    references = collect_snapshot_references(inner.backup_root)
+    references = collect_snapshot_references(inner.manifest_path.parent)
     return SnapshotResult(
         status="complete",
         complete=True,
