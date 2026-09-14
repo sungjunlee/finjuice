@@ -24,6 +24,7 @@ from finjuice.pipeline.cli.output import (
     warning,
 )
 from finjuice.pipeline.cli.utils import get_config
+from finjuice.pipeline.storage.sqlite.read_compat import configured_transactions_frame
 from finjuice.pipeline.tagging.rules import apply_tagging_rules_v3, load_rules
 
 logger = logging.getLogger(__name__)
@@ -38,7 +39,10 @@ def _search_transactions(
     date: Optional[str],
 ) -> pl.DataFrame:
     """Search transactions matching query. Returns a Polars DataFrame."""
-    with DuckDBAnalytics(config.data_dir) as analytics:
+    with DuckDBAnalytics(
+        config.data_dir,
+        source_frame=configured_transactions_frame(),
+    ) as analytics:
         where_parts = ["(merchant_raw ILIKE ? OR memo_raw ILIKE ?)"]
         params: list[str] = [f"%{query}%", f"%{query}%"]
 
