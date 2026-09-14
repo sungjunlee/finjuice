@@ -373,3 +373,23 @@ def test_stale_session_cannot_apply_a_second_correction(tmp_path: Path) -> None:
 
     assert applied.status == "applied"
     assert retry.status == "already_applied"
+
+
+def test_stale_persist_does_not_drop_fence_modes(tmp_path: Path) -> None:
+    """A stale handle must not clobber fence_enabled or remembered modes."""
+    csv_relative = "transactions/2024/01/transactions.csv"
+    target = tmp_path / "target"
+    pin = _pin()
+    with IsolatedCutover(target, pin) as session:
+        seed = session.data_dir / csv_relative
+        seed.parent.mkdir(parents=True, exist_ok=True)
+        seed.write_text("row_hash,amount\nsynthetic,0\n", encoding="utf-8")
+        original_file_mode = stat.S_IMODE(seed.stat().st_mode)
+        session.activate_legacy_csv_fence()
+        stale = IsolatedCutover(target, pin)
+        stale.persist()
+        stale.close()
+        resumed = IsolatedCutover.resume(target)
+        resumed.close()
+        assert resumed.fence_enabled is True
+        assert stat.S_IMODE(seed.stat().st_mode) == original_file_mode

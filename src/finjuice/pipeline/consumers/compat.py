@@ -343,7 +343,7 @@ class IsolatedCutover:
 
     def persist(self) -> Path:
         """Write restartable session state without financial row payloads."""
-        self._adopt_disk_overlay()
+        self._adopt_disk_state()
         payload = {
             "schema_version": SCHEMA_VERSION,
             "mode": self.mode,
@@ -474,7 +474,7 @@ class IsolatedCutover:
 
     def apply_overlay_corrections(self, correction_id: str) -> OverlayApplyResult:
         """Apply overlay corrections once; retries do not duplicate the baseline."""
-        self._adopt_disk_overlay()
+        self._adopt_disk_state()
         if self.overlay is None:
             raise ConsumerCutoverError("Overlay is not bound to a canonical revision.")
         if self.overlay.baseline_revision != self.pin.dataset_revision:
@@ -546,15 +546,33 @@ class IsolatedCutover:
             _restore_modes(self._remembered_modes)
             self._remembered_modes = {}
 
-    def _adopt_disk_overlay(self) -> None:
-        """Keep a newer apply-once overlay if a stale handle writes state."""
-        if not self.state_path.is_file():
+    def _adopt_disk_state(self) -> None:
+        """Keep newer overlay and fence state if a stale handle writes."""
+        existing = self._read_disk_state()
+        if existing is None:
             return
+        self._adopt_disk_overlay_payload(existing.get("overlay"))
+        if existing.get("fence_enabled") and not self.fence_enabled:
+            self.fence_enabled = True
+        disk_modes = existing.get("remembered_modes") or {}
+        if disk_modes and not self._remembered_modes:
+            remembered: dict[Path, int] = {}
+            for relative, mode in disk_modes.items():
+                remembered[self.data_dir / str(relative)] = int(mode)
+            self._remembered_modes = remembered
+
+    def _read_disk_state(self) -> dict[str, Any] | None:
+        if not self.state_path.is_file():
+            return None
         try:
             existing = json.loads(self.state_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError, TypeError):
-            return
-        overlay_payload = existing.get("overlay")
+            return None
+        if not isinstance(existing, dict):
+            return None
+        return existing
+
+    def _adopt_disk_overlay_payload(self, overlay_payload: object) -> None:
         if not isinstance(overlay_payload, dict):
             return
         disk_id = overlay_payload.get("applied_correction_id")
