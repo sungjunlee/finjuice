@@ -246,6 +246,35 @@ def test_editing_derived_csv_does_not_change_authority_and_is_stale(
     assert classify_derived(tmp_path / "missing", snapshot) == "invalid"
 
 
+def test_export_dry_run_uses_sqlite_when_csv_partitions_are_gone(
+    mirrored_dataset: dict[str, Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SQLite-backed export must not report zero rows after live CSV is removed."""
+    data_dir = mirrored_dataset["data_dir"]
+    for csv_path in (data_dir / "transactions").rglob("transactions.csv"):
+        csv_path.unlink()
+    monkeypatch.setenv(GENERATION_ENV_VAR, str(mirrored_dataset["database"].parent))
+    expected = read_transactions_frame(mirrored_dataset["database"]).height
+    assert expected > 0
+
+    result = runner.invoke(
+        app,
+        [
+            "--data-dir",
+            str(data_dir),
+            "export",
+            "--format",
+            "md",
+            "--dry-run",
+            "--json",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["transaction_count"] == expected
+
+
 def test_query_ignores_stale_live_csv_when_sqlite_is_selected(
     mirrored_dataset: dict[str, Path],
     monkeypatch: pytest.MonkeyPatch,

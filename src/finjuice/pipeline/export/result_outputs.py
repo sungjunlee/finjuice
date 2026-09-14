@@ -31,7 +31,11 @@ def _generate_xlsx_outputs(run: ExportRunContext) -> tuple[int, list[dict[str, A
     logger.info(f"Exporting master file to: {master_path}")
 
     _emit_info(f"Exporting master file: {master_path}", emit_text=run.emit_text)
-    row_count = export_master_xlsx(run.config.csv_base_dir, master_path)
+    row_count = export_master_xlsx(
+        run.config.csv_base_dir,
+        master_path,
+        source_df=run.report_source_df,
+    )
     generated_artifacts = [
         build_output_entry(
             master_path,

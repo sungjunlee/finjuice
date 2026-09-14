@@ -111,6 +111,13 @@ def _load_report_filters_for_export(
     return load_report_filters(config.rules_file)
 
 
+def _configured_sqlite_frame() -> pl.DataFrame | None:
+    """Return the SQLite export frame, or ``None`` in CSV mode."""
+    from finjuice.pipeline.query import configured_source_frame
+
+    return configured_source_frame()
+
+
 def _load_filtered_report_export_source(
     ctx: Any,
     config: Any,
@@ -125,12 +132,17 @@ def _load_filtered_report_export_source(
         config,
         json_output=json_output,
     )
+    sqlite_frame = _configured_sqlite_frame()
     if report_filters.is_empty():
-        return None, 0
+        return sqlite_frame, 0
 
     from finjuice.pipeline.storage import csv_transactions
 
-    source_df = csv_transactions.get_all_transactions(config.csv_base_dir)
+    source_df = (
+        sqlite_frame
+        if sqlite_frame is not None
+        else csv_transactions.get_all_transactions(config.csv_base_dir)
+    )
     if source_df.is_empty():
         return source_df, 0
 
@@ -175,6 +187,9 @@ def _resolve_transaction_count(
         return transaction_count
     if run.report_source_df is not None:
         return len(run.report_source_df)
+    sqlite_frame = _configured_sqlite_frame()
+    if sqlite_frame is not None:
+        return len(sqlite_frame)
     if format_lower in {"html", "md"} and run.period is not None:
         from finjuice.pipeline.export.aggregations import load_transactions
 
@@ -208,6 +223,9 @@ def _compute_export_result(  # noqa: PLR0913 - moved helper keeps the existing p
 
     if dry_run:
         plan = build_export_plan(config.data_dir, config.csv_base_dir, format_lower, period)
+        sqlite_frame = _configured_sqlite_frame()
+        if sqlite_frame is not None:
+            plan["transaction_count"] = len(sqlite_frame)
         return {
             "command": "export",
             "dry_run": True,
