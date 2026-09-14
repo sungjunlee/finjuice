@@ -90,16 +90,27 @@ def asset_candidates(connection: sqlite3.Connection) -> dict[str, Any]:
     """Expose source identity/state and all meaning evidence without confirming legacy facts."""
     sources = asset_sources(connection)
     meanings = rows(connection, "asset_meaning_assertions")
-    interpreted = {row["source_entity_id"] for row in _heads(meanings)}
+    heads = _heads(meanings)
+    interpreted = {row["source_entity_id"] for row in heads}
+    pending = [
+        {
+            "source_entity_id": row["source_entity_id"],
+            "assertion_id": row["assertion_id"],
+            "reason": "meaning_" + row["confirmation_state"],
+        }
+        for row in heads
+        if row["confirmation_state"] != "confirmed"
+    ]
+    pending.extend(
+        {"source_entity_id": key, "reason": "meaning_unconfirmed"}
+        for key in sources
+        if key not in interpreted
+    )
     return {
         "sources": list(sources.values()),
         "meaning_assertions": meanings,
         "relations": rows(connection, "entity_relation_assertions"),
-        "pending": [
-            {"source_entity_id": key, "reason": "meaning_unconfirmed"}
-            for key in sources
-            if key not in interpreted
-        ],
+        "pending": pending,
         "legacy_pending": [
             {
                 "source_observation_id": row["observation_id"],
@@ -235,6 +246,7 @@ def _inclusion_cycles(exclusions: dict[str, dict[str, Any]], issues: list[dict[s
         while target in exclusions and "container_id" in exclusions[target]:
             if target in seen:
                 issues.append(_issue("inclusion_cycle", member))
+                exclusion["reason"] = "unresolved_inclusion_cycle"
                 break
             seen.add(target)
             target = exclusions[target]["container_id"]
@@ -398,7 +410,9 @@ def asset_report(connection: sqlite3.Connection, query: AssetReportQuery) -> dic
         "scope_kind": "explicit_sources" if query.source_ids else "all_canonical_asset_sources",
         "completeness": "complete_for_declared_scope" if complete else "incomplete",
         "net_worth_total": _amount(subtotal) if complete else None,
-        "known_net_worth_subtotal": _amount(subtotal),
+        "known_net_worth_subtotal": None
+        if any(issue["kind"] == "inclusion_cycle" for issue in issues)
+        else _amount(subtotal),
         "cash_flow_subtotal": _amount(cash),
         "valuation_is_cash_flow": False,
         "lines": lines,

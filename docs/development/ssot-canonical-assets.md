@@ -35,7 +35,7 @@ finjuice --data-dir <root> ssot assets report \
 
 party는 반드시 명시한 기존 UUID 집합이며 옵션을 반복할 수 있다. source를 반복해 선언된 보고 범위를 좁힐 수 있다. 생략하면 보존된 전체 canonical 자산 source 범위에서 미해석·legacy 누락을 보고한다. 동일 snapshot에서 기준일 ownership 지분을 정확히 적용한다. 일부 화면은 최신 전체 관측을 대체하지 않고, 오래된 전체 자료는 이력으로 남긴다. 기본 stale 기준은 30일이며 `--stale-days`로 명시할 수 있다.
 
-의미·소유·포함·통화/FX와 범위 근거가 충분하면 `complete_for_declared_scope`와 exact `net_worth_total`을 반환한다. 불완전하면 total은 null이고 알려진 subtotal, 미확정 잔여와 구체적인 issues를 반환한다. 이는 선언된 source 범위에 대한 합계이며 사용자의 세계 모든 재산을 수집했다는 주장이 아니다. 평가액은 stock 합계에만, cash_movement는 별도 cash_flow_subtotal에만 들어간다. quantity와 expected_inflow를 현금 또는 현재 순자산으로 자동 환산하지 않는다.
+의미·소유·포함·통화/FX와 범위 근거가 충분하면 `complete_for_declared_scope`와 exact `net_worth_total`을 반환한다. 불완전하면 total은 null이고 알려진 subtotal, 미확정 잔여와 구체적인 issues를 반환한다. 포함 관계가 순환해 합산 근거가 사라지는 경우 subtotal도 null이며, 각 원본 줄에 unresolved_inclusion_cycle 사유를 남긴다. 이는 선언된 source 범위에 대한 합계이며 사용자의 세계 모든 재산을 수집했다는 주장이 아니다. 평가액은 stock 합계에만, cash_movement는 별도 cash_flow_subtotal에만 들어간다. quantity와 expected_inflow를 현금 또는 현재 순자산으로 자동 환산하지 않는다.
 
 runtime schema 7은 `asset_meaning_assertions`만 추가한다. legacy migration policy4/5 pin은 유지하며 raw4/5/6 복원은 원래 schema를 보존한다. 현재 runtime 사용은 명시적인 clone upgrade/activation 계약을 따른다. 새로운 의미 fact는 backup_coverage에 포함되고 실제 recovery graph capture→검증→inactive restore 후 같은 snapshot query로 유지된다.
 

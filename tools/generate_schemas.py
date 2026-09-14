@@ -2157,7 +2157,7 @@ SCHEMAS: dict[str, JsonSchema] = {
         {
             "completeness": string,
             "net_worth_total": {"anyOf": [object_any, {"type": "null"}]},
-            "known_net_worth_subtotal": object_any,
+            "known_net_worth_subtotal": {"anyOf": [object_any, {"type": "null"}]},
             "lines": array_of(object_any),
             "issues": array_of(object_any),
             "dataset_revision": integer,

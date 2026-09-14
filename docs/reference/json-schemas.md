@@ -7041,7 +7041,7 @@ ssot assets report output
 | `completeness` | `string` | yes |
 | `dataset_revision` | `integer` | yes |
 | `issues` | `array`[`object`] | yes |
-| `known_net_worth_subtotal` | `object` | yes |
+| `known_net_worth_subtotal` | `object` or `null` | yes |
 | `lines` | `array`[`object`] | yes |
 | `net_worth_total` | `object` or `null` | yes |
 
@@ -7068,8 +7068,15 @@ ssot assets report output
       "type": "array"
     },
     "known_net_worth_subtotal": {
-      "additionalProperties": true,
-      "type": "object"
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "lines": {
       "items": {

@@ -20,8 +20,15 @@
       "type": "array"
     },
     "known_net_worth_subtotal": {
-      "additionalProperties": true,
-      "type": "object"
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "lines": {
       "items": {

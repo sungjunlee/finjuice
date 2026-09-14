@@ -341,6 +341,56 @@ def test_prior_asset_schema_raw_restore_and_explicit_upgrade(tmp_path, version):
         assert reader.rows("asset_meaning_assertions") == []
 
 
+@pytest.mark.parametrize("state", ["unconfirmed", "rejected"])
+def test_asset_list_keeps_unconfirmed_first_meanings_pending(tmp_path, state):
+    env = _environment(tmp_path)
+    source = _source(env, "2026-07-01", "10", "pending-source")
+    body = _meaning(env, source, "2026-07-01", confirmation_state=state)
+    decision = _confirm(env, body, "pending-meaning")
+    listed = _payload(_invoke(env, ["list"]), "ssot_assets_list.schema.json")
+    assert {
+        "source_entity_id": source["entity_id"],
+        "assertion_id": decision["assertion_id"],
+        "reason": "meaning_" + state,
+    } in listed["pending"]
+    body["confirmation_state"] = "confirmed"
+    _confirm(env, body, "confirmed-meaning", previous=decision["assertion_id"])
+    listed = _payload(_invoke(env, ["list"]), "ssot_assets_list.schema.json")
+    assert not any(row["source_entity_id"] == source["entity_id"] for row in listed["pending"])
+
+
+def test_cyclic_inclusion_reports_unknown_subtotal_instead_of_zero(tmp_path):
+    env = _environment(tmp_path)
+    first = _source(env, "2026-07-01", "10", "cycle-first")
+    second = _source(env, "2026-07-01", "20", "cycle-second")
+    _own(env)
+    for key, source in (("first", first), ("second", second)):
+        _confirm(env, _meaning(env, source, "2026-07-01"), key)
+    for key, container, member in (("forward", first, second), ("reverse", second, first)):
+        _confirm(
+            env,
+            {
+                "container_id": container["entity_id"],
+                "member_id": member["entity_id"],
+                "relation_kind": "includes",
+                "evidence": {"reason": "synthetic contradictory inclusion"},
+            },
+            key,
+            relation=True,
+        )
+    report = _report(env, [first, second], human=True)
+    assert report["completeness"] == "incomplete"
+    assert report["net_worth_total"] is None
+    assert report["known_net_worth_subtotal"] is None
+    assert {line["source_entity_id"] for line in report["lines"]} == {
+        first["entity_id"],
+        second["entity_id"],
+    }
+    assert all(
+        line["exclusion"]["reason"] == "unresolved_inclusion_cycle" for line in report["lines"]
+    )
+
+
 def _catalog_asset_result(tmp_path, command):
     env = _environment(tmp_path)
     if command == "list":
