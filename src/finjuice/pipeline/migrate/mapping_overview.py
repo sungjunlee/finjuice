@@ -174,6 +174,15 @@ def map_overview_fact_row(work: RowWork) -> None:
             {"reason": "missing_numeric_value", "field_name": "value_numeric"},
         )
         return
+    if value_type not in {"number", "empty"} and not (work.row.get("value_text") or ""):
+        _opaque(
+            state,
+            provenance_id,
+            locator,
+            payload,
+            {"reason": "missing_value_text", "field_name": "value_text"},
+        )
+        return
     fact_id = stable_id(state.digest, "overview_fact", locator)
     observation_id = add_observation(state, work.occurrence_id, locator)
     state.builder.add_overview_fact(

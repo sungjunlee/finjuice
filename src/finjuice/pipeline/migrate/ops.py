@@ -264,7 +264,16 @@ def _semantic_snapshot(database: Path) -> dict[str, Any]:
             "config_revisions": reader.rows("config_revisions"),
             "overview_facts": reader.rows("overview_facts"),
             "overview_balances": reader.rows("overview_balances"),
+            "overview_cashflows": reader.rows("overview_cashflows"),
+            "overview_insurance": reader.rows("overview_insurance"),
+            "overview_investments": reader.rows("overview_investments"),
+            "overview_loans": reader.rows("overview_loans"),
             "asset_snapshots": reader.rows("asset_snapshots"),
+            "source_artifacts": reader.rows("source_artifacts"),
+            "source_occurrences": reader.rows("source_occurrences"),
+            "record_provenance": reader.rows("record_provenance"),
+            "observations": reader.rows("observations"),
+            "resources": reader.rows("resources"),
             "migration_identities": reader.rows("migration_identities"),
         }
     for rows in payload.values():
@@ -420,6 +429,20 @@ def _payload_for_row(row: dict[str, str], payloads: list[dict[str, Any]]) -> dic
     return None
 
 
+def _payload_record_for(
+    row: dict[str, str], payload_rows: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    for item in payload_rows:
+        parsed = json.loads(item["payload_json"])
+        fields = parsed.get("fields") or {}
+        if fields.get("row_hash") != row.get("row_hash"):
+            continue
+        if fields.get("source_row") != row.get("source_row"):
+            continue
+        return item
+    return None
+
+
 def _hidden_markers_match(rows: list[dict[str, str]], payloads: list[dict[str, Any]]) -> bool:
     for row in rows:
         tags, _issue = parse_tag_sequence(row.get("tags_manual"))
@@ -433,16 +456,23 @@ def _hidden_markers_match(rows: list[dict[str, str]], payloads: list[dict[str, A
 
 
 def _persisted_category_match(
-    rows: list[dict[str, str]], transactions: list[dict[str, Any]]
+    rows: list[dict[str, str]],
+    transactions: list[dict[str, Any]],
+    payload_rows: list[dict[str, Any]],
 ) -> bool:
-    expected = sorted(
-        (row.get("category_final") or "", row.get("category_rule") or "") for row in rows
-    )
-    actual = sorted(
-        (str(row.get("category_final") or ""), str(row.get("category_rule") or ""))
-        for row in transactions
-    )
-    return expected == actual
+    by_provenance = {row["provenance_id"]: row for row in transactions}
+    for row in rows:
+        record = _payload_record_for(row, payload_rows)
+        if record is None:
+            return False
+        txn = by_provenance.get(record["provenance_id"])
+        if txn is None:
+            continue
+        if str(txn.get("category_final") or "") != (row.get("category_final") or ""):
+            return False
+        if str(txn.get("category_rule") or "") != (row.get("category_rule") or ""):
+            return False
+    return True
 
 
 def _unknown_fields_match(rows: list[dict[str, str]], payloads: list[dict[str, Any]]) -> bool:
@@ -456,16 +486,28 @@ def _unknown_fields_match(rows: list[dict[str, str]], payloads: list[dict[str, A
     return True
 
 
-def _duplicate_hash_ok(snapshot: dict[str, Any], transactions: list[dict[str, Any]]) -> bool:
+def _duplicate_hash_ok(
+    snapshot: dict[str, Any],
+    transactions: list[dict[str, Any]],
+    frozen_rows: list[dict[str, str]],
+) -> bool:
     transaction_ids = [row["entity_id"] for row in transactions]
-    hash_groups: dict[str, set[str]] = {}
+    if len(transaction_ids) != len(set(transaction_ids)):
+        return False
+    expected: dict[str, int] = {}
+    for row in frozen_rows:
+        key = row.get("row_hash") or ""
+        expected[key] = expected.get(key, 0) + 1
+    actual: dict[str, int] = {}
+    transaction_ids_set = set(transaction_ids)
     for row in snapshot["legacy_identifiers"]:
         if row["identifier_kind"] != "row_hash":
             continue
-        hash_groups.setdefault(row["identifier_value"], set()).add(row["entity_id"])
-    return len(transaction_ids) == len(set(transaction_ids)) and all(
-        len(entity_ids) == len(entity_ids) for entity_ids in hash_groups.values()
-    )
+        if row["entity_id"] not in transaction_ids_set:
+            continue
+        value = str(row["identifier_value"])
+        actual[value] = actual.get(value, 0) + 1
+    return expected == actual
 
 
 def _preservation_checks(
@@ -475,14 +517,15 @@ def _preservation_checks(
     accounts: list[dict[str, Any]],
 ) -> tuple[dict[str, Any], ...]:
     frozen_rows = _frozen_transaction_rows(capture)
-    payloads = [json.loads(row["payload_json"]) for row in snapshot["legacy_payloads"]]
+    payload_rows = snapshot["legacy_payloads"]
+    payloads = [json.loads(row["payload_json"]) for row in payload_rows]
     hidden_count = sum(
         1
         for row in frozen_rows
         if split_hidden_category(parse_tag_sequence(row.get("tags_manual"))[0])[2]
     )
     unknown_count = sum(1 for row in frozen_rows if unknown_fields(row, set(CSV_COLUMNS)))
-    identity_ok = _duplicate_hash_ok(snapshot, transactions)
+    identity_ok = _duplicate_hash_ok(snapshot, transactions, frozen_rows)
     return (
         _check(
             "P01",
@@ -496,7 +539,9 @@ def _preservation_checks(
         ),
         _check(
             "P03",
-            status="pass" if _persisted_category_match(frozen_rows, transactions) else "fail",
+            status="pass"
+            if _persisted_category_match(frozen_rows, transactions, payload_rows)
+            else "fail",
             checked_count=len(frozen_rows),
         ),
         _check(

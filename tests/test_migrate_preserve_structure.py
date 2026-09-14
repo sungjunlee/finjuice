@@ -166,6 +166,22 @@ def _frozen_dataset(root: Path) -> Path:
                 "source_row": "5",
                 "source_col": "2",
             },
+            {
+                "fact_id": "fact-text",
+                "snapshot_date": "2024-01-31",
+                "sheet_name": "overview",
+                "block_id": "assets",
+                "block_title": "자산",
+                "fact_kind": "label",
+                "row_label": "메모",
+                "column_label": "내용",
+                "value_numeric": "",
+                "value_text": "",
+                "value_type": "text",
+                "file_id": "240131_1",
+                "source_row": "6",
+                "source_col": "2",
+            },
         ],
     )
     _write_csv(
@@ -282,6 +298,7 @@ def _assert_hidden_override_and_unknown_fields(staging: Path) -> None:
             row["field_name"] == "value_numeric" and row["issue_kind"] == "unparseable_amount"
             for row in issues
         )
+        assert any(row["field_name"] == "value_text" for row in issues)
         opaque = [
             row
             for row in reader.rows("migration_dispositions")
