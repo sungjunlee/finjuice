@@ -93,3 +93,5 @@
 - Capsule 최종전체4415PASS1SKIP90.96%778.72s와후속Cursor20PASS/P1P2없음확인, 소스/설치70PASS465origins2SHA로커밋진행. 새main fbc1682(#504–506)가발견됐으므로이full을새main통합검증으로표시하지않는다. Wrapper초안은Cursor13PASS로완료됐고root4실패재현/수정후별도worktree87focused진행중. 다음newmain정확금액/정본보존통합및wrapper검증을계속한다.
 
 - 2026-09-14 효율 지시 적용: 기능/AC 묶음별 구현·동결 후 통합 checkpoint에서 전체/설치본/교차 검증한다. 작은 후속 수정은 관련 회귀로 검증하고 기존 전체 결과의 적용 소스를 구분한다. main fbc1682 통합 검증 진행 및 #446–#448 재개방, PR #507–#511 중복 설계 주의 사항은 활성 스프린트 최신 항목을 따른다.
+
+- main #504–#506 통합 cec0e9d를 주 작업 branch에 반영했다. 최종 전체4,447PASS/1SKIP91.02%, 설치115PASS와교차리뷰통과. 복구operator는 별도Cursor작업이며 이검증에미포함. 다음은원격PR반영후복구명령기능묶음의집중검증을통합한다.
