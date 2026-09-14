@@ -4,7 +4,7 @@ GitHub 이슈가 명세·AC·상태의 정본이다. 전체 목표는 `goals/fin
 
 ## 현재 재개점 — 2026-09-14
 
-- PR #521 `ceae05d`의 CI 34852394131은 전체 PASS다. 정상 squash merge는 필수 비작성자 리뷰 정책으로 거절됐고, 관리자 머지 확인은 사용자에게 요청한 상태다. 아직 머지하지 않았다.
+- PR #521 `ceae05d`의 CI 34852394131은 전체 PASS다. 사용자 승인으로 관리자 squash merge를 완료했다(main `16e4f82`).
 - 새 실제 마이그레이션은 종료 코드 0: 980 inputs, DB integrity/FK/object hash/capture 재구성/adapter 재생성 의미 비교 PASS. 독립 비교 1,652,643개·consumer 비교 640,024개에서 차이 0이다. 미지원 CSV는 보존된 backups/exports/metadata이고 quarantine은 0이지만 원본 참조·소유권/환율·운영 수용의 불확실성을 숨기지 않는다.
 - 설치된 #521 wheel이 만든 실제 입력과 수동 설정을 운영 분석 함수에 전달한 격리 비교는 원본 캡처와 일치했다. 원래 schema5 DB를 보존한 별도 schema9 upgrade도 53개 기존 테이블·1,045,729행/원래 컬럼 비교에서 차이 0, integrity/FK PASS다. 합성 Linux 사본에서 구 설치본이 새 marker를 무시하고 쓰는 경우와 OS 읽기 전용 경계의 차단(errno30)을 검증했다. 실제 서비스 적용·전환은 남아 있다.
 - `codex/ssot-host-runtime`은 #521 위의 단독 작업 브랜치다. Cursor 구현 후 GPT 교차 검토로 compact root 옵션, host 옵션 종료, 숨김 패키지 리소스, Typer 내장 Click context 호환을 수정했다. 관련21 PASS, 최종 context 회귀3 PASS, 전체 Ruff/mypy608/complexity/security PASS. 실제 built wheel 설치6개 흐름과 별도 module subprocess PASS, 532개 로드 모듈 모두 설치본, package741개 소스/wheel/설치본 bytes 일치.
