@@ -962,11 +962,118 @@ finjuice --version
 │ --help          Show this message and exit.                                                                          │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ migrate   Plan, build, and verify preservation migrations.                                                           │
-│ backup    Create snapshots, capture a local recovery graph, retain a managed store, and restore inactive workspaces. │
-│ account   Inspect canonical accounts and explicitly bind source identities.                                          │
-│ assets    Confirm source-backed asset meanings and report exact scoped ownership.                                    │
-│ intake    Preserve original evidence and review explicitly supplied extraction and proposals.                        │
+│ migrate     Plan, build, and verify preservation migrations.                                                         │
+│ backup      Create snapshots, capture a local recovery graph, retain a managed store, and restore inactive           │
+│             workspaces.                                                                                              │
+│ account     Inspect canonical accounts and explicitly bind source identities.                                        │
+│ assets      Confirm source-backed asset meanings and report exact scoped ownership.                                  │
+│ intake      Preserve original evidence and review explicitly supplied extraction and proposals.                      │
+│ reconcile   Preserve purchase evidence and review exact N:M ledger settlements.                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot reconcile`
+
+```
+
+ Usage: finjuice ssot reconcile [OPTIONS] COMMAND [ARGS]...
+
+ Preserve purchase evidence and review exact N:M ledger settlements.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ submit       Preserve original bytes and explicit purchase/order/line-item/payment evidence.                         │
+│ candidates   Explain exact candidates, residuals and immutable decisions; never apply guesses.                       │
+│ confirm      Confirm evidence_ids/payment_ids and reviewed expected_residual/currency with reason/time.              │
+│ withdraw     Append allocation_id/reason/withdrawn_at; regrouping requires a new explicit confirmation.              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot reconcile submit`
+
+```
+
+ Usage: finjuice ssot reconcile submit [OPTIONS] SOURCE METADATA
+
+ Preserve original bytes and explicit purchase/order/line-item/payment evidence.
+
+ Metadata: source_namespace, received_at, items. Each item explicitly names
+ external_key, evidence_kind, occurred_on, amount (decimal string), currency,
+ settlement_unit, detail, optional parent_external_key and transaction_id.
+ Positive evidence is a purchase; negative evidence is a refund.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    source        PATH  [required]                                                                                  │
+│ *    metadata      PATH  [required]                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot reconcile candidates`
+
+```
+
+ Usage: finjuice ssot reconcile candidates [OPTIONS]
+
+ Explain exact candidates, residuals and immutable decisions; never apply guesses.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --window-days        INTEGER RANGE [x>=0]  [default: 14]                                                             │
+│ --json                                                                                                               │
+│ --help                                     Show this message and exit.                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot reconcile confirm`
+
+```
+
+ Usage: finjuice ssot reconcile confirm [OPTIONS] REQUEST
+
+ Confirm evidence_ids/payment_ids and reviewed expected_residual/currency with reason/time.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    request      PATH  [required]                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot reconcile withdraw`
+
+```
+
+ Usage: finjuice ssot reconcile withdraw [OPTIONS] REQUEST
+
+ Append allocation_id/reason/withdrawn_at; regrouping requires a new explicit confirmation.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    request      PATH  [required]                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```
@@ -983,9 +1090,11 @@ finjuice --version
 │ --help          Show this message and exit.                                                                          │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ submit    Preserve source bytes and supplied metadata; never infer OCR or account meaning.                           │
-│ list      Read one authority-bound snapshot including pending, stale and uncertain decisions.                        │
-│ confirm   Apply exactly the stored proposal with its explicit application identity.                                  │
+│ submit     Preserve source bytes and supplied metadata; never infer OCR or account meaning.                          │
+│ list       Read one authority-bound snapshot including pending, stale and uncertain decisions.                       │
+│ confirm    Apply exactly the stored proposal with its explicit application identity.                                 │
+│ revise     Atomically preserve a typed successor over verified source bytes; never erase its parent.                 │
+│ withdraw   Reject an unapplied proposal; applied domain changes require a typed correction proposal.                 │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```
@@ -1001,6 +1110,50 @@ finjuice --version
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ *    source        PATH  Original description/image/workbook file [required]                                         │
 │ *    metadata      PATH  Explicit extraction and proposal JSON document [required]                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot intake revise`
+
+```
+
+ Usage: finjuice ssot intake revise [OPTIONS] PROPOSAL_ID REQUEST
+
+ Atomically preserve a typed successor over verified source bytes; never erase its parent.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    proposal_id      TEXT  [required]                                                                               │
+│ *    request          PATH  Parent digest, new proposal and explicit revision evidence [required]                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json                                                                                                               │
+│ --idempotency-key            TEXT     Stable retry key for an authoritative mutation                                 │
+│ --expected-generation        TEXT     Expected active dataset generation                                             │
+│ --expected-revision          INTEGER  Expected active dataset revision                                               │
+│ --help                                Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot intake withdraw`
+
+```
+
+ Usage: finjuice ssot intake withdraw [OPTIONS] PROPOSAL_ID REQUEST
+
+ Reject an unapplied proposal; applied domain changes require a typed correction proposal.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    proposal_id      TEXT  [required]                                                                               │
+│ *    request          PATH  Exact proposal digest, withdrawal evidence and timestamp [required]                      │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ --json                                                                                                               │

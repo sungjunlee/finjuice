@@ -6,8 +6,9 @@ GitHub 이슈가 명세·AC·상태의 정본이다. 전체 목표는 `goals/fin
 
 - main 진입 PR #463: `codex/ssot-m2-mutations`. 코드 통합 소스 `a836238`은 검증한 `abb56ec`와 전체 파일 tree가 같다. 필수 비작성자 approving review가 남아 있으며 main에는 아직 반영하지 않았다.
 - 작업 브랜치 PR #517 → #516 → #481은 CI 확인 후 순서대로 squash merge했다. 계좌·자산·증빙 입력·보존 이전·정본 소비·managed recovery/delivery가 이제 #463에 함께 있다. 저장소가 허용하지 않는 merge commit 대신 허용된 squash 방식으로 통합했다.
-- `codex/ssot-intake-decisions`에서 #444 제안 철회·재작성과 적용된 변경의 타입별 교정을 구현 중이다. writer 기준은 `5d2d324`이며, 동결 후 해당 delta만 최신 통합 코드에 반영한다.
-- `codex/ssot-canonical-reconcile`에서 #446의 실제 정본 구매/할부 N:M 대사를 구현 중이다. 기준은 `abb56ec`이며 기존 별도 sidecar를 정본으로 취급하지 않는다. #445의 실제 운영 수용은 아직 남아 있어 M5 완료를 주장하지 않는다.
+- `codex/ssot-intake-reconcile`에서 #444 제안 수정·철회와 추출 자산 관측, #446 schema8 정본 구매/할부 대사를 통합했다. 기준은 `47f7734`이며 두 독립 writer의 delta만 반영했다. 공유 mutation/facade/schema 생성기 충돌을 해결하고 확정되지 않은 자산 의미 후속 제안이 기존 확정 head를 무효화하지 않도록 맞췄다.
+- 기능 소유자 검증: lifecycle10, 자산 관측10, 대사 핵심75+catalog8 통과. 실패는 해당 노드만 재실행했다. 통합 실제 흐름4 PASS/13.50초, 변경 source17 mypy와 Ruff 통과. 원본→수정/확정→다른 XLSX→capture/restore/query 포함. 기존 전체 검사는 반복하지 않았다.
+- 통합 Grok 교차 리뷰와 설치 artifact 확인은 진행 중이다. #445의 실제 가족 재산 운영 수용과 #446의 실제 월 검증은 남아 있어 이슈 완료로 간주하지 않는다. 적용된 asset observation의 수치 재작성과 단위 계약 없는 수량 관측은 명시 거절한다.
 - 기본 active checkout을 writer로 가정하지 않는다. 정확한 경로는 `git worktree list`로 확인한다. 이미 완료된 Cursor 리뷰/설치 검증은 재시작하지 않는다.
 
 ## 완료된 검사 — 재실행하지 않을 것

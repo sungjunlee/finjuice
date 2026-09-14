@@ -40,7 +40,7 @@ CoverageStatus = Literal[
     "unknown",
     "transfer_failed",
 ]
-FactKind = Literal["receipt", "changeset", "entry", "audit", "asset_meaning"]
+FactKind = Literal["receipt", "changeset", "entry", "audit", "asset_meaning", "reconcile"]
 
 
 @dataclass(frozen=True)
@@ -218,6 +218,29 @@ def _load_facts(connection: sqlite3.Connection) -> tuple[CommittedFact, ...]:
             content = dict(zip(names, row, strict=True))
             content["changeset_id"] = content["created_changeset_id"]
             facts.append(_fact("asset_meaning", {"assertion_id": content["assertion_id"]}, content))
+    if connection.execute("PRAGMA user_version").fetchone()[0] >= 8:
+        from finjuice.pipeline.storage.sqlite.schema_v8 import TABLE_KEYS
+
+        for table, keys in TABLE_KEYS.items():
+            cursor = connection.execute(f"SELECT * FROM {table} ORDER BY {', '.join(keys)}")
+            names = [column[0] for column in cursor.description]
+            for row in cursor:
+                content = dict(zip(names, row, strict=True))
+                if "created_changeset_id" in content:
+                    content["changeset_id"] = content["created_changeset_id"]
+                else:
+                    content["changeset_id"] = connection.execute(
+                        "SELECT created_changeset_id FROM reconcile_allocations "
+                        "WHERE allocation_id=?",
+                        (content["allocation_id"],),
+                    ).fetchone()[0]
+                facts.append(
+                    _fact(
+                        "reconcile",
+                        {"table": table, **{key: content[key] for key in keys}},
+                        content,
+                    )
+                )
     receipt_changes = set()
     for row in receipts:
         receipt_changes.add(row[0])

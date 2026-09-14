@@ -71,82 +71,92 @@ def submit_intake(service: MutationService, submission: IntakeSubmission) -> Mut
         actor=submission.actor,
     )
 
-    def capture(context: MutationContext) -> MutationOutcome:
-        # execute owns the authority shared lease and BEGIN IMMEDIATE here.
-        artifact = SourceObjectStore(context.authority.paths).publish(
-            io.BytesIO(submission.content)
-        )
-        context.register_source_artifact(artifact)
-        existing = context.find_intake_artifact(artifact.artifact_id)
-        artifact_id = (
-            str(existing["intake_artifact_id"])
-            if existing is not None
-            else _id("artifact/" + artifact.artifact_id)
-        )
-        if existing is None:
-            context.add_intake_artifact(
-                AgentIntakeArtifactRecord(
-                    artifact_id,
-                    artifact.artifact_id,
-                    submission.media_type,
-                    {"source_digest": artifact.artifact_id},
-                    submission.received_at,
-                )
-            )
-        occurrence_id = _id("occurrence/" + identity)
-        extraction_id = _id("extraction/" + identity)
-        proposal_id = _id("proposal/" + identity)
-        context.add_intake_occurrence(
-            AgentIntakeOccurrenceRecord(
-                occurrence_id,
-                artifact_id,
-                submission.channel,
-                submission.received_at,
-                {
-                    "source_kind": submission.source_kind,
-                    "media_type": submission.media_type,
-                    "uncertainties": payload["uncertainties"],
-                },
-            )
-        )
-        context.add_intake_extraction(
-            AgentIntakeExtractionRecord(
-                extraction_id,
-                occurrence_id,
-                submission.extractor,
-                payload["extraction"],
-                submission.received_at,
-            )
-        )
-        context.add_intake_proposal(
-            AgentIntakeProposalRecord(
-                proposal_id,
-                extraction_id,
-                submission.policy_version,
-                submission.proposal_scope,
-                application_key,
-                submission.expected_generation,
-                submission.expected_revision + 1,
-                payload["proposal"],
-                submission.received_at,
-            )
-        )
-        return MutationOutcome(
-            {
-                "source_artifact_id": artifact.artifact_id,
-                "intake_artifact_id": artifact_id,
-                "occurrence_id": occurrence_id,
-                "extraction_id": extraction_id,
-                "proposal_id": proposal_id,
-                "application_scope": submission.proposal_scope,
-                "application_key": application_key,
-                "expected_generation": submission.expected_generation,
-                "expected_revision": submission.expected_revision + 1,
-            },
-            retained_artifacts=(artifact.artifact_id,),
-        )
+    return service.execute(
+        request, lambda context: capture_intake(context, submission, identity, application_key)
+    )
 
-    return service.execute(request, capture)
+
+def capture_intake(
+    context: MutationContext,
+    submission: IntakeSubmission,
+    identity: str,
+    application_key: str,
+    lineage: Mapping[str, Any] | None = None,
+) -> MutationOutcome:
+    """Append a complete intake in the caller's transaction, optionally with verified lineage."""
+    payload = _payload(submission)
+    # execute owns the authority shared lease and BEGIN IMMEDIATE here.
+    artifact = SourceObjectStore(context.authority.paths).publish(io.BytesIO(submission.content))
+    context.register_source_artifact(artifact)
+    existing = context.find_intake_artifact(artifact.artifact_id)
+    artifact_id = (
+        str(existing["intake_artifact_id"])
+        if existing is not None
+        else _id("artifact/" + artifact.artifact_id)
+    )
+    if existing is None:
+        context.add_intake_artifact(
+            AgentIntakeArtifactRecord(
+                artifact_id,
+                artifact.artifact_id,
+                submission.media_type,
+                {"source_digest": artifact.artifact_id},
+                submission.received_at,
+            )
+        )
+    occurrence_id = _id("occurrence/" + identity)
+    extraction_id = _id("extraction/" + identity)
+    proposal_id = _id("proposal/" + identity)
+    context.add_intake_occurrence(
+        AgentIntakeOccurrenceRecord(
+            occurrence_id,
+            artifact_id,
+            submission.channel,
+            submission.received_at,
+            {
+                "source_kind": submission.source_kind,
+                "media_type": submission.media_type,
+                "uncertainties": payload["uncertainties"],
+                **({"proposal_revision": dict(lineage)} if lineage is not None else {}),
+            },
+        )
+    )
+    context.add_intake_extraction(
+        AgentIntakeExtractionRecord(
+            extraction_id,
+            occurrence_id,
+            submission.extractor,
+            payload["extraction"],
+            submission.received_at,
+        )
+    )
+    context.add_intake_proposal(
+        AgentIntakeProposalRecord(
+            proposal_id,
+            extraction_id,
+            submission.policy_version,
+            submission.proposal_scope,
+            application_key,
+            submission.expected_generation,
+            submission.expected_revision + 1,
+            payload["proposal"],
+            submission.received_at,
+        )
+    )
+    return MutationOutcome(
+        {
+            "source_artifact_id": artifact.artifact_id,
+            "intake_artifact_id": artifact_id,
+            "occurrence_id": occurrence_id,
+            "extraction_id": extraction_id,
+            "proposal_id": proposal_id,
+            "application_scope": submission.proposal_scope,
+            "application_key": application_key,
+            "expected_generation": submission.expected_generation,
+            "expected_revision": submission.expected_revision + 1,
+        },
+        retained_artifacts=(artifact.artifact_id,),
+    )
 
 
 def _payload(submission: IntakeSubmission) -> dict[str, Any]:

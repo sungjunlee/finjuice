@@ -18,7 +18,7 @@ from finjuice.pipeline.storage.authority import (
     AuthorityPaths,
     StaticActivationEvidenceProvider,
 )
-from finjuice.pipeline.storage.sqlite import RepositoryReader
+from finjuice.pipeline.storage.sqlite import GenerationPaths, RepositoryReader, upgrade_repository
 from tests.cli.commands.test_assets import _write_balance
 from tests.cli.commands.test_assets import asset_data_dir as _asset_fixture
 from tests.cli.commands.test_repository_query import QueryRoot
@@ -31,6 +31,10 @@ def _activate(source: Path, tmp_path: Path) -> QueryRoot:
     create_backup(CreateRequest(source, capture, ConsistencyEvidence("stopped_writers", ("test",))))
     plan_migration(capture, output=plan, active_data_dir=source)
     build_migration(plan, candidate, active_data_dir=source)
+    # M1 produces the pinned schema v5 capsule; activation uses an explicit clone upgrade.
+    upgraded = GenerationPaths(tmp_path / "upgraded")
+    upgrade_repository(candidate / "finjuice.sqlite3", upgraded)
+    candidate = upgraded.root
     with RepositoryReader(candidate / "finjuice.sqlite3") as reader:
         info = reader.info
     root = tmp_path / "active"

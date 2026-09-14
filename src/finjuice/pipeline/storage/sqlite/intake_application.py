@@ -113,7 +113,17 @@ def apply_intake_decision(
         (proposal_id,),
     ).fetchone():
         raise MutationConflictError("Intake proposal already has a decision.")
-    result = _apply_domain(context, payload)
+    if (
+        payload.get("change_kind") == "account_fact"
+        and payload.get("operation") == "asset_observation"
+    ):
+        from finjuice.pipeline.storage.sqlite.intake_asset_observation import (
+            apply_asset_observation,
+        )
+
+        result = apply_asset_observation(connection, context, proposal_id, payload["decision"])
+    else:
+        result = _apply_domain(context, payload)
     confirmation_id = new_entity_id()
     context.add_intake_confirmation(
         AgentIntakeConfirmationRecord(

@@ -45,7 +45,16 @@ def _render(payload: dict[str, Any]) -> None:
             )
             info(f"불확실성: {json.dumps(decision['uncertainties'], ensure_ascii=False)}")
             info(f"제안: {json.dumps(decision['proposal'], ensure_ascii=False)}")
+            info(f"이전 제안: {json.dumps(decision.get('lineage'), ensure_ascii=False)}")
+            successors = decision.get("successor_proposal_ids", [])
+            info(f"후속 제안: {json.dumps(successors, ensure_ascii=False)}")
             _render_identity(decision)
+    elif "parent_proposal_id" in payload:
+        info(f"증빙 제안 수정: {payload['parent_proposal_id']} → {payload['proposal_id']}")
+        info(f"이전 제안 상태: {payload['parent_status']}")
+        _render_identity(payload)
+    elif payload.get("status") == "rejected":
+        info(f"증빙 제안 철회: {payload['proposal_id']}; 리비전 {payload['committed_revision']}")
     elif "application_key" in payload:
         info(f"증빙 제출: {payload['proposal_id']}; 리비전 {payload['committed_revision']}")
         _render_identity(payload)
@@ -146,6 +155,71 @@ def intake_confirm(
         receipt = _facade(ctx).confirm_intake(
             proposal_id, identity=identity, confirmed_at=confirmed_at
         )
+        emit(
+            {**receipt.result, **mutation_metadata(identity, receipt)},
+            json_output,
+            _render,
+            command=name,
+        )
+    except Exception as exc:
+        _error(exc, name, json_output)
+
+
+@intake_app.command("revise")
+@with_mutation_options
+def intake_revise(
+    ctx: typer.Context,
+    proposal_id: str = typer.Argument(...),
+    request: Path = typer.Argument(
+        ..., help="Parent digest, new proposal and explicit revision evidence"
+    ),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Atomically preserve a typed successor over verified source bytes; never erase its parent."""
+    from finjuice.pipeline.storage.sqlite.intake_lifecycle import IntakeRevision
+
+    name = "ssot intake revise"
+    try:
+        identity = _identity(ctx)
+        body = json.loads(read_regular_bytes(request))
+        uncertainties = body.pop("uncertainties")
+        if not isinstance(uncertainties, list) or any(
+            not isinstance(item, str) for item in uncertainties
+        ):
+            raise ValueError("Revision uncertainties must be an explicit JSON array of strings.")
+        revision = IntakeRevision(
+            parent_proposal_id=proposal_id, uncertainties=tuple(uncertainties), **body
+        )
+        receipt = _facade(ctx).revise_intake(revision, identity=identity)
+        emit(
+            {**receipt.result, **mutation_metadata(identity, receipt)},
+            json_output,
+            _render,
+            command=name,
+        )
+    except Exception as exc:
+        _error(exc, name, json_output)
+
+
+@intake_app.command("withdraw")
+@with_mutation_options
+def intake_withdraw(
+    ctx: typer.Context,
+    proposal_id: str = typer.Argument(...),
+    request: Path = typer.Argument(
+        ..., help="Exact proposal digest, withdrawal evidence and timestamp"
+    ),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Reject an unapplied proposal; applied domain changes require a typed correction proposal."""
+    from finjuice.pipeline.storage.sqlite.intake_lifecycle import IntakeWithdrawal
+
+    name = "ssot intake withdraw"
+    try:
+        identity = _identity(ctx)
+        body = json.loads(read_regular_bytes(request))
+        withdrawal = IntakeWithdrawal(proposal_id=proposal_id, **body)
+        receipt = _facade(ctx).withdraw_intake(withdrawal, identity=identity)
         emit(
             {**receipt.result, **mutation_metadata(identity, receipt)},
             json_output,

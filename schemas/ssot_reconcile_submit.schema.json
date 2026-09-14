@@ -1,0 +1,34 @@
+{
+  "$id": "ssot_reconcile_submit.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "evidence_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "inserted_count": {
+      "type": "integer"
+    },
+    "replayed": {
+      "type": "boolean"
+    },
+    "source_artifact_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "evidence_ids",
+    "source_artifact_id",
+    "inserted_count",
+    "replayed"
+  ],
+  "title": "ssot reconcile submit output",
+  "type": "object"
+}

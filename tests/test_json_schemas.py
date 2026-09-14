@@ -21,9 +21,15 @@ SCHEMAS_DIR = REPO_ROOT / "schemas"
 runner = CliRunner()
 
 CATALOGUED_COMMANDS = [
+    ("ssot reconcile submit", [], "ssot_reconcile_submit.schema.json"),
+    ("ssot reconcile candidates", [], "ssot_reconcile_candidates.schema.json"),
+    ("ssot reconcile confirm", [], "ssot_reconcile_confirm.schema.json"),
+    ("ssot reconcile withdraw", [], "ssot_reconcile_withdraw.schema.json"),
     ("ssot intake list", [], "ssot_intake_list.schema.json"),
     ("ssot intake submit", [], "ssot_intake_submit.schema.json"),
     ("ssot intake confirm", [], "ssot_intake_confirm.schema.json"),
+    ("ssot intake revise", [], "ssot_intake_revise.schema.json"),
+    ("ssot intake withdraw", [], "ssot_intake_withdraw.schema.json"),
     ("ssot assets list", [], "ssot_assets_list.schema.json"),
     ("ssot assets confirm", [], "ssot_assets_confirm.schema.json"),
     ("ssot assets correct", [], "ssot_assets_correct.schema.json"),
@@ -764,10 +770,24 @@ def test_command_output_validates_against_schema(
         cmd_args = _materialize_sqlite_backup_catalog_args(schema_data_dir, label)
     if label.startswith("ssot migrate "):
         cmd_args = _materialize_migration_catalog_args(schema_data_dir, label)
+    if label.startswith("ssot reconcile "):
+        from tests.pipeline.test_canonical_reconcile import reconcile_catalog_outputs
+
+        payload = reconcile_catalog_outputs(schema_data_dir.parent / "canonical-reconcile")[
+            label.split()[-1]
+        ]
+        _validator_for(_load_schema(schema_file)).validate(payload)
+        return
     if label.startswith("ssot intake "):
         from tests.pipeline.test_canonical_intake_cli import intake_catalog_outputs
 
-        payload = intake_catalog_outputs(schema_data_dir.parent / "intake")[label.replace(" ", "_")]
+        if label.endswith((" revise", " withdraw")):
+            from tests.pipeline.test_intake_lifecycle import intake_lifecycle_catalog_outputs
+
+            outputs = intake_lifecycle_catalog_outputs(schema_data_dir.parent / "intake")
+        else:
+            outputs = intake_catalog_outputs(schema_data_dir.parent / "intake")
+        payload = outputs[label.replace(" ", "_")]
         _validator_for(_load_schema(schema_file)).validate(payload)
         return
     if label.startswith("ssot assets "):

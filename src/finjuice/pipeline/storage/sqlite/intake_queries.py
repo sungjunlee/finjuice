@@ -51,6 +51,12 @@ def intake_decision_view(connection: sqlite3.Connection) -> IntakeDecisionView:
     ).fetchone()
     if meta is None:
         raise RepositoryIntegrityError("Intake snapshot has no repository identity.")
+    from finjuice.pipeline.storage.sqlite.intake_lineage import validated_lineage
+
+    lineage = validated_lineage(connection)
+    successors: dict[str, list[str]] = {}
+    for child, link in lineage.items():
+        successors.setdefault(link["parent_proposal_id"], []).append(child)
     decisions: list[dict[str, Any]] = []
     rows = connection.execute(
         "SELECT p.proposal_id, p.command_scope, p.idempotency_key, p.expected_generation, "
@@ -92,23 +98,12 @@ def intake_decision_view(connection: sqlite3.Connection) -> IntakeDecisionView:
             uncertainties = ["invalid_uncertainty_evidence"]
         stale = row[3] != meta[0] or row[4] != meta[1]
         states = {item["state"] for item in confirmations}
-        if application is not None:
-            status = "applied"
-        elif len(states) > 1:
-            status = "conflicting_confirmations"
-        elif "rejected" in states:
-            status = "rejected"
-        elif stale:
-            status = "stale"
-        elif uncertainties:
-            status = "uncertain"
-        elif "confirmed" in states:
-            status = "confirmed_unapplied"
-        else:
-            status = "pending"
+        status = _status(application, bool(successors.get(row[0])), states, stale, uncertainties)
         decisions.append(
             {
                 "proposal_id": row[0],
+                "lineage": lineage.get(row[0]),
+                "successor_proposal_ids": sorted(successors.get(row[0], [])),
                 "application_scope": row[1],
                 "application_key": row[2],
                 "expected_generation": row[3],
@@ -144,3 +139,25 @@ def intake_decision_view(connection: sqlite3.Connection) -> IntakeDecisionView:
         "dataset_revision": int(meta[1]),
         "decisions": decisions,
     }
+
+
+def _status(
+    application: Any, has_successors: bool, states: set[str], stale: bool, uncertainties: list[Any]
+) -> str:
+    if application is not None:
+        status = "applied"
+    elif has_successors:
+        status = "revised"
+    elif len(states) > 1:
+        status = "conflicting_confirmations"
+    elif "rejected" in states:
+        status = "rejected"
+    elif stale:
+        status = "stale"
+    elif uncertainties:
+        status = "uncertain"
+    elif "confirmed" in states:
+        status = "confirmed_unapplied"
+    else:
+        status = "pending"
+    return status

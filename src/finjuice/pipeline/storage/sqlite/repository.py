@@ -149,6 +149,10 @@ _READ_TABLE_SQL_V5: Final = {
 def _read_table_sql(schema_version: int) -> Mapping[str, str]:
     """Return exactly the authoritative table surface of the selected schema."""
     _resolve_schema_version(schema_version)
+    if schema_version == 8:
+        from finjuice.pipeline.storage.sqlite.schema_v8 import TABLE_KEYS
+
+        return {**_read_table_sql(7), **{table: f"SELECT * FROM {table}" for table in TABLE_KEYS}}
     return {
         4: _READ_TABLE_SQL_V4,
         5: _READ_TABLE_SQL_V5,
@@ -657,6 +661,19 @@ class RepositoryReader(AbstractContextManager["RepositoryReader"]):
             "dataset_revision": self.info.dataset_revision,
             **ownership_projection(self._connection, account_id, as_of=as_of),
         }
+
+    def reconcile_evidence(self, *, window_days: int = 14) -> dict[str, Any]:
+        """Read settlement candidates and immutable decisions from one snapshot."""
+        from finjuice.pipeline.reconcile.canonical import reconcile_view
+
+        owns_snapshot = not self._connection.in_transaction
+        if owns_snapshot:
+            self._connection.execute("BEGIN")
+        try:
+            return reconcile_view(self._connection, self._repository_paths, window_days=window_days)
+        finally:
+            if owns_snapshot:
+                self._connection.execute("ROLLBACK")
 
     def intake_decisions(self) -> dict[str, Any]:
         """Read all canonical intake decision evidence from this pinned snapshot."""
