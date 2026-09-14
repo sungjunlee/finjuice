@@ -46,3 +46,5 @@ GitHub Issues가 명세·AC·상태의 정본이다. 실행 권한과 완료 조
 - 새 #435/#442/#443/#444 자동종료와 #446–#448 근거없는재종료를 확인하고 원래AC의남은canonical/운영검증을설명해다시열었다. PR513은실제SQLite/Hermes대신caller pin을복사하는격리harness라현재경로대체에사용하지않는다.
 
 - 후속 독립v4 실제1605234checks/0different/41752unresolved/6notchecked,960entry의전체topology/POSIXmetadata/immutablecapture보존확인. private checkpoint갱신,원본수정없음. M4다음연결계약은docs/development/ssot-m4-canonical-contract.md. liveCursor의keyset pagination초안에서300→256누락을격리재현했으므로terminal후최종source재검토및실제256초과receipt회귀필요(/tmp/finjuice-backup-delivery/root-review-notes.md).
+
+- consumer-v3 설치실행완료627953checks/0different/3unresolved/6notchecked,163origins. 선택config typedparse/3asof legacy순자산호환일치;fullfamily/FX/forecast운영미검증유지. delivery실제wheel초안은/tmp/finjuice-backup-delivery/recorded-delivery-artifact-smoke.py(아직미실행). terminalreview시keyset>256누락,missingfacts vs pending_commit_count 의미,실제mutation postcommit callsite 없는wrapper공백을최종source에서재확인한다.
