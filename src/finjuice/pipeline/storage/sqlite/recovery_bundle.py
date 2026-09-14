@@ -2,8 +2,8 @@
 
 This helper returns a local graph verification receipt. It does not prove
 off-device copy, encryption, key recovery, capacity, RPO/RTO, wheel installation,
-GC deletion, or a durable pin registry. Shared coordination currently serializes
-cooperating exclusive maintenance; retention acceptance remains unimplemented.
+or GC deletion. Managed store capture, verify, restore, and prune coordinate
+through the initialized store lease; this helper still verifies one graph body.
 """
 
 from __future__ import annotations
@@ -154,34 +154,37 @@ def capture_recovery_bundle(
     source: RecoveryCaptureInput, expected: ExpectedRecoveryGraph
 ) -> RecoveryGraphReceipt:
     """Hold the shared lease, copy retained buffers, and publish a fresh local graph."""
+    from finjuice.pipeline.storage.sqlite.recovery_store_lock import managed_read_lease
+
     staging = None
     owned = None
     scratch = None
     scratch_owned = None
     try:
         data_dir, destination, candidate = _roots(source)
-        identities = (
-            checked_directories(destination.parent),
-            checked_directories(data_dir),
-            checked_directories(candidate),
-        )
-        paths = AuthorityPaths.for_data_dir(data_dir)
-        with shared_write_lease(paths):
-            staging, owned, scratch, scratch_owned, receipt = _capture_locked(
-                source, expected, paths
+        with managed_read_lease(destination):
+            identities = (
+                checked_directories(destination.parent),
+                checked_directories(data_dir),
+                checked_directories(candidate),
             )
-            _admit(data_dir, source.evidence_provider, expected)
-            if (
-                checked_directories(destination.parent) != identities[0]
-                or checked_directories(data_dir) != identities[1]
-                or checked_directories(candidate) != identities[2]
-                or checked_directories(staging) != owned
-            ):
-                raise BackupVerificationError(_ERROR)
-            rename_exclusive(staging, destination)
-            staging = None
-            _fsync_directory(destination.parent)
-            return receipt
+            paths = AuthorityPaths.for_data_dir(data_dir)
+            with shared_write_lease(paths):
+                staging, owned, scratch, scratch_owned, receipt = _capture_locked(
+                    source, expected, paths
+                )
+                _admit(data_dir, source.evidence_provider, expected)
+                if (
+                    checked_directories(destination.parent) != identities[0]
+                    or checked_directories(data_dir) != identities[1]
+                    or checked_directories(candidate) != identities[2]
+                    or checked_directories(staging) != owned
+                ):
+                    raise BackupVerificationError(_ERROR)
+                rename_exclusive(staging, destination)
+                staging = None
+                _fsync_directory(destination.parent)
+                return receipt
     except Exception:
         raise BackupVerificationError(_ERROR) from None
     finally:
@@ -191,6 +194,18 @@ def capture_recovery_bundle(
 
 def verify_recovery_bundle(bundle: Path, expected: ExpectedRecoveryGraph) -> RecoveryGraphReceipt:
     """Verify one published graph using only the bundle and caller-trusted expectations."""
+    from finjuice.pipeline.storage.sqlite.recovery_store_lock import managed_read_lease
+
+    try:
+        with managed_read_lease(bundle):
+            return _verify_unlocked(bundle, expected)
+    except BackupVerificationError:
+        raise
+    except Exception:
+        raise BackupVerificationError(_ERROR) from None
+
+
+def _verify_unlocked(bundle: Path, expected: ExpectedRecoveryGraph) -> RecoveryGraphReceipt:
     try:
         root = Path(os.path.abspath(bundle))
         checked_directories(root)

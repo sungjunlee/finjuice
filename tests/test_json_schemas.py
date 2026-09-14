@@ -27,6 +27,14 @@ CATALOGUED_COMMANDS = [
     ("ssot backup restore", [], "ssot_backup_restore.schema.json"),
     ("ssot backup restore-bundle", [], "ssot_backup_restore_bundle.schema.json"),
     ("ssot backup status", [], "ssot_backup_status.schema.json"),
+    ("ssot backup store init", [], "ssot_backup_store_init.schema.json"),
+    ("ssot backup store capture", [], "ssot_backup_store_capture.schema.json"),
+    ("ssot backup store list", [], "ssot_backup_store_list.schema.json"),
+    ("ssot backup store verify", [], "ssot_backup_store_verify.schema.json"),
+    ("ssot backup store restore", [], "ssot_backup_store_restore.schema.json"),
+    ("ssot backup store protect", [], "ssot_backup_store_protect.schema.json"),
+    ("ssot backup store plan", [], "ssot_backup_store_plan.schema.json"),
+    ("ssot backup store prune", [], "ssot_backup_store_prune.schema.json"),
     ("ssot migrate plan", [], "ssot_migrate_plan.schema.json"),
     ("ssot migrate build", [], "ssot_migrate_build.schema.json"),
     ("ssot migrate verify", [], "ssot_migrate_verify.schema.json"),
@@ -496,6 +504,8 @@ def _materialize_sqlite_backup_catalog_args(schema_data_dir: Path, label: str) -
         "ssot backup restore-bundle",
     }:
         return _materialize_recovery_bundle_catalog_args(schema_data_dir, label)
+    if label.startswith("ssot backup store "):
+        return _materialize_recovery_store_catalog_args(schema_data_dir, label)
     from finjuice.pipeline.storage.sqlite.backup import create_backup
     from tests.pipeline.test_sqlite_backup import _build_generation
 
@@ -559,6 +569,63 @@ def _materialize_recovery_bundle_catalog_args(schema_data_dir: Path, label: str)
         str(expected_path),
         "--json",
     ]
+
+
+def _materialize_recovery_store_catalog_args(schema_data_dir: Path, label: str) -> list[str]:
+    """Prepare an initialized store and one verified graph for store command catalog cases."""
+    from finjuice.pipeline.storage.sqlite.recovery_store import (
+        capture_into_store,
+        initialize_recovery_store,
+    )
+    from tests.cli.test_sqlite_recovery_bundle import _write_expected
+    from tests.pipeline.test_recovery_bundle import _live
+
+    root = schema_data_dir.parent / "recovery-store-live"
+    source, expected, *_ = _live(root)
+    expected_path = _write_expected(root / "enrolled.json", expected)
+    store = root / "store"
+    prefix = ["ssot", "backup", "store"]
+    shared = ["--store", str(store), "--expected", str(expected_path), "--json"]
+    if label == "ssot backup store init":
+        return [*prefix, "init", "--store", str(store), "--expected", str(expected_path), "--json"]
+    initialize_recovery_store(store, expected)
+    if label == "ssot backup store capture":
+        paths = source.release_paths
+        return [
+            *prefix,
+            "capture",
+            "--store",
+            str(store),
+            "--source-data-dir",
+            str(source.data_dir),
+            "--expected",
+            str(expected_path),
+            "--wheel",
+            str(paths.wheel),
+            "--dependency-lock",
+            str(paths.dependency_lock),
+            "--binding",
+            str(paths.binding),
+            "--migration-candidate",
+            str(source.migration_candidate),
+            "--json",
+        ]
+    captured = capture_into_store(store, source, expected)
+    action = {
+        "ssot backup store list": ["list"],
+        "ssot backup store verify": ["verify", "--copy-id", captured.copy_id],
+        "ssot backup store restore": [
+            "restore",
+            "--copy-id",
+            captured.copy_id,
+            "--target",
+            str(schema_data_dir.parent / "recovery-store-restored"),
+        ],
+        "ssot backup store protect": ["protect", "--copy-id", captured.copy_id],
+        "ssot backup store plan": ["plan"],
+        "ssot backup store prune": ["prune"],
+    }[label]
+    return [*prefix, *action, *shared]
 
 
 @pytest.mark.parametrize(("label", "cmd_args", "schema_file"), CATALOGUED_COMMANDS)

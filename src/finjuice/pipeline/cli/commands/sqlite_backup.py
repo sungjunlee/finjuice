@@ -26,7 +26,10 @@ from finjuice.pipeline.storage.sqlite.inactive_restore import restore_workspace
 
 ssot_backup_app = typer.Typer(
     name="backup",
-    help="Create snapshots, capture a local recovery graph, and restore inactive workspaces.",
+    help=(
+        "Create snapshots, capture a local recovery graph, retain a managed store, "
+        "and restore inactive workspaces."
+    ),
     no_args_is_help=True,
 )
 
@@ -176,6 +179,7 @@ def _register_recovery_bundle_commands() -> None:
     import importlib
 
     importlib.import_module("finjuice.pipeline.cli.commands.sqlite_recovery_bundle")
+    importlib.import_module("finjuice.pipeline.cli.commands.sqlite_recovery_store")
 
 
 _register_recovery_bundle_commands()

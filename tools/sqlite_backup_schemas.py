@@ -64,6 +64,61 @@ def sqlite_backup_schemas() -> dict[str, JsonSchema]:
             count,
         ),
     }
+    copy_item: dict[str, JsonSchema] = {
+        "copy_id": text,
+        "created_at": {"type": ["string", "null"]},
+        "graph_digest": {"type": ["string", "null"]},
+        "health": {"enum": ["healthy", "held"], "type": "string"},
+        "hold_reason": {"type": ["string", "null"]},
+        "protected": {"type": "boolean"},
+    }
+    store_init: dict[str, JsonSchema] = {
+        "kind": {"const": "local_recovery_store_initialized"},
+        **dict.fromkeys(("store_id", "activation_sha256", "enrollment_digest"), text),
+    }
+    store_capture = {
+        **graph,
+        "kind": {"const": "local_recovery_store_captured"},
+        "copy_id": text,
+        "baseline_registered": {"type": "boolean"},
+    }
+    store_list: dict[str, JsonSchema] = {
+        "kind": {"const": "local_recovery_store_inventory"},
+        "store_id": text,
+        "healthy_count": count,
+        "held_count": count,
+        "baseline_copy_ids": {"type": "array", "items": text},
+        "latest_healthy_id": {"type": ["string", "null"]},
+        "copies": {"type": "array", "items": {"type": "object", "properties": copy_item}},
+        "plan_digest": {"type": ["string", "null"]},
+    }
+    store_protect: dict[str, JsonSchema] = {
+        "kind": {"const": "local_recovery_store_protected"},
+        "copy_id": text,
+        "graph_digest": text,
+    }
+    policy = {
+        "type": "object",
+        "properties": dict.fromkeys(("daily", "weekly", "monthly"), count),
+        "required": ["daily", "weekly", "monthly"],
+    }
+    store_plan: dict[str, JsonSchema] = {
+        "kind": {"const": "local_recovery_store_plan"},
+        "plan_digest": text,
+        **dict.fromkeys(("delete_count", "keep_count", "protected_count"), count),
+        "latest_healthy_id": {"type": ["string", "null"]},
+        "policy": policy,
+        **dict.fromkeys(
+            ("keep_ids", "delete_ids", "protected_ids"),
+            {"type": "array", "items": text},
+        ),
+    }
+    store_prune: dict[str, JsonSchema] = {
+        "kind": {"const": "local_recovery_store_pruned"},
+        **dict.fromkeys(("deleted_count", "kept_count", "held_count"), count),
+        "plan_digest": text,
+        **dict.fromkeys(("deleted_ids", "kept_ids"), {"type": "array", "items": text}),
+    }
     contracts = (
         ("create", create),
         ("restore", restore),
@@ -71,17 +126,25 @@ def sqlite_backup_schemas() -> dict[str, JsonSchema]:
         ("capture-bundle", graph),
         ("verify-bundle", graph),
         ("restore-bundle", restore),
+        ("store init", store_init),
+        ("store capture", store_capture),
+        ("store list", store_list),
+        ("store verify", graph),
+        ("store restore", restore),
+        ("store protect", store_protect),
+        ("store plan", store_plan),
+        ("store prune", store_prune),
     )
     schemas: dict[str, JsonSchema] = {}
     for action, properties in contracts:
-        filename = f"ssot_backup_{action.replace('-', '_')}.schema.json"
+        filename = f"ssot_backup_{action.replace('-', '_').replace(' ', '_')}.schema.json"
         schema = command_schema(
             filename,
             f"ssot backup {action} --json output",
             properties,
             list(properties),
         )
-        if "-" in action:
-            schema["x-command"] = f"ssot.backup.{action}"
+        if "-" in action or " " in action:
+            schema["x-command"] = "ssot.backup." + action.replace(" ", ".")
         schemas[filename] = schema
     return schemas

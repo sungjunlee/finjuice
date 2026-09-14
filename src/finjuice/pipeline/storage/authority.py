@@ -75,6 +75,20 @@ def _local_lease_state(path: Path) -> _LocalLeaseState:
 
 
 @dataclass(frozen=True)
+class CoordinationPaths:
+    """A lock namespace that is not an activation authority."""
+
+    control_root: Path
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "control_root", self.control_root.expanduser().absolute())
+
+    @property
+    def coordination_lock(self) -> Path:
+        return self.control_root / "coordination.lock"
+
+
+@dataclass(frozen=True)
 class AuthorityPaths:
     """Paths shared by repository writers and the future activation command."""
 
@@ -191,7 +205,7 @@ class CoordinationLease(AbstractContextManager["CoordinationLease"]):
 
     def __init__(
         self,
-        paths: AuthorityPaths,
+        paths: AuthorityPaths | CoordinationPaths,
         *,
         exclusive: bool,
         timeout_ms: int = _DEFAULT_LEASE_TIMEOUT_MS,
