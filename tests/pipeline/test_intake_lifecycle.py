@@ -195,7 +195,7 @@ def test_pending_withdrawal_is_idempotent_and_never_undoes_applied_domain(tmp_pa
     from tests.test_json_schemas import _load_schema, _validator_for
 
     _validator_for(_load_schema("ssot_intake_withdraw.schema.json")).validate(result)
-    assert _view(env, parent["proposal_id"])["status"] == "revised"
+    assert _view(env, parent["proposal_id"])["status"] == "rejected"
     assert _invoke(env, _confirm_arguments(submitted)).exit_code != 0
     denied_revision = _invoke(
         env,
@@ -207,7 +207,7 @@ def test_pending_withdrawal_is_idempotent_and_never_undoes_applied_domain(tmp_pa
         ],
     )
     assert denied_revision.exit_code != 0
-    assert _view(env, parent["proposal_id"])["status"] == "revised"
+    assert _view(env, parent["proposal_id"])["status"] == "rejected"
     another = _payload(_invoke(env, ["submit", source, metadata, *env.options("another")]))
     applied = _payload(_invoke(env, _confirm_arguments(another)))
     body["payload_digest"] = _view(env, another["proposal_id"])["payload_digest"]

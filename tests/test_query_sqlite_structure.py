@@ -352,11 +352,11 @@ def test_export_master_xlsx_uses_unfiltered_sqlite_snapshot(
     assert "스타벅스" in master_df["merchant_raw"].to_list()
 
 
-def test_query_ignores_stale_live_csv_when_sqlite_is_selected(
+def test_explicit_sqlite_query_ignores_csv_while_cli_preserves_selected_legacy(
     mirrored_dataset: dict[str, Path],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A mutated CSV partition must not change SQLite-backed query results."""
+    """Explicit SQLite reads stay pinned; CLI preserves selected legacy CSV authority."""
     data_dir = mirrored_dataset["data_dir"]
     csv_path = data_dir / "transactions" / "2024" / "10" / "transactions.csv"
     csv_path.write_text(
@@ -365,12 +365,14 @@ def test_query_ignores_stale_live_csv_when_sqlite_is_selected(
     )
     monkeypatch.setenv(GENERATION_ENV_VAR, str(mirrored_dataset["database"].parent))
 
-    payload = _invoke_query_json(
-        data_dir,
-        "SELECT merchant_raw FROM transactions WHERE row_hash = 'abc1234567890001'",
-    )
-
-    assert payload["rows"] == [{"merchant_raw": "스타벅스"}]
+    sql = "SELECT merchant_raw FROM transactions WHERE row_hash = 'abc1234567890001'"
+    selected = load_query_snapshot(mirrored_dataset["database"])
+    with open_analytics(data_dir, source_frame=selected.frame) as analytics:
+        rows = analytics.query_readonly(sql).pl().to_dicts()
+    assert rows == [{"merchant_raw": "스타벅스"}]
+    # A detached locator is not activation evidence for the CLI's selected legacy dataset.
+    payload = _invoke_query_json(data_dir, sql)
+    assert payload["rows"] == [{"merchant_raw": "STALE"}]
     frame = configured_source_frame()
     assert frame is not None
     assert "STALE" not in frame["merchant_raw"].to_list()
@@ -465,9 +467,12 @@ def test_export_html_md_transaction_count_honors_period_when_filters_empty(
     format_lower: str,
     dry_run: bool,
 ) -> None:
-    """SQLite html/md export counts the --period slice, not the full snapshot."""
+    """Legacy html/md export counts its period even when a detached locator is set."""
     data_dir = mirrored_dataset["data_dir"]
     monkeypatch.setenv(GENERATION_ENV_VAR, str(mirrored_dataset["database"].parent))
+    from finjuice.pipeline.query import configured_snapshot
+
+    assert configured_snapshot(data_dir) is None  # Exercise the legacy CSV counting branch.
     snapshot = read_transactions_frame(mirrored_dataset["database"])
     period_count = snapshot.filter(pl.col("date").str.starts_with("2024-10")).height
     assert snapshot.height > period_count > 0

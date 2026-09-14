@@ -69,6 +69,16 @@ def build_output_entry(  # noqa: PLR0913 - JSON artifact entries expose these st
     }
 
 
+def _count_plan_transactions(csv_base_dir: Path, format_lower: str, period: str | None) -> int:
+    if format_lower in {"html", "md"} and period is not None:
+        from finjuice.pipeline.export.aggregations import load_transactions
+
+        return len(load_transactions(csv_base_dir, period))
+    from finjuice.pipeline.storage import csv_partition
+
+    return len(csv_partition.get_all_transactions(csv_base_dir, columns=["row_hash"]))
+
+
 def build_export_plan(
     data_dir: Path,
     csv_base_dir: Path,
@@ -78,15 +88,11 @@ def build_export_plan(
     transaction_count: int | None = None,
 ) -> dict[str, Any]:
     """Build a read-only export manifest for text and JSON dry-run output."""
-    from finjuice.pipeline.storage import csv_partition
-
     export_dir = data_dir / "exports"
     reports_dir = export_dir / "reports"
     today = datetime.now().strftime("%Y%m%d")
     if transaction_count is None:
-        transaction_count = len(
-            csv_partition.get_all_transactions(csv_base_dir, columns=["row_hash"])
-        )
+        transaction_count = _count_plan_transactions(csv_base_dir, format_lower, period)
     output_files: list[dict[str, Any]] = []
     skipped_outputs: list[dict[str, Any]] = []
 
