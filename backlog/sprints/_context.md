@@ -19,7 +19,7 @@ GitHub Issues가 명세·AC·상태의 정본이다. 실행 권한과 완료 조
 - 복구 기능 검증 소스 커밋은 `49add1b`다. 현재 검증된 기능 소스는 `bbbf25b`이며 기반 갱신·close 저장 보완·managed store를 포함한다. 최신 recovery bundle와 capture/verify/restore CLI·독립 expected 입력·스키마를 함께 통합했다. Cursor 구현을 GPT 검토해 검증→복원 identity 누락3건을 재현하고 manifest digest/gen/schema/revision 연결로 수정했다. 원래 Cursor supervisor는 1008.67초/exit0로 종료됐으므로 다시 시작하지 않는다.
 - 관련52개+catalog12개 및 정적검사/commit hooks 통과. 동결 커밋 전체pytest는4,486PASS/1SKIP91.04%,799.06초/exit0로 종료했다. `/tmp/finjuice-recovery-operator-checkpoint/full.log`의 최종 결과이며 재시작하지 않는다.
 - 49add1b 실제wheel 설치265PASS(493개module origin), runtime/schema8개SHA일치. 실제wheel/lock을 담은 합성enrollment bundle의 원본제거→격리복원revision1→party수정→재백업→2차복원revision2도 통과(472개module origin). WheelSHA는6a38c3070253ed00a5cdda6844a741f164731ae7edd48d46c7c545e5fbc4ead8. 이는 운영trust/offdevice/cutover 증거가 아니다. 근거는 위 checkpoint 디렉터리다.
-- 최신 main75e64cc에 #508/#509/#511/#512가 머지됐고 주 writer에 충돌 없이 병합 검증 중이다. 신규57PASS와 기존migration41PASS, Ruff/mypy34 통과. #507/#510은 OPEN이고 새 #513도 읽기전용 비교 중이다. #510의 schema v2/별도 authority marker는 현재 schema5와 검증된 active.json 체계와 겹친다. main 또는 다른 branch를 덮어쓰지 말고 최신 상태와 필요한 동작을 대조한다. PR #503의 CLI 표면은 이미 안전한 엔진에 맞춰 반영했지만 그 PR 전체를 병합한 것은 아니다.
+- 최신 main75e64cc에 #508/#509/#511/#512가 머지됐고 주 writer f5f4359로 충돌 없이 통합·push했다. 신규57PASS와 기존migration41PASS, Ruff/mypy34 통과. #507/#510은 OPEN이고 새 #513도 읽기전용 비교 중이다. #510의 schema v2/별도 authority marker는 현재 schema5와 검증된 active.json 체계와 겹친다. main 또는 다른 branch를 덮어쓰지 말고 최신 상태와 필요한 동작을 대조한다. PR #503의 CLI 표면은 이미 안전한 엔진에 맞춰 반영했지만 그 PR 전체를 병합한 것은 아니다.
 
 ## 다음 행동
 
@@ -42,3 +42,5 @@ GitHub Issues가 명세·AC·상태의 정본이다. 실행 권한과 완료 조
 - 운영 설치 최신 관측(09-14 09:13KST): SSH로 표준계정경로finjuice0.8.3/uv0.10.7을확인했다. 기본비대화형PATH에는없다. 설치본authority/recovery_bundle/sqlite_backup CLI/nm모듈이없으므로현재통합판배포나cutover로간주하지않는다. 금융원본읽기/운영변경없음; 세부근거는활성스프린트와runtime-check기록을따른다.
 
 - 현재 delivery sole writer는 별도 codex/ssot-backup-delivery(bbbf25b 기반), Cursor Grok4.6high --trust /tmp/finjuice-backup-delivery/run.py(45분 deadline)다. 실제 tool events를 확인했으며 살아 있는 실행을 재시작하거나 그 파일을 동시에 수정하지 않는다. 최신 main 통합과 소비자 검토는 root 주 writer에서 수행한다.
+
+- 새 #435/#442/#443/#444 자동종료와 #446–#448 근거없는재종료를 확인하고 원래AC의남은canonical/운영검증을설명해다시열었다. PR513은실제SQLite/Hermes대신caller pin을복사하는격리harness라현재경로대체에사용하지않는다.
