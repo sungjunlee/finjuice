@@ -20,6 +20,7 @@ from finjuice.pipeline.storage.authority import (
     resolve_storage_authority,
 )
 from finjuice.pipeline.storage.sqlite.account_bindings import AccountBindingConfirmation
+from finjuice.pipeline.storage.sqlite.account_decisions import OwnershipDecision
 from finjuice.pipeline.storage.sqlite.bulk_tagging import (
     BulkTagCommand,
     apply_bulk_tagging,
@@ -233,6 +234,33 @@ class StorageMutationFacade:
         return self._execute(
             _RequestSpec(scope, asdict(command), identity, "cli", None),
             lambda context: MutationOutcome(result=context.confirm_account_binding(command)),
+        )
+
+    def preview_account_binding(self, command: AccountBindingConfirmation) -> BulkMutationPreview:
+        """Preview exact-key impact and optimistic-concurrency identity from one snapshot."""
+        from dataclasses import asdict
+
+        return self._preview(
+            _RequestSpec(
+                "account.binding.preview", asdict(command), MutationIdentity(), "cli", None
+            ),
+            lambda context: MutationOutcome(result=context.preview_account_binding(command)),
+        )
+
+    def confirm_ownership(
+        self, command: OwnershipDecision, *, identity: MutationIdentity = MutationIdentity()
+    ) -> MutationReceipt:
+        """Confirm or correct exact ownership through canonical audit and validation."""
+        from dataclasses import asdict
+
+        scope = (
+            "account.ownership.correct"
+            if command.supersedes_assertion_id
+            else "account.ownership.confirm"
+        )
+        return self._execute(
+            _RequestSpec(scope, asdict(command), identity, "cli", None),
+            lambda context: MutationOutcome(result=context.confirm_ownership(command)),
         )
 
     def read_account_bindings(self) -> dict[str, Any]:

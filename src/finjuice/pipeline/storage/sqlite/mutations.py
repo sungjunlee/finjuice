@@ -28,6 +28,7 @@ from finjuice.pipeline.storage.sqlite.account_bindings import (
     insert_account_binding,
     resolve_account_binding,
 )
+from finjuice.pipeline.storage.sqlite.account_decisions import OwnershipDecision
 from finjuice.pipeline.storage.sqlite.errors import (
     MutationAbortedError,
     MutationBusyError,
@@ -950,6 +951,45 @@ class MutationContext:
     ) -> AccountBindingResolution:
         """Resolve explicit current bindings in the same transaction as an import."""
         return resolve_account_binding(self.__connection, namespace, external_key)
+
+    def preview_account_binding(self, command: AccountBindingConfirmation) -> dict[str, Any]:
+        """Read one binding impact under the mutation preview snapshot."""
+        from finjuice.pipeline.storage.sqlite.account_decisions import binding_impact
+
+        revision = self.__connection.execute(
+            "SELECT dataset_revision FROM repository_meta WHERE singleton = 1"
+        ).fetchone()[0]
+        return {
+            "expected_generation": as_generation_binding(self.authority).dataset_generation,
+            "expected_revision": revision,
+            **binding_impact(self.__connection, command),
+        }
+
+    def confirm_ownership(self, command: OwnershipDecision) -> dict[str, Any]:
+        """Append exact shares and one evidenced assertion in the current transaction."""
+        from finjuice.pipeline.storage.sqlite.account_decisions import validate_ownership_decision
+
+        validate_ownership_decision(self.__connection, command)
+        assertion_id = new_entity_id()
+        shares = []
+        for decision in command.shares:
+            value_id = new_entity_id()
+            self.add_exact_value(value_id, decision.exact_value())
+            shares.append(OwnershipShareRecord(assertion_id, decision.party_id, value_id))
+        record = OwnershipAssertionRecord(
+            assertion_id=assertion_id,
+            account_id=command.account_id,
+            completeness=command.completeness,
+            confirmation_state="confirmed",
+            evidence=command.evidence,
+            effective_from=command.effective_from,
+            effective_to=command.effective_to,
+            unknown_remainder=command.completeness != "complete",
+            confirmed_at=datetime.now(timezone.utc).isoformat(),
+            supersedes_assertion_id=command.supersedes_assertion_id,
+        )
+        self.add_ownership_assertion(record, shares)
+        return {**asdict(record), "shares": [asdict(share) for share in shares]}
 
     def add_ownership_assertion(
         self,

@@ -111,3 +111,28 @@ ObservationRecord에는 시간/범위/확정/supersedes가 있지만 전체/부�
 runtime source binding은 schema 6의 별도 테이블에 기록한다. legacy capture mapping에 가짜 provenance를 추가하지 않으며, migration policy의 schema 4/5 pin도 바꾸지 않는다. schema 5 백업의 raw restore는 버전과 내용을 보존한다. 현재 runtime에서 사용할 때에는 명시적인 clone upgrade와 해당 activation 계약이 필요하며, 복원만으로 기존 활성 source를 자동 승격하지 않는다.
 
 이 묶음은 기존 source occurrence의 소급 재연결·영향 preview, ownership 확정 CLI, 일반 intake proposal/application 연결, 가계 집계를 구현하지 않는다. 이 항목과 장비 밖 운영 증거를 완료한 것으로 간주하지 않는다.
+
+### 후속 연결: 영향 미리보기와 ownership 결정
+
+`ssot account preview REQUEST.json [--corrects BINDING_ID]`는 한 검증된 읽기 snapshot에서 현재 연결, 요청 후 연결 상태, 실제 저장된 관측 scope와 `expected_generation`/`expected_revision`을 반환한다. 해당 값을 기존 `confirm` 또는 `correct`의 필수 옵션에 전달한다. 그 사이 revision이나 generation이 바뀌면 새 결정은 거절된다. 같은 idempotency 요청의 재전송은 기존 receipt를 재생한다. 미리보기는 별도 영속 승인 토큰을 생성하지 않으며, 실제 확인 요청에 대한 명시 결정 책임은 호출자에게 있다.
+
+거래 scope에는 정확한 account_text로 연결된 materialized 거래와 그 source link를, 자산 scope에는 정확한 외부 account ID가 남은 source payload 및 연결된 snapshot을 표시한다. 관측 ID·provenance ID·source occurrence ID와 현재 실제 계좌를 보존하며 원시 금융 셀을 출력하지 않는다. 매칭할 근거가 없는 격리 거래 셀은 추정하지 않는다. 지원되지 않는 namespace는 현재 importer 연결이 없다고 표시한다. 기존 거래·자산·이미 완료된 import receipt는 소급 변경하지 않는다.
+
+`ssot account ownership-confirm REQUEST.json` 또는 `ownership-correct ASSERTION_ID REQUEST.json`은 같은 필수 idempotency/generation/revision 옵션을 사용한다. 요청 예시는 다음과 같다. 계좌와 party ID는 이미 존재하는 canonical ID를 명시해야 하며 새 사람이나 소유 관계를 자동 생성하지 않는다.
+
+```json
+{
+  "account_id": "<existing-account-uuid>",
+  "completeness": "partial",
+  "effective_from": "2026-01-01",
+  "effective_to": "2026-12-31",
+  "shares": [
+    {"party_id": "<existing-party-uuid>", "coefficient": "5", "scale": 1}
+  ],
+  "evidence": {"reason": "사용자가 확인한 소유 근거"}
+}
+```
+
+지분은 coefficient × 10^(-scale)의 정확값이다. complete는 합이 정확히 1이어야 하며, partial/unknown은 남은 몫을 미확정으로 유지한다. 기존 canonical 기간·겹침·지분 validator를 동일 transaction에서 적용한다. 실패 시 값/주장/receipt 일부만 남기지 않는다. 교정은 같은 계좌의 아직 교정되지 않은 assertion을 가리키며, 기존 global confirmed supersession 의미를 그대로 따른다. `ssot account ownership ACCOUNT_ID --as-of YYYY-MM-DD`에서 정확 지분, 미확정 잔여와 원본·교정 근거를 확인할 수 있다.
+
+영향 preview 및 ownership 확정 CLI는 이제 연결되었다. 과거 관측의 소급 재연결, party 생성 UI, 일반 intake channel/application, household 집계 및 과거 활성 schema의 운영 upgrade/cutover는 계속 별도 범위다.

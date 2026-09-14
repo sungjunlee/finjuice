@@ -21,6 +21,9 @@ SCHEMAS_DIR = REPO_ROOT / "schemas"
 runner = CliRunner()
 
 CATALOGUED_COMMANDS = [
+    ("ssot account preview", [], "ssot_account_preview.schema.json"),
+    ("ssot account ownership-confirm", [], "ssot_account_ownership_confirm.schema.json"),
+    ("ssot account ownership-correct", [], "ssot_account_ownership_correct.schema.json"),
     ("ssot account list", [], "ssot_account_list.schema.json"),
     ("ssot account confirm", [], "ssot_account_confirm.schema.json"),
     ("ssot account correct", [], "ssot_account_correct.schema.json"),
@@ -689,6 +692,13 @@ def _materialize_backup_deliver_catalog_args(schema_data_dir: Path, label: str) 
 
 
 def _account_catalog_result(schema_data_dir: Path, label: str):
+    if label.split()[-1] in {"preview", "ownership-confirm", "ownership-correct"}:
+        from tests.pipeline.test_account_decisions import _catalog_command_result
+
+        return _catalog_command_result(
+            schema_data_dir.parent / "account-decision", label.split()[-1]
+        )
+
     from finjuice.pipeline.storage.mutation_facade import StorageMutationFacade
     from finjuice.pipeline.storage.sqlite.account_bindings import AccountBindingConfirmation
     from finjuice.pipeline.storage.sqlite.schema import inspect_repository
