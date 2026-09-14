@@ -4,13 +4,14 @@ GitHub 이슈가 명세·AC·상태의 정본이다. 전체 목표는 `goals/fin
 
 ## 현재 코드와 PR
 
-- main 진입 PR #463: `codex/ssot-m2-mutations`. 최신 통합 소스 `96504ce`는 PR #518 최종 검증 소스 `373fc63`과 전체 파일 tree가 같다. 필수 비작성자 approving review가 남아 있으며 main에는 아직 반영하지 않았다.
+- main 진입 PR #463: `codex/ssot-m2-mutations`. 최신 통합 소스 `6da728f`는 PR #519 최종 검증 소스 `9e945e8`과 전체 파일 tree가 같다. 필수 비작성자 approving review가 남아 있으며 main에는 아직 반영하지 않았다.
 - 작업 브랜치 PR #517 → #516 → #481은 CI 확인 후 순서대로 squash merge했다. 계좌·자산·증빙 입력·보존 이전·정본 소비·managed recovery/delivery가 이제 #463에 함께 있다. 저장소가 허용하지 않는 merge commit 대신 허용된 squash 방식으로 통합했다.
 - `codex/ssot-intake-reconcile`에서 #444 제안 수정·철회와 추출 자산 관측, #446 schema8 정본 구매/할부 대사를 통합했다. 기준은 `47f7734`이며 두 독립 writer의 delta만 반영했다. 공유 mutation/facade/schema 생성기 충돌을 해결하고 자산 정정 대상은 불변 계보의 마지막 assertion, 보고/동일 증빙 재사용은 최신 확정 assertion으로 구분했다.
 - 기능 소유자 검증: lifecycle10, 자산 관측10, 대사 핵심75+catalog8 통과. 실패는 해당 노드만 재실행했다. 통합 실제 흐름4 PASS/13.50초, 변경 source17 mypy와 Ruff 통과. 원본→수정/확정→다른 XLSX→capture/restore/query 포함. 기존 전체 검사는 반복하지 않았다.
 - PR #518 (`0559cd6`) 설치 wheel에서 철회/재시도 및 일반 N:M 흐름2 PASS/6.46초, installed origins527, source/wheel/installed package722개 bytes 일치를 확인했다. wheel SHA `5b488af353dea067fed602d9b15da54963d8e44a3e21f2cdaba060d07f0e21f5`. 초기 revise-only2 PASS는 최종 확인 근거로 쓰지 않는다. Grok522.64초/exit0 리뷰 지적 중 철회한 제안의 재수정과 pending successor 후 동일 원본 재사용을 수정했다. 명시적으로 confirmed successor를 확정할 때 이전 confirmed 의미를 교체하는 동작은 의도한 정정 계약이며, 최종 apply/report까지 검증하도록 회귀를 확장했다. 변경 회귀4 PASS/3.19초, Ruff/mypy2 PASS. 최종373fc63 wheel 설치 회귀3 PASS/2.90초, installed origins528, package722개 source/wheel/installed bytes 일치. SHA `02c851d3efc6f869ee230b6972cb464d87890454b6536798f242d98052176446`. PR #518은 CI 통과 후15:35 KST에 정상 squash merge했고 통합 커밋은96504ce다. #445의 실제 가족 재산 운영 수용과 #446의 실제 월 검증은 남아 있어 이슈 완료로 간주하지 않는다. 적용된 asset observation의 수치 재작성과 단위 계약 없는 수량 관측은 명시 거절한다.
 - #447 정본 월 마감/재개방 구현을 Opus5 high가1192.49초/exit0에 마쳤다. 관련296PASS1fixtureFAIL(260.78초), root가 v5캡처→현행clone upgrade fixture로 실패1개를 수정해4.99초에PASS. 초기9 close/raw4–8복원 검사는 통과했으며 이를 반복하지 않았다.
 - `codex/ssot-close-adapter`는 최신ebfaa0c에서 #447 delta를 통합했다. 원본 writer의 마지막 소스와 snapshot hash가 같음을 확인했다. GPT 교차 검토에서 정밀 금액·이체 판단·원본 자산 단순합계·역사 재생성·미대사 상태·mutation manifest를 보완했다. 실제 수정 회귀3PASS/9.88초(최초2fixture실패 후 해당2+새미대사1만 검사), 추가기존 close→restore1PASS. 새 계산은cash.v1만 지원하고 자산에는 명시party/currency/source범위를 요구한다. 원본 close에는 당시 exact거래/자산판단/대사 입력을 보존해 history에서 재계산·digest를 검사한다.
+- PR #519는 CI 확인 후15:54 KST 정상 squash merge했다(6da728f). 최종9e945e8 설치 실제 close/이체판단/재생성/복원 및 자산 정정2 PASS/3.88초, 설치 origins534, package728개 source/wheel/installed bytes 일치. wheel SHA `81e49b606f8776b83bc3563303737bb7e99ed3fc76a0c1cdf984f30c186332d4`. 소스/검증 원장은 `/tmp/finjuice-canonical-close/root-checkpoint.json`이다. 기존 검사를 재실행하지 않는다.
 - #447 최초 writer `codex/ssot-canonical-close`는 동결됐다. #448 추가 JSON 정본 입력은 `codex/ssot-canonical-adapter`에서 Cursor Grok4.6 high가 계속 구현 중이다. 해당 실행 handle은86607이며 `/tmp/finjuice-canonical-adapter/`에 로그가 있다. 관측 없이 재시작하지 않는다.
 - 기본 active checkout을 writer로 가정하지 않는다. 정확한 경로는 `git worktree list`로 확인한다. 이미 완료된 Cursor 리뷰/설치 검증은 재시작하지 않는다.
 
