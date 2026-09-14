@@ -33,6 +33,7 @@ from finjuice.pipeline.storage.sqlite.inactive_restore import (
     restore_workspace,
 )
 from finjuice.pipeline.storage.sqlite.mutations import MutationOutcome, MutationService
+from finjuice.pipeline.storage.sqlite.schema import SQLITE_SCHEMA_VERSION
 from tests.pipeline.test_sqlite_exact_import import _asset_book, _import, _query, _tx_book, _tx_row
 from tests.pipeline.test_sqlite_exact_import import repo as repo_fixture
 from tests.pipeline.test_sqlite_mutations import _ownership_handler, _request
@@ -212,7 +213,7 @@ def test_v5_backup_restore_and_explicit_clone_upgrade_preserve_policy_schema(
     current = GenerationPaths(tmp_path / "v6")
     upgrade_repository(raw.database, current)
     with RepositoryReader(current.database) as reader:
-        assert reader.info.schema_version == 6
+        assert reader.info.schema_version == SQLITE_SCHEMA_VERSION
         assert reader.rows("account_source_bindings") == []
         assert reader.rows("accounts")[0]["entity_id"] == account
     with RepositoryReader(source.database, expected_schema_version=5) as reader:

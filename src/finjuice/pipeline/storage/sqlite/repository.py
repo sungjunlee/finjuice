@@ -16,6 +16,7 @@ from finjuice.pipeline.storage.sqlite.analysis_reads import (
     AnalysisReadSnapshot,
     analysis_snapshot,
 )
+from finjuice.pipeline.storage.sqlite.asset_reports import AssetReportQuery
 from finjuice.pipeline.storage.sqlite.checkup_reads import (
     CheckupReadSnapshot,
     import_preview_snapshot,
@@ -154,6 +155,11 @@ def _read_table_sql(schema_version: int) -> Mapping[str, str]:
         6: {
             **_READ_TABLE_SQL_V5,
             "account_source_bindings": "SELECT * FROM account_source_bindings",
+        },
+        7: {
+            **_READ_TABLE_SQL_V5,
+            "account_source_bindings": "SELECT * FROM account_source_bindings",
+            "asset_meaning_assertions": "SELECT * FROM asset_meaning_assertions",
         },
     }[schema_version]
 
@@ -650,6 +656,34 @@ class RepositoryReader(AbstractContextManager["RepositoryReader"]):
         return {
             "dataset_revision": self.info.dataset_revision,
             **ownership_projection(self._connection, account_id, as_of=as_of),
+        }
+
+    def intake_decisions(self) -> dict[str, Any]:
+        """Read all canonical intake decision evidence from this pinned snapshot."""
+        from finjuice.pipeline.storage.sqlite.intake_queries import intake_decision_view
+
+        owns_snapshot = not self._connection.in_transaction
+        if owns_snapshot:
+            self._connection.execute("BEGIN")
+        try:
+            return dict(intake_decision_view(self._connection))
+        finally:
+            if owns_snapshot:
+                self._connection.execute("ROLLBACK")
+
+    def canonical_assets(self, query: AssetReportQuery | None = None) -> dict[str, Any]:
+        """Read source evidence and its confirmed meaning at this validated revision."""
+        from finjuice.pipeline.storage.sqlite.asset_reports import asset_candidates, asset_report
+
+        payload = (
+            asset_candidates(self._connection)
+            if query is None
+            else asset_report(self._connection, query)
+        )
+        return {
+            "dataset_revision": self.info.dataset_revision,
+            "dataset_generation": self.info.dataset_generation,
+            **payload,
         }
 
     def account_binding_snapshot(self) -> dict[str, Any]:

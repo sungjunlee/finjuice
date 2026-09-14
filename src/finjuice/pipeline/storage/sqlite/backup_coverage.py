@@ -40,7 +40,7 @@ CoverageStatus = Literal[
     "unknown",
     "transfer_failed",
 ]
-FactKind = Literal["receipt", "changeset", "entry", "audit"]
+FactKind = Literal["receipt", "changeset", "entry", "audit", "asset_meaning"]
 
 
 @dataclass(frozen=True)
@@ -211,6 +211,13 @@ def _load_facts(connection: sqlite3.Connection) -> tuple[CommittedFact, ...]:
         ("",),
     )
     facts: list[CommittedFact] = []
+    if connection.execute("PRAGMA user_version").fetchone()[0] >= 7:
+        cursor = connection.execute("SELECT * FROM asset_meaning_assertions ORDER BY assertion_id")
+        names = [column[0] for column in cursor.description]
+        for row in cursor:
+            content = dict(zip(names, row, strict=True))
+            content["changeset_id"] = content["created_changeset_id"]
+            facts.append(_fact("asset_meaning", {"assertion_id": content["assertion_id"]}, content))
     receipt_changes = set()
     for row in receipts:
         receipt_changes.add(row[0])
