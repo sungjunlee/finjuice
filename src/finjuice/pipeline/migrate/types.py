@@ -33,6 +33,8 @@ INVENTORY_ROLES: tuple[str, ...] = (
     "source_workbook",
     "rules",
     "goals",
+    "assets",
+    "scenarios",
     "import_history",
     "audit_history",
     "overlay",

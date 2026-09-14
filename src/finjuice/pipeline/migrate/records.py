@@ -67,6 +67,7 @@ class BuildState:
     resources: dict[str, str] = field(default_factory=dict)
     dispositions: list[tuple[str, Disposition, str]] = field(default_factory=list)
     issues: int = 0
+    issue_ids: set[str] = field(default_factory=set)
     origin_artifact_id: str = ""
     origin_occurrence_id: str = ""
 
@@ -121,6 +122,10 @@ def add_issue(
         "issue_kind": issue_kind,
         "field_name": field_name or "",
     }
+    issue_id = stable_id(state.digest, "preservation_issue", locator)
+    if issue_id in state.issue_ids:
+        return
+    state.issue_ids.add(issue_id)
     state.builder.add_preservation_issue(
         PreservationIssueRecord(
             provenance_id=provenance_id,
@@ -128,7 +133,7 @@ def add_issue(
             detail=detail or {"reason": issue_kind},
             field_name=field_name,
             lexical_value=lexical_value,
-            issue_id=stable_id(state.digest, "preservation_issue", locator),
+            issue_id=issue_id,
         )
     )
     state.issues += 1

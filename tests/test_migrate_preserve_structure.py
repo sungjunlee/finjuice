@@ -149,7 +149,23 @@ def _frozen_dataset(root: Path) -> Path:
                 "file_id": "240131_1",
                 "source_row": "4",
                 "source_col": "2",
-            }
+            },
+            {
+                "fact_id": "fact-bad",
+                "snapshot_date": "2024-01-31",
+                "sheet_name": "overview",
+                "block_id": "assets",
+                "block_title": "자산",
+                "fact_kind": "amount",
+                "row_label": "기타",
+                "column_label": "금액",
+                "value_numeric": "not-a-number",
+                "value_text": "not-a-number",
+                "value_type": "number",
+                "file_id": "240131_1",
+                "source_row": "5",
+                "source_col": "2",
+            },
         ],
     )
     _write_csv(
@@ -181,6 +197,8 @@ def _frozen_dataset(root: Path) -> Path:
     )
     (source / "rules.yaml").write_text("version: 1\nrules: []\n", encoding="utf-8")
     (source / "goals.yaml").write_text("version: 1\ngoals: []\n", encoding="utf-8")
+    (source / "assets.yaml").write_text("assets: []\n", encoding="utf-8")
+    (source / "scenarios.yaml").write_text("scenarios: []\n", encoding="utf-8")
     (source / "imports").mkdir(parents=True)
     (source / "imports" / "2024-01.xlsx").write_bytes(b"synthetic-xlsx")
     (source / "audit").mkdir()
@@ -252,12 +270,22 @@ def _assert_hidden_override_and_unknown_fields(staging: Path) -> None:
         }
         assert amounts["10.10"] == ("1010", 2)
         assert amounts["0.0037"] == ("37", 4)
+        config_kinds = {row["config_kind"] for row in reader.rows("config_revisions")}
+        assert {"rules", "goals", "assets", "scenarios", "other"} <= config_kinds
         issues = reader.rows("preservation_issues")
         assert any(row["field_name"] == "confidence" for row in issues)
+        assert any(
+            row["field_name"] == "value_numeric" and row["issue_kind"] == "unparseable_amount"
+            for row in issues
+        )
+        opaque = [
+            row
+            for row in reader.rows("migration_dispositions")
+            if row["disposition"] == "preserved_opaque"
+        ]
+        assert opaque
         assert reader.rows("overview_facts")
         assert reader.rows("overview_balances")
-        config_kinds = {row["config_kind"] for row in reader.rows("config_revisions")}
-        assert {"rules", "goals", "other"} <= config_kinds
         roles = {row["occurrence_kind"] for row in reader.rows("source_occurrences")}
         assert "source_workbook" in roles
         assert "audit_history" in roles

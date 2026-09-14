@@ -48,6 +48,8 @@ _ROLE_PREFIXES: tuple[tuple[str, str], ...] = (
 _ROLE_FILES: dict[str, str] = {
     "rules": "rules.yaml",
     "goals": "goals.yaml",
+    "assets": "assets.yaml",
+    "scenarios": "scenarios.yaml",
 }
 
 _WORKBOOK_SUFFIXES = {".xlsx", ".zip"}
@@ -351,6 +353,8 @@ def record_kind_for_role(role: str) -> str:
         "source_workbook": "source_occurrence",
         "rules": "config_revision",
         "goals": "config_revision",
+        "assets": "config_revision",
+        "scenarios": "config_revision",
         "import_history": "source_occurrence",
         "audit_history": "source_occurrence",
         "overlay": "config_revision",
@@ -392,7 +396,7 @@ def expand_planned_inputs(manifest: CaptureManifest) -> list[PlannedInput]:
                 )
             continue
         expected: Disposition = "preserved_opaque"
-        if entry.logical_role in {"rules", "goals", "overlay"}:
+        if entry.logical_role in {"rules", "goals", "assets", "scenarios", "overlay"}:
             expected = "migrated"
         inputs.append(_file_input(entry, expected=expected))
     return inputs

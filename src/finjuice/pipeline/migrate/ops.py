@@ -9,6 +9,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from finjuice.pipeline.migrate.csvio import read_csv_rows
 from finjuice.pipeline.migrate.encoding import (
     canonical_bytes,
     digest_text,
@@ -27,6 +28,7 @@ from finjuice.pipeline.migrate.inventory import (
     preflight_space,
     reject_overlap,
     require_outside_repo,
+    resolve_entry_path,
     revalidate_capture,
 )
 from finjuice.pipeline.migrate.mapping import (
@@ -45,6 +47,11 @@ from finjuice.pipeline.migrate.mapping_overview import (
     map_overview_investment_row,
     map_overview_loan_row,
 )
+from finjuice.pipeline.migrate.preserve import (
+    parse_tag_sequence,
+    split_hidden_category,
+    unknown_fields,
+)
 from finjuice.pipeline.migrate.records import BuildState, add_origin_revision
 from finjuice.pipeline.migrate.types import (
     COMPLETION_MARKER,
@@ -57,6 +64,7 @@ from finjuice.pipeline.migrate.types import (
     MigrationResult,
     PlannedInput,
 )
+from finjuice.pipeline.storage.csv_schema import CSV_COLUMNS
 from finjuice.pipeline.storage.sqlite import (
     GenerationPaths,
     RepositoryBuilder,
@@ -64,7 +72,13 @@ from finjuice.pipeline.storage.sqlite import (
     migration_entity_id,
 )
 
-_CONFIG_KIND = {"rules": "rules", "goals": "goals", "overlay": "other"}
+_CONFIG_KIND = {
+    "rules": "rules",
+    "goals": "goals",
+    "assets": "assets",
+    "scenarios": "scenarios",
+    "overlay": "other",
+}
 _CSV_HANDLERS = {
     "transaction_partition": map_transaction_row,
     "overview_facts": map_overview_fact_row,
@@ -78,6 +92,8 @@ _CSV_HANDLERS = {
 _FILE_ROLE_ORDER = (
     "rules",
     "goals",
+    "assets",
+    "scenarios",
     "overlay",
     "source_workbook",
     "import_history",
@@ -265,6 +281,7 @@ def _write_migration_manifest(
         "kind": MIGRATION_KIND,
         "attempt_id": attempt_id,
         "capture_digest": plan.capture_digest,
+        "capture_path": str(plan.capture_path) if plan.capture_path else None,
         "candidate_digest": result.candidate_digest,
         "input_count": result.input_count,
         "dispositions": result.dispositions,
@@ -374,6 +391,114 @@ def _check(
     }
 
 
+def _frozen_transaction_rows(capture: CaptureManifest) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for entry in iter_role_entries(capture, ("transaction_partition",)):
+        _headers, parsed = read_csv_rows(resolve_entry_path(capture, entry))
+        rows.extend(parsed)
+    return rows
+
+
+def _payload_for_row(row: dict[str, str], payloads: list[dict[str, Any]]) -> dict[str, Any] | None:
+    for payload in payloads:
+        fields = payload.get("fields") or {}
+        if fields.get("row_hash") != row.get("row_hash"):
+            continue
+        if fields.get("source_row") != row.get("source_row"):
+            continue
+        return payload
+    return None
+
+
+def _hidden_markers_match(rows: list[dict[str, str]], payloads: list[dict[str, Any]]) -> bool:
+    for row in rows:
+        tags, _issue = parse_tag_sequence(row.get("tags_manual"))
+        _visible, _selected, markers = split_hidden_category(tags)
+        payload = _payload_for_row(row, payloads)
+        if payload is None:
+            return False
+        if list(payload.get("category_override_markers") or []) != markers:
+            return False
+    return True
+
+
+def _persisted_category_match(
+    rows: list[dict[str, str]], transactions: list[dict[str, Any]]
+) -> bool:
+    expected = sorted(
+        (row.get("category_final") or "", row.get("category_rule") or "") for row in rows
+    )
+    actual = sorted(
+        (str(row.get("category_final") or ""), str(row.get("category_rule") or ""))
+        for row in transactions
+    )
+    return expected == actual
+
+
+def _unknown_fields_match(rows: list[dict[str, str]], payloads: list[dict[str, Any]]) -> bool:
+    known = set(CSV_COLUMNS)
+    for row in rows:
+        payload = _payload_for_row(row, payloads)
+        if payload is None:
+            return False
+        if (payload.get("unknown_fields") or {}) != unknown_fields(row, known):
+            return False
+    return True
+
+
+def _duplicate_hash_ok(snapshot: dict[str, Any], transactions: list[dict[str, Any]]) -> bool:
+    transaction_ids = [row["entity_id"] for row in transactions]
+    hash_groups: dict[str, set[str]] = {}
+    for row in snapshot["legacy_identifiers"]:
+        if row["identifier_kind"] != "row_hash":
+            continue
+        hash_groups.setdefault(row["identifier_value"], set()).add(row["entity_id"])
+    return len(transaction_ids) == len(set(transaction_ids)) and all(
+        len(entity_ids) == len(entity_ids) for entity_ids in hash_groups.values()
+    )
+
+
+def _preservation_checks(
+    capture: CaptureManifest,
+    snapshot: dict[str, Any],
+    transactions: list[dict[str, Any]],
+    accounts: list[dict[str, Any]],
+) -> tuple[dict[str, Any], ...]:
+    frozen_rows = _frozen_transaction_rows(capture)
+    payloads = [json.loads(row["payload_json"]) for row in snapshot["legacy_payloads"]]
+    hidden_count = sum(
+        1
+        for row in frozen_rows
+        if split_hidden_category(parse_tag_sequence(row.get("tags_manual"))[0])[2]
+    )
+    unknown_count = sum(1 for row in frozen_rows if unknown_fields(row, set(CSV_COLUMNS)))
+    identity_ok = _duplicate_hash_ok(snapshot, transactions)
+    return (
+        _check(
+            "P01",
+            status="pass" if identity_ok else "fail",
+            checked_count=len(transactions),
+        ),
+        _check(
+            "P02",
+            status="pass" if _hidden_markers_match(frozen_rows, payloads) else "fail",
+            checked_count=hidden_count,
+        ),
+        _check(
+            "P03",
+            status="pass" if _persisted_category_match(frozen_rows, transactions) else "fail",
+            checked_count=len(frozen_rows),
+        ),
+        _check(
+            "P04",
+            status="pass" if _unknown_fields_match(frozen_rows, payloads) else "fail",
+            checked_count=unknown_count,
+        ),
+        _check("I01", status="pass", checked_count=len(snapshot["migration_identities"])),
+        _check("H01", status="pass", checked_count=len(accounts)),
+    )
+
+
 def verify_migration(candidate: Path) -> MigrationResult:
     """Verify a built candidate against its frozen capture, not a live tree."""
     staging = require_outside_repo(candidate, context="migration candidate")
@@ -384,6 +509,12 @@ def verify_migration(candidate: Path) -> MigrationResult:
     payload = load_json_object(manifest_path)
     capture_digest = str(payload.get("capture_digest", ""))
     hex_digest(capture_digest)
+    capture_path = payload.get("capture_path")
+    if not capture_path:
+        raise invalid("Migration candidate is missing its capture path.")
+    capture = load_capture_manifest(Path(str(capture_path)))
+    if capture.canonical_digest != capture_digest:
+        raise invalid("Capture digest does not match the frozen capture manifest.")
     database = GenerationPaths(staging).database
     snapshot = _semantic_snapshot(database)
     recomputed = digest_text(sha256_bytes(canonical_bytes(snapshot)))
@@ -403,42 +534,8 @@ def verify_migration(candidate: Path) -> MigrationResult:
     owner_inferred = [row for row in accounts if row["ownership_state"] != "unknown"]
     if owner_inferred:
         raise invalid("Baseline ownership was inferred; migration must keep ownership unknown.")
-    transaction_ids = [row["entity_id"] for row in transactions]
-    hash_groups: dict[str, set[str]] = {}
-    for row in snapshot["legacy_identifiers"]:
-        if row["identifier_kind"] != "row_hash":
-            continue
-        hash_groups.setdefault(row["identifier_value"], set()).add(row["entity_id"])
-    duplicate_hash_ok = all(
-        len(entity_ids) == len(entity_ids) for entity_ids in hash_groups.values()
-    )
-    hidden_payloads = [
-        json.loads(row["payload_json"])
-        for row in snapshot["legacy_payloads"]
-        if "category_override_markers" in json.loads(row["payload_json"])
-    ]
     unexplained = int(payload.get("unexplained_loss_count", 0))
-    distinct_ok = len(transaction_ids) == len(set(transaction_ids))
-    checks = (
-        _check(
-            "P01",
-            status="pass" if distinct_ok and duplicate_hash_ok else "fail",
-            checked_count=len(transactions),
-        ),
-        _check("P02", status="pass", checked_count=len(hidden_payloads)),
-        _check("P03", status="pass", checked_count=len(transactions)),
-        _check(
-            "P04",
-            status="pass",
-            checked_count=sum(
-                1
-                for row in snapshot["legacy_payloads"]
-                if json.loads(row["payload_json"]).get("unknown_fields")
-            ),
-        ),
-        _check("I01", status="pass", checked_count=len(snapshot["migration_identities"])),
-        _check("H01", status="pass", checked_count=len(accounts)),
-    )
+    checks = _preservation_checks(capture, snapshot, transactions, accounts)
     if unexplained:
         raise invalid("Unexplained legacy inputs were not given a disposition.")
     failed = [item for item in checks if item["status"] == "fail"]
