@@ -227,7 +227,10 @@ def _compute_export_result(  # noqa: PLR0913 - moved helper keeps the existing p
         plan = build_export_plan(config.data_dir, config.csv_base_dir, format_lower, period)
         sqlite_frame = _configured_sqlite_frame()
         if sqlite_frame is not None:
-            snapshot_count = len(sqlite_frame)
+            count_df = sqlite_frame
+            if format_lower in {"html", "md"} and period is not None:
+                count_df = count_df.filter(pl.col("date").str.starts_with(period))
+            snapshot_count = len(count_df)
             plan["transaction_count"] = snapshot_count
             for item in plan["output_files"]:
                 if item.get("row_count") is not None:

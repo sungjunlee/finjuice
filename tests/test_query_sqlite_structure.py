@@ -455,10 +455,12 @@ def test_classify_derived_empty_or_missing_required_files_is_not_fresh(
 
 
 @pytest.mark.parametrize("format_lower", ["html", "md"])
+@pytest.mark.parametrize("dry_run", [False, True])
 def test_export_html_md_transaction_count_honors_period_when_filters_empty(
     mirrored_dataset: dict[str, Path],
     monkeypatch: pytest.MonkeyPatch,
     format_lower: str,
+    dry_run: bool,
 ) -> None:
     """SQLite html/md export counts the --period slice, not the full snapshot."""
     data_dir = mirrored_dataset["data_dir"]
@@ -467,21 +469,23 @@ def test_export_html_md_transaction_count_honors_period_when_filters_empty(
     period_count = snapshot.filter(pl.col("date").str.starts_with("2024-10")).height
     assert snapshot.height > period_count > 0
 
-    result = runner.invoke(
-        app,
-        [
-            "--data-dir",
-            str(data_dir),
-            "export",
-            "--format",
-            format_lower,
-            "--period",
-            "2024-10",
-            "--json",
-        ],
-    )
+    args = [
+        "--data-dir",
+        str(data_dir),
+        "export",
+        "--format",
+        format_lower,
+        "--period",
+        "2024-10",
+        "--json",
+    ]
+    if dry_run:
+        args.append("--dry-run")
+
+    result = runner.invoke(app, args)
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["transaction_count"] == period_count
     assert payload["_meta"]["filters_applied"] == 0
+    assert payload["dry_run"] is dry_run
