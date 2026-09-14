@@ -411,19 +411,20 @@ def test_second_fence_activation_does_not_poison_remembered_modes(tmp_path: Path
 
 
 def test_mismatched_overlay_digest_does_not_adopt_disk_correction(tmp_path: Path) -> None:
-    """A stale handle with a different overlay must keep the disk apply-once id."""
+    """A stale handle with a different overlay must not rewrite overlay.yaml."""
     target = tmp_path / "target"
     pin = _pin()
     other = b"overlay: other-binding\n"
     with IsolatedCutover(target, pin, overlay_bytes=SYNTHETIC_OVERLAY) as session:
         applied = session.apply_overlay_corrections("overlay-baseline-v1")
-        stale = IsolatedCutover(target, pin, overlay_bytes=other)
-        stale.persist()
+        with pytest.raises(OverlayAlreadyAppliedError):
+            IsolatedCutover(target, pin, overlay_bytes=other)
         resumed = IsolatedCutover.resume(target)
         retry = resumed.apply_overlay_corrections("overlay-baseline-v1")
 
     assert applied.status == "applied"
     assert retry.status == "already_applied"
+    assert (target / "overlay.yaml").read_bytes() == SYNTHETIC_OVERLAY
     assert resumed.overlay is not None
     assert resumed.overlay.digest == overlay_digest(SYNTHETIC_OVERLAY)
     assert resumed.overlay.applied_correction_id == "overlay-baseline-v1"

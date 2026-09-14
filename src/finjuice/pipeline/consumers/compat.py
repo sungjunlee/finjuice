@@ -460,7 +460,14 @@ class IsolatedCutover:
 
     def bind_overlay(self, payload: bytes) -> OverlayBinding:
         """Pin overlay baseline meaning to the canonical dataset revision."""
+        self._adopt_disk_state()
         digest = overlay_digest(payload)
+        if (
+            self.overlay is not None
+            and self.overlay.applied_correction_id is not None
+            and self.overlay.digest != digest
+        ):
+            raise OverlayAlreadyAppliedError("Overlay already bound to a different payload.")
         binding = OverlayBinding(
             digest=digest,
             baseline_revision=self.pin.dataset_revision,
