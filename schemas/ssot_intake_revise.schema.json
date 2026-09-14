@@ -1,0 +1,47 @@
+{
+  "$id": "ssot_intake_revise.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "application_key": {
+      "type": "string"
+    },
+    "committed_revision": {
+      "type": "integer"
+    },
+    "expected_generation": {
+      "type": "string"
+    },
+    "expected_revision": {
+      "type": "integer"
+    },
+    "parent_proposal_id": {
+      "type": "string"
+    },
+    "parent_status": {
+      "type": "string"
+    },
+    "proposal_id": {
+      "type": "string"
+    },
+    "replayed": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "_meta",
+    "proposal_id",
+    "parent_proposal_id",
+    "parent_status",
+    "application_key",
+    "expected_generation",
+    "expected_revision",
+    "committed_revision",
+    "replayed"
+  ],
+  "title": "ssot intake revise output",
+  "type": "object"
+}

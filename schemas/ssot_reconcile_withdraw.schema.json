@@ -1,0 +1,31 @@
+{
+  "$id": "ssot_reconcile_withdraw.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "allocation_id": {
+      "type": "string"
+    },
+    "replayed": {
+      "type": "boolean"
+    },
+    "status": {
+      "type": "string"
+    },
+    "withdrawal_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "allocation_id",
+    "withdrawal_id",
+    "status",
+    "replayed"
+  ],
+  "title": "ssot reconcile withdraw output",
+  "type": "object"
+}

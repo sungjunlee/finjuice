@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Final, TypeAlias
+from typing import TYPE_CHECKING, Any, Final, TypeAlias
 
 from finjuice.pipeline.storage.authority import (
     ActivationEvidence,
@@ -94,7 +94,17 @@ from finjuice.pipeline.storage.sqlite.schema import (
 )
 from finjuice.pipeline.storage.sqlite.schema_v6 import validate_v6_invariants
 from finjuice.pipeline.storage.sqlite.schema_v7 import validate_v7_invariants
+from finjuice.pipeline.storage.sqlite.schema_v8 import validate_v8_invariants
 from finjuice.pipeline.storage.sqlite.writes import TypedRowWriter
+
+if TYPE_CHECKING:
+    from finjuice.pipeline.reconcile.canonical import (
+        AllocationConfirmation,
+        AllocationWithdrawal,
+        EvidenceSubmission,
+    )
+    from finjuice.pipeline.storage.sqlite.intake_lifecycle import IntakeRevision, IntakeWithdrawal
+
 
 JSONValue: TypeAlias = Any
 MutationHandler: TypeAlias = Callable[["MutationContext"], "MutationOutcome"]
@@ -954,6 +964,44 @@ class MutationContext:
     ) -> AccountBindingResolution:
         """Resolve explicit current bindings in the same transaction as an import."""
         return resolve_account_binding(self.__connection, namespace, external_key)
+
+    def intake_transaction_target(self, identifier: str) -> str:
+        """Resolve a revision target with the same canonical resolver used by manual edits."""
+        return self._resolve_transaction_id(identifier.strip())
+
+    def revise_intake(
+        self, revision: IntakeRevision, request: MutationRequest
+    ) -> Mapping[str, Any]:
+        """Atomically create a successor proposal over verified preserved source evidence."""
+        from finjuice.pipeline.storage.sqlite.intake_lifecycle import revise_intake
+
+        return revise_intake(self.__connection, self, revision, request)
+
+    def withdraw_intake(
+        self, withdrawal: IntakeWithdrawal, request: MutationRequest
+    ) -> Mapping[str, Any]:
+        """Reject an unapplied proposal without changing any prior domain application."""
+        from finjuice.pipeline.storage.sqlite.intake_lifecycle import withdraw_intake
+
+        return withdraw_intake(self.__connection, self, withdrawal, request)
+
+    def import_reconcile_evidence(self, command: EvidenceSubmission) -> Mapping[str, Any]:
+        """Capture purchase evidence through the current atomic mutation."""
+        from finjuice.pipeline.reconcile.canonical import import_evidence
+
+        return import_evidence(self.__connection, self, command)
+
+    def confirm_reconcile(self, command: AllocationConfirmation) -> Mapping[str, Any]:
+        """Append a validated exclusive N:M settlement allocation."""
+        from finjuice.pipeline.reconcile.canonical import confirm_allocation
+
+        return confirm_allocation(self.__connection, self, command)
+
+    def withdraw_reconcile(self, command: AllocationWithdrawal) -> Mapping[str, Any]:
+        """Append a withdrawal without rewriting allocation or transaction evidence."""
+        from finjuice.pipeline.reconcile.canonical import withdraw_allocation
+
+        return withdraw_allocation(self.__connection, self, command)
 
     def find_intake_artifact(self, source_artifact_id: str) -> Mapping[str, Any] | None:
         """Find existing canonical intake evidence for one immutable source artifact."""
@@ -1966,6 +2014,7 @@ def _execute_new_request(
     _validate_v4_invariants(connection)
     validate_v6_invariants(connection)
     validate_v7_invariants(connection)
+    validate_v8_invariants(connection)
     _advance_revision(connection, commit)
     retained = _attempt_retained_artifacts(attempt)
     _store_receipt(connection, request, commit, result_json, retained)

@@ -57,6 +57,14 @@ from finjuice.pipeline.storage.sqlite.records import (
 from finjuice.pipeline.storage.sqlite.schema import inspect_repository
 
 if TYPE_CHECKING:
+    from finjuice.pipeline.reconcile.canonical import (
+        AllocationConfirmation,
+        AllocationWithdrawal,
+        EvidenceSubmission,
+    )
+    from finjuice.pipeline.storage.sqlite.intake_lifecycle import IntakeRevision, IntakeWithdrawal
+
+if TYPE_CHECKING:
     from finjuice.pipeline.storage.sqlite.intake_submission import IntakeSubmission
 
 JSONValue = Any
@@ -221,6 +229,106 @@ class StorageMutationFacade:
                 else identity.expected_revision
             ),
         )
+
+    def revise_intake(
+        self, revision: IntakeRevision, *, identity: MutationIdentity
+    ) -> MutationReceipt:
+        """Append a new typed proposal and retire a pending parent in a single commit."""
+        from dataclasses import asdict
+
+        identity.validate()
+        if (
+            identity.idempotency_key is None
+            or identity.expected_generation is None
+            or identity.expected_revision is None
+        ):
+            raise ValueError(
+                "Explicit generation, current revision and new idempotency key are required."
+            )
+        dispatch, authority = self._repository_dispatch()
+        request = self._request(
+            dispatch,
+            authority,
+            _RequestSpec("agent.intake.revise", asdict(revision), identity, "cli", None),
+        )
+        assert dispatch.evidence is not None
+        return MutationService(dispatch.paths, dispatch.evidence).execute(
+            request,
+            lambda context: MutationOutcome(result=context.revise_intake(revision, request)),
+        )
+
+    def withdraw_intake(
+        self, withdrawal: IntakeWithdrawal, *, identity: MutationIdentity
+    ) -> MutationReceipt:
+        """Record explicit withdrawal without undoing an applied proposal."""
+        from dataclasses import asdict
+
+        identity.validate()
+        if (
+            identity.idempotency_key is None
+            or identity.expected_generation is None
+            or identity.expected_revision is None
+        ):
+            raise ValueError(
+                "Explicit generation, current revision and new idempotency key are required."
+            )
+        dispatch, authority = self._repository_dispatch()
+        request = self._request(
+            dispatch,
+            authority,
+            _RequestSpec("agent.intake.withdraw", asdict(withdrawal), identity, "cli", None),
+        )
+        assert dispatch.evidence is not None
+        return MutationService(dispatch.paths, dispatch.evidence).execute(
+            request,
+            lambda context: MutationOutcome(result=context.withdraw_intake(withdrawal, request)),
+        )
+
+    def import_reconcile_evidence(
+        self, command: EvidenceSubmission, *, identity: MutationIdentity
+    ) -> MutationReceipt:
+        """Publish purchase source evidence through the canonical audited transaction."""
+        return self._execute(
+            _RequestSpec("reconcile.evidence.submit", command.payload(), identity, "cli", None),
+            lambda context: MutationOutcome(context.import_reconcile_evidence(command)),
+        )
+
+    def confirm_reconcile(
+        self, command: AllocationConfirmation, *, identity: MutationIdentity
+    ) -> MutationReceipt:
+        """Explicitly reserve an N:M settlement selection without altering payments."""
+        from dataclasses import asdict
+
+        return self._execute(
+            _RequestSpec("reconcile.allocation.confirm", asdict(command), identity, "cli", None),
+            lambda context: MutationOutcome(context.confirm_reconcile(command)),
+        )
+
+    def withdraw_reconcile(
+        self, command: AllocationWithdrawal, *, identity: MutationIdentity
+    ) -> MutationReceipt:
+        """Append a settlement withdrawal and retain source/manual transaction state."""
+        from dataclasses import asdict
+
+        return self._execute(
+            _RequestSpec("reconcile.allocation.withdraw", asdict(command), identity, "cli", None),
+            lambda context: MutationOutcome(context.withdraw_reconcile(command)),
+        )
+
+    def read_reconcile_evidence(self, *, window_days: int = 14) -> dict[str, Any]:
+        """Read exact candidates under the same active-generation lease."""
+        from finjuice.pipeline.storage.authority import (
+            require_repository_authority,
+            shared_write_lease,
+        )
+        from finjuice.pipeline.storage.sqlite.repository import RepositoryReader
+
+        dispatch, _ = self._repository_dispatch()
+        assert dispatch.evidence is not None
+        with shared_write_lease(dispatch.paths):
+            authority = require_repository_authority(dispatch.paths, dispatch.evidence)
+            with RepositoryReader(authority.paths.database) as reader:
+                return reader.reconcile_evidence(window_days=window_days)
 
     def submit_intake(self, submission: IntakeSubmission) -> MutationReceipt:
         """Capture canonical intake evidence through its authority-bound submission service."""

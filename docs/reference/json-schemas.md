@@ -111,10 +111,16 @@ command/code/exit-code combinations against this schema.
 | `schemas/ssot_backup_verify_bundle.schema.json` | ssot backup verify-bundle --json output | `kind`, `graph_digest`, `activation_sha256`, `wheel_basename`, `snapshot_generation`, `snapshot_backup_id`, `snapshot_manifest_digest`, `capsule_digest`, `snapshot_schema_version`, `snapshot_revision`, `activation_revision`, `file_count` |
 | `schemas/ssot_intake_confirm.schema.json` | ssot intake confirm output | `proposal_id`, `confirmation_id`, `applied`, `committed_revision`, `replayed` |
 | `schemas/ssot_intake_list.schema.json` | ssot intake list output | `dataset_generation`, `dataset_revision`, `decisions` |
+| `schemas/ssot_intake_revise.schema.json` | ssot intake revise output | `proposal_id`, `parent_proposal_id`, `parent_status`, `application_key`, `expected_generation`, `expected_revision`, `committed_revision`, `replayed` |
 | `schemas/ssot_intake_submit.schema.json` | ssot intake submit output | `proposal_id`, `source_artifact_id`, `occurrence_id`, `committed_revision`, `replayed` |
+| `schemas/ssot_intake_withdraw.schema.json` | ssot intake withdraw output | `proposal_id`, `confirmation_id`, `status`, `committed_revision`, `replayed` |
 | `schemas/ssot_migrate_build.schema.json` | ssot migrate build --json output | `status`, `phase`, `manifest_digest`, `input_count`, `cutover_ready`, `limitations`, `generation_status`, `attempt_id`, `origin_kind`, `dataset_revision`, `checks` |
 | `schemas/ssot_migrate_plan.schema.json` | ssot migrate plan --json output | `status`, `phase`, `manifest_digest`, `input_count`, `cutover_ready`, `limitations` |
 | `schemas/ssot_migrate_verify.schema.json` | ssot migrate verify --json output | `status`, `phase`, `manifest_digest`, `input_count`, `cutover_ready`, `limitations`, `generation_status`, `attempt_id`, `origin_kind`, `dataset_revision`, `checks` |
+| `schemas/ssot_reconcile_candidates.schema.json` | ssot reconcile candidates output | `dataset_generation`, `dataset_revision`, `candidates`, `evidence`, `allocations`, `withdrawals`, `ledger_cash_totals`, `payments` |
+| `schemas/ssot_reconcile_confirm.schema.json` | ssot reconcile confirm output | `allocation_id`, `status`, `residual`, `currency`, `replayed` |
+| `schemas/ssot_reconcile_submit.schema.json` | ssot reconcile submit output | `evidence_ids`, `source_artifact_id`, `inserted_count`, `replayed` |
+| `schemas/ssot_reconcile_withdraw.schema.json` | ssot reconcile withdraw output | `allocation_id`, `withdrawal_id`, `status`, `replayed` |
 | `schemas/status.schema.json` | status --json output | `data_directory`, `transactions`, `last_import`, `terminology`, `tagging`, `rules_file`, `health`, `actionable`, `signals`, `next_steps` |
 | `schemas/tag.schema.json` | tag --json output | `status` |
 | `schemas/template_list.schema.json` | template list --json output | `templates` |
@@ -8869,6 +8875,72 @@ ssot intake list output
 }
 ```
 
+## `schemas/ssot_intake_revise.schema.json`
+
+ssot intake revise output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `application_key` | `string` | yes |
+| `committed_revision` | `integer` | yes |
+| `expected_generation` | `string` | yes |
+| `expected_revision` | `integer` | yes |
+| `parent_proposal_id` | `string` | yes |
+| `parent_status` | `string` | yes |
+| `proposal_id` | `string` | yes |
+| `replayed` | `boolean` | yes |
+
+```json
+{
+  "$id": "ssot_intake_revise.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "application_key": {
+      "type": "string"
+    },
+    "committed_revision": {
+      "type": "integer"
+    },
+    "expected_generation": {
+      "type": "string"
+    },
+    "expected_revision": {
+      "type": "integer"
+    },
+    "parent_proposal_id": {
+      "type": "string"
+    },
+    "parent_status": {
+      "type": "string"
+    },
+    "proposal_id": {
+      "type": "string"
+    },
+    "replayed": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "_meta",
+    "proposal_id",
+    "parent_proposal_id",
+    "parent_status",
+    "application_key",
+    "expected_generation",
+    "expected_revision",
+    "committed_revision",
+    "replayed"
+  ],
+  "title": "ssot intake revise output",
+  "type": "object"
+}
+```
+
 ## `schemas/ssot_intake_submit.schema.json`
 
 ssot intake submit output
@@ -8916,6 +8988,57 @@ ssot intake submit output
     "replayed"
   ],
   "title": "ssot intake submit output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_intake_withdraw.schema.json`
+
+ssot intake withdraw output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `committed_revision` | `integer` | yes |
+| `confirmation_id` | `string` | yes |
+| `proposal_id` | `string` | yes |
+| `replayed` | `boolean` | yes |
+| `status` | `any` | yes |
+
+```json
+{
+  "$id": "ssot_intake_withdraw.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "committed_revision": {
+      "type": "integer"
+    },
+    "confirmation_id": {
+      "type": "string"
+    },
+    "proposal_id": {
+      "type": "string"
+    },
+    "replayed": {
+      "type": "boolean"
+    },
+    "status": {
+      "const": "rejected"
+    }
+  },
+  "required": [
+    "_meta",
+    "proposal_id",
+    "confirmation_id",
+    "status",
+    "committed_revision",
+    "replayed"
+  ],
+  "title": "ssot intake withdraw output",
   "type": "object"
 }
 ```
@@ -9183,6 +9306,239 @@ ssot migrate verify --json output
     "checks"
   ],
   "title": "ssot migrate verify --json output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_reconcile_candidates.schema.json`
+
+ssot reconcile candidates output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `allocations` | `array`[`object`] | yes |
+| `candidates` | `array`[`object`] | yes |
+| `dataset_generation` | `string` | yes |
+| `dataset_revision` | `integer` | yes |
+| `evidence` | `array`[`object`] | yes |
+| `ledger_cash_totals` | `object` | yes |
+| `payments` | `array`[`object`] | yes |
+| `withdrawals` | `array`[`object`] | yes |
+
+```json
+{
+  "$id": "ssot_reconcile_candidates.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "allocations": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "candidates": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "dataset_generation": {
+      "type": "string"
+    },
+    "dataset_revision": {
+      "type": "integer"
+    },
+    "evidence": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "ledger_cash_totals": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "payments": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "withdrawals": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "_meta",
+    "dataset_generation",
+    "dataset_revision",
+    "candidates",
+    "evidence",
+    "allocations",
+    "withdrawals",
+    "ledger_cash_totals",
+    "payments"
+  ],
+  "title": "ssot reconcile candidates output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_reconcile_confirm.schema.json`
+
+ssot reconcile confirm output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `allocation_id` | `string` | yes |
+| `currency` | `string` | yes |
+| `replayed` | `boolean` | yes |
+| `residual` | `string` | yes |
+| `status` | `string` | yes |
+
+```json
+{
+  "$id": "ssot_reconcile_confirm.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "allocation_id": {
+      "type": "string"
+    },
+    "currency": {
+      "type": "string"
+    },
+    "replayed": {
+      "type": "boolean"
+    },
+    "residual": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "allocation_id",
+    "status",
+    "residual",
+    "currency",
+    "replayed"
+  ],
+  "title": "ssot reconcile confirm output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_reconcile_submit.schema.json`
+
+ssot reconcile submit output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `evidence_ids` | `array`[`string`] | yes |
+| `inserted_count` | `integer` | yes |
+| `replayed` | `boolean` | yes |
+| `source_artifact_id` | `string` | yes |
+
+```json
+{
+  "$id": "ssot_reconcile_submit.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "evidence_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "inserted_count": {
+      "type": "integer"
+    },
+    "replayed": {
+      "type": "boolean"
+    },
+    "source_artifact_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "evidence_ids",
+    "source_artifact_id",
+    "inserted_count",
+    "replayed"
+  ],
+  "title": "ssot reconcile submit output",
+  "type": "object"
+}
+```
+
+## `schemas/ssot_reconcile_withdraw.schema.json`
+
+ssot reconcile withdraw output
+
+| Field | Type | Required |
+|-------|------|----------|
+| `_meta` | `$ref` _meta.schema.json | yes |
+| `allocation_id` | `string` | yes |
+| `replayed` | `boolean` | yes |
+| `status` | `string` | yes |
+| `withdrawal_id` | `string` | yes |
+
+```json
+{
+  "$id": "ssot_reconcile_withdraw.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "allocation_id": {
+      "type": "string"
+    },
+    "replayed": {
+      "type": "boolean"
+    },
+    "status": {
+      "type": "string"
+    },
+    "withdrawal_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "allocation_id",
+    "withdrawal_id",
+    "status",
+    "replayed"
+  ],
+  "title": "ssot reconcile withdraw output",
   "type": "object"
 }
 ```
