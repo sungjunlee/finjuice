@@ -962,7 +962,7 @@ finjuice --version
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ migrate   Plan, build, and verify preservation migrations.                                                           │
-│ backup    Create, restore, and inspect a SQLite generation backup.                                                   │
+│ backup    Create snapshots, capture a local recovery graph, and restore inactive workspaces.                         │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```
@@ -973,15 +973,18 @@ finjuice --version
 
  Usage: finjuice ssot backup [OPTIONS] COMMAND [ARGS]...
 
- Create, restore, and inspect a SQLite generation backup.
+ Create snapshots, capture a local recovery graph, and restore inactive workspaces.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ --help          Show this message and exit.                                                                          │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ create    Capture one SQLite generation snapshot and its referenced artifacts.                                       │
-│ restore   Restore a verified SQLite backup into an inactive isolated directory.                                      │
-│ status    Report whether one SQLite backup directory is an intact local snapshot.                                    │
+│ create           Capture one SQLite generation snapshot and its referenced artifacts.                                │
+│ restore          Restore a verified SQLite backup into an inactive isolated directory.                               │
+│ status           Report whether one SQLite backup directory is an intact local snapshot.                             │
+│ capture-bundle   Capture one local recovery graph from explicit operator paths.                                      │
+│ verify-bundle    Verify one published recovery graph against independently enrolled evidence.                        │
+│ restore-bundle   Verify the graph, then restore its snapshot into an inactive workspace.                             │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```
@@ -1036,6 +1039,69 @@ finjuice --version
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ --json          Output as JSON                                                                                       │
 │ --help          Show this message and exit.                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup capture-bundle`
+
+```
+
+ Usage: finjuice ssot backup capture-bundle [OPTIONS]
+
+ Capture one local recovery graph from explicit operator paths.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --source-data-dir            PATH  Explicit live data directory to snapshot; not read from the host pointer.      │
+│                                       [required]                                                                     │
+│ *  --output                     PATH  Fresh directory for the published graph. [required]                            │
+│ *  --expected                   PATH  Independently retained expectation JSON; never derived from the live tree.     │
+│                                       [required]                                                                     │
+│ *  --wheel                      PATH  Operator-selected release wheel. [required]                                    │
+│ *  --dependency-lock            PATH  Operator-selected dependency lock file. [required]                             │
+│ *  --binding                    PATH  Operator-selected trusted binding file. [required]                             │
+│ *  --migration-candidate        PATH  Immutable migration candidate directory. [required]                            │
+│    --json                             Output as JSON                                                                 │
+│    --help                             Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup verify-bundle`
+
+```
+
+ Usage: finjuice ssot backup verify-bundle [OPTIONS] BUNDLE
+
+ Verify one published recovery graph against independently enrolled evidence.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    bundle      PATH  Published local recovery graph directory. [required]                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --expected        PATH  Independently retained expectation JSON; never derived from the bundle. [required]        │
+│    --json                  Output as JSON                                                                            │
+│    --help                  Show this message and exit.                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+
+### `finjuice ssot backup restore-bundle`
+
+```
+
+ Usage: finjuice ssot backup restore-bundle [OPTIONS] BUNDLE
+
+ Verify the graph, then restore its snapshot into an inactive workspace.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    bundle      PATH  Published local recovery graph directory. [required]                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --target          PATH  Fresh isolated workspace directory; parent must exist. [required]                         │
+│ *  --expected        PATH  Independently retained expectation JSON; never derived from the bundle. [required]        │
+│    --json                  Output as JSON                                                                            │
+│    --help                  Show this message and exit.                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```

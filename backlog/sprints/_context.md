@@ -38,3 +38,5 @@ GitHub Issues가 명세·AC·상태의 정본이다. 실행 권한과 완료 조
 - 사용자 목표 계약은 범위 내 구조·CLI/schema·의존성·커밋·PR·머지·배포·검증된 이전/백업/복원을 승인한다. Cursor --trust 승인도 유지된다. 플랫폼 필수 승인은 별도이며 새 금융 거래·범위 밖 원본 삭제·유료 계약은 포함되지 않는다.
 - 사용자 효율 지시: 작은 helper마다 full pytest·wheel 설치·장시간 리뷰를 반복하지 않는다. 기능/AC 묶음 구현·자체검토 후 checkpoint에서 검증한다. 작은 후속 수정은 실패 재현+관련 회귀로 확인하고 이전 전체 결과의 적용 소스를 구분한다. 변경 없는 로그·refs·quota 재조회와 상세 이력 중복을 줄인다.
 - quota는 dispatch·통합·publish 같은 결정 시점에 확인한다. unknown은 소진이 아니며 다른 계정/창의 잔여율을 혼합하지 않는다. credit reset/결제는 승인되지 않았다.
+
+- 운영 설치 최신 관측(09-14 09:13KST): SSH로 표준계정경로finjuice0.8.3/uv0.10.7을확인했다. 기본비대화형PATH에는없다. 설치본authority/recovery_bundle/sqlite_backup CLI/nm모듈이없으므로현재통합판배포나cutover로간주하지않는다. 금융원본읽기/운영변경없음; 세부근거는활성스프린트와runtime-check기록을따른다.

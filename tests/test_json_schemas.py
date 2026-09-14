@@ -22,7 +22,10 @@ runner = CliRunner()
 
 CATALOGUED_COMMANDS = [
     ("ssot backup create", [], "ssot_backup_create.schema.json"),
+    ("ssot backup capture-bundle", [], "ssot_backup_capture_bundle.schema.json"),
+    ("ssot backup verify-bundle", [], "ssot_backup_verify_bundle.schema.json"),
     ("ssot backup restore", [], "ssot_backup_restore.schema.json"),
+    ("ssot backup restore-bundle", [], "ssot_backup_restore_bundle.schema.json"),
     ("ssot backup status", [], "ssot_backup_status.schema.json"),
     ("ssot migrate plan", [], "ssot_migrate_plan.schema.json"),
     ("ssot migrate build", [], "ssot_migrate_build.schema.json"),
@@ -487,6 +490,12 @@ def _materialize_migration_catalog_args(schema_data_dir: Path, label: str) -> li
 
 def _materialize_sqlite_backup_catalog_args(schema_data_dir: Path, label: str) -> list[str]:
     """Prepare an actual snapshot for the SQLite backup command catalog."""
+    if label in {
+        "ssot backup capture-bundle",
+        "ssot backup verify-bundle",
+        "ssot backup restore-bundle",
+    }:
+        return _materialize_recovery_bundle_catalog_args(schema_data_dir, label)
     from finjuice.pipeline.storage.sqlite.backup import create_backup
     from tests.pipeline.test_sqlite_backup import _build_generation
 
@@ -513,6 +522,41 @@ def _materialize_sqlite_backup_catalog_args(schema_data_dir: Path, label: str) -
         str(backup),
         "--target",
         str(schema_data_dir.parent / "sqlite-restored"),
+        "--json",
+    ]
+
+
+def _materialize_recovery_bundle_catalog_args(schema_data_dir: Path, label: str) -> list[str]:
+    """Prepare a real synthetic graph for recovery-bundle command catalog cases."""
+    from finjuice.pipeline.storage.sqlite.recovery_bundle import capture_recovery_bundle
+    from tests.cli.test_sqlite_recovery_bundle import _capture_args, _write_expected
+    from tests.pipeline.test_recovery_bundle import _live
+
+    root = schema_data_dir.parent / "recovery-bundle-live"
+    source, expected, *_ = _live(root)
+    expected_path = _write_expected(root / "enrolled.json", expected)
+    if label == "ssot backup capture-bundle":
+        return ["ssot", "backup", *_capture_args(source, expected_path), "--json"]
+    capture_recovery_bundle(source, expected)
+    if label == "ssot backup verify-bundle":
+        return [
+            "ssot",
+            "backup",
+            "verify-bundle",
+            str(source.destination),
+            "--expected",
+            str(expected_path),
+            "--json",
+        ]
+    return [
+        "ssot",
+        "backup",
+        "restore-bundle",
+        str(source.destination),
+        "--target",
+        str(schema_data_dir.parent / "recovery-restored"),
+        "--expected",
+        str(expected_path),
         "--json",
     ]
 

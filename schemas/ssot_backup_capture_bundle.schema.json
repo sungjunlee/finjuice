@@ -1,0 +1,68 @@
+{
+  "$id": "ssot_backup_capture_bundle.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "_meta": {
+      "$ref": "_meta.schema.json"
+    },
+    "activation_revision": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "activation_sha256": {
+      "type": "string"
+    },
+    "capsule_digest": {
+      "type": "string"
+    },
+    "file_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "graph_digest": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "local_graph_verified"
+    },
+    "snapshot_backup_id": {
+      "type": "string"
+    },
+    "snapshot_generation": {
+      "type": "string"
+    },
+    "snapshot_manifest_digest": {
+      "type": "string"
+    },
+    "snapshot_revision": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "snapshot_schema_version": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "wheel_basename": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_meta",
+    "kind",
+    "graph_digest",
+    "activation_sha256",
+    "wheel_basename",
+    "snapshot_generation",
+    "snapshot_backup_id",
+    "snapshot_manifest_digest",
+    "capsule_digest",
+    "snapshot_schema_version",
+    "snapshot_revision",
+    "activation_revision",
+    "file_count"
+  ],
+  "title": "ssot backup capture-bundle --json output",
+  "type": "object",
+  "x-command": "ssot.backup.capture-bundle"
+}

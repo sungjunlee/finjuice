@@ -542,3 +542,7 @@ Claude Opus5high 교차 리뷰는 exit0/577.7s, 근거 있는 P1/P2 없음이다
 - 결정 시점 quota08:49KST: CodexPro oauth/exact 주간61%사용39%잔여/reset09-19 17:10KST/pace 소진1일1시간(리셋전), 5시간·월간unknown,credits0. CursorUltra web/confidenceunknown 월간primary42.0263%사용57.9737%잔여,secondary32.361%사용67.639%잔여,tertiary100%사용0%잔여/reset09-17 00:44KST/primary·secondary 리셋까지유지;5시간·주간unknown,USD20.54사용/USD20한도. 이후review완료selected조회는 /tmp/finjuice-main506-review/quota-cursor-after.json으로 기록 중이다.
 
 - 통합 최종확정: cec0e9d(main fbc1682 포함) 전체4,447PASS/1SKIP,91.02%,1118.61초. 집중/설치115PASS,494module origins,3개SHA 및 Cursor513.56초/독립115PASS/중요P1P2없음; 동결 source 무변경과 commit hooks 통과. 주 작업 codex/ssot-m2-migrate에 fast-forward했다. 복구 bundle/operator 별도 변경은 이번 전체 결과에 포함하지 않는다.
+
+- 운영 준비 read-only 관측(09-14 09:13KST): SSH 가능, 기본 비대화형PATH에는finjuice/uv없으나 표준계정실행경로에서finjuice0.8.3/uv0.10.7확인. 설치패키지에authority/recovery_bundle/sqlite_backup CLI/nm모듈은없고schema모듈지문은로컬통합판과별도기록했다. 따라서버전같음을통합판배포/cutover증거로보지않는다. 금융파일/환경비밀은읽지않았고설치·서비스·데이터변경없음. /tmp/finjuice-recovery-runtime-check/installed-runtime-sep14.json.
+
+- Recovery operator기능묶음통합: Cursor구현1008.67초/CLI29+catalog6PASS후root가검증→복원identity연결누락을발견했다. Native가3개실패를재현하고graph receipt의snapshot_manifest_digest와실제복원digest/gen/schema/revision일치를검사해보완;52focused+12catalogPASS. 전체complexity에서test함수길이1건을helper로분리해정상human/JSON2PASS,baseline110유지. 출력schema문서는생성기로갱신했다.18개기능파일을통합했고ruff/format/mypy529통과. 코드동결커밋후한차례전체/설치및실제wheel포함합성복원검증을수행한다;아직최종검증/운영완료아니다.

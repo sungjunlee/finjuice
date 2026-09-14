@@ -40,12 +40,48 @@ def sqlite_backup_schemas() -> dict[str, JsonSchema]:
         "manifest_digest": {"type": ["string", "null"]},
         "source_generation": {"type": ["string", "null"]},
     }
-    return {
-        f"ssot_backup_{action}.schema.json": command_schema(
-            f"ssot_backup_{action}.schema.json",
+    graph: dict[str, JsonSchema] = {
+        "kind": {"const": "local_graph_verified"},
+        **dict.fromkeys(
+            (
+                "graph_digest",
+                "activation_sha256",
+                "wheel_basename",
+                "snapshot_generation",
+                "snapshot_backup_id",
+                "snapshot_manifest_digest",
+                "capsule_digest",
+            ),
+            text,
+        ),
+        **dict.fromkeys(
+            (
+                "snapshot_schema_version",
+                "snapshot_revision",
+                "activation_revision",
+                "file_count",
+            ),
+            count,
+        ),
+    }
+    contracts = (
+        ("create", create),
+        ("restore", restore),
+        ("status", status),
+        ("capture-bundle", graph),
+        ("verify-bundle", graph),
+        ("restore-bundle", restore),
+    )
+    schemas: dict[str, JsonSchema] = {}
+    for action, properties in contracts:
+        filename = f"ssot_backup_{action.replace('-', '_')}.schema.json"
+        schema = command_schema(
+            filename,
             f"ssot backup {action} --json output",
             properties,
             list(properties),
         )
-        for action, properties in (("create", create), ("restore", restore), ("status", status))
-    }
+        if "-" in action:
+            schema["x-command"] = f"ssot.backup.{action}"
+        schemas[filename] = schema
+    return schemas

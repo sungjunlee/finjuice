@@ -187,7 +187,15 @@ def generate_cli_docs() -> None:
         "assets": ["status", "show"],
         "networth": ["breakdown", "history", "forecast", "validate"],
         "template": ["run"],
-        "ssot": ["backup", "backup create", "backup restore", "backup status"],
+        "ssot": [
+            "backup",
+            "backup create",
+            "backup restore",
+            "backup status",
+            "backup capture-bundle",
+            "backup verify-bundle",
+            "backup restore-bundle",
+        ],
     }
 
     output_path = ROOT / "docs/reference/cli.md"
