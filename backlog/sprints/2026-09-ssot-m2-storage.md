@@ -624,3 +624,8 @@ Claude Opus5high 교차 리뷰는 exit0/577.7s, 근거 있는 P1/P2 없음이다
 - PR516에 영향preview·exact ownership 확정/교정·조회까지 통합했다. source fbaec52와 integration228b943의 tree 일치를 확인했다. 최신 설치7PASS/508origins/692package bytes, Grok 두 번째 좁은리뷰 P1/P2없음. 새 full은 반복하지 않았다.
 - maincf109f5/#515 반영 중 versioned backup container와 새wrapper의 flat-path 불일치4건을 재현·수정했다. immutable receipt attempt/lease 및 pointer교체회귀 확인, 통합branch8PASS. 수정7f1091e는 #481에도 게시했다.
 - #463은 c2864aa, #481은7f1091e, #516은228b943 기능checkpoint다. 필수 GitHub non-author review/실제머지·운영·M4나머지·M5는 남는다. 계좌 기능완료를 전체목표완료로 바꾸지 않는다.
+
+
+## 자산·증빙 연결과 작업 브랜치 통합 (2026-09-14)
+
+#517, #516, #481을 순서대로 squash merge하여 #463 기반 `a836238`로 모았다. 이 파일 tree는 최종 검증 소스 `abb56ec`와 동일하다. main은 필수 비작성자 승인 대기이며 운영 전환은 수행하지 않았다. 자산/증빙 설치 핵심6PASS와 리뷰 교정3PASS는 각 소스 `5d2d324`/`abb56ec`에 귀속된다. 전체 검사는 반복하지 않았다. 다음 독립 구현은 #444 제안 철회/재작성과 #446 정본 N:M 대사이며, 운영 수용 및 원래 M5 범위는 유지한다. 상세 최신 상태는 `_context.md`와 해당 PR의 실제 검사 결과를 따른다.

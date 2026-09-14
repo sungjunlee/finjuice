@@ -4,12 +4,11 @@ GitHub 이슈가 명세·AC·상태의 정본이다. 전체 목표는 `goals/fin
 
 ## 현재 코드와 PR
 
-- 기반 PR #463: `codex/ssot-m2-mutations`, `c2864aa`. 기존 main75e의 38개 additive 파일에 이어 main `cf109f5`(#515)의 3개 추가 파일을 무충돌 병합했다. 필수 non-author approving review가 남았으며 저장소는 auto-merge를 허용하지 않는다. 보호 규칙을 우회하지 않는다.
-- 통합 PR #481: `codex/ssot-m2-migrate`, 최신 기능 검증 소스 `c6b509b`, 기반 동기화 `bacf7bd`는 같은 파일 tree다. draft를 해제했다. 보존 이전·정본 소비·managed recovery store·immutable commit coverage·실제 postcommit filesystem delivery를 포함한다.
-- 계좌 기능: `codex/ssot-account-binding`, `228b943`(검증 기능 소스 `fbaec52`, 동일 tree), #481 위 PR #516. schema6의 명시 source binding 확인/교정, 서로 다른 XLSX의 stable account 유지, `ssot account list|preview|confirm|correct|ownership-confirm|ownership-correct|ownership`의 실제 확인·교정 흐름과 exact as-of 지분/근거 조회를 구현했다. Grok read-only 교차 리뷰 exit0/P1·P2 없음으로 ready for review다.
-- 자산·증빙 정본 연결 PR #517: `codex/ssot-canonical-assets`, `5d2d324`, #516 위 draft. schema7 자산 의미/포함 교정과 명시 가계 범위의 정확 합계, 실제 `ssot assets` 및 `ssot intake submit/list/confirm`, 일회 정정/반복 규칙의 정본 적용을 포함한다. Cursor/Grok 교차 리뷰는 exit0/P1 없음으로 완료됐고, 대기 목록 누락과 순환 포함 소계 P2 두 건은 후속 교정했다. 해당 실제 human/JSON 회귀3개가 통과했다.
-- 다음 #444 제안 철회·재작성/타입별 교정 작업은 `codex/ssot-intake-decisions`에서 `5d2d324` 기반으로 진행한다. 기존 원본·추출·제안·적용 기록을 보존한다. #517 소스와 검증을 다시 시작하지 않는다. 머지/운영 게이트와 원래 M5 범위도 유지한다.
-- 작업 공간의 정확한 절대 경로는 `git worktree list`로 확인한다. 기본 active checkout을 writer로 가정하지 않는다.
+- main 진입 PR #463: `codex/ssot-m2-mutations`. 코드 통합 소스 `a836238`은 검증한 `abb56ec`와 전체 파일 tree가 같다. 필수 비작성자 approving review가 남아 있으며 main에는 아직 반영하지 않았다.
+- 작업 브랜치 PR #517 → #516 → #481은 CI 확인 후 순서대로 squash merge했다. 계좌·자산·증빙 입력·보존 이전·정본 소비·managed recovery/delivery가 이제 #463에 함께 있다. 저장소가 허용하지 않는 merge commit 대신 허용된 squash 방식으로 통합했다.
+- `codex/ssot-intake-decisions`에서 #444 제안 철회·재작성과 적용된 변경의 타입별 교정을 구현 중이다. writer 기준은 `5d2d324`이며, 동결 후 해당 delta만 최신 통합 코드에 반영한다.
+- `codex/ssot-canonical-reconcile`에서 #446의 실제 정본 구매/할부 N:M 대사를 구현 중이다. 기준은 `abb56ec`이며 기존 별도 sidecar를 정본으로 취급하지 않는다. #445의 실제 운영 수용은 아직 남아 있어 M5 완료를 주장하지 않는다.
+- 기본 active checkout을 writer로 가정하지 않는다. 정확한 경로는 `git worktree list`로 확인한다. 이미 완료된 Cursor 리뷰/설치 검증은 재시작하지 않는다.
 
 ## 완료된 검사 — 재실행하지 않을 것
 
@@ -20,9 +19,9 @@ GitHub 이슈가 명세·AC·상태의 정본이다. 전체 목표는 `goals/fin
 - 계좌 설치 wheel 핵심 **8 PASS / 7.05초**, installed origins505, package686개 source/wheel/installed bytes 일치. 실제 다른 XLSX→stable ID→복원/교정과 schema5 raw restore→명시 clone upgrade 포함. wheel SHA `035f4c3e70c627bcd9ea00e0dbd69699c15b9a491cd05daa995e14ea833c1dbd`.
 - 최종 계좌 흐름 fbaec52: 설치7PASS/7.90초,508origins,692package bytes, wheel SHA `2cfc029906326322a4b25806faf14a261290c905b53c8a3516aede92fa26d9f7`. 전체 Ruff/mypy579 및 최종delta PASS. 두 번째 Grok 범위리뷰도 exit0/P1·P2 없음. `/tmp/finjuice-account-decisions-review/`의 결과를 재사용한다.
 - 새main #515의 flat-path 불일치는 `7f1091e`(#481), `fbaec52`(계좌 소스)에서 immutable attempt 선택/lease로 수정했다. 실패4개+pointer교체1개 및 통합tree8개 PASS, 설치포인터교체도 PASS. 직접 SQL correction 보조함수는 여전히 canonical 변경 증거가 아니다.
-- 로컬 상세 근거는 `/tmp/finjuice-backup-delivery/final/` 및 `/tmp/finjuice-account-binding-review/`. Cursor 원본 delivery 실행은 이미 terminal이며 재시작하지 않는다. 새 리뷰는 account-binding 전용 실행이다.
+- 로컬 상세 근거는 `/tmp/finjuice-backup-delivery/final/` 및 `/tmp/finjuice-account-binding-review/`. Cursor 원본 delivery 실행은 이미 terminal이며 재시작하지 않는다. 계좌 및 자산/입력 범위 리뷰도 모두 종료됐다.
 
-- `5d2d324`: 설치 실제 자산 human/JSON capture→restore→query, 증빙 submit→confirm→retry, 반복 규칙 교정·제거, catalog 회귀 **6 PASS / 17.71초**. 설치 origins524, package710개 소스/wheel/설치본 bytes 일치. wheel SHA `b9f6d36d40219c86c782fcf85716cd8d214f0b8d6972c529d5a910aed2729a55`. 관련 source 회귀와 Ruff/mypy, 패키지 구성 검사 통과. full 재실행 없음. 근거 `/tmp/finjuice-canonical-assets-review/`, `/tmp/finjuice-canonical-assets/handoff.md`.
+- `5d2d324`: 설치 실제 자산 human/JSON capture→restore→query, 증빙 submit→confirm→retry, 반복 규칙 교정·제거, catalog 회귀 **6 PASS / 17.71초**. 설치 origins524, package710개 소스/wheel/설치본 bytes 일치. wheel SHA `b9f6d36d40219c86c782fcf85716cd8d214f0b8d6972c529d5a910aed2729a55`. 관련 source 회귀와 Ruff/mypy, 패키지 구성 검사 통과. full 재실행 없음. 근거 `/tmp/finjuice-canonical-assets-review/`, `/tmp/finjuice-canonical-assets/handoff.md`. Grok 리뷰는 682.56초/exit0, P1 없음/P2 두 건 교정 완료. 최종 교정 `abb56ec` 설치 회귀3PASS/5.42초,520origins,710package bytes, wheel SHA `4f16b151b711d93365e3e00bf848ada66905061e79dcf001254bc8001159e60a`.
 
 ## 남은 실제 완료 조건
 
