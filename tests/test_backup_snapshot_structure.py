@@ -186,7 +186,7 @@ def test_transfer_failure_reports_backup_pending_not_record_failure(
     # Arrange
     generation = _build_generation(tmp_path / "generation")
     first = create_sqlite_snapshot(generation.database, tmp_path / "backup")
-    previous_manifest = (tmp_path / "backup" / MANIFEST_FILENAME).read_bytes()
+    previous_manifest = (tmp_path / "backup" / "backup-current.json").read_bytes()
 
     def _fail_transfer(*args: Any, **kwargs: Any) -> Any:
         raise BackupTransferError("simulated payload transfer failure")
@@ -204,7 +204,7 @@ def test_transfer_failure_reports_backup_pending_not_record_failure(
     assert pending.record_commit == "ok"
     assert pending.reason == "transfer_failed"
     assert pending.status != "record_failed"
-    assert (tmp_path / "backup" / MANIFEST_FILENAME).read_bytes() == previous_manifest
+    assert (tmp_path / "backup" / "backup-current.json").read_bytes() == previous_manifest
     assert snapshot_status(tmp_path / "backup").complete
 
 
@@ -288,3 +288,36 @@ def test_incomplete_backup_cannot_be_restored(tmp_path: Path) -> None:
     status = snapshot_status(backup_root)
     assert status.complete is False
     assert status.status == "incomplete_backup"
+
+
+def test_completion_references_remain_with_receipt_after_pointer_replacement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A later publication cannot replace the evidence attached to an earlier receipt."""
+    first = _build_generation(tmp_path / "first", source_bytes=b"first source")
+    second = _build_generation(tmp_path / "second", source_bytes=b"second source")
+    publish = snapshot_module._publish_generation_backup
+    receipts = []
+
+    def publish_then_replace(source_database: Path, destination: Path) -> Any:
+        receipt = publish(source_database, destination)
+        receipts.append(receipt)
+        publish(second.database, destination)
+        return receipt
+
+    monkeypatch.setattr(snapshot_module, "_publish_generation_backup", publish_then_replace)
+    result = create_sqlite_snapshot(first.database, tmp_path / "backup")
+    current = snapshot_status(tmp_path / "backup")
+
+    assert result.complete and current.complete
+    assert result.references is not None and current.references is not None
+    assert result.backup_id == receipts[0].backup_id
+    assert result.references.dataset_generation == result.source_generation
+    assert result.references.source_artifact_ids == tuple(
+        artifact.artifact_id for artifact in list_referenced_artifacts(first.database)
+    )
+    assert current.references.dataset_generation == current.source_generation
+    assert current.references.source_artifact_ids == tuple(
+        artifact.artifact_id for artifact in list_referenced_artifacts(second.database)
+    )
+    assert result.backup_id != current.backup_id
