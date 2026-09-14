@@ -96,9 +96,17 @@ GitHub 이슈가 명세·AC·상태의 정본이다. 전체 목표는 `goals/fin
 - `codex/portfolio-consumer-projection` adds investment/loan display and a single-snapshot native-aware bundle. Preserved unsupported native overview projections now contribute to incomplete readiness rather than disappearing from coverage. Initial 39 focused tests passed. Five cross-family findings were fixed; the final focused set of 37 tests, changed-source Ruff/mypy, and diff checks pass. Full Ruff/mypy (609 sources) also passed before those localized review corrections.
 - Historical compatibility, operating cutover, new-record recovery, and confirmed family ownership remain separate gates. No operating source or service was changed by this implementation.
 
-## 2026-09-15 승인 후 진행
+## 2026-09-15 운영 전환 완료 checkpoint
 
-- #522 관리자 squash merge 완료: `f011526`, 정확한 head CI34867296195 PASS. 사용자는 목표 범위의 후속 교차 리뷰·필수 CI 통과 PR에 대한 관리자 머지와 계속 진행을 승인했다.
-- #523을 최신 main에 재배치하고 ready 처리했다: `c1a10eb`, CI34871798225 진행. source package bytes는 기존 검증 artifact와 동일하다.
-- #434는 기존 AC 검증과 #463 실제 머지를 확인해 COMPLETED로 정리했다. 다른 운영/실사용 이슈는 미완료다.
-- 독립 private staging 작업: rate 단독 미확정은 비율 unknown으로 명시하는 부분 보고, 서비스와 수동 소비자의 동일 authority 강제. 실제 운영 적용은 아직 하지 않았다.
+- #522 관리자 squash merge `f011526`, CI34867296195 PASS. #523 최종 head `ff0236e`, CI34872364225 PASS 후 `2ddf9da`로 관리자 squash merge했다. 최종 설치 package와 merge source는 일치한다.
+- 최종 동결 원본 8개 범위의 내용·권한·mtime 및 별도 writer probe를 확인했다. 원본/후보 artifact와 최종 metadata 증거를 장비 밖에 백업하고 격리 복원해 검증했다. 기존 checker의 역사 자료/미확정 참조 진단을 지우지 않고 후속 보존 증거·중요도 판단과 함께 보존했다.
+- #438 보존 수용, #427 M2 에픽, #439 소비자 전환 준비를 실제 AC 충족 근거로 COMPLETED 처리했다. 미확정 가족 소유권을 확인된 사실로 바꾸지 않았다.
+- 검토된 운영 파일 18개를 적용했고 실제 쿠팡 조회·자산 보고서 main 실행이 통과했다. 대상 서비스 재시작 및 실제 프로세스 mount namespace의 legacy CSV/수동 overlay 읽기 전용을 확인했다. 대상 밖 서비스는 변경하지 않았다.
+- 전환 전 실패 시 기존 서비스 복구를 실제 확인했다. 전환 확정 뒤에는 자동 rollback을 막고 감시 타이머 해제를 확인한 후 새 서비스를 시작했다. 운영 DB/CSV에 가짜 거래를 넣지 않았다.
+- 운영본 첫 장비 밖 백업과 별도 native inactive restore/admission·integrity/FK·대표 조회 검증 PASS(약 297초). 일일 03:10 백업과 매월 1일 04:10 복원 점검을 등록했다. 첫 일일 calendar 실행은 NAS 저장·정상 종료까지 PASS. 월간 첫 실행은 아직 예정 전이며 이후 정상 신규 기록 복구는 별도 완료 조건이다.
+- #446/#448은 코드 구현과 실제 수용을 구분해 다시 열었다. #447 코드 수용과 M5 실제 업무 완료도 혼동하지 않는다.
+- 가족 계좌 소유권·동일 계좌 판단과 M5 실제 입력의 통화/단위/주문 경계·할부/환불 사실은 사용자 확인이 남았다. 목표 전체는 active이며 M3/M4/M5 완료로 과장하지 않는다.
+- 비공개 실행 checkpoint: 개인 실행 저장소의 `pr520-closeout/resume-approval-progress.json`. 실패 기록, 원본, 설치 artifact, 상세 재현 증거는 공개 저장소에 넣지 않는다.
+
+- 현재 공개 연속성 branch: `codex/ssot-operating-closeout` (main `2ddf9da` 기반). 범위 25개가 모두 존재하며 미완료는 #355/#425/#428/#429/#440/#441/#445/#446/#448이다.
+- private checkpoint의 오래된 진행 중 handle과 전환 전 false 상태는 별도 history로 보존하고 현재 상태를 정규화했다. 실제 신규 입력·가족/주문 사실을 받기 전 같은 검사를 반복하지 않는다.
