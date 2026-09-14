@@ -265,6 +265,141 @@
       "issue_confidence": "LOW",
       "test_name": "hardcoded_sql_expressions",
       "rationale": "SELECT identifiers come only from the source-defined five-entry _DETAIL_TABLES mapping; no caller-provided identifier or value is interpolated. Reviewed 2026-09-13. Re-review if these identifier/value boundaries change; remove this entry when the dynamic expression or finding is removed."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/close/canonical.py",
+      "function": "_insert",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Table names are checked against fixed schema TABLE_KEYS before execution; record column names must exist in pragma_table_info queried with a bound table parameter. All record values use placeholders."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/close/canonical.py",
+      "function": "_rows",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Table names are rejected unless present in the fixed schema TABLE_KEYS map; ORDER BY columns come from that same map. No supplied values are interpolated."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/reconcile/canonical.py",
+      "function": "_insert",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Table names are checked against fixed schema TABLE_KEYS before execution; record column names must exist in pragma_table_info queried with a bound table parameter. All record values use placeholders."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/reconcile/canonical.py",
+      "function": "_rows",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Table names are rejected unless present in the fixed schema TABLE_KEYS map; ORDER BY columns come from that same map. No supplied values are interpolated."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/reconcile/canonical.py",
+      "function": "confirm_allocation",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Table and key identifiers come only from two literal internal tuples. Evidence/payment IDs are bound placeholders."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/asset_meanings.py",
+      "function": "rows",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "A closed literal allowlist rejects unsupported table names before interpolation; no external value becomes SQL."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/backup_coverage.py",
+      "function": "_domain_facts",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Tables and ordering keys are enumerated exclusively from schema_v8/schema_v9 TABLE_KEYS constants. Allocation IDs use placeholders."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/intake_lifecycle.py",
+      "function": "_current_head",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Operation indexes a closed literal map of table/column identifiers. Optional confirmation filter is a fixed literal; all external assertion IDs use placeholders."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/repository.py",
+      "function": "_read_table_sql",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Table names are enumerated from code-owned versioned schema TABLE_KEYS constants after supported-version validation."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/schema_v8.py",
+      "function": "apply_schema_v8",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Migration trigger identifiers and predicates are generated solely from schema-owned TABLE_KEYS and fixed UPDATE/DELETE actions; no request inputs."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/schema_v9.py",
+      "function": "apply_schema_v9",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Migration trigger identifiers and predicates are generated solely from schema-owned TABLE_KEYS and fixed UPDATE/DELETE actions; no request inputs."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/backup_coverage.py",
+      "function": "_domain_facts",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Tables and ordering keys are enumerated exclusively from schema_v8/schema_v9 TABLE_KEYS constants. Allocation IDs use placeholders."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/intake_lifecycle.py",
+      "function": "_current_head",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Operation indexes a closed literal map of table/column identifiers. Optional confirmation filter is a fixed literal; all external assertion IDs use placeholders."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/intake_lifecycle.py",
+      "function": "_current_head",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "MEDIUM",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Operation indexes a closed literal map of table/column identifiers. Optional confirmation filter is a fixed literal; all external assertion IDs use placeholders."
+    },
+    {
+      "test_id": "B608",
+      "filename": "src/finjuice/pipeline/storage/sqlite/repository.py",
+      "function": "_read_table_sql",
+      "issue_severity": "MEDIUM",
+      "issue_confidence": "LOW",
+      "test_name": "hardcoded_sql_expressions",
+      "rationale": "Table names are enumerated from code-owned versioned schema TABLE_KEYS constants after supported-version validation."
     }
   ]
 }

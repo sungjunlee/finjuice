@@ -126,6 +126,13 @@ def _rows(connection: sqlite3.Connection, table: str) -> list[dict[str, Any]]:
 def _insert(
     connection: sqlite3.Connection, context: MutationContext, table: str, record: dict[str, Any]
 ) -> None:
+    if table not in TABLE_KEYS:
+        raise ValueError("Unsupported close table.")
+    columns = {
+        row[0] for row in connection.execute("SELECT name FROM pragma_table_info(?)", (table,))
+    }
+    if not record or not set(record) <= columns:
+        raise ValueError("Record contains unsupported columns.")
     connection.execute(
         f"INSERT INTO {table} ({', '.join(record)}) VALUES ({', '.join('?' for _ in record)})",
         tuple(record.values()),

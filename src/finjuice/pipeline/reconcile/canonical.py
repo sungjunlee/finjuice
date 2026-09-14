@@ -126,6 +126,11 @@ def _insert(
 ) -> None:
     if table not in TABLE_KEYS:
         raise ValueError("Unsupported reconciliation table.")
+    columns = {
+        row[0] for row in connection.execute("SELECT name FROM pragma_table_info(?)", (table,))
+    }
+    if not record or not set(record) <= columns:
+        raise ValueError("Record contains unsupported columns.")
     connection.execute(
         f"INSERT INTO {table} ({', '.join(record)}) VALUES ({', '.join('?' for _ in record)})",
         tuple(record.values()),
