@@ -68,7 +68,7 @@ class StatusFacts:
     min_date: Any | None
     max_date: Any | None
     partition_count: int
-    schema_summary: PartitionSchemaSummary
+    schema_summary: PartitionSchemaSummary | None
     last_import_date: Any | None
     last_import_file: Any | None
     rules_path: Path
