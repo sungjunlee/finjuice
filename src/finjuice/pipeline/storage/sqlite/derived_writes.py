@@ -73,7 +73,7 @@ _BULK_TRANSACTION_SQL = (
 
 def _canonical_write_json(value: JSONValue) -> str:
     """Encode one derived-write payload with the mutation JSON contract."""
-    from finjuice.pipeline.storage.sqlite.mutations import _canonical_request_json
+    from finjuice.pipeline.storage.sqlite.mutation_json import _canonical_request_json
 
     return _canonical_request_json(value)
 
