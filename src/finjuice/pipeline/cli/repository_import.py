@@ -1,7 +1,9 @@
-"""Thin CLI helpers for authoritative exact XLSX import."""
+"""Thin CLI helpers for authoritative exact XLSX and JSON statement import."""
 
 from __future__ import annotations
 
+import json
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -13,6 +15,12 @@ from finjuice.pipeline.cli.pipeline_failure import FullPipelineError
 from finjuice.pipeline.cli.utils import mutation_identity, mutation_metadata
 from finjuice.pipeline.config import Config
 from finjuice.pipeline.ingest.xlsx_evidence import XlsxEvidenceError
+from finjuice.pipeline.statements.canonical import (
+    STATEMENT_SCHEMA_VERSION,
+    StatementImport,
+    parse_document,
+    plan_rows,
+)
 from finjuice.pipeline.storage.authority import RepositoryAuthority
 from finjuice.pipeline.storage.mutation_facade import (
     BulkMutationPreview,
@@ -20,6 +28,7 @@ from finjuice.pipeline.storage.mutation_facade import (
     MutationIdentity,
     StorageMutationFacade,
 )
+from finjuice.pipeline.storage.sqlite.backup_io import BackupPayloadError, read_regular_bytes
 from finjuice.pipeline.storage.sqlite.errors import (
     MutationConflictError,
     MutationError,
@@ -31,6 +40,7 @@ from finjuice.pipeline.storage.sqlite.exact_import import (
 )
 from finjuice.pipeline.storage.sqlite.mutations import MutationReceipt
 from finjuice.pipeline.storage.sqlite.objects import ObjectStoreError
+from finjuice.pipeline.storage.sqlite.schema import inspect_repository
 from finjuice.pipeline.storage.sqlite.source_lookup import (
     SourceLookupError,
     resolve_archived_source,
@@ -76,19 +86,7 @@ def import_xlsx_paths(
     preview: bool,
 ) -> ImportBatchResult:
     """Import captured workbooks one file at a time and stop on the first failure."""
-    reject_batch_identity(identity, len(paths))
-    receipts: list[dict[str, Any]] = []
-    failed: list[tuple[str, str]] = []
-    for path in paths:
-        try:
-            receipts.append(_import_one_path(facade, path, identity, preview=preview))
-        except (MutationValidationError, MutationConflictError) as exc:
-            failed.append((path.name, type(exc).__name__))
-            return ImportBatchResult(tuple(receipts), tuple(failed), typed_failure=exc)
-        except Exception as exc:
-            failed.append((path.name, _safe_error(exc)))
-            break
-    return ImportBatchResult(tuple(receipts), tuple(failed))
+    return _import_path_batch(facade, paths, identity, preview=preview, importer=_import_one_path)
 
 
 def present_ingest_step(
@@ -132,9 +130,14 @@ def ingest_import_directory(
     preview: bool,
     archive_requested: bool,
 ) -> dict[str, Any]:
-    """Import every XLSX currently in the configured imports directory."""
-    paths = _xlsx_in(config.import_dir)
-    batch = import_xlsx_paths(facade, paths, identity, preview=preview)
+    """Import staged XLSX workbooks and canonical JSON statements from imports/."""
+    paths = sorted(
+        (*_xlsx_in(config.import_dir), *_canonical_statement_paths(config.import_dir)),
+        key=lambda path: path.name,
+    )
+    batch = _import_path_batch(
+        facade, paths, identity, preview=preview, importer=_import_one_ingest_path
+    )
     return present_ingest_step(
         batch,
         source="imports",
@@ -192,6 +195,134 @@ def _xlsx_in(directory: Path) -> list[Path]:
     if not directory.is_dir():
         return []
     return sorted(path for path in directory.glob("*.xlsx") if path.is_file())
+
+
+def _canonical_statement_paths(directory: Path) -> list[Path]:
+    """Return JSON files that claim the canonical statement schema version."""
+    if not directory.is_dir():
+        return []
+    return sorted(
+        path
+        for path in directory.glob("*.json")
+        if path.is_file() and _claims_canonical_statement(path)
+    )
+
+
+def _claims_canonical_statement(path: Path) -> bool:
+    try:
+        payload: Any = json.loads(read_regular_bytes(path).decode("utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError, BackupPayloadError):
+        return False
+    return isinstance(payload, dict) and payload.get("schema_version") == STATEMENT_SCHEMA_VERSION
+
+
+def _import_path_batch(
+    facade: StorageMutationFacade,
+    paths: list[Path],
+    identity: MutationIdentity,
+    *,
+    preview: bool,
+    importer: Callable[..., dict[str, Any]],
+) -> ImportBatchResult:
+    """Import one staged path at a time and stop on the first failure."""
+    reject_batch_identity(identity, len(paths))
+    receipts: list[dict[str, Any]] = []
+    failed: list[tuple[str, str]] = []
+    for path in paths:
+        try:
+            receipts.append(importer(facade, path, identity, preview=preview))
+        except (MutationValidationError, MutationConflictError) as exc:
+            failed.append((path.name, type(exc).__name__))
+            return ImportBatchResult(tuple(receipts), tuple(failed), typed_failure=exc)
+        except Exception as exc:
+            failed.append((path.name, _safe_error(exc)))
+            break
+    return ImportBatchResult(tuple(receipts), tuple(failed))
+
+
+def _import_one_ingest_path(
+    facade: StorageMutationFacade,
+    path: Path,
+    identity: MutationIdentity,
+    *,
+    preview: bool,
+) -> dict[str, Any]:
+    if path.suffix.lower() == ".json":
+        return _import_one_statement(facade, path, identity, preview=preview)
+    return _import_one_path(facade, path, identity, preview=preview)
+
+
+def _import_one_statement(
+    facade: StorageMutationFacade,
+    path: Path,
+    identity: MutationIdentity,
+    *,
+    preview: bool,
+) -> dict[str, Any]:
+    content = read_regular_bytes(path)
+    envelope = parse_document(content)
+    if preview:
+        return _present_statement_preview(facade, path.name, envelope)
+    command = StatementImport(content=content, imported_at=str(envelope["collected_at"]))
+    receipt = facade.import_statement(command, identity=identity)
+    return _present_statement_receipt(path.name, identity, receipt)
+
+
+def _present_statement_preview(
+    facade: StorageMutationFacade, filename: str, envelope: Mapping[str, Any]
+) -> dict[str, Any]:
+    rows = plan_rows(envelope)
+    return {
+        "filename": filename,
+        "result": {
+            "artifact_id": None,
+            "completed": False,
+            "counts": _with_transaction_counts(
+                {"created": 0, "linked": 0, "reused": 0, "pending": len(rows)}
+            ),
+            "noop": True,
+            "occurrence_id": None,
+        },
+        "authority": "repository",
+        "dataset_revision": _snapshot_revision(facade),
+        "state_changed": False,
+    }
+
+
+def _present_statement_receipt(
+    filename: str,
+    identity: MutationIdentity,
+    receipt: MutationReceipt,
+) -> dict[str, Any]:
+    presented = _present_receipt(filename, identity, receipt)
+    result = dict(presented["result"])
+    result["counts"] = _with_transaction_counts(result.get("counts") or {})
+    result["completed"] = True
+    presented["result"] = result
+    return presented
+
+
+def _with_transaction_counts(counts: Mapping[str, Any]) -> dict[str, Any]:
+    mapped = dict(counts)
+    created = int(counts.get("created", 0) or 0)
+    reused = int(counts.get("reused", 0) or 0) + int(counts.get("linked", 0) or 0)
+    mapped["transactions"] = {
+        "inserted": created,
+        "quarantined": 0,
+        "reused": reused,
+        "unsupported": 0,
+    }
+    return mapped
+
+
+def _snapshot_revision(facade: StorageMutationFacade) -> int:
+    dispatch = facade.dispatch()
+    if not isinstance(dispatch.authority, RepositoryAuthority):
+        raise MutationValidationError("Statement ingest requires an active repository.")
+    revision = inspect_repository(dispatch.authority.paths.database).dataset_revision
+    if revision is None:
+        raise MutationValidationError("Active repository is missing a dataset revision.")
+    return revision
 
 
 def _import_one_path(
