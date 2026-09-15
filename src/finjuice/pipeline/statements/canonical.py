@@ -63,6 +63,7 @@ class StatementImport:
     content: bytes
     imported_at: str
     original: bytes | None = None
+    preview: bool = False
 
     def payload(self) -> dict[str, Any]:
         """Bind the exact document bytes and declared identity to the retry key."""
@@ -309,6 +310,8 @@ def import_statement(
     envelope = parse_document(command.content)
     rows = plan_rows(envelope)
     resolved = _resolve_rows(connection, envelope, rows)
+    if command.preview:
+        return _preview_result(rows, resolved)
     store = SourceObjectStore(context.authority.paths)
     artifact = store.publish(io.BytesIO(command.content))
     context.register_source_artifact(artifact)
@@ -318,6 +321,40 @@ def import_statement(
     for row in rows:
         _apply_row(context, envelope, row, resolved[row.index], occurrence_id, artifact, counts)
     return _result(envelope, artifact, original_id, occurrence_id, counts, rows)
+
+
+def _preview_result(
+    rows: Sequence[_Row], resolved: Mapping[int, Mapping[str, Any]]
+) -> dict[str, Any]:
+    """Return write-path counts without publishing artifacts or mutation entries."""
+    counts = _Counts([], [], [], [])
+    for row in rows:
+        _tally_row(counts, row, resolved[row.index])
+    return {
+        "artifact_id": None,
+        "completed": False,
+        "counts": counts.as_dict(),
+        "noop": False,
+        "occurrence_id": None,
+    }
+
+
+def _tally_row(counts: _Counts, row: _Row, state: Mapping[str, Any]) -> None:
+    """Classify one resolved row the same way the write path would, without writing."""
+    mapped = state["mapped"]
+    binding = state["binding"]
+    decided = row.action in {"create", "link"} and binding.status == "confirmed"
+    if mapped is not None:
+        counts.reused.append(row.external_id)
+        return
+    if not decided:
+        counts.pending.append(row.external_id)
+        return
+    if row.action == "link":
+        assert row.target is not None
+        counts.linked.append(row.target)
+        return
+    counts.created.append(row.external_id)
 
 
 def _publish_original(
