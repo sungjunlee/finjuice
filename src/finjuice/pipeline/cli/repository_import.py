@@ -134,9 +134,10 @@ def ingest_import_directory(
         for path in sorted(config.import_dir.glob("*.json"))
         if path.is_file() and (capture := capture_statement(path)) is not None
     }
+    # Explicit statement decisions establish identities before automatic XLSX overlap checks.
     paths = sorted(
         (*_xlsx_in(config.import_dir), *statements),
-        key=lambda path: path.name,
+        key=lambda path: (path not in statements, path.name),
     )
     batch = _import_path_batch(
         facade,

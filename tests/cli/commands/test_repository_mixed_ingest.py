@@ -19,7 +19,7 @@ from tests.pipeline.test_sqlite_exact_import import _tx_book, _tx_row
 active_root = _active_root_fixture
 
 
-@pytest.mark.parametrize("first_format", ["json", "xlsx", "same_xlsx"])
+@pytest.mark.parametrize("first_format", ["json", "json-last", "xlsx", "same_xlsx"])
 @pytest.mark.parametrize(
     ("time_text", "zone"),
     [(None, ""), ("13:04:05", "+09:00"), ("13:04:05", "Z")],
@@ -30,10 +30,10 @@ def test_batch_preview_matches_committed_overlap_and_replay(
 ) -> None:
     _bind(active_root)
     workbook = _tx_book(_tx_row(2, time_text=time_text))
-    if first_format == "json":
+    if first_format in {"json", "json-last"}:
         _stage(
             active_root,
-            "a.json",
+            "z.json" if first_format == "json-last" else "a.json",
             _envelope(
                 [
                     _record(

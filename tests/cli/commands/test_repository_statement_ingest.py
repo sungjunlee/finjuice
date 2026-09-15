@@ -240,7 +240,7 @@ def test_ingest_processes_xlsx_and_json_together(active_root: _ActiveRoot) -> No
 
     result = _payload(_invoke(active_root, "ingest", "--json"))
     names = [item["filename"] for item in result["receipts"]]
-    assert names == ["book.xlsx", "statement.json"]
+    assert names == ["statement.json", "book.xlsx"]
     assert result["summary"]["files_processed"] == 2
     assert result["summary"]["new_transactions"] >= 2
     assert len(_transactions(active_root)) >= 2
