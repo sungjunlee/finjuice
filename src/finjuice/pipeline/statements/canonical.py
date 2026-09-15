@@ -17,7 +17,8 @@ from __future__ import annotations
 import hashlib
 import io
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Literal, Mapping, Sequence
 
 from finjuice.pipeline.statements.canonical_parse import (
@@ -56,14 +57,24 @@ _SCOPE_STATE: dict[str, Literal["complete", "partial", "unknown"]] = {
 }
 
 
+@dataclass
+class StatementPreviewState:
+    """Ephemeral predictions for a staged batch; never persisted as authority."""
+
+    mappings: dict[tuple[str, str], tuple[str | None, set[str]]] = field(default_factory=dict)
+    documents: set[str] = field(default_factory=set)
+
+
 @dataclass(frozen=True)
 class StatementImport:
     """One local JSON statement document plus its optional upstream original."""
 
     content: bytes
-    imported_at: str
+    imported_at: str | None
     original: bytes | None = None
     preview: bool = False
+    skip_recorded: bool = False
+    preview_state: StatementPreviewState | None = None
 
     def payload(self) -> dict[str, Any]:
         """Bind the exact document bytes and declared identity to the retry key."""
@@ -72,6 +83,7 @@ class StatementImport:
             "document_digest": hashlib.sha256(self.content).hexdigest(),
             "original_supplied": self.original is not None,
             "imported_at": self.imported_at,
+            **({"skip_recorded": True} if self.skip_recorded else {}),
             **{field: envelope[field] for field in _ENVELOPE_FIELDS},
             "record_count": len(envelope["records"]),
         }
@@ -266,7 +278,10 @@ class _Counts:
 
 
 def _resolve_rows(
-    connection: sqlite3.Connection, envelope: Mapping[str, Any], rows: Sequence[_Row]
+    connection: sqlite3.Connection,
+    envelope: Mapping[str, Any],
+    rows: Sequence[_Row],
+    preview_state: StatementPreviewState | None = None,
 ) -> dict[int, dict[str, Any]]:
     """Resolve bindings, prior mappings and link targets before writing anything."""
     identity = str(envelope["source_identity"])
@@ -274,6 +289,11 @@ def _resolve_rows(
     for row in rows:
         binding = resolve_account_binding_for(connection, row.account_key)
         mapped, digests = _existing_mapping(connection, identity, row.external_id)
+        if preview_state is not None:
+            staged = preview_state.mappings.get((identity, row.external_id))
+            if staged is not None:
+                mapped = mapped or staged[0]
+                digests = digests | staged[1]
         if digests and row.content_digest() not in digests:
             raise MutationConflictError(
                 "Statement record content changed for an already preserved external id."
@@ -321,11 +341,19 @@ def import_statement(
     if command.preview:
         return _preview_statement(connection, command, envelope, rows)
     resolved = _resolve_rows(connection, envelope, rows)
+    if command.skip_recorded:
+        applied = _applied_statement(connection, command.content)
+        predicted = _preview_result(rows, resolved)
+        if applied is not None and not _has_new_decisions(predicted):
+            return _history_skipped_preview(applied, predicted)
     store = SourceObjectStore(context.authority.paths)
     artifact = store.publish(io.BytesIO(command.content))
     context.register_source_artifact(artifact)
     original_id = _publish_original(context, store, command, envelope)
-    occurrence_id = _occurrence(context, artifact.artifact_id, envelope, command.imported_at)
+    imported_at = command.imported_at or (
+        datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    )
+    occurrence_id = _occurrence(context, artifact.artifact_id, envelope, imported_at)
     counts = _Counts([], [], [], [])
     for row in rows:
         _apply_row(context, envelope, row, resolved[row.index], occurrence_id, artifact, counts)
@@ -339,10 +367,45 @@ def _preview_statement(
     rows: Sequence[_Row],
 ) -> dict[str, Any]:
     """Preview new work, or report an already-recorded identical document as a noop."""
+    resolved = _resolve_rows(connection, envelope, rows, command.preview_state)
+    predicted = _preview_result(rows, resolved)
     applied = _applied_statement(connection, command.content)
-    if applied is not None:
-        return _history_skipped_preview(applied, len(rows))
-    return _preview_result(rows, _resolve_rows(connection, envelope, rows))
+    digest = hashlib.sha256(command.content).hexdigest()
+    state = command.preview_state
+    already_recorded = applied is not None or (state is not None and digest in state.documents)
+    if state is not None:
+        _remember_preview(state, envelope, rows, resolved, digest)
+    if already_recorded and not _has_new_decisions(predicted):
+        return _history_skipped_preview(applied, predicted)
+    return predicted
+
+
+def _has_new_decisions(predicted: Mapping[str, Any]) -> bool:
+    counts = predicted["counts"]
+    return bool(counts["created"] or counts["linked"])
+
+
+def _remember_preview(
+    state: StatementPreviewState,
+    envelope: Mapping[str, Any],
+    rows: Sequence[_Row],
+    resolved: Mapping[int, Mapping[str, Any]],
+    digest: str,
+) -> None:
+    """Publish predictions only after every row in this file validates successfully."""
+    for row in rows:
+        item = resolved[row.index]
+        mapped = item["mapped"]
+        if mapped is None and item["binding"].status == "confirmed":
+            if row.action == "create":
+                mapped = new_entity_id()
+            elif row.action == "link":
+                mapped = row.target
+        state.mappings[(str(envelope["source_identity"]), row.external_id)] = (
+            mapped,
+            {row.content_digest()},
+        )
+    state.documents.add(digest)
 
 
 def _applied_statement(connection: sqlite3.Connection, content: bytes) -> tuple[str, str] | None:
@@ -354,15 +417,15 @@ def _applied_statement(connection: sqlite3.Connection, content: bytes) -> tuple[
     return str(row[0]), str(row[1])
 
 
-def _history_skipped_preview(applied: tuple[str, str], record_count: int) -> dict[str, Any]:
-    """Match the XLSX completed-preview contract: identical bytes are already recorded."""
-    artifact_id, occurrence_id = applied
+def _history_skipped_preview(
+    applied: tuple[str, str] | None, predicted: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Keep mapped and pending counts distinct when no new decision can apply."""
     return {
-        "artifact_id": artifact_id,
-        "completed": False,
-        "counts": {"created": 0, "linked": 0, "reused": record_count, "pending": 0},
+        **predicted,
+        "artifact_id": None if applied is None else applied[0],
         "noop": True,
-        "occurrence_id": occurrence_id,
+        "occurrence_id": None if applied is None else applied[1],
     }
 
 

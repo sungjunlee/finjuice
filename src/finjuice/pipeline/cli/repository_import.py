@@ -18,7 +18,7 @@ from finjuice.pipeline.ingest.xlsx_evidence import XlsxEvidenceError
 from finjuice.pipeline.statements.canonical import (
     STATEMENT_SCHEMA_VERSION,
     StatementImport,
-    parse_document,
+    StatementPreviewState,
 )
 from finjuice.pipeline.storage.authority import RepositoryAuthority
 from finjuice.pipeline.storage.mutation_facade import (
@@ -226,9 +226,16 @@ def _import_path_batch(
     reject_batch_identity(identity, len(paths))
     receipts: list[dict[str, Any]] = []
     failed: list[tuple[str, str]] = []
+    statement_preview = StatementPreviewState() if preview else None
     for path in paths:
         try:
-            receipts.append(importer(facade, path, identity, preview=preview))
+            if path.suffix.lower() == ".json" and importer is _import_one_ingest_path:
+                receipt = _import_one_statement(
+                    facade, path, identity, preview=preview, preview_state=statement_preview
+                )
+            else:
+                receipt = importer(facade, path, identity, preview=preview)
+            receipts.append(receipt)
         except (MutationValidationError, MutationConflictError) as exc:
             failed.append((path.name, type(exc).__name__))
             return ImportBatchResult(tuple(receipts), tuple(failed), typed_failure=exc)
@@ -256,13 +263,14 @@ def _import_one_statement(
     identity: MutationIdentity,
     *,
     preview: bool,
+    preview_state: StatementPreviewState | None = None,
 ) -> dict[str, Any]:
-    content = read_regular_bytes(path)
-    envelope = parse_document(content)
     command = StatementImport(
-        content=content,
-        imported_at=str(envelope["collected_at"]),
+        content=read_regular_bytes(path),
+        imported_at=None,
         preview=preview,
+        skip_recorded=True,
+        preview_state=preview_state,
     )
     receipt = facade.import_statement(command, identity=identity)
     return _present_statement_receipt(path.name, identity, receipt)

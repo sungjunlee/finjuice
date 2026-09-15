@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -50,7 +52,7 @@ def _bind(active: _ActiveRoot) -> str:
         return MutationOutcome(result={"account": account_id})
 
     MutationService(active.paths, active.evidence).execute(
-        _request(active.generation, "statement-account", 0), seed
+        _request(active.generation, "statement-account", _revision(active)), seed
     )
     active.facade.confirm_account_binding(
         AccountBindingConfirmation(
@@ -91,11 +93,15 @@ def test_ingest_json_statement_full_partial_historical_and_retry(
     created = _transactions(active_root)
     assert len(created) == 1
 
+    revision = _revision(active_root)
     retry = _payload(_invoke(active_root, "ingest", "--json"))
     assert retry["receipts"][0]["result"]["counts"]["created"] == 0
     assert retry["receipts"][0]["result"]["counts"]["reused"] == 1
     assert retry["summary"]["new_transactions"] == 0
     assert retry["summary"]["updated"] == 1
+    assert _revision(active_root) == revision
+    assert retry["receipts"][0]["state_changed"] is False
+    assert retry["receipts"][0]["result"]["occurrence_id"] == receipt["result"]["occurrence_id"]
     assert staged.read_bytes() == original
     assert len(_transactions(active_root)) == 1
     dumped = json.dumps(retry)
@@ -325,6 +331,9 @@ def test_dry_run_already_ingested_pending_json_is_history_skipped(
 
     assert preview["history_skipped"] == 1
     assert preview["would_parse"] == 0
+    assert preview["receipts"][0]["result"]["counts"]["pending"] == 1
+    assert preview["receipts"][0]["result"]["counts"]["reused"] == 0
+    assert preview["summary"]["updated"] == 0
     assert preview["receipts"][0]["result"]["noop"] is True
     assert preview["receipts"][0]["result"]["completed"] is False
     assert _authority_state(active_root) == before
@@ -385,3 +394,111 @@ def _manual_tags(active: _ActiveRoot, transaction_id: str) -> list[str]:
             item for item in reader.rows("transactions") if item["entity_id"] == transaction_id
         )
     return json.loads(row["tags_manual_json"])
+
+
+@pytest.mark.parametrize(
+    ("second_amount", "second_coverage"),
+    [("-1200.50", "full"), ("-1200.50", "partial"), ("-999.00", "partial")],
+)
+def test_batch_preview_matches_overlapping_statement_writes(
+    active_root: _ActiveRoot, second_amount: str, second_coverage: str
+) -> None:
+    _bind(active_root)
+    for name, amount in [("a.json", "-1200.50"), ("b.json", second_amount)]:
+        _stage(
+            active_root,
+            name,
+            _envelope(
+                [_record("shared-id", amount=amount, decision={"action": "create"})],
+                coverage="full" if name == "a.json" else second_coverage,
+            ),
+        )
+    before = _authority_state(active_root)
+
+    preview = _invoke(active_root, "ingest", "--dry-run", "--json")
+    assert _authority_state(active_root) == before
+    assert _transactions(active_root) == []
+    write = _invoke(active_root, "ingest", "--json")
+
+    assert preview.exit_code == write.exit_code
+    if second_amount == "-1200.50":
+        planned = _payload(preview)
+        applied = _payload(write)
+        assert planned["summary"] == applied["summary"]
+        assert planned["summary"]["new_transactions"] == 1
+        assert planned["summary"]["updated"] == 1
+        assert planned["receipts"][1]["result"]["counts"]["reused"] == 1
+        assert len(_transactions(active_root)) == 1
+    else:
+        assert preview.exit_code != ExitCode.SUCCESS
+        planned = json.loads(preview.output)["_meta"]["pipeline"]["steps"]["ingest"]
+        applied = json.loads(write.output)["_meta"]["pipeline"]["steps"]["ingest"]
+        assert planned["summary"] == applied["summary"]
+        assert planned["summary"]["failed_files"] == [["b.json", "MutationConflictError"]]
+        assert len(_transactions(active_root)) == 1
+
+
+def test_ingest_uses_current_import_time_and_preserves_collected_time(
+    active_root: _ActiveRoot,
+) -> None:
+    _bind(active_root)
+    collected_at = "2001-01-01T00:00:00Z"
+    _stage(
+        active_root,
+        "historical.json",
+        _envelope(
+            [_record("txn-1", decision={"action": "create"})],
+            coverage="historical",
+            collected_at=collected_at,
+        ),
+    )
+    started = datetime.now(timezone.utc)
+    revision = _revision(active_root)
+    identity_args = (
+        "--idempotency-key",
+        "import-historical",
+        "--expected-generation",
+        active_root.generation,
+        "--expected-revision",
+        str(revision),
+    )
+    first = _payload(_invoke(active_root, "ingest", "--json", *identity_args))
+    with sqlite3.connect(active_root.database) as connection:
+        imported_at = connection.execute(
+            "SELECT imported_at FROM source_occurrences WHERE occurrence_kind = ?",
+            ("canonical_json_statement",),
+        ).fetchone()[0]
+        observed_collection = connection.execute(
+            "SELECT collected_at FROM observations"
+        ).fetchone()[0]
+    assert started <= datetime.fromisoformat(imported_at) <= datetime.now(timezone.utc)
+    assert observed_collection == collected_at
+    revision = _revision(active_root)
+
+    replay = _payload(_invoke(active_root, "ingest", "--json", *identity_args))
+    assert replay["receipts"][0]["result"] == first["receipts"][0]["result"]
+    assert _revision(active_root) == revision
+
+
+def test_pending_staged_statement_becomes_actionable_after_binding(
+    active_root: _ActiveRoot,
+) -> None:
+    _stage(
+        active_root,
+        "pending.json",
+        _envelope(
+            [_record("txn-1", decision={"action": "create"})],
+        ),
+    )
+    first = _payload(_invoke(active_root, "ingest", "--json"))
+    assert first["receipts"][0]["result"]["counts"]["pending"] == 1
+    _bind(active_root)
+    before = _authority_state(active_root)
+
+    preview = _payload(_invoke(active_root, "ingest", "--dry-run", "--json"))
+    assert preview["history_skipped"] == 0
+    assert preview["summary"]["new_transactions"] == 1
+    assert _authority_state(active_root) == before
+    applied = _payload(_invoke(active_root, "ingest", "--json"))
+    assert applied["summary"]["new_transactions"] == 1
+    assert len(_transactions(active_root)) == 1
