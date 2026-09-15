@@ -52,7 +52,16 @@ _STAGING_PREFIX: Final = ".finjuice-backup-"
 
 
 def _restore_backup_unlocked(backup_root: Path, destination: Path) -> RestoreResult:
-    from finjuice.pipeline.storage.sqlite.backup import RestoreResult, _absolute_root
+    from finjuice.pipeline.storage.sqlite.backup import (
+        RestoreResult,
+        _absolute_root,
+        _prepare_restore_root,
+        _restore_database,
+        _restore_manifest_document,
+        _restore_objects,
+        _rollback_restore,
+        _verify_restored_database,
+    )
 
     input_root = _absolute_root(backup_root)
     source_root, manifest, _ = resolve_backup_input(input_root)
