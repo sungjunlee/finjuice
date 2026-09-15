@@ -15,6 +15,7 @@ from finjuice.pipeline.cli.commands.full_pipeline_orchestrator import (
     FullPipelineOptions,
     run_full_pipeline_orchestrator,
 )
+from finjuice.pipeline.cli.commands.ingest_rendering import _render_pending_statements
 from finjuice.pipeline.cli.export_runtime import configure_cli_export_result_runtime
 from finjuice.pipeline.cli.mutation_options import with_mutation_options
 from finjuice.pipeline.cli.output import ErrorCode, ExitCode, emit, emit_error
@@ -81,6 +82,7 @@ def _compute_full_pipeline_result(
                         f"   ✓ ingest: {ingest_summary['new_transactions']}건 추가, "
                         f"{ingest_summary['updated']}건 업데이트"
                     )
+                _render_pending_statements(ingest_summary)
                 return
 
             if step_name == "tag":

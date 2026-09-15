@@ -127,7 +127,9 @@ def _plausible_time(
 
 def _parse_instant(text: str) -> datetime | None:
     try:
-        parsed = datetime.fromisoformat(text)
+        parsed = datetime.fromisoformat(
+            text.removesuffix("Z") + ("+00:00" if text.endswith("Z") else "")
+        )
     except ValueError:
         return None
     return parsed

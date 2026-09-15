@@ -20,9 +20,13 @@ active_root = _active_root_fixture
 
 
 @pytest.mark.parametrize("first_format", ["json", "xlsx", "same_xlsx"])
-@pytest.mark.parametrize("time_text", [None, "13:04:05"], ids=["date-only", "with-time"])
+@pytest.mark.parametrize(
+    ("time_text", "zone"),
+    [(None, ""), ("13:04:05", "+09:00"), ("13:04:05", "Z")],
+    ids=["date-only", "with-time", "utc-z"],
+)
 def test_batch_preview_matches_committed_overlap_and_replay(
-    active_root: _ActiveRoot, first_format: str, time_text: str | None
+    active_root: _ActiveRoot, first_format: str, time_text: str | None, zone: str
 ) -> None:
     _bind(active_root)
     workbook = _tx_book(_tx_row(2, time_text=time_text))
@@ -36,7 +40,7 @@ def test_batch_preview_matches_committed_overlap_and_replay(
                         "same-transaction",
                         amount="-1000.00",
                         occurred_on="2024-03-15",
-                        occurred_at=None if time_text is None else f"2024-03-15T{time_text}+09:00",
+                        occurred_at=None if time_text is None else f"2024-03-15T{time_text}{zone}",
                         decision={"action": "create"},
                     )
                 ]
