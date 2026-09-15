@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
@@ -156,3 +157,36 @@ def test_ambiguous_file_id_is_rejected(active_root: _ActiveRoot) -> None:
 
     with pytest.raises(SourceLookupError, match="ambiguous"):
         resolve_archived_source(_generation_paths(active_root), "dup-id")
+
+
+@pytest.mark.parametrize("json_output", [False, True])
+def test_json_statement_archive_is_a_typed_read_only_rejection(
+    active_root: _ActiveRoot, json_output: bool
+) -> None:
+    from tests.cli.commands.test_repository_statement_ingest import (
+        _authority_state,
+        _envelope,
+        _invoke,
+        _payload,
+        _record,
+        _stage,
+    )
+
+    _stage(active_root, "pending.json", _envelope([_record("pending")]))
+    imported = _payload(_invoke(active_root, "ingest", "--json"))
+    receipt = imported["receipts"][0]["result"]
+    before = _authority_state(active_root)
+
+    for selector in [receipt["occurrence_id"], receipt["artifact_id"]]:
+        with pytest.raises(SourceLookupError, match="not a supported XLSX"):
+            resolve_archived_source(_generation_paths(active_root), selector)
+        args = ["ingest", "--from-archive", selector]
+        if json_output:
+            args.append("--json")
+        result = _invoke(active_root, *args)
+        assert result.exit_code == 2
+        if json_output:
+            assert json.loads(result.output)["error"]["code"] == "INVALID_ARGS"
+        else:
+            assert "not a supported XLSX" in result.output
+        assert _authority_state(active_root) == before

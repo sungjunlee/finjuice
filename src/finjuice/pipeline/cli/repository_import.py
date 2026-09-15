@@ -285,6 +285,8 @@ def _present_statement_receipt(
     result = dict(presented["result"])
     result["counts"] = _with_transaction_counts(result.get("counts") or {})
     result["completed"] = not isinstance(receipt, BulkMutationPreview)
+    if isinstance(receipt, MutationReceipt):
+        result["noop"] = receipt.replayed or not receipt.state_changed
     presented["result"] = result
     return presented
 
@@ -361,6 +363,10 @@ def _summary_from_batch(batch: ImportBatchResult) -> dict[str, Any]:
         "failed_files": failed_files,
         "files_processed": len(batch.receipts) + len(failed_files),
         "new_transactions": _count_field(batch.receipts, "inserted"),
+        "pending": sum(
+            int(item.get("result", {}).get("counts", {}).get("pending", 0) or 0)
+            for item in batch.receipts
+        ),
         "updated": _count_field(batch.receipts, "reused"),
     }
 

@@ -476,7 +476,7 @@ def test_ingest_uses_current_import_time_and_preserves_collected_time(
     revision = _revision(active_root)
 
     replay = _payload(_invoke(active_root, "ingest", "--json", *identity_args))
-    assert replay["receipts"][0]["result"] == first["receipts"][0]["result"]
+    assert replay["receipts"][0]["result"] == {**first["receipts"][0]["result"], "noop": True}
     assert _revision(active_root) == revision
 
 
@@ -502,3 +502,54 @@ def test_pending_staged_statement_becomes_actionable_after_binding(
     applied = _payload(_invoke(active_root, "ingest", "--json"))
     assert applied["summary"]["new_transactions"] == 1
     assert len(_transactions(active_root)) == 1
+
+
+@pytest.mark.parametrize("confirmed", [False, True])
+@pytest.mark.parametrize("second_coverage", ["full", "partial"])
+def test_history_counts_match_new_pending_and_duplicate_evidence(
+    active_root: _ActiveRoot, confirmed: bool, second_coverage: str
+) -> None:
+    if confirmed:
+        _bind(active_root)
+    for name, coverage in [("a.json", "full"), ("b.json", second_coverage)]:
+        _stage(
+            active_root,
+            name,
+            _envelope(
+                [_record("same-id", decision={"action": "create"})],
+                coverage=coverage,
+            ),
+        )
+    before = _authority_state(active_root)
+    preview = _payload(_invoke(active_root, "ingest", "--dry-run", "--json"))
+    assert _authority_state(active_root) == before
+    written = _payload(_invoke(active_root, "ingest", "--only-unprocessed", "--json"))
+
+    expected_skipped = 1 if second_coverage == "full" else 0
+    for result in (preview, written):
+        assert result["history_skipped"] == expected_skipped
+        assert result["would_parse"] == 2 - expected_skipped
+        assert result["summary"]["pending"] == (0 if confirmed else 2)
+        assert result["receipts"][0]["result"]["noop"] is False
+    with sqlite3.connect(active_root.database) as connection:
+        count = connection.execute(
+            "SELECT count(*) FROM source_occurrences WHERE occurrence_kind = ?",
+            ("canonical_json_statement",),
+        ).fetchone()[0]
+    assert count == 2 - expected_skipped
+
+
+@pytest.mark.parametrize("preview", [False, True])
+def test_pending_statement_is_visible_in_human_and_json_summary(
+    active_root: _ActiveRoot, preview: bool
+) -> None:
+    _stage(active_root, "pending.json", _envelope([_record("txn-1")]))
+    args = ("--dry-run",) if preview else ()
+    human = _invoke(active_root, "ingest", *args)
+    assert human.exit_code == ExitCode.SUCCESS, human.output
+    assert "Pending statement records: 1 (awaiting confirmation)" in human.output
+    assert ACCOUNT_KEY not in human.output
+    assert "-1200.50" not in human.output
+    result = _payload(_invoke(active_root, "ingest", "--json", *args))
+    assert result["summary"]["pending"] == 1
+    assert result["summary"]["new_transactions"] == 0
