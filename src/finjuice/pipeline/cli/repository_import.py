@@ -1,7 +1,8 @@
-"""Thin CLI helpers for authoritative exact XLSX import."""
+"""Thin CLI helpers for authoritative exact XLSX and JSON statement import."""
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,11 @@ from finjuice.pipeline.cli.pipeline_failure import FullPipelineError
 from finjuice.pipeline.cli.utils import mutation_identity, mutation_metadata
 from finjuice.pipeline.config import Config
 from finjuice.pipeline.ingest.xlsx_evidence import XlsxEvidenceError
+from finjuice.pipeline.statements.canonical import (
+    StatementImport,
+    StatementPreviewState,
+)
+from finjuice.pipeline.statements.staged import StatementCapture, capture_statement
 from finjuice.pipeline.storage.authority import RepositoryAuthority
 from finjuice.pipeline.storage.mutation_facade import (
     BulkMutationPreview,
@@ -20,6 +26,7 @@ from finjuice.pipeline.storage.mutation_facade import (
     MutationIdentity,
     StorageMutationFacade,
 )
+from finjuice.pipeline.storage.sqlite.backup_io import read_regular_bytes
 from finjuice.pipeline.storage.sqlite.errors import (
     MutationConflictError,
     MutationError,
@@ -29,6 +36,7 @@ from finjuice.pipeline.storage.sqlite.exact_import import (
     ExactWorkbookCapture,
     capture_exact_xlsx,
 )
+from finjuice.pipeline.storage.sqlite.exact_import.models import ImportPreviewState
 from finjuice.pipeline.storage.sqlite.mutations import MutationReceipt
 from finjuice.pipeline.storage.sqlite.objects import ObjectStoreError
 from finjuice.pipeline.storage.sqlite.source_lookup import (
@@ -76,19 +84,7 @@ def import_xlsx_paths(
     preview: bool,
 ) -> ImportBatchResult:
     """Import captured workbooks one file at a time and stop on the first failure."""
-    reject_batch_identity(identity, len(paths))
-    receipts: list[dict[str, Any]] = []
-    failed: list[tuple[str, str]] = []
-    for path in paths:
-        try:
-            receipts.append(_import_one_path(facade, path, identity, preview=preview))
-        except (MutationValidationError, MutationConflictError) as exc:
-            failed.append((path.name, type(exc).__name__))
-            return ImportBatchResult(tuple(receipts), tuple(failed), typed_failure=exc)
-        except Exception as exc:
-            failed.append((path.name, _safe_error(exc)))
-            break
-    return ImportBatchResult(tuple(receipts), tuple(failed))
+    return _import_path_batch(facade, paths, identity, preview=preview)
 
 
 def present_ingest_step(
@@ -132,9 +128,24 @@ def ingest_import_directory(
     preview: bool,
     archive_requested: bool,
 ) -> dict[str, Any]:
-    """Import every XLSX currently in the configured imports directory."""
-    paths = _xlsx_in(config.import_dir)
-    batch = import_xlsx_paths(facade, paths, identity, preview=preview)
+    """Import staged XLSX workbooks and canonical JSON statements from imports/."""
+    statements = {
+        path: capture
+        for path in sorted(config.import_dir.glob("*.json"))
+        if path.is_file() and (capture := capture_statement(path)) is not None
+    }
+    # Explicit statement decisions establish identities before automatic XLSX overlap checks.
+    paths = sorted(
+        (*_xlsx_in(config.import_dir), *statements),
+        key=lambda path: (path not in statements, path.name),
+    )
+    batch = _import_path_batch(
+        facade,
+        paths,
+        identity,
+        preview=preview,
+        statements=statements,
+    )
     return present_ingest_step(
         batch,
         source="imports",
@@ -194,15 +205,110 @@ def _xlsx_in(directory: Path) -> list[Path]:
     return sorted(path for path in directory.glob("*.xlsx") if path.is_file())
 
 
+def _import_path_batch(
+    facade: StorageMutationFacade,
+    paths: list[Path],
+    identity: MutationIdentity,
+    *,
+    preview: bool,
+    statements: Mapping[Path, StatementCapture] | None = None,
+) -> ImportBatchResult:
+    """Import one staged path at a time and stop on the first failure."""
+    reject_batch_identity(identity, len(paths))
+    receipts: list[dict[str, Any]] = []
+    failed: list[tuple[str, str]] = []
+    statement_preview = StatementPreviewState() if preview else None
+    for path in paths:
+        try:
+            if path.suffix.lower() == ".json" and statements is not None:
+                receipt = _import_one_statement(
+                    facade,
+                    statements[path],
+                    identity,
+                    preview=preview,
+                    preview_state=statement_preview,
+                )
+            elif statement_preview is not None:
+                receipt = _import_one_path(
+                    facade, path, identity, preview=True, preview_state=statement_preview.imports
+                )
+            else:
+                receipt = _import_one_path(facade, path, identity, preview=preview)
+            receipts.append(receipt)
+        except (MutationValidationError, MutationConflictError) as exc:
+            failed.append((path.name, type(exc).__name__))
+            return ImportBatchResult(tuple(receipts), tuple(failed), typed_failure=exc)
+        except Exception as exc:
+            failed.append((path.name, _safe_error(exc)))
+            break
+    return ImportBatchResult(tuple(receipts), tuple(failed))
+
+
+def _import_one_statement(
+    facade: StorageMutationFacade,
+    path: Path | StatementCapture,
+    identity: MutationIdentity,
+    *,
+    preview: bool,
+    preview_state: StatementPreviewState | None = None,
+) -> dict[str, Any]:
+    command = StatementImport(
+        content=path.content if isinstance(path, StatementCapture) else read_regular_bytes(path),
+        imported_at=None,
+        preview=preview,
+        skip_recorded=True,
+        preview_state=preview_state,
+    )
+    receipt = facade.import_statement(command, identity=identity)
+    filename = path.filename if isinstance(path, StatementCapture) else path.name
+    return _present_statement_receipt(filename, identity, receipt)
+
+
+def _present_statement_receipt(
+    filename: str,
+    identity: MutationIdentity,
+    receipt: MutationReceipt | BulkMutationPreview,
+) -> dict[str, Any]:
+    presented = _present_receipt(filename, identity, receipt)
+    result = dict(presented["result"])
+    counts = dict(result.get("counts") or {})
+    if isinstance(receipt, MutationReceipt) and receipt.replayed:
+        counts["reused"] = sum(
+            int(counts.get(key, 0) or 0) for key in ("created", "linked", "reused")
+        )
+        counts["created"] = 0
+        counts["linked"] = 0
+    result["counts"] = _with_transaction_counts(counts)
+    result["completed"] = not isinstance(receipt, BulkMutationPreview)
+    if isinstance(receipt, MutationReceipt):
+        result["noop"] = receipt.replayed or not receipt.state_changed
+    presented["result"] = result
+    return presented
+
+
+def _with_transaction_counts(counts: Mapping[str, Any]) -> dict[str, Any]:
+    mapped = dict(counts)
+    created = int(counts.get("created", 0) or 0)
+    reused = int(counts.get("reused", 0) or 0) + int(counts.get("linked", 0) or 0)
+    mapped["transactions"] = {
+        "inserted": created,
+        "quarantined": 0,
+        "reused": reused,
+        "unsupported": 0,
+    }
+    return mapped
+
+
 def _import_one_path(
     facade: StorageMutationFacade,
     path: Path,
     identity: MutationIdentity,
     *,
     preview: bool,
+    preview_state: ImportPreviewState | None = None,
 ) -> dict[str, Any]:
     capture = capture_exact_xlsx(path, filename=path.name)
-    receipt = _import_capture(facade, capture, identity, preview)
+    receipt = _import_capture(facade, capture, identity, preview, preview_state)
     return _present_receipt(path.name, identity, receipt)
 
 
@@ -211,8 +317,9 @@ def _import_capture(
     capture: ExactWorkbookCapture,
     identity: MutationIdentity,
     preview: bool,
+    preview_state: ImportPreviewState | None = None,
 ) -> MutationReceipt | BulkMutationPreview:
-    command = ExactImportCommand(capture, preview=preview)
+    command = ExactImportCommand(capture, preview=preview, preview_state=preview_state)
     return facade.import_exact_xlsx(command, identity=identity)
 
 
@@ -253,6 +360,10 @@ def _summary_from_batch(batch: ImportBatchResult) -> dict[str, Any]:
         "failed_files": failed_files,
         "files_processed": len(batch.receipts) + len(failed_files),
         "new_transactions": _count_field(batch.receipts, "inserted"),
+        "pending": sum(
+            int(item.get("result", {}).get("counts", {}).get("pending", 0) or 0)
+            for item in batch.receipts
+        ),
         "updated": _count_field(batch.receipts, "reused"),
     }
 

@@ -14,6 +14,7 @@ from finjuice.pipeline.cli.output import emit, info
 from finjuice.pipeline.cli.utils import mutation_metadata
 from finjuice.pipeline.statements.canonical import StatementImport
 from finjuice.pipeline.storage.sqlite.backup_io import read_regular_bytes
+from finjuice.pipeline.storage.sqlite.mutations import MutationReceipt
 
 
 def _render(payload: dict[str, Any]) -> None:
@@ -54,8 +55,10 @@ def import_json(
             content=read_regular_bytes(document),
             imported_at=imported_at,
             original=None if original is None else read_regular_bytes(original),
+            preview=False,
         )
         receipt = _facade(ctx).import_statement(command, identity=identity)
+        assert isinstance(receipt, MutationReceipt)
         emit(
             {**receipt.result, **mutation_metadata(identity, receipt)},
             json_output,

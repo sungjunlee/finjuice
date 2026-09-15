@@ -761,7 +761,9 @@ class RepositoryReader(AbstractContextManager["RepositoryReader"]):
         transactions = self.transaction_snapshot()
         return analysis_snapshot(self._connection, self._repository_paths, transactions)
 
-    def checkup_snapshot(self, digests: tuple[str, ...] = ()) -> CheckupReadSnapshot:
+    def checkup_snapshot(
+        self, digests: tuple[str, ...] = (), *, statements: tuple[bytes, ...] = ()
+    ) -> CheckupReadSnapshot:
         """Read all checkup domains and requested import evidence from this revision."""
         if self._closed:
             raise RuntimeError("Repository reader is already closed.")
@@ -771,7 +773,7 @@ class RepositoryReader(AbstractContextManager["RepositoryReader"]):
                 self.info,
                 status,
                 self.portfolio_snapshot(),
-                import_preview_snapshot(self._connection, self.info, digests),
+                import_preview_snapshot(self._connection, self.info, digests, statements),
                 rules_config_snapshot(self._connection, self._repository_paths),
                 status.transactions.unmaterialized_months,
             )

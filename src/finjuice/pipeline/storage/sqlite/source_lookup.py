@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+from finjuice.pipeline.ingest.xlsx_evidence import XlsxEvidenceError
 from finjuice.pipeline.storage.sqlite.errors import (
     IdentifierError,
     MutationValidationError,
@@ -133,7 +134,12 @@ def _capture_verified(
         verified = SourceObjectStore(paths).verify(artifact_id, expected_size=byte_length)
     except ObjectStoreError as exc:
         raise SourceLookupError("Archived source object could not be verified.") from exc
-    capture = capture_exact_xlsx(paths.object_path(verified.digest_hex), filename=filename)
+    try:
+        capture = capture_exact_xlsx(paths.object_path(verified.digest_hex), filename=filename)
+    except XlsxEvidenceError as exc:
+        raise SourceLookupError(
+            "Archived source is not a supported XLSX workbook for --from-archive."
+        ) from exc
     if capture.digest_hex != digest_hex or capture.byte_length != byte_length:
         raise SourceLookupError("Captured source does not match the archived artifact.")
     if capture.artifact_id != artifact_id:

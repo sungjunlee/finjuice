@@ -148,3 +148,50 @@ def test_writer_between_domains_does_not_split_revision(
     assert fresh.info.dataset_revision == before.info.dataset_revision + 1
     assert fresh.portfolio.goals.head == fresh.status.goals
     assert fresh.portfolio.goals.head is not None
+
+
+def test_statement_capture_and_pinned_preview_do_not_reopen_source(
+    repo: _Repo, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from finjuice.pipeline.checkup.import_preview import (
+        capture_staged_imports,
+        summarize_staged_imports,
+    )
+    from finjuice.pipeline.statements import staged
+    from finjuice.pipeline.statements.canonical import StatementImport
+    from tests.pipeline.test_canonical_statement_json import _envelope, _record
+
+    imports = tmp_path / "staged"
+    imports.mkdir()
+    path = imports / "statement.json"
+    content = json.dumps(_envelope([_record("captured-once")])).encode()
+    path.write_bytes(content)
+    reads = []
+    original_read = staged.read_regular_bytes
+
+    def capture_once(source: Path, *, max_bytes: int | None = None) -> bytes:
+        reads.append(source.name)
+        result = original_read(source, max_bytes=max_bytes)
+        source.write_bytes(b"now malformed")
+        return result
+
+    monkeypatch.setattr(staged, "read_regular_bytes", capture_once)
+    observed = capture_staged_imports(imports)
+    assert reads == ["statement.json"]
+    assert observed.statements[0].content == content
+    statements = tuple(item.content for item in observed.statements)
+    with RepositoryReader(repo.database) as reader:
+        pinned = reader.checkup_snapshot(observed.digests, statements=statements)
+        assert summarize_staged_imports(observed, pinned.imports).pending_files == 1
+        repo.facade.import_statement(
+            StatementImport(content, imported_at="2026-09-15T00:00:00Z"),
+            identity=repo.identity("statement-first", 0),
+        )
+        assert reader.checkup_snapshot(observed.digests, statements=statements) == pinned
+    with RepositoryReader(repo.database) as reader:
+        fresh = reader.checkup_snapshot(observed.digests, statements=statements)
+    assert summarize_staged_imports(observed, fresh.imports).pending_files == 0
+    assert summarize_staged_imports(observed, pinned.imports).pending_files == 1
+    assert reads == ["statement.json"]
+    with pytest.raises(MutationValidationError, match="not requested"):
+        summarize_staged_imports(observed, replace(fresh.imports, statement_results={}))

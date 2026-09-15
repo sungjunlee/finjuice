@@ -339,12 +339,13 @@ class StorageMutationFacade:
 
     def import_statement(
         self, command: StatementImport, *, identity: MutationIdentity
-    ) -> MutationReceipt:
-        """Publish one canonical JSON statement through the audited mutation boundary."""
-        return self._execute(
-            _RequestSpec("statement.json.import", command.payload(), identity, "cli", None),
-            lambda context: MutationOutcome(context.import_statement(command)),
-        )
+    ) -> MutationReceipt | BulkMutationPreview:
+        """Publish one canonical JSON statement, or preview counts without writing."""
+        spec = _RequestSpec("statement.json.import", command.payload(), identity, "cli", None)
+        handler = _statement_import_handler(command)
+        if command.preview:
+            return self._preview(spec, handler)
+        return self._execute(spec, handler)
 
     def read_statement_evidence(self, *, source_identity: str | None = None) -> dict[str, Any]:
         """Read preserved statement evidence from one authority-pinned snapshot."""
@@ -946,6 +947,15 @@ def _exact_import_handler(
 
     def apply(context: MutationContext) -> MutationOutcome:
         return apply_exact_import(context, command)
+
+    return apply
+
+
+def _statement_import_handler(
+    command: StatementImport,
+) -> Callable[[MutationContext], MutationOutcome]:
+    def apply(context: MutationContext) -> MutationOutcome:
+        return MutationOutcome(context.import_statement(command))
 
     return apply
 
