@@ -189,16 +189,25 @@ def test_brief_status_reports_unavailable_repository_without_mutating_it(
 
 
 @pytest.mark.parametrize("command", ["doctor", "checkup", "automation", "brief"])
-def test_diagnostics_ignore_statement_above_capture_limit(
-    active_root: _ActiveRoot, command: str, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("failure", ["byte-limit", "parser-recursion"])
+def test_diagnostics_isolate_statement_capture_failure(
+    active_root: _ActiveRoot, command: str, failure: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from typer.testing import CliRunner
 
     from finjuice.pipeline.cli.main import app
     from finjuice.pipeline.statements import staged
 
-    # Exercise the production bound using a tiny limit and a small synthetic file.
-    monkeypatch.setattr(staged, "MAX_STATEMENT_BYTES", 8)
+    # Use small synthetic inputs for both byte-limit and parser-failure handling.
+    if failure == "byte-limit":
+        monkeypatch.setattr(staged, "MAX_STATEMENT_BYTES", 8)
+    else:
+        from types import SimpleNamespace
+
+        def parser_failure(content: str) -> None:
+            raise RecursionError("synthetic parser failure")
+
+        monkeypatch.setattr(staged, "json", SimpleNamespace(loads=parser_failure))
     _stage(active_root, "over-limit.json", _envelope([_record("bounded-1")]))
     before = _authority_state(active_root)
 

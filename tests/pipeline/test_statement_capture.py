@@ -66,3 +66,16 @@ def test_statement_capture_preserves_symlink_rejection(tmp_path: Path) -> None:
     assert staged.capture_statement(link) is None
     assert link.is_symlink()
     assert target.read_bytes() == content
+
+
+def test_statement_capture_skips_json_recursion_failure(tmp_path: Path, monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    path = tmp_path / "statement.json"
+    path.write_bytes(b'{"schema_version":"finjuice.statement.v1"}')
+
+    def reject_nesting(document: str) -> object:
+        raise RecursionError("synthetic decoder recursion failure")
+
+    monkeypatch.setattr(staged, "json", SimpleNamespace(loads=reject_nesting))
+    assert staged.capture_statement(path) is None

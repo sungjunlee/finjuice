@@ -27,7 +27,7 @@ def capture_statement(path: Path) -> StatementCapture | None:
     try:
         content = read_regular_bytes(path, max_bytes=MAX_STATEMENT_BYTES)
         envelope = json.loads(content.decode("utf-8"))
-    except (OSError, UnicodeDecodeError, ValueError, BackupPayloadError):
+    except (OSError, UnicodeDecodeError, ValueError, RecursionError, BackupPayloadError):
         return None
     if not isinstance(envelope, dict) or envelope.get("schema_version") != STATEMENT_SCHEMA_VERSION:
         return None
