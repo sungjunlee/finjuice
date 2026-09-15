@@ -241,7 +241,7 @@
     },
     {
       "test_id": "B608",
-      "filename": "src/finjuice/pipeline/storage/sqlite/repository.py",
+      "filename": "src/finjuice/pipeline/storage/sqlite/repository_read_sql.py",
       "function": "<module>",
       "issue_severity": "MEDIUM",
       "issue_confidence": "LOW",
@@ -340,7 +340,7 @@
     },
     {
       "test_id": "B608",
-      "filename": "src/finjuice/pipeline/storage/sqlite/repository.py",
+      "filename": "src/finjuice/pipeline/storage/sqlite/repository_read_sql.py",
       "function": "_read_table_sql",
       "issue_severity": "MEDIUM",
       "issue_confidence": "LOW",
@@ -394,7 +394,7 @@
     },
     {
       "test_id": "B608",
-      "filename": "src/finjuice/pipeline/storage/sqlite/repository.py",
+      "filename": "src/finjuice/pipeline/storage/sqlite/repository_read_sql.py",
       "function": "_read_table_sql",
       "issue_severity": "MEDIUM",
       "issue_confidence": "LOW",
