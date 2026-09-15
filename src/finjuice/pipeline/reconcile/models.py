@@ -35,6 +35,7 @@ class PaymentItem:
     occurred_on: date
     amount: Decimal
     currency: str
+    reference: str | None = None
 
 
 @dataclass(frozen=True)

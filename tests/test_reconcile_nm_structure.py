@@ -61,12 +61,15 @@ def _evidence(
     )
 
 
-def _payment(payment_id: str, day: str, amount: str) -> PaymentItem:
+def _payment(
+    payment_id: str, day: str, amount: str, *, reference: str | None = None
+) -> PaymentItem:
     return PaymentItem(
         payment_id=payment_id,
         occurred_on=date.fromisoformat(day),
         amount=Decimal(amount),
         currency="KRW",
+        reference=reference,
     )
 
 
@@ -239,6 +242,22 @@ def test_store_requires_explicit_path_and_synthetic_ids(tmp_path: Path) -> None:
     assert store.path.is_relative_to(tmp_path)
     assert store.load_groups()[0].status == "unmatched"
     assert store.load_groups()[0].reason == "missing_ledger_coverage"
+
+
+def test_reference_tie_break_does_not_double_count_cash() -> None:
+    payments = [
+        _payment("p-other", "2024-08-15", "-12000", reference="OTHER"),
+        _payment("p-hit", "2024-08-16", "-12000", reference="e-installment"),
+    ]
+    report = reconcile(
+        [_evidence("e-installment", "2024-08-15", "12000")],
+        payments,
+    )
+
+    assert report.groups[0].payment_ids == ("p-hit",)
+    assert ledger_cash_spend(payments, report.groups) == Decimal("-24000")
+    assert "def _reference_hit" in (RECONCILE_DIR / "nm.py").read_text(encoding="utf-8")
+    assert "def _reference_hit" not in (RECONCILE_DIR / "engine.py").read_text(encoding="utf-8")
 
 
 def test_spend_and_store_definition_sites() -> None:

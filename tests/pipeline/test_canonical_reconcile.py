@@ -12,6 +12,7 @@ import pytest
 from typer.testing import CliRunner
 
 from finjuice.pipeline.cli.main import app
+from finjuice.pipeline.storage.mutation_facade import MutationIdentity
 from finjuice.pipeline.storage.sqlite import (
     GenerationPaths,
     RepositoryBuilder,
@@ -21,6 +22,7 @@ from finjuice.pipeline.storage.sqlite import (
 )
 from finjuice.pipeline.storage.sqlite.backup import create_backup, restore_backup
 from finjuice.pipeline.storage.sqlite.backup_coverage import _load_facts
+from finjuice.pipeline.storage.sqlite.mutations import ManualTransactionEdit
 from finjuice.pipeline.storage.sqlite.schema import SQLITE_SCHEMA_VERSION
 from tests.pipeline.test_account_decisions import Environment, _environment
 from tests.pipeline.test_sqlite_exact_import import _tx_book, _tx_row
@@ -324,6 +326,68 @@ def test_old_raw_restore_and_explicit_clone_upgrade(tmp_path: Path, version: int
 def _facts(database: Path) -> Any:
     with sqlite3.connect(database.as_uri() + "?mode=ro", uri=True) as connection:
         return _load_facts(connection)
+
+
+def test_later_ledger_rematch_preserves_manual_state_and_cash(tmp_path: Path) -> None:
+    env = _environment(tmp_path)
+    submitted, args = _submit(env, [_item("order-ref", "1350")])
+    empty = _candidates(env)
+    unmatched = next(
+        row
+        for row in empty["candidates"]
+        if set(row["evidence_ids"]) == set(submitted["evidence_ids"])
+    )
+    assert unmatched["status"] == "unmatched"
+    assert Decimal(unmatched["residual"]) == Decimal("1350")
+    assert empty["ledger_cash_totals"] == {}
+    assert empty["payment_ids"] == []
+
+    env.import_bytes(_tx_book(_tx_row(2, amount="-600"), _tx_row(3, amount="-750")), "later-ledger")
+    with RepositoryReader(env.database) as reader:
+        payments = [row["transaction_id"] for row in reader.transaction_snapshot().rows]
+        occurrence = submitted["occurrence_id"]
+        assert {row["occurrence_id"] for row in reader.rows("reconcile_evidence")} == {occurrence}
+    filled = _candidates(env)
+    candidate = next(
+        row for row in filled["candidates"] if set(row["payment_ids"]) == set(payments)
+    )
+    assert candidate["status"] == "matched"
+    assert set(candidate["evidence_ids"]) == set(submitted["evidence_ids"])
+    assert Decimal(filled["ledger_cash_totals"]["KRW"]) == Decimal("-1350")
+
+    env.facade.edit_manual_transaction(
+        ManualTransactionEdit(
+            identifier=payments[0],
+            add_tags=("keep-manual",),
+            note_supplied=True,
+            note="operator memo",
+        ),
+        identity=MutationIdentity("manual-keep", env.generation, env.revision()),
+    )
+    with RepositoryReader(env.database) as reader:
+        before = next(row for row in reader.rows("transactions") if row["entity_id"] == payments[0])
+    confirmed, _ = _confirm(env, candidate)
+    path = env.file(
+        "withdraw-later.json",
+        {
+            "allocation_id": confirmed["allocation_id"],
+            "reason": "review after later ledger fill",
+            "withdrawn_at": NOW,
+        },
+    )
+    _payload(_invoke(env, ["withdraw", path, *env.options("withdraw-later")]))
+    retry = _payload(_invoke(env, [*args[:3], *env.options("later-retry")]))
+    with RepositoryReader(env.database) as reader:
+        after = next(row for row in reader.rows("transactions") if row["entity_id"] == payments[0])
+        evidence = reader.rows("reconcile_evidence")
+    assert retry["inserted_count"] == 0 and retry["state_changed"] is False
+    assert retry["occurrence_id"] == submitted["occurrence_id"]
+    assert json.loads(after["tags_manual_json"]) == json.loads(before["tags_manual_json"])
+    assert "keep-manual" in json.loads(after["tags_manual_json"])
+    assert after["notes_manual"] == before["notes_manual"] == "operator memo"
+    assert after["category_manual"] == before["category_manual"]
+    assert {row["occurrence_id"] for row in evidence} == {submitted["occurrence_id"]}
+    assert Decimal(_candidates(env)["ledger_cash_totals"]["KRW"]) == Decimal("-1350")
 
 
 def test_explicit_many_to_many_and_same_evidence_new_retry_key(tmp_path: Path) -> None:

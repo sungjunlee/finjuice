@@ -25,12 +25,15 @@ def _evidence(
     )
 
 
-def _payment(payment_id: str, day: str, amount: str) -> PaymentItem:
+def _payment(
+    payment_id: str, day: str, amount: str, *, reference: str | None = None
+) -> PaymentItem:
     return PaymentItem(
         payment_id=payment_id,
         occurred_on=date.fromisoformat(day),
         amount=Decimal(amount),
         currency="KRW",
+        reference=reference,
     )
 
 
@@ -51,6 +54,32 @@ def test_later_ledger_rows_rematch_same_evidence_id() -> None:
     assert filled.matched == 1
     assert filled.groups[0].evidence_ids == ("e1",)
     assert filled.groups[0].payment_ids == ("p1",)
+
+
+def test_reference_breaks_same_amount_ties() -> None:
+    report = reconcile(
+        [_evidence("e-ref", "2024-08-15", "12000")],
+        [
+            _payment("p-other", "2024-08-15", "-12000", reference="OTHER"),
+            _payment("p-hit", "2024-08-16", "-12000", reference="e-ref"),
+        ],
+    )
+
+    assert report.matched == 1
+    assert report.groups[0].payment_ids == ("p-hit",)
+
+
+def test_missing_reference_keeps_date_then_id_order() -> None:
+    report = reconcile(
+        [_evidence("e-plain", "2024-08-15", "12000")],
+        [
+            _payment("p-b", "2024-08-15", "-12000"),
+            _payment("p-a", "2024-08-15", "-12000"),
+        ],
+    )
+
+    assert report.matched == 1
+    assert report.groups[0].payment_ids == ("p-a",)
 
 
 def test_one_purchase_matches_installment_payments() -> None:
