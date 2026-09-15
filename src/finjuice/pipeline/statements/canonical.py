@@ -420,9 +420,9 @@ def _preview_identity(row: _Row, transaction_id: str) -> dict[str, Any]:
         "scale": row.amount.scale,
         "currency_code": row.currency,
         "currency_unknown": False,
-        "effective_at": row.occurred_on,
+        "effective_at": row.occurred_at or row.occurred_on,
         "date_raw": row.occurred_on,
-        "time_raw": "" if row.occurred_at is None else row.occurred_at[11:19],
+        "time_raw": "" if row.occurred_at is None else row.occurred_at[11:],
         "timezone_state": "unknown" if row.occurred_at is None else "known",
     }
 

@@ -20,11 +20,12 @@ active_root = _active_root_fixture
 
 
 @pytest.mark.parametrize("first_format", ["json", "xlsx", "same_xlsx"])
+@pytest.mark.parametrize("time_text", [None, "13:04:05"], ids=["date-only", "with-time"])
 def test_batch_preview_matches_committed_overlap_and_replay(
-    active_root: _ActiveRoot, first_format: str
+    active_root: _ActiveRoot, first_format: str, time_text: str | None
 ) -> None:
     _bind(active_root)
-    workbook = _tx_book(_tx_row(2, time_text=None))
+    workbook = _tx_book(_tx_row(2, time_text=time_text))
     if first_format == "json":
         _stage(
             active_root,
@@ -35,14 +36,16 @@ def test_batch_preview_matches_committed_overlap_and_replay(
                         "same-transaction",
                         amount="-1000.00",
                         occurred_on="2024-03-15",
-                        occurred_at=None,
+                        occurred_at=None if time_text is None else f"2024-03-15T{time_text}+09:00",
                         decision={"action": "create"},
                     )
                 ]
             ),
         )
     else:
-        first = workbook if first_format == "same_xlsx" else _tx_book(_tx_row(3, time_text=None))
+        first = (
+            workbook if first_format == "same_xlsx" else _tx_book(_tx_row(3, time_text=time_text))
+        )
         (active_root.root / "imports" / "a.xlsx").write_bytes(first)
     (active_root.root / "imports" / "b.xlsx").write_bytes(workbook)
     before = _authority_state(active_root)

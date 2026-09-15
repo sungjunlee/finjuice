@@ -421,3 +421,46 @@ def test_existing_mapping_rejects_a_different_explicit_target(tmp_path: Path) ->
     result = _invoke(env, _import_args(env, changed, "remap"))
     assert result.exit_code != 0
     assert env.revision() == revision
+
+
+@pytest.mark.parametrize(
+    "occurred_at",
+    [
+        None,
+        "2026-09-01T13:04:05+09:00",
+        "2026-09-01T13:04+09:00",
+        "2026-09-01T13:04:05.123456+09:00",
+        "2026-09-01T04:04:05Z",
+    ],
+)
+def test_overlap_identity_preserves_statement_event_time_without_rewriting_dates(
+    tmp_path: Path,
+    occurred_at: str | None,
+) -> None:
+    from finjuice.pipeline.statements.canonical import _preview_identity, parse_document, plan_rows
+    from finjuice.pipeline.storage.sqlite.exact_import.lookup import (
+        load_transaction_identity_snapshot,
+    )
+
+    env = _environment(tmp_path)
+    _bind(env)
+    payload = _envelope([_record("timed", occurred_at=occurred_at, decision={"action": "create"})])
+    path = _document(env, "timed.json", payload)
+    imported = _payload(_invoke(env, _import_args(env, path, "time-import")))
+    transaction_id = imported["created_transaction_ids"][0]
+    row = plan_rows(parse_document(json.dumps(payload).encode()))[0]
+    with sqlite3.connect(env.database) as connection:
+        observed = connection.execute(
+            "SELECT o.effective_at, o.observed_at FROM observations o "
+            "JOIN transactions t ON t.observation_id = o.entity_id WHERE t.entity_id = ?",
+            (transaction_id,),
+        ).fetchone()
+        identity = next(
+            item
+            for item in load_transaction_identity_snapshot(connection)
+            if item["transaction_id"] == transaction_id
+        )
+    assert observed == ("2026-09-01", occurred_at)
+    assert identity == _preview_identity(row, transaction_id)
+    assert identity["effective_at"] == (occurred_at or "2026-09-01")
+    assert identity["time_raw"] == ("" if occurred_at is None else occurred_at[11:])
