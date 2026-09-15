@@ -4,7 +4,7 @@
 
 ## 통합 상태
 
-**최종 통합 진행 중이다.** #538의 목표 변경은 main에 머지됐다. #532의 최종 입력 연동 소스는 `febc5e6`이며, 혼합 배치 미리보기까지 수정했다. 고정 커밋 교차 리뷰와 전체 CI 결과를 확인한 뒤 머지해야 한다. 아래 정적 AC 대조와 부분 실행 결과만으로 전체 완료를 선언하지 않는다.
+**최종 통합 진행 중이다.** #538의 목표 변경은 main에 머지됐다. #532의 최종 입력 연동 소스는 `a7cdb48`다. 입력·진단 통합과 저장소 오류 경계의 설치본 검증을 완료했고, 교차 리뷰 판단을 마쳤고 전체 CI와 머지를 기다린다. 아래 AC 대조를 전체 통합 완료 선언으로 대신하지 않는다.
 
 ## 원래 기능 요구와 검증 경계
 
@@ -29,18 +29,18 @@
 | #445 | 가족 입력→확인/정정→재임포트→조회→복원 | 위 #442~#444의 통합 시나리오와 자산/소유권 복원 assertion. 합성 수용이며 실제 가족 사실의 확인으로 표시하지 않는다. |
 | #355, #446 | N:M·할부·환불·부분/미매칭·잔차·확정/철회·중복 방지 | `pipeline/test_canonical_reconcile.py`: `test_actual_installment_confirm_withdraw_retry_and_capture_restore`, `test_many_orders_refund_partial_and_long_exact_amounts`, `test_explicit_many_to_many_and_same_evidence_new_retry_key`. 원거래·현금총액과 복원 결과를 보존한다. 함수명의 actual은 실제 쓰기 경로이며 자료는 합성이다. |
 | #447 | revision 마감·늦은 입력·재개방·재마감·재생성·미확인 항목 | `pipeline/test_canonical_close.py::test_close_late_data_reopen_reclose_diff_and_restore`; `test_canonical_close_integrity.py`의 후속 이체 변경, 가족 자산 확정 범위, 미대사 구매 검사를 통해 과거 마감 의미를 유지한다. |
-| #448 | 추가 입력 경로의 전체/부분/과거·출처 중첩·실패/재시도 | `pipeline/test_canonical_statement_json.py`; `cli/commands/test_repository_statement_ingest.py`, `test_repository_mixed_ingest.py`. JSON→XLSX·XLSX→XLSX 중첩 및 동일 XLSX 반복 배치의 preview/write counts 일치와 read-only·재시도를 포함하며 일반 ingest/refresh, 배치 미리보기, 실제 가져오기 시각, 보류 표시, 동일 문서 무변경 재수집, 계좌 확인 후 재처리, 수동 정정·원본·정확 금액·복원을 검사한다. `pipeline/test_sqlite_source_lookup.py`는 XLSX 전용 archive 선택의 JSON 거부가 구조화된 오류이며 정본을 바꾸지 않음을 검사한다. |
+| #448 | 추가 입력 경로의 전체/부분/과거·출처 중첩·실패/재시도 | `pipeline/test_canonical_statement_json.py`; `cli/commands/test_repository_statement_ingest.py`, `test_repository_mixed_ingest.py`, `test_repository_statement_inventory.py`. Doctor/checkup/automation의 JSON 신규·완료·계좌 확인 후 재처리·잘못된 금액/ID·fast 모드와 캡처 bytes/revision 고정도 검증한다. JSON→XLSX·XLSX→XLSX 중첩 및 동일 XLSX 반복 배치의 preview/write counts 일치와 read-only·재시도를 포함하며 일반 ingest/refresh, 배치 미리보기, 실제 가져오기 시각, 보류 표시, 동일 문서 무변경 재수집, 계좌 확인 후 재처리, 수동 정정·원본·정확 금액·복원을 검사한다. `pipeline/test_sqlite_source_lookup.py`는 XLSX 전용 archive 선택의 JSON 거부가 구조화된 오류이며 정본을 바꾸지 않음을 검사한다. |
 
 ## 실행 증거
 
-- `b1bd806`: adapter/CLI/구조 회귀 고유 35건, 변경 소스 Ruff/mypy·complexity·보안 검사 통과. 별도 wheel 설치 환경의 입력 연동·가족·대사·마감 62건 통과(98.52초). 테스트에서 로드한 모듈의 설치본 경로와 source/wheel/installed 파일 747개의 bytes 일치를 확인했다.
-- `d5f84c8`: 교차 리뷰의 인접 표시/오류 처리 3건을 수정했다. 입력/history 32건 및 source lookup 7건 통과. 변경 소스 Ruff/mypy·complexity와 commit hooks 통과. 마지막 수정은 입력 표시·summary·archive 오류 경계이며 가족·대사·마감 구현은 변경하지 않았다.
-- 후속 교차 리뷰에서 위 3건의 해결을 확인했다. 추가로 제안된 `summary.pending`의 고유 ID 집계는 적용하지 않았다. 이 summary는 현재 배치의 파일별 입력 레코드 처리 통계이며, 재관측/건너뛴 파일의 보류 레코드도 포함한다. 고유한 미확정 거래나 필요한 사용자 결정의 수를 뜻하지 않는다. `updated` 역시 파일별 재사용 레코드 합계다. 실제 경제적 거래의 중복 방지는 별도의 거래 수·원장 불변 assertion으로 검증한다.
-- 최종 `d5f84c8` wheel 설치본에서 영향받는 39건이 통과했다(20.20초). 로드된 모듈 546개가 설치본을 사용하고 source/wheel/installed 파일 747개가 일치함을 확인했다. 전체 CI·머지 결과는 아직 수집 중이다. 앞 커밋의 통과 결과를 최종 전체 CI 통과로 표시하지 않는다.
-- `7ec024b`의 Public PR Gate [34948999975](https://github.com/sungjunlee/finjuice/actions/runs/34948999975)에서 `uv run mypy src/` 614개 소스 및 전체 Ruff 검사가 통과했다. 전체 pytest 실행 [34948999931](https://github.com/sungjunlee/finjuice/actions/runs/34948999931)은 후속 수정의 CI로 대체됐다.
-- 최종 `7ec024b`는 명시적 재시도에서 신규/연결 건수를 0으로 표시하고 원본 영수증을 보존한다. 변경분 교차 리뷰 no findings, 최종 wheel 설치본의 입력/history/archive 40건 PASS(16초), 모듈546개 설치 경로·source/wheel/installed 파일747개 일치 및 CLI smoke PASS를 확인했다.
-- `febc5e6`: 혼합 배치의 앞 파일이 예측한 거래 식별 정보와 XLSX 완료 상태를 다음 파일에 전달한다. 신규 회귀 3건 및 별도 wheel 설치본 관련 69건 PASS(26.92초), 모듈546개 설치 경로·source/wheel/installed 파일747개 bytes 일치·CLI smoke PASS. 최종 전체 CI는 [34950353000](https://github.com/sungjunlee/finjuice/actions/runs/34950353000)에서 수집 중이다.
-- 첫 설치 smoke 스크립트는 빈 데이터 폴더의 `status --json`을 종료 코드 0으로 잘못 기대했다. 올바른 계약인 구조화된 `NO_DATA`/종료 코드 4로 검증기만 수정했고 제품 코드는 바꾸지 않았다. 원래 실패 기록도 보존했다.
+- 최종 `a7cdb48`: DB 누락·손상·미지원 버전의 기본 화면 안내와 원본 불변 회귀3건, 저장소22건 PASS. 설치 환경에서 진단·입력·저장소 오류 경계72건 PASS(22.42초), 모듈548개의 설치 경로·source/wheel/installed748파일 일치와 CLI human/JSON smoke를 확인했다. 공통 저장소 오류를 안내로 처리하고 SQLite 헤더 읽기 실패도 typed integrity 오류로 변환한다. 마지막 교차 리뷰의 오류 분류·업그레이드 안내 의견2건은 비차단 개선으로 판정했다. 실제 코드는 손상을 확정하거나 자동 복구하지 않으며, 버전 오류는 타 애플리케이션 DB도 포함해 일률적인 업그레이드 안내가 맞지 않는다.
+- 앞 단계 `250d35a`: 설치 환경에서 변경된 진단·입력·오류 경계 관련 47건 PASS(21.71초). 로드 모듈548개의 설치 경로와 source/wheel/installed748파일 일치 및 CLI human/JSON smoke를 확인했다. `54622f2..250d35a`의 제한 교차 리뷰에서 두 오류 처리 결함이 모두 해결됐고 새 P1/P2는 없었다.
+- 최종 전체 pytest/ruff/mypy·보안·패키지 검사는 [CI34957073642](https://github.com/sungjunlee/finjuice/actions/runs/34957073642)에서 수집 중이다. 이전 커밋의 CI 결과를 최종 소스 전체 통과로 표시하지 않는다.
+- `54622f2`: 입력 inventory 신규 10건, 기존 영향61건·staged12건·no-args1건과 Ruff/mypy·complexity PASS. 설치 환경 관련136건 PASS(64.67초), 모듈548개 설치 경로·source/wheel/installed748파일 일치. 후속 변경은 잘못된 UUID의 파일별 실패 처리와 미검증·누락·손상 저장소의 기본 화면 오류 경계다.
+- `febc5e6`: JSON→XLSX·XLSX→XLSX 중첩 및 같은 XLSX 반복의 preview/write 집계·read-only·재시도 회귀3건 PASS. 설치본69건 PASS(26.92초), 모듈546개 설치 경로·source/wheel/installed747파일 일치. [CI34950353000](https://github.com/sungjunlee/finjuice/actions/runs/34950353000) 전체 성공과 Ruff/mypy614소스 검사를 확인했다.
+- 앞 단계의 설치 근거도 보존한다. `b1bd806`은 입력·가족·대사·마감62건 PASS(98.52초), `d5f84c8`은 입력/history/archive39건 PASS(20.20초), `7ec024b`는 명시적 재시도 표시를 포함한40건 PASS(16초)였다. 각각 source/wheel/installed747파일 일치와 실제 설치 실행에 연결돼 있다. 이후 가족·대사·마감 구현은 변경하지 않았다.
+- `summary.pending`은 현재 배치의 파일별 입력 처리 통계이며 재관측/건너뛴 파일의 보류 레코드도 포함한다. 고유 미확정 거래나 필요한 사용자 결정의 수가 아니다. `updated` 역시 파일별 재사용 합계이며, 실제 경제적 거래의 중복 방지는 별도 거래 수·원장 불변 assertion으로 검증한다.
+- 설치 검증기의 초기 오류와 보정 기록도 보존한다. 빈 데이터의 `status --json`은 `NO_DATA`/종료 코드4가 올바른 계약이다. `54622f2`의 첫 실행에서는 제품 관련134건은 통과했으나 소스 구조 검사2건이 실행 경로 문제로 실패했고, 경로만 보정한 최종136건이 통과했다. 제품 코드 변경이나 실패 기록 삭제로 검사를 통과시키지 않았다.
 
 비공개 실행 저장소에는 각 artifact hash, 모듈 경로, 시험 로그 및 기존 보존/운영 증거를 보존한다. 공개 문서에는 금융 원본·금액·계좌/소유자·인증정보·상세 호스트 경로를 넣지 않는다.
 
