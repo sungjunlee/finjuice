@@ -11,10 +11,13 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
+from finjuice import get_version
 from finjuice.pipeline.cli.main import app
 from finjuice.pipeline.statements.canonical import (
     STATEMENT_ACCOUNT_NAMESPACE,
     STATEMENT_SCHEMA_VERSION,
+    STATEMENT_UNRESOLVED_WITHOUT_INVENTION,
+    STATEMENT_USAGE_CONDITIONS,
 )
 from finjuice.pipeline.storage.mutation_facade import MutationIdentity
 from finjuice.pipeline.storage.sqlite import GenerationPaths, RepositoryReader
@@ -289,6 +292,90 @@ def test_credential_field_and_unsupported_schema_are_rejected(tmp_path: Path) ->
         env, "stale.json", _envelope([_record("txn-1")], schema_version="finjuice.statement.v0")
     )
     assert _invoke(env, _import_args(env, stale, "import-stale")).exit_code != 0
+
+
+def test_verification_records_usage_conditions_without_private_facts(tmp_path: Path) -> None:
+    # Arrange: one decided record plus an upstream original to preserve privately.
+    env = _environment(tmp_path)
+    _bind(env)
+    document = _document(
+        env, "verify.json", _envelope([_record("txn-1", decision={"action": "create"})])
+    )
+    original = _original(env)
+    first_args = _import_args(env, document, "import-1", original=original)
+
+    # Act.
+    applied = _payload(_invoke(env, first_args))
+
+    # Assert: usage conditions and private retention are recorded, PII is not.
+    verification = applied["verification"]
+    assert verification["policy"] == "statement_usage_conditions.v1"
+    assert verification["source_identity"] == IDENTITY
+    assert verification["original_hash"] == ORIGINAL_HASH
+    assert verification["package_version"] == get_version()
+    assert verification["credentials_present"] is False
+    assert verification["document_retained_private"] is True
+    assert verification["original_retained_private"] is True
+    assert verification["published"] is False
+    assert verification["invented_facts"] == []
+    assert verification["unresolved"] == list(STATEMENT_UNRESOLVED_WITHOUT_INVENTION)
+    assert verification["checks"] == {
+        "credentials_rejected_at_parse": True,
+        "originals_copied_into_repo": False,
+        "document_retained_private": True,
+        "original_retained_private": True,
+        "published": False,
+    }
+    conditions = verification["usage_conditions"]
+    assert conditions == STATEMENT_USAGE_CONDITIONS
+    assert conditions["network"] is False
+    assert conditions["browser_session"] is False
+    assert conditions["credentials_accepted"] is False
+    assert conditions["originals_copied_into_repo"] is False
+    assert conditions["synthetic_ok_for_ci"] is True
+    dumped = json.dumps(verification, ensure_ascii=False)
+    assert "-1200.50" not in dumped
+    assert ACCOUNT_KEY not in dumped
+    assert "합성 가맹점" not in dumped
+    assert str(env.root) not in dumped
+    assert str(document) not in dumped
+
+    with sqlite3.connect(env.database.as_uri() + "?mode=ro", uri=True) as connection:
+        stored = json.loads(
+            connection.execute(
+                "SELECT result_json FROM idempotency_requests WHERE idempotency_key = ?",
+                ("import-1",),
+            ).fetchone()[0]
+        )
+    assert stored["result"]["verification"] == verification
+    stored_dump = json.dumps(stored, ensure_ascii=False)
+    assert "-1200.50" not in stored_dump
+    assert ACCOUNT_KEY not in stored_dump
+    assert str(env.root) not in stored_dump
+
+    # Act: identical replay and a fresh re-send of the same document.
+    replayed = _payload(_invoke(env, first_args))
+    resent = _payload(_invoke(env, _import_args(env, document, "import-2", original=original)))
+
+    # Assert: the verification record is deterministic and never claims a new original.
+    assert replayed["verification"] == verification
+    assert resent["verification"] == verification
+    assert resent["counts"] == {"created": 0, "linked": 0, "reused": 1, "pending": 0}
+
+    # Arrange/Act: an import without upstream original bytes.
+    second = _document(
+        env,
+        "second.json",
+        _envelope(
+            [_record("txn-2", decision={"action": "create"})],
+            idempotency_key="producer-batch-2",
+        ),
+    )
+    created = _payload(_invoke(env, _import_args(env, second, "import-3")))
+
+    # Assert: retention facts distinguish the missing original without PII.
+    assert created["verification"]["original_retained_private"] is False
+    assert created["verification"]["document_retained_private"] is True
 
 
 @pytest.mark.parametrize("coverage", ["full", "partial", "historical"])
