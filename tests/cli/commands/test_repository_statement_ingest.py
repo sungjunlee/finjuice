@@ -16,7 +16,7 @@ from finjuice.pipeline.storage.sqlite.account_bindings import AccountBindingConf
 from finjuice.pipeline.storage.sqlite.mutations import MutationOutcome, MutationService
 from finjuice.pipeline.storage.sqlite.schema import inspect_repository
 from tests.cli.commands.test_repository_bulk_commands import _invoke
-from tests.cli.commands.test_repository_mutation_fences import _ActiveRoot
+from tests.cli.commands.test_repository_mutation_fences import _ActiveRoot, _authority_state
 from tests.cli.commands.test_repository_mutation_fences import active_root as _active_root_fixture
 from tests.pipeline.test_canonical_statement_json import ACCOUNT_KEY, _envelope, _record
 from tests.pipeline.test_sqlite_mutations import _request
@@ -247,15 +247,81 @@ def test_dry_run_validates_without_writing(active_root: _ActiveRoot) -> None:
         "preview.json",
         _envelope([_record("txn-1", decision={"action": "create"})]),
     )
-    revision = _revision(active_root)
+    before = _authority_state(active_root)
 
     preview = _payload(_invoke(active_root, "ingest", "--dry-run", "--json"))
     assert preview["dry_run"] is True
+    assert preview["history_skipped"] == 0
+    assert preview["would_parse"] == 1
     assert preview["receipts"][0]["state_changed"] is False
+    assert preview["receipts"][0]["result"]["noop"] is False
+    assert preview["receipts"][0]["result"]["completed"] is False
+    assert preview["receipts"][0]["result"]["counts"]["created"] == 1
+    assert preview["receipts"][0]["result"]["counts"]["pending"] == 0
+    assert preview["receipts"][0]["result"]["counts"]["transactions"]["inserted"] == 1
+    assert preview["summary"]["new_transactions"] == 1
+    assert _authority_state(active_root) == before
+    assert _transactions(active_root) == []
+
+
+def test_dry_run_new_pending_file_is_not_history_skipped(active_root: _ActiveRoot) -> None:
+    _stage(
+        active_root,
+        "pending.json",
+        _envelope([_record("txn-1", decision={"action": "create"})]),
+    )
+    before = _authority_state(active_root)
+
+    preview = _payload(_invoke(active_root, "ingest", "--dry-run", "--json"))
+    assert preview["history_skipped"] == 0
+    assert preview["would_parse"] == 1
+    assert preview["receipts"][0]["result"]["noop"] is False
     assert preview["receipts"][0]["result"]["counts"]["pending"] == 1
     assert preview["receipts"][0]["result"]["counts"]["transactions"]["inserted"] == 0
-    assert preview["summary"]["new_transactions"] == 0
-    assert _revision(active_root) == revision
+    assert _authority_state(active_root) == before
+    assert _transactions(active_root) == []
+
+
+def test_dry_run_rejects_missing_link_target_without_writing(active_root: _ActiveRoot) -> None:
+    _bind(active_root)
+    _stage(
+        active_root,
+        "broken-link.json",
+        _envelope(
+            [_record("txn-1", decision={"action": "link", "transaction_id": new_entity_id()})]
+        ),
+    )
+    before = _authority_state(active_root)
+
+    preview = _invoke(active_root, "ingest", "--dry-run", "--json")
+    assert preview.exit_code == ExitCode.USAGE_ERROR, preview.output
+    assert "must-never-be-stored" not in preview.output
+    assert _authority_state(active_root) == before
+    assert _transactions(active_root) == []
+
+    write = _invoke(active_root, "ingest", "--json")
+    assert write.exit_code == ExitCode.USAGE_ERROR, write.output
+    assert _authority_state(active_root) == before
+    assert _transactions(active_root) == []
+
+
+def test_dry_run_rejects_stale_revision_without_writing(active_root: _ActiveRoot) -> None:
+    _bind(active_root)
+    _stage(
+        active_root,
+        "stale.json",
+        _envelope([_record("txn-1", decision={"action": "create"})]),
+    )
+    before = _authority_state(active_root)
+
+    result = _invoke(active_root, "ingest", "--dry-run", "--json", "--expected-revision", "0")
+
+    assert result.exit_code == ExitCode.VALIDATION_ERROR, result.output
+    payload = json.loads(result.output)
+    assert payload["error"]["code"] == "VALIDATION_FAILED"
+    assert payload["_meta"]["pipeline"]["error_type"] == "MutationConflictError"
+    assert payload["_meta"]["pipeline"]["steps"]["ingest"]["receipts"] == []
+    assert _authority_state(active_root) == before
     assert _transactions(active_root) == []
 
 

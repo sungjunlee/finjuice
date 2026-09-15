@@ -19,7 +19,6 @@ from finjuice.pipeline.statements.canonical import (
     STATEMENT_SCHEMA_VERSION,
     StatementImport,
     parse_document,
-    plan_rows,
 )
 from finjuice.pipeline.storage.authority import RepositoryAuthority
 from finjuice.pipeline.storage.mutation_facade import (
@@ -40,7 +39,6 @@ from finjuice.pipeline.storage.sqlite.exact_import import (
 )
 from finjuice.pipeline.storage.sqlite.mutations import MutationReceipt
 from finjuice.pipeline.storage.sqlite.objects import ObjectStoreError
-from finjuice.pipeline.storage.sqlite.schema import inspect_repository
 from finjuice.pipeline.storage.sqlite.source_lookup import (
     SourceLookupError,
     resolve_archived_source,
@@ -261,43 +259,24 @@ def _import_one_statement(
 ) -> dict[str, Any]:
     content = read_regular_bytes(path)
     envelope = parse_document(content)
-    if preview:
-        return _present_statement_preview(facade, path.name, envelope)
-    command = StatementImport(content=content, imported_at=str(envelope["collected_at"]))
+    command = StatementImport(
+        content=content,
+        imported_at=str(envelope["collected_at"]),
+        preview=preview,
+    )
     receipt = facade.import_statement(command, identity=identity)
     return _present_statement_receipt(path.name, identity, receipt)
-
-
-def _present_statement_preview(
-    facade: StorageMutationFacade, filename: str, envelope: Mapping[str, Any]
-) -> dict[str, Any]:
-    rows = plan_rows(envelope)
-    return {
-        "filename": filename,
-        "result": {
-            "artifact_id": None,
-            "completed": False,
-            "counts": _with_transaction_counts(
-                {"created": 0, "linked": 0, "reused": 0, "pending": len(rows)}
-            ),
-            "noop": True,
-            "occurrence_id": None,
-        },
-        "authority": "repository",
-        "dataset_revision": _snapshot_revision(facade),
-        "state_changed": False,
-    }
 
 
 def _present_statement_receipt(
     filename: str,
     identity: MutationIdentity,
-    receipt: MutationReceipt,
+    receipt: MutationReceipt | BulkMutationPreview,
 ) -> dict[str, Any]:
     presented = _present_receipt(filename, identity, receipt)
     result = dict(presented["result"])
     result["counts"] = _with_transaction_counts(result.get("counts") or {})
-    result["completed"] = True
+    result["completed"] = not isinstance(receipt, BulkMutationPreview)
     presented["result"] = result
     return presented
 
@@ -313,16 +292,6 @@ def _with_transaction_counts(counts: Mapping[str, Any]) -> dict[str, Any]:
         "unsupported": 0,
     }
     return mapped
-
-
-def _snapshot_revision(facade: StorageMutationFacade) -> int:
-    dispatch = facade.dispatch()
-    if not isinstance(dispatch.authority, RepositoryAuthority):
-        raise MutationValidationError("Statement ingest requires an active repository.")
-    revision = inspect_repository(dispatch.authority.paths.database).dataset_revision
-    if revision is None:
-        raise MutationValidationError("Active repository is missing a dataset revision.")
-    return revision
 
 
 def _import_one_path(
