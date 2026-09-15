@@ -169,9 +169,9 @@ def test_statement_capture_and_pinned_preview_do_not_reopen_source(
     reads = []
     original_read = staged.read_regular_bytes
 
-    def capture_once(source: Path) -> bytes:
+    def capture_once(source: Path, *, max_bytes: int | None = None) -> bytes:
         reads.append(source.name)
-        result = original_read(source)
+        result = original_read(source, max_bytes=max_bytes)
         source.write_bytes(b"now malformed")
         return result
 

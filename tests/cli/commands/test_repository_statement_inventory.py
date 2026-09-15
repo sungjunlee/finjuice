@@ -186,3 +186,33 @@ def test_brief_status_reports_unavailable_repository_without_mutating_it(
     assert "CSV" not in result.output
     assert "Traceback" not in result.output
     assert file_fingerprints() == before
+
+
+@pytest.mark.parametrize("command", ["doctor", "checkup", "automation", "brief"])
+def test_diagnostics_ignore_statement_above_capture_limit(
+    active_root: _ActiveRoot, command: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from typer.testing import CliRunner
+
+    from finjuice.pipeline.cli.main import app
+    from finjuice.pipeline.statements import staged
+
+    # Exercise the production bound using a tiny limit and a small synthetic file.
+    monkeypatch.setattr(staged, "MAX_STATEMENT_BYTES", 8)
+    _stage(active_root, "over-limit.json", _envelope([_record("bounded-1")]))
+    before = _authority_state(active_root)
+
+    if command == "brief":
+        result = CliRunner().invoke(
+            app,
+            ["--data-dir", str(active_root.root)],
+            obj={"activation_evidence_provider": active_root.provider},
+        )
+        assert result.exit_code == 0, result.output
+        assert "미처리 파일" not in result.output
+    else:
+        payload = _diagnose(active_root, command)
+        observation = payload["_meta"]["staged_observation"]
+        assert observation["files_seen"] == 0
+        assert observation["pending_files"] == 0
+    assert _authority_state(active_root) == before

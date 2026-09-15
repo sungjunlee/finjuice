@@ -8,12 +8,6 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
-from finjuice.pipeline.statements.canonical import (
-    StatementImport,
-    _preview_statement,
-    parse_document,
-    plan_rows,
-)
 from finjuice.pipeline.storage.sqlite.errors import (
     IdentifierError,
     MutationConflictError,
@@ -68,6 +62,13 @@ def import_preview_snapshot(
 
 def _statement_preview(connection: sqlite3.Connection, content: bytes) -> dict[str, Any]:
     """Evaluate one captured statement against this pinned revision, without mutations."""
+    from finjuice.pipeline.statements.canonical import (
+        StatementImport,
+        _preview_statement,
+        parse_document,
+        plan_rows,
+    )
+
     try:
         envelope = parse_document(content)
         return _preview_statement(

@@ -618,9 +618,9 @@ def test_ingest_uses_the_same_bytes_for_schema_selection_and_apply(
     reads = []
     original_read = staged.read_regular_bytes
 
-    def capture_once(path: Path) -> bytes:
+    def capture_once(path: Path, *, max_bytes: int | None = None) -> bytes:
         reads.append(path.name)
-        content = original_read(path)
+        content = original_read(path, max_bytes=max_bytes)
         path.write_bytes(b"now malformed")
         return content
 

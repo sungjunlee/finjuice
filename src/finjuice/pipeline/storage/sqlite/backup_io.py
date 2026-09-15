@@ -34,7 +34,9 @@ def _stable(info: os.stat_result) -> tuple[int, ...]:
     return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
 
 
-def _read(path: Path, consume: Callable[[bytes], None]) -> tuple[int, str]:
+def _read(
+    path: Path, consume: Callable[[bytes], None], *, max_bytes: int | None = None
+) -> tuple[int, str]:
     try:
         ancestors = checked_directories(path.parent)
         initial = path.lstat()
@@ -46,18 +48,16 @@ def _read(path: Path, consume: Callable[[bytes], None]) -> tuple[int, str]:
             opened = os.fstat(descriptor)
             if not stat.S_ISREG(opened.st_mode) or _stable(initial) != _stable(opened):
                 raise BackupPayloadError("payload_changed")
-            digest, length = hashlib.sha256(), 0
-            while chunk := os.read(descriptor, 1024 * 1024):
-                consume(chunk)
-                digest.update(chunk)
-                length += len(chunk)
+            if max_bytes is not None and opened.st_size > max_bytes:
+                raise BackupPayloadError("payload_too_large")
+            length, digest = _consume_descriptor(descriptor, consume, max_bytes)
             if _stable(opened) != _stable(os.fstat(descriptor)) or length != opened.st_size:
                 raise BackupPayloadError("payload_changed")
             if _stable(path.lstat()) != _stable(opened):
                 raise BackupPayloadError("payload_changed")
             if checked_directories(path.parent) != ancestors:
                 raise BackupPayloadError("payload_changed")
-            return length, digest.hexdigest()
+            return length, digest
         finally:
             os.close(descriptor)
     except FileNotFoundError:
@@ -66,10 +66,30 @@ def _read(path: Path, consume: Callable[[bytes], None]) -> tuple[int, str]:
         raise BackupPayloadError("payload_unreadable") from None
 
 
-def read_regular_bytes(path: Path) -> bytes:
-    """Read stable regular-file bytes without following a symbolic link."""
+def _consume_descriptor(
+    descriptor: int, consume: Callable[[bytes], None], max_bytes: int | None
+) -> tuple[int, str]:
+    """Stream within the budget, rejecting the overflow byte before consuming it."""
+    digest, length = hashlib.sha256(), 0
+    while True:
+        budget = 1024 * 1024 if max_bytes is None else min(1024 * 1024, max_bytes - length + 1)
+        chunk = os.read(descriptor, budget)
+        if not chunk:
+            break
+        if max_bytes is not None and length + len(chunk) > max_bytes:
+            raise BackupPayloadError("payload_too_large")
+        consume(chunk)
+        digest.update(chunk)
+        length += len(chunk)
+    return length, digest.hexdigest()
+
+
+def read_regular_bytes(path: Path, *, max_bytes: int | None = None) -> bytes:
+    """Read stable regular-file bytes with an optional limit and no symbolic links."""
+    if max_bytes is not None and max_bytes < 0:
+        raise ValueError("max_bytes must be nonnegative")
     chunks: list[bytes] = []
-    _read(path, chunks.append)
+    _read(path, chunks.append, max_bytes=max_bytes)
     return b"".join(chunks)
 
 
