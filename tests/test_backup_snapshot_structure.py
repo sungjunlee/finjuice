@@ -14,6 +14,7 @@ from uuid import uuid4
 import pytest
 
 from finjuice.pipeline.backup import snapshot as snapshot_module
+from finjuice.pipeline.backup.drill import incident_runbook, run_restore_drill
 from finjuice.pipeline.backup.errors import BackupError
 from finjuice.pipeline.backup.restore import (
     apply_copy_correction,
@@ -21,6 +22,8 @@ from finjuice.pipeline.backup.restore import (
     restore_sqlite_snapshot,
     restored_mutation_smoke,
 )
+from finjuice.pipeline.backup.retention import plan_retention
+from finjuice.pipeline.backup.schedule import next_run_at
 from finjuice.pipeline.backup.snapshot import (
     acquire_reference_pins,
     create_sqlite_snapshot,
@@ -57,8 +60,13 @@ def test_snapshot_restore_names_live_in_backup_package() -> None:
     assert "def restore_sqlite_snapshot" in Path(
         "src/finjuice/pipeline/backup/restore.py"
     ).read_text(encoding="utf-8")
-    assert not Path("src/finjuice/pipeline/backup/drill.py").exists()
-    assert not Path("src/finjuice/pipeline/backup/schedule.py").exists()
+    # issue #441 owns drill/schedule; they live outside legacy ops.py.
+    assert Path("src/finjuice/pipeline/backup/drill.py").is_file()
+    assert Path("src/finjuice/pipeline/backup/schedule.py").is_file()
+    assert run_restore_drill.__module__ == "finjuice.pipeline.backup.drill"
+    assert incident_runbook.__module__ == "finjuice.pipeline.backup.drill"
+    assert next_run_at.__module__ == "finjuice.pipeline.backup.schedule"
+    assert plan_retention.__module__ == "finjuice.pipeline.backup.retention"
 
 
 def _build_generation(
