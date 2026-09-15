@@ -4,7 +4,7 @@
 
 ## 통합 상태
 
-**최종 통합 진행 중이다.** #538의 목표 변경은 main에 머지됐다. #532의 최종 입력 연동 소스는 `d5f84c8`이며, 마지막 교차 리뷰와 전체 CI 결과를 확인한 뒤 머지해야 한다. 아래 정적 AC 대조와 부분 실행 결과만으로 전체 완료를 선언하지 않는다.
+**최종 통합 진행 중이다.** #538의 목표 변경은 main에 머지됐다. #532의 최종 입력 연동 소스는 `7ec024b`이며, 교차 리뷰는 완료했고 전체 CI 결과를 확인한 뒤 머지해야 한다. 아래 정적 AC 대조와 부분 실행 결과만으로 전체 완료를 선언하지 않는다.
 
 ## 원래 기능 요구와 검증 경계
 
@@ -37,7 +37,8 @@
 - `d5f84c8`: 교차 리뷰의 인접 표시/오류 처리 3건을 수정했다. 입력/history 32건 및 source lookup 7건 통과. 변경 소스 Ruff/mypy·complexity와 commit hooks 통과. 마지막 수정은 입력 표시·summary·archive 오류 경계이며 가족·대사·마감 구현은 변경하지 않았다.
 - 후속 교차 리뷰에서 위 3건의 해결을 확인했다. 추가로 제안된 `summary.pending`의 고유 ID 집계는 적용하지 않았다. 이 summary는 현재 배치의 파일별 입력 레코드 처리 통계이며, 재관측/건너뛴 파일의 보류 레코드도 포함한다. 고유한 미확정 거래나 필요한 사용자 결정의 수를 뜻하지 않는다. `updated` 역시 파일별 재사용 레코드 합계다. 실제 경제적 거래의 중복 방지는 별도의 거래 수·원장 불변 assertion으로 검증한다.
 - 최종 `d5f84c8` wheel 설치본에서 영향받는 39건이 통과했다(20.20초). 로드된 모듈 546개가 설치본을 사용하고 source/wheel/installed 파일 747개가 일치함을 확인했다. 전체 CI·머지 결과는 아직 수집 중이다. 앞 커밋의 통과 결과를 최종 전체 CI 통과로 표시하지 않는다.
-- 최종 Public PR Gate [34947871188](https://github.com/sungjunlee/finjuice/actions/runs/34947871188)에서 `uv run mypy src/` 614개 소스 및 전체 Ruff 검사가 통과했다. 전체 pytest 실행은 [34947871097](https://github.com/sungjunlee/finjuice/actions/runs/34947871097)에서 계속 수집한다.
+- 최종 Public PR Gate [34948999975](https://github.com/sungjunlee/finjuice/actions/runs/34948999975)에서 `uv run mypy src/` 614개 소스 및 전체 Ruff 검사가 통과했다. 전체 pytest 실행은 [34948999931](https://github.com/sungjunlee/finjuice/actions/runs/34948999931)에서 계속 수집한다.
+- 최종 `7ec024b`는 명시적 재시도에서 신규/연결 건수를 0으로 표시하고 원본 영수증을 보존한다. 변경분 교차 리뷰 no findings, 최종 wheel 설치본의 입력/history/archive 40건 PASS(16초), 모듈546개 설치 경로·source/wheel/installed 파일747개 일치 및 CLI smoke PASS를 확인했다.
 - 첫 설치 smoke 스크립트는 빈 데이터 폴더의 `status --json`을 종료 코드 0으로 잘못 기대했다. 올바른 계약인 구조화된 `NO_DATA`/종료 코드 4로 검증기만 수정했고 제품 코드는 바꾸지 않았다. 원래 실패 기록도 보존했다.
 
 비공개 실행 저장소에는 각 artifact hash, 모듈 경로, 시험 로그 및 기존 보존/운영 증거를 보존한다. 공개 문서에는 금융 원본·금액·계좌/소유자·인증정보·상세 호스트 경로를 넣지 않는다.

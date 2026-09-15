@@ -124,8 +124,8 @@ GitHub 이슈가 명세·AC·상태의 정본이다. 전체 목표는 `goals/fin
 ## 2026-09-15 기능 목표 재개 및 최종 입력 통합
 
 - 앱 목표는 사용자 재개 후 최신 기능 완료 문구의 `active` 상태로 확인됐다. 위의 blocked/UI 제한 기록은 과거 상태다. 실제 가족 정보·키체인을 기다리며 구현을 중단하지 않는다.
-- #538 목표 변경은 `6b3a47b`로 머지됐다. #532는 기존 원격 head와 대조한 뒤 격리 branch `codex/ingest-final-fixes`에서 fast-forward로 수정했다. 최종 코드 head는 `d5f84c8`이다.
+- #538 목표 변경은 `6b3a47b`로 머지됐다. #532는 기존 원격 head와 대조한 뒤 격리 branch `codex/ingest-final-fixes`에서 fast-forward로 수정했다. 최종 코드 head는 `7ec024b`다. 명시적 재시도의 신규 생성 표시도 0으로 정규화하고 저장된 원본 영수증을 보존한다.
 - JSON 배치 미리보기·실제 imported_at·무변경 재수집·확인 후 pending 재처리, history/noop 구분·보류 표시·archive typed error를 보완했다. Opus 교차 리뷰에서 세 후속 결함의 해결을 확인했다. 파일별 pending 통계와 고유 거래/결정 대기열 수는 구분한다.
 - `b1bd806` 설치본의 가족/대사/마감 포함 62건 PASS와 최종 `d5f84c8` 설치본 영향 범위 39건 PASS를 보존했다. 최종 source/wheel/installed 747개 bytes 일치, 로드된 모듈 546개 설치 경로 확인. 실제 운영 배포/원장은 변경하지 않았다.
-- 최종 Public PR Gate34947871188(Ruff/mypy614/기타 gate)는 PASS. 전체 pytest CI34947871097 및 #532 머지는 아직 대기 중이다. 같은 전체 테스트를 추가 실행하지 않고 이 실행을 회수한다.
-- 원래 25개 이슈의 기능 요구·실행 증거·별도 운영 항목은 `docs/development/ssot-functional-acceptance.md`에서 대조한다. 아직 최종 CI/머지가 남아 있으므로 목표 완료를 선언하지 않는다. 현재 문서 작업 branch는 `codex/ssot-functional-acceptance`다.
+- 최종 Public PR Gate34948999975(Ruff/mypy614/기타 gate)는 PASS. 최종 wheel의 영향 범위40건(16초)과 마지막 변경 교차 리뷰도 PASS. 전체 pytest CI34948999931 및 #532 머지는 아직 대기 중이다. 같은 전체 테스트를 추가 실행하지 않고 이 실행을 회수한다.
+- 원래 25개 이슈의 기능 요구·실행 증거·별도 운영 항목은 `docs/development/ssot-functional-acceptance.md`에서 대조한다. 아직 최종 CI/머지가 남아 있으므로 목표 완료를 선언하지 않는다. 현재 문서 작업 branch는 `codex/ssot-functional-acceptance`, PR #541이다.
