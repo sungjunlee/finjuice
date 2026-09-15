@@ -951,11 +951,14 @@ def inspect_repository(
     """Inspect the latest stable DB/WAL state without SQLite-opening the original files."""
     version = _resolve_schema_version(expected_schema_version)
     with inspection_snapshot(database, scratch_root=scratch_root) as snapshot:
-        connection = _connect_snapshot(snapshot)
         try:
-            return _read_info(connection, expected_schema_version=version)
-        finally:
-            connection.close()
+            connection = _connect_snapshot(snapshot)
+            try:
+                return _read_info(connection, expected_schema_version=version)
+            finally:
+                connection.close()
+        except sqlite3.DatabaseError as exc:
+            raise RepositoryIntegrityError("Repository snapshot could not be read.") from exc
 
 
 def upgrade_repository(
