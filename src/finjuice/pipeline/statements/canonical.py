@@ -33,6 +33,7 @@ from finjuice.pipeline.storage.sqlite.errors import (
     MutationConflictError,
     MutationValidationError,
 )
+from finjuice.pipeline.storage.sqlite.exact_import.models import ImportPreviewState
 from finjuice.pipeline.storage.sqlite.ids import new_entity_id
 from finjuice.pipeline.storage.sqlite.objects import SourceObjectStore
 from finjuice.pipeline.storage.sqlite.records import (
@@ -63,6 +64,7 @@ class StatementPreviewState:
 
     mappings: dict[tuple[str, str], tuple[str | None, set[str]]] = field(default_factory=dict)
     documents: set[str] = field(default_factory=set)
+    imports: ImportPreviewState = field(default_factory=ImportPreviewState)
 
 
 @dataclass(frozen=True)
@@ -399,6 +401,7 @@ def _remember_preview(
         if mapped is None and item["binding"].status == "confirmed":
             if row.action == "create":
                 mapped = new_entity_id()
+                state.imports.transaction_identities.append(_preview_identity(row, mapped))
             elif row.action == "link":
                 mapped = row.target
         state.mappings[(str(envelope["source_identity"]), row.external_id)] = (
@@ -406,6 +409,22 @@ def _remember_preview(
             {row.content_digest()},
         )
     state.documents.add(digest)
+
+
+def _preview_identity(row: _Row, transaction_id: str) -> dict[str, Any]:
+    """Mirror the persisted transaction identity used by XLSX overlap planning."""
+    return {
+        "transaction_id": transaction_id,
+        "type_norm": row.type_norm,
+        "coefficient": row.amount.coefficient,
+        "scale": row.amount.scale,
+        "currency_code": row.currency,
+        "currency_unknown": False,
+        "effective_at": row.occurred_on,
+        "date_raw": row.occurred_on,
+        "time_raw": "" if row.occurred_at is None else row.occurred_at[11:19],
+        "timezone_state": "unknown" if row.occurred_at is None else "known",
+    }
 
 
 def _applied_statement(connection: sqlite3.Connection, content: bytes) -> tuple[str, str] | None:

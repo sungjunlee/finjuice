@@ -37,6 +37,7 @@ from finjuice.pipeline.storage.sqlite.exact_import import (
     ExactWorkbookCapture,
     capture_exact_xlsx,
 )
+from finjuice.pipeline.storage.sqlite.exact_import.models import ImportPreviewState
 from finjuice.pipeline.storage.sqlite.mutations import MutationReceipt
 from finjuice.pipeline.storage.sqlite.objects import ObjectStoreError
 from finjuice.pipeline.storage.sqlite.source_lookup import (
@@ -233,6 +234,10 @@ def _import_path_batch(
                 receipt = _import_one_statement(
                     facade, path, identity, preview=preview, preview_state=statement_preview
                 )
+            elif statement_preview is not None:
+                receipt = _import_one_path(
+                    facade, path, identity, preview=True, preview_state=statement_preview.imports
+                )
             else:
                 receipt = importer(facade, path, identity, preview=preview)
             receipts.append(receipt)
@@ -317,9 +322,10 @@ def _import_one_path(
     identity: MutationIdentity,
     *,
     preview: bool,
+    preview_state: ImportPreviewState | None = None,
 ) -> dict[str, Any]:
     capture = capture_exact_xlsx(path, filename=path.name)
-    receipt = _import_capture(facade, capture, identity, preview)
+    receipt = _import_capture(facade, capture, identity, preview, preview_state)
     return _present_receipt(path.name, identity, receipt)
 
 
@@ -328,8 +334,9 @@ def _import_capture(
     capture: ExactWorkbookCapture,
     identity: MutationIdentity,
     preview: bool,
+    preview_state: ImportPreviewState | None = None,
 ) -> MutationReceipt | BulkMutationPreview:
-    command = ExactImportCommand(capture, preview=preview)
+    command = ExactImportCommand(capture, preview=preview, preview_state=preview_state)
     return facade.import_exact_xlsx(command, identity=identity)
 
 

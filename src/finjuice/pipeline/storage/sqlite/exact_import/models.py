@@ -37,6 +37,14 @@ class ExactImportIntent:
         }
 
 
+@dataclass
+class ImportPreviewState:
+    """Batch-local predictions, never a stored completion marker or authority."""
+
+    transaction_identities: list[dict[str, Any]] = field(default_factory=list)
+    completed_by_digest: dict[str, dict[str, Any]] = field(default_factory=dict)
+
+
 @dataclass(frozen=True)
 class ExactImportCommand:
     """One file-level import request bound to captured bytes and intent."""
@@ -44,6 +52,7 @@ class ExactImportCommand:
     capture: ExactWorkbookCapture
     intent: ExactImportIntent = ExactImportIntent()
     preview: bool = False
+    preview_state: ImportPreviewState | None = None
 
     def payload(self) -> dict[str, JSONValue]:
         """Return the MutationService payload without a transient execution clock."""
