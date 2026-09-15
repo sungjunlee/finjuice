@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
+from finjuice.pipeline.statements.staged import StatementCapture, capture_statement
 from finjuice.pipeline.storage.sqlite.errors import MutationConflictError, MutationValidationError
 from finjuice.pipeline.storage.sqlite.exact_import import (
     ExactImportCommand,
@@ -43,6 +44,7 @@ class StagedImportObservation:
     seen_files: int
     capture_failed_files: int
     capture_failures: tuple[StagedImportCaptureFailure, ...] = ()
+    statements: tuple[StatementCapture, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -78,11 +80,11 @@ def _now() -> str:
 
 
 def capture_staged_imports(import_dir: Path, *, fast: bool = False) -> StagedImportObservation:
-    """Capture every staged XLSX once, or observe names only in fast mode."""
+    """Capture XLSX/selected JSON once; fast mode skips XLSX capture and all previews."""
     started = _now()
     directory_state = "present"
     try:
-        paths = sorted(path for path in import_dir.iterdir() if path.suffix == ".xlsx")
+        paths = sorted(path for path in import_dir.iterdir() if path.suffix in {".xlsx", ".json"})
     except FileNotFoundError:
         paths = []
         directory_state = "absent"
@@ -92,13 +94,26 @@ def capture_staged_imports(import_dir: Path, *, fast: bool = False) -> StagedImp
         ) from None
     captures: list[ExactWorkbookCapture] = []
     failures: list[StagedImportCaptureFailure] = []
+    statements = tuple(
+        capture
+        for path in paths
+        if path.suffix == ".json"
+        if (capture := capture_statement(path)) is not None
+    )
+    paths = [path for path in paths if path.suffix == ".xlsx"]
+    seen_files = len(paths) + len(statements)
     if not fast:
         for path in paths:
             try:
                 captures.append(capture_exact_xlsx(path))
             except Exception:
                 failures.append(StagedImportCaptureFailure(path.name))
-    digests = tuple(sorted({capture.digest_hex for capture in captures}))
+    digests = tuple(
+        sorted(
+            {capture.digest_hex for capture in captures}
+            | {capture.digest_hex for capture in statements}
+        )
+    )
     metadata: dict[str, object] = {
         "authority": "observed_staged_files",
         "directory_state": directory_state,
@@ -107,15 +122,15 @@ def capture_staged_imports(import_dir: Path, *, fast: bool = False) -> StagedImp
         "preview_policy": "independent_baseline.v1",
         "capture_policy": "single_capture_bytes.v1",
         "fast": fast,
-        "files_seen": len(paths),
-        "files_examined": 0 if fast else len(paths),
+        "files_seen": seen_files,
+        "files_examined": len(statements) if fast else seen_files,
         "files_not_examined": len(paths) if fast else 0,
-        "files_captured": len(captures),
+        "files_captured": len(captures) + len(statements),
         "capture_failed_files": len(failures),
         "unique_digest_count": len(digests),
     }
     return StagedImportObservation(
-        tuple(captures), digests, metadata, len(paths), len(failures), tuple(failures)
+        tuple(captures), digests, metadata, seen_files, len(failures), tuple(failures), statements
     )
 
 
@@ -135,6 +150,8 @@ def evaluate_staged_imports(
         for item in observation.capture_failures
     ]
     outcomes.extend(_preview_outcome(capture, snapshot) for capture in observation.captures)
+    if not observation.metadata["fast"]:
+        outcomes.extend(_statement_outcome(capture, snapshot) for capture in observation.statements)
     outcomes.sort(key=lambda item: item.filename or "")
     pending = (
         observation.seen_files
@@ -161,7 +178,7 @@ def evaluate_staged_imports(
     }
     warning = "Some staged imports could not be previewed." if failed else None
     if observation.metadata["fast"]:
-        warning = "Staged workbook contents were not examined in fast mode."
+        warning = "Staged import previews were not evaluated in fast mode."
     summary = StagedImportSummary(pending, failed, metadata, warning)
     return StagedImportEvaluation(tuple(outcomes), summary)
 
@@ -185,4 +202,30 @@ def _preview_outcome(
         capture.filename,
         "noop" if result.get("noop") is True else "pending",
         deepcopy(counts) if isinstance(counts, dict) else None,
+    )
+
+
+def _statement_outcome(
+    capture: StatementCapture, snapshot: ImportPreviewSnapshot
+) -> StagedImportOutcome:
+    result = snapshot.statement_results.get(capture.digest_hex)
+    if result is None:
+        raise MutationValidationError("Statement digest was not requested in this snapshot.")
+    if failure := result.get("failure_code"):
+        return StagedImportOutcome(capture.filename, "failed", failure_code=str(failure))
+    counts = deepcopy(result["counts"])
+    empty = {"inserted": 0, "reused": 0, "quarantined": 0, "unsupported": 0}
+    counts.update(
+        transactions={
+            **empty,
+            "inserted": counts["created"],
+            "reused": counts["reused"] + counts["linked"],
+        },
+        assets=dict(empty),
+        overview=dict(empty),
+        unknown_sheets=0,
+        uncovered_rows=0,
+    )
+    return StagedImportOutcome(
+        capture.filename, "noop" if result.get("noop") is True else "pending", counts
     )

@@ -600,3 +600,50 @@ def test_replay_presentation_reuses_all_mapped_rows_without_changing_stored_coun
     assert counts["transactions"]["inserted"] == 0
     assert counts["transactions"]["reused"] == 6
     assert receipt.result == {"counts": original_counts, "noop": False}
+
+
+def test_ingest_uses_the_same_bytes_for_schema_selection_and_apply(
+    active_root: _ActiveRoot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from finjuice.pipeline.statements import staged
+
+    _bind(active_root)
+    _stage(
+        active_root,
+        "statement.json",
+        _envelope(
+            [_record("captured-once", decision={"action": "create"})],
+        ),
+    )
+    reads = []
+    original_read = staged.read_regular_bytes
+
+    def capture_once(path: Path) -> bytes:
+        reads.append(path.name)
+        content = original_read(path)
+        path.write_bytes(b"now malformed")
+        return content
+
+    monkeypatch.setattr(staged, "read_regular_bytes", capture_once)
+    result = _payload(_invoke(active_root, "ingest", "--json"))
+    assert reads == ["statement.json"]
+    assert result["summary"]["new_transactions"] == 1
+    assert len(_transactions(active_root)) == 1
+
+
+def test_active_brief_status_counts_only_claimed_statement_inputs(active_root: _ActiveRoot) -> None:
+    from typer.testing import CliRunner
+
+    from finjuice.pipeline.cli.main import app
+
+    _stage(active_root, "statement.json", _envelope([_record("pending")]))
+    _stage(active_root, "notes.json", {"kind": "unrelated"})
+    before = _authority_state(active_root)
+    result = CliRunner().invoke(
+        app,
+        ["--data-dir", str(active_root.root)],
+        obj={"activation_evidence_provider": active_root.provider},
+    )
+    assert result.exit_code == ExitCode.SUCCESS, result.output
+    assert "미처리 파일: 1개" in result.output
+    assert _authority_state(active_root) == before

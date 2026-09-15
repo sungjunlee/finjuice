@@ -343,7 +343,9 @@ def main(
     if ctx.invoked_subcommand is None:
         # Default: show brief status (CLI convention)
         if not machine_output:
-            _show_brief_status(config)
+            from finjuice.pipeline.cli.utils import get_activation_evidence_provider
+
+            _show_brief_status(config, get_activation_evidence_provider(ctx))
         raise typer.Exit(0)
 
 

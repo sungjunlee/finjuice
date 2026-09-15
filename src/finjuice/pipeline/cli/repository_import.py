@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import json
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -16,10 +15,10 @@ from finjuice.pipeline.cli.utils import mutation_identity, mutation_metadata
 from finjuice.pipeline.config import Config
 from finjuice.pipeline.ingest.xlsx_evidence import XlsxEvidenceError
 from finjuice.pipeline.statements.canonical import (
-    STATEMENT_SCHEMA_VERSION,
     StatementImport,
     StatementPreviewState,
 )
+from finjuice.pipeline.statements.staged import StatementCapture, capture_statement
 from finjuice.pipeline.storage.authority import RepositoryAuthority
 from finjuice.pipeline.storage.mutation_facade import (
     BulkMutationPreview,
@@ -27,7 +26,7 @@ from finjuice.pipeline.storage.mutation_facade import (
     MutationIdentity,
     StorageMutationFacade,
 )
-from finjuice.pipeline.storage.sqlite.backup_io import BackupPayloadError, read_regular_bytes
+from finjuice.pipeline.storage.sqlite.backup_io import read_regular_bytes
 from finjuice.pipeline.storage.sqlite.errors import (
     MutationConflictError,
     MutationError,
@@ -85,7 +84,7 @@ def import_xlsx_paths(
     preview: bool,
 ) -> ImportBatchResult:
     """Import captured workbooks one file at a time and stop on the first failure."""
-    return _import_path_batch(facade, paths, identity, preview=preview, importer=_import_one_path)
+    return _import_path_batch(facade, paths, identity, preview=preview)
 
 
 def present_ingest_step(
@@ -130,12 +129,21 @@ def ingest_import_directory(
     archive_requested: bool,
 ) -> dict[str, Any]:
     """Import staged XLSX workbooks and canonical JSON statements from imports/."""
+    statements = {
+        path: capture
+        for path in sorted(config.import_dir.glob("*.json"))
+        if path.is_file() and (capture := capture_statement(path)) is not None
+    }
     paths = sorted(
-        (*_xlsx_in(config.import_dir), *_canonical_statement_paths(config.import_dir)),
+        (*_xlsx_in(config.import_dir), *statements),
         key=lambda path: path.name,
     )
     batch = _import_path_batch(
-        facade, paths, identity, preview=preview, importer=_import_one_ingest_path
+        facade,
+        paths,
+        identity,
+        preview=preview,
+        statements=statements,
     )
     return present_ingest_step(
         batch,
@@ -196,32 +204,13 @@ def _xlsx_in(directory: Path) -> list[Path]:
     return sorted(path for path in directory.glob("*.xlsx") if path.is_file())
 
 
-def _canonical_statement_paths(directory: Path) -> list[Path]:
-    """Return JSON files that claim the canonical statement schema version."""
-    if not directory.is_dir():
-        return []
-    return sorted(
-        path
-        for path in directory.glob("*.json")
-        if path.is_file() and _claims_canonical_statement(path)
-    )
-
-
-def _claims_canonical_statement(path: Path) -> bool:
-    try:
-        payload: Any = json.loads(read_regular_bytes(path).decode("utf-8"))
-    except (OSError, UnicodeDecodeError, ValueError, BackupPayloadError):
-        return False
-    return isinstance(payload, dict) and payload.get("schema_version") == STATEMENT_SCHEMA_VERSION
-
-
 def _import_path_batch(
     facade: StorageMutationFacade,
     paths: list[Path],
     identity: MutationIdentity,
     *,
     preview: bool,
-    importer: Callable[..., dict[str, Any]],
+    statements: Mapping[Path, StatementCapture] | None = None,
 ) -> ImportBatchResult:
     """Import one staged path at a time and stop on the first failure."""
     reject_batch_identity(identity, len(paths))
@@ -230,16 +219,20 @@ def _import_path_batch(
     statement_preview = StatementPreviewState() if preview else None
     for path in paths:
         try:
-            if path.suffix.lower() == ".json" and importer is _import_one_ingest_path:
+            if path.suffix.lower() == ".json" and statements is not None:
                 receipt = _import_one_statement(
-                    facade, path, identity, preview=preview, preview_state=statement_preview
+                    facade,
+                    statements[path],
+                    identity,
+                    preview=preview,
+                    preview_state=statement_preview,
                 )
             elif statement_preview is not None:
                 receipt = _import_one_path(
                     facade, path, identity, preview=True, preview_state=statement_preview.imports
                 )
             else:
-                receipt = importer(facade, path, identity, preview=preview)
+                receipt = _import_one_path(facade, path, identity, preview=preview)
             receipts.append(receipt)
         except (MutationValidationError, MutationConflictError) as exc:
             failed.append((path.name, type(exc).__name__))
@@ -250,35 +243,24 @@ def _import_path_batch(
     return ImportBatchResult(tuple(receipts), tuple(failed))
 
 
-def _import_one_ingest_path(
-    facade: StorageMutationFacade,
-    path: Path,
-    identity: MutationIdentity,
-    *,
-    preview: bool,
-) -> dict[str, Any]:
-    if path.suffix.lower() == ".json":
-        return _import_one_statement(facade, path, identity, preview=preview)
-    return _import_one_path(facade, path, identity, preview=preview)
-
-
 def _import_one_statement(
     facade: StorageMutationFacade,
-    path: Path,
+    path: Path | StatementCapture,
     identity: MutationIdentity,
     *,
     preview: bool,
     preview_state: StatementPreviewState | None = None,
 ) -> dict[str, Any]:
     command = StatementImport(
-        content=read_regular_bytes(path),
+        content=path.content if isinstance(path, StatementCapture) else read_regular_bytes(path),
         imported_at=None,
         preview=preview,
         skip_recorded=True,
         preview_state=preview_state,
     )
     receipt = facade.import_statement(command, identity=identity)
-    return _present_statement_receipt(path.name, identity, receipt)
+    filename = path.filename if isinstance(path, StatementCapture) else path.name
+    return _present_statement_receipt(filename, identity, receipt)
 
 
 def _present_statement_receipt(

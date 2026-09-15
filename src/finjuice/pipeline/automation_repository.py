@@ -72,7 +72,12 @@ def collect_repository_automation(
         if options.large_transaction_threshold < 0:
             raise ValueError("Large-transaction threshold must be nonnegative.")
         staged = capture_staged_imports(config.import_dir)
-        snapshot = read_checkup_snapshot(config.data_dir, provider, digests=staged.digests)
+        snapshot = read_checkup_snapshot(
+            config.data_dir,
+            provider,
+            digests=staged.digests,
+            statements=tuple(item.content for item in staged.statements),
+        )
         if snapshot is None:
             raise ValueError("Repository authority changed during automation.")
         return automation_from_snapshot(config, snapshot, staged, options)

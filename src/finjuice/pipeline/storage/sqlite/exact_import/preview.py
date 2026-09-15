@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from finjuice.pipeline.storage.sqlite.errors import MutationValidationError
@@ -23,6 +23,7 @@ class ImportPreviewSnapshot:
     info: RepositoryInfo
     transaction_identities: tuple[dict[str, Any], ...]
     completed_by_digest: dict[str, tuple[dict[str, Any], ...]]
+    statement_results: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 def preview_captured_import(

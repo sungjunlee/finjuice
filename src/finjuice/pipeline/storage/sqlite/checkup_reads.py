@@ -2,10 +2,19 @@
 
 from __future__ import annotations
 
+import hashlib
 import sqlite3
 from copy import deepcopy
 from dataclasses import dataclass
+from typing import Any
 
+from finjuice.pipeline.statements.canonical import (
+    StatementImport,
+    _preview_statement,
+    parse_document,
+    plan_rows,
+)
+from finjuice.pipeline.storage.sqlite.errors import MutationConflictError, MutationValidationError
 from finjuice.pipeline.storage.sqlite.exact_import.lookup import (
     load_completed_exact_imports,
     load_transaction_identity_snapshot,
@@ -35,7 +44,10 @@ class CheckupReadSnapshot:
 
 
 def import_preview_snapshot(
-    connection: sqlite3.Connection, info: RepositoryInfo, digests: tuple[str, ...]
+    connection: sqlite3.Connection,
+    info: RepositoryInfo,
+    digests: tuple[str, ...],
+    statements: tuple[bytes, ...] = (),
 ) -> ImportPreviewSnapshot:
     """Read existing verified closure lookups, distinguishing absent from unrequested."""
     identities = tuple(dict(row) for row in load_transaction_identity_snapshot(connection))
@@ -43,7 +55,27 @@ def import_preview_snapshot(
         digest: tuple(dict(row) for row in load_completed_exact_imports(connection, digest))
         for digest in dict.fromkeys(digests)
     }
-    return deepcopy(ImportPreviewSnapshot(info, identities, completed))
+    statement_results = {
+        hashlib.sha256(content).hexdigest(): _statement_preview(connection, content)
+        for content in dict.fromkeys(statements)
+    }
+    return deepcopy(ImportPreviewSnapshot(info, identities, completed, statement_results))
+
+
+def _statement_preview(connection: sqlite3.Connection, content: bytes) -> dict[str, Any]:
+    """Evaluate one captured statement against this pinned revision, without mutations."""
+    try:
+        envelope = parse_document(content)
+        return _preview_statement(
+            connection,
+            StatementImport(content, imported_at=None, preview=True),
+            envelope,
+            plan_rows(envelope),
+        )
+    except MutationConflictError:
+        return {"failure_code": "statement_conflict"}
+    except MutationValidationError:
+        return {"failure_code": "statement_validation_failed"}
 
 
 def rules_config_snapshot(
