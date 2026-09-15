@@ -283,7 +283,14 @@ def _present_statement_receipt(
 ) -> dict[str, Any]:
     presented = _present_receipt(filename, identity, receipt)
     result = dict(presented["result"])
-    result["counts"] = _with_transaction_counts(result.get("counts") or {})
+    counts = dict(result.get("counts") or {})
+    if isinstance(receipt, MutationReceipt) and receipt.replayed:
+        counts["reused"] = sum(
+            int(counts.get(key, 0) or 0) for key in ("created", "linked", "reused")
+        )
+        counts["created"] = 0
+        counts["linked"] = 0
+    result["counts"] = _with_transaction_counts(counts)
     result["completed"] = not isinstance(receipt, BulkMutationPreview)
     if isinstance(receipt, MutationReceipt):
         result["noop"] = receipt.replayed or not receipt.state_changed

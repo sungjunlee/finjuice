@@ -476,8 +476,26 @@ def test_ingest_uses_current_import_time_and_preserves_collected_time(
     revision = _revision(active_root)
 
     replay = _payload(_invoke(active_root, "ingest", "--json", *identity_args))
-    assert replay["receipts"][0]["result"] == {**first["receipts"][0]["result"], "noop": True}
+    replay_result = replay["receipts"][0]["result"]
+    assert replay_result["noop"] is True
+    assert replay_result["counts"]["created"] == 0
+    assert replay_result["counts"]["linked"] == 0
+    assert replay_result["counts"]["reused"] == 1
+    assert replay_result["counts"]["pending"] == 0
+    assert replay["summary"]["new_transactions"] == 0
+    assert replay["summary"]["updated"] == 1
+    assert replay_result["occurrence_id"] == first["receipts"][0]["result"]["occurrence_id"]
     assert _revision(active_root) == revision
+    with sqlite3.connect(active_root.database) as connection:
+        stored = json.loads(
+            connection.execute(
+                "SELECT result_json FROM idempotency_requests WHERE idempotency_key = ?",
+                ("import-historical",),
+            ).fetchone()[0]
+        )
+    assert stored["result"]["counts"]["created"] == 1
+    assert stored["result"]["counts"]["reused"] == 0
+    assert stored["result"]["noop"] is False
 
 
 def test_pending_staged_statement_becomes_actionable_after_binding(
@@ -553,3 +571,32 @@ def test_pending_statement_is_visible_in_human_and_json_summary(
     result = _payload(_invoke(active_root, "ingest", "--json", *args))
     assert result["summary"]["pending"] == 1
     assert result["summary"]["new_transactions"] == 0
+
+
+def test_replay_presentation_reuses_all_mapped_rows_without_changing_stored_counts() -> None:
+    from finjuice.pipeline.cli.repository_import import _present_statement_receipt
+    from finjuice.pipeline.storage.sqlite.mutations import MutationReceipt
+
+    original_counts = {"created": 1, "linked": 2, "reused": 3, "pending": 4}
+    receipt = MutationReceipt(
+        changeset_id="synthetic-changeset",
+        base_revision=0,
+        committed_revision=1,
+        state_changed=True,
+        result={"counts": dict(original_counts), "noop": False},
+        retained_artifacts=(),
+        replayed=True,
+    )
+
+    presented = _present_statement_receipt("statement.json", MutationIdentity(), receipt)
+
+    counts = presented["result"]["counts"]
+    assert (counts["created"], counts["linked"], counts["reused"], counts["pending"]) == (
+        0,
+        0,
+        6,
+        4,
+    )
+    assert counts["transactions"]["inserted"] == 0
+    assert counts["transactions"]["reused"] == 6
+    assert receipt.result == {"counts": original_counts, "noop": False}
