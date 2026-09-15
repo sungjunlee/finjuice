@@ -129,3 +129,6 @@ GitHub 이슈가 명세·AC·상태의 정본이다. 전체 목표는 `goals/fin
 - `b1bd806` 설치본의 가족/대사/마감 포함 62건 PASS와 최종 `d5f84c8` 설치본 영향 범위 39건 PASS를 보존했다. 최종 source/wheel/installed 747개 bytes 일치, 로드된 모듈 546개 설치 경로 확인. 실제 운영 배포/원장은 변경하지 않았다.
 - 최종 Public PR Gate34948999975(Ruff/mypy614/기타 gate)는 PASS. 최종 wheel의 영향 범위40건(16초)과 마지막 변경 교차 리뷰도 PASS. 전체 pytest CI34948999931 및 #532 머지는 아직 대기 중이다. 같은 전체 테스트를 추가 실행하지 않고 이 실행을 회수한다.
 - 원래 25개 이슈의 기능 요구·실행 증거·별도 운영 항목은 `docs/development/ssot-functional-acceptance.md`에서 대조한다. 아직 최종 CI/머지가 남아 있으므로 목표 완료를 선언하지 않는다. 현재 문서 작업 branch는 `codex/ssot-functional-acceptance`, PR #541이다.
+
+- 후속 자동 리뷰의 혼합 JSON→XLSX preview 불일치를 `febc5e6`에서 수정했다. XLSX→XLSX 중첩 및 동일 XLSX 반복도 포함한 회귀3건 PASS, 새 wheel 설치본69건 PASS(26.92초), source/wheel/installed747파일 일치. 최종 CI34950353000을 회수 중이며 과거 CI는 대체됐다. #532 및 #541 최종 머지 전에는 기능 완료로 표시하지 않는다.
+- M2 sprint의 과거 Plan 진행 표시를 실제 완료된 #433~#438/#427 AC와 일치시키고 `sprint-close.sh`로 완료 처리했다. doctor PASS·reassess quiet. 원본 보존·정확 금액·단일 writer·비공개 증거 경계는 계속 적용한다. M1~M5 최종 기능 완료는 #532 CI/머지와 이 문서 PR의 통합이 남아 있다.
