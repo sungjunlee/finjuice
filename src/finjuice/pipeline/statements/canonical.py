@@ -19,8 +19,9 @@ import io
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Literal, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Final, Literal, Mapping, Sequence
 
+from finjuice import get_version
 from finjuice.pipeline.statements.canonical_parse import (
     _ENVELOPE_FIELDS,
     COVERAGE_KINDS,  # noqa: F401 — re-exported public parse constant
@@ -51,6 +52,28 @@ STATEMENT_OCCURRENCE_KIND = "canonical_json_statement"
 STATEMENT_FAMILY = "statement"
 STATEMENT_ACCOUNT_NAMESPACE = "statement.json.account_key.v1"
 RECORD_COORDINATE_KIND = "canonical_json_record"
+STATEMENT_VERIFICATION_POLICY: Final = "statement_usage_conditions.v1"
+# Actual usage conditions of the selected local JSON path (#448). Credential-like
+# fields are rejected at parse time; documents and upstream originals are only
+# ever published into the private authority object store, never into the repo.
+STATEMENT_USAGE_CONDITIONS: Final[dict[str, Any]] = {
+    "input_kind": "local_json",
+    "network": False,
+    "browser_session": False,
+    "credentials_accepted": False,
+    "originals_copied_into_repo": False,
+    "private_store": "authority_object_store",
+    "synthetic_ok_for_ci": True,
+}
+# Observed import never invents these facts to fill acceptance. They stay
+# unresolved until a private copy actually supplies them.
+STATEMENT_UNRESOLVED_WITHOUT_INVENTION: Final[tuple[str, ...]] = (
+    "actual_private_input",
+    "actual_private_retry",
+    "actual_private_result",
+    "account_order_boundary",
+    "installment_or_refund",
+)
 _SCOPE_STATE: dict[str, Literal["complete", "partial", "unknown"]] = {
     "full": "complete",
     "partial": "partial",
@@ -544,6 +567,50 @@ def _apply_decision(
     counts.created.append(transaction_id)
 
 
+def _verification(
+    envelope: Mapping[str, Any], original_id: str | None, rows: Sequence[_Row]
+) -> dict[str, Any]:
+    """Record privacy-safe usage conditions and retention facts for one import.
+
+    The block carries envelope identity fields, install version, observed
+    checks and unresolved items only: never amounts, account keys, merchant
+    text, record payloads or host paths. It is deterministic for identical
+    documents on one install so a replayed receipt preserves the same
+    verification record. Currency/unit, account/order boundary,
+    installment/refund or verification transactions that are absent from the
+    source are left unresolved rather than invented.
+    """
+    original_retained = original_id is not None
+    return {
+        "policy": STATEMENT_VERIFICATION_POLICY,
+        "source_identity": envelope["source_identity"],
+        "schema_version": envelope["schema_version"],
+        "parser_version": envelope["parser_version"],
+        "original_hash": envelope["original_hash"],
+        "idempotency_key": envelope["idempotency_key"],
+        "coverage": envelope["coverage"],
+        "currency": envelope["currency"],
+        "as_of": envelope["as_of"],
+        "collected_at": envelope["collected_at"],
+        "record_count": len(rows),
+        "package_version": get_version(),
+        "credentials_present": False,
+        "document_retained_private": True,
+        "original_retained_private": original_retained,
+        "published": False,
+        "invented_facts": [],
+        "checks": {
+            "credentials_rejected_at_parse": True,
+            "originals_copied_into_repo": False,
+            "document_retained_private": True,
+            "original_retained_private": original_retained,
+            "published": False,
+        },
+        "unresolved": list(STATEMENT_UNRESOLVED_WITHOUT_INVENTION),
+        "usage_conditions": dict(STATEMENT_USAGE_CONDITIONS),
+    }
+
+
 def _result(
     envelope: Mapping[str, Any],
     artifact: Any,
@@ -568,6 +635,7 @@ def _result(
         "reused_external_ids": list(counts.reused),
         "pending_external_ids": list(counts.pending),
         "noop": not (counts.created or counts.linked),
+        "verification": _verification(envelope, original_id, rows),
     }
 
 
