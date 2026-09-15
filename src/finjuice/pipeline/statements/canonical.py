@@ -303,15 +303,24 @@ def _required_account(binding: Any) -> str:
     return str(binding.account_id)
 
 
+_APPLIED_SQL = """
+SELECT art.source_artifact_id, occ.entity_id
+FROM source_occurrences AS occ
+JOIN source_artifacts AS art ON art.source_artifact_id = occ.source_artifact_id
+WHERE art.digest_hex = ? AND occ.occurrence_kind = ?
+ORDER BY occ.entity_id
+"""
+
+
 def import_statement(
     connection: sqlite3.Connection, context: MutationContext, command: StatementImport
 ) -> dict[str, Any]:
     """Preserve exact statement bytes and apply only explicitly decided economic records."""
     envelope = parse_document(command.content)
     rows = plan_rows(envelope)
-    resolved = _resolve_rows(connection, envelope, rows)
     if command.preview:
-        return _preview_result(rows, resolved)
+        return _preview_statement(connection, command, envelope, rows)
+    resolved = _resolve_rows(connection, envelope, rows)
     store = SourceObjectStore(context.authority.paths)
     artifact = store.publish(io.BytesIO(command.content))
     context.register_source_artifact(artifact)
@@ -321,6 +330,40 @@ def import_statement(
     for row in rows:
         _apply_row(context, envelope, row, resolved[row.index], occurrence_id, artifact, counts)
     return _result(envelope, artifact, original_id, occurrence_id, counts, rows)
+
+
+def _preview_statement(
+    connection: sqlite3.Connection,
+    command: StatementImport,
+    envelope: Mapping[str, Any],
+    rows: Sequence[_Row],
+) -> dict[str, Any]:
+    """Preview new work, or report an already-recorded identical document as a noop."""
+    applied = _applied_statement(connection, command.content)
+    if applied is not None:
+        return _history_skipped_preview(applied, len(rows))
+    return _preview_result(rows, _resolve_rows(connection, envelope, rows))
+
+
+def _applied_statement(connection: sqlite3.Connection, content: bytes) -> tuple[str, str] | None:
+    """Return the first statement occurrence bound to these exact document bytes."""
+    digest_hex = hashlib.sha256(content).hexdigest()
+    row = connection.execute(_APPLIED_SQL, (digest_hex, STATEMENT_OCCURRENCE_KIND)).fetchone()
+    if row is None:
+        return None
+    return str(row[0]), str(row[1])
+
+
+def _history_skipped_preview(applied: tuple[str, str], record_count: int) -> dict[str, Any]:
+    """Match the XLSX completed-preview contract: identical bytes are already recorded."""
+    artifact_id, occurrence_id = applied
+    return {
+        "artifact_id": artifact_id,
+        "completed": False,
+        "counts": {"created": 0, "linked": 0, "reused": record_count, "pending": 0},
+        "noop": True,
+        "occurrence_id": occurrence_id,
+    }
 
 
 def _preview_result(

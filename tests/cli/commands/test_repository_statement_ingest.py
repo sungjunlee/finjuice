@@ -282,6 +282,54 @@ def test_dry_run_new_pending_file_is_not_history_skipped(active_root: _ActiveRoo
     assert _transactions(active_root) == []
 
 
+def test_dry_run_already_ingested_identical_json_is_history_skipped(
+    active_root: _ActiveRoot,
+) -> None:
+    _bind(active_root)
+    _stage(
+        active_root,
+        "applied.json",
+        _envelope([_record("txn-1", decision={"action": "create"})]),
+    )
+    applied = _payload(_invoke(active_root, "ingest", "--json"))
+    occurrence_id = applied["receipts"][0]["result"]["occurrence_id"]
+    before = _authority_state(active_root)
+
+    preview = _payload(_invoke(active_root, "ingest", "--dry-run", "--json"))
+
+    assert preview["dry_run"] is True
+    assert preview["history_skipped"] == 1
+    assert preview["would_parse"] == 0
+    assert preview["receipts"][0]["state_changed"] is False
+    assert preview["receipts"][0]["result"]["noop"] is True
+    assert preview["receipts"][0]["result"]["completed"] is False
+    assert preview["receipts"][0]["result"]["occurrence_id"] == occurrence_id
+    assert preview["receipts"][0]["result"]["counts"]["created"] == 0
+    assert preview["receipts"][0]["result"]["counts"]["transactions"]["inserted"] == 0
+    assert preview["summary"]["new_transactions"] == 0
+    assert _authority_state(active_root) == before
+
+
+def test_dry_run_already_ingested_pending_json_is_history_skipped(
+    active_root: _ActiveRoot,
+) -> None:
+    _stage(
+        active_root,
+        "pending.json",
+        _envelope([_record("txn-1", decision={"action": "create"})]),
+    )
+    _payload(_invoke(active_root, "ingest", "--json"))
+    before = _authority_state(active_root)
+
+    preview = _payload(_invoke(active_root, "ingest", "--dry-run", "--json"))
+
+    assert preview["history_skipped"] == 1
+    assert preview["would_parse"] == 0
+    assert preview["receipts"][0]["result"]["noop"] is True
+    assert preview["receipts"][0]["result"]["completed"] is False
+    assert _authority_state(active_root) == before
+
+
 def test_dry_run_rejects_missing_link_target_without_writing(active_root: _ActiveRoot) -> None:
     _bind(active_root)
     _stage(
