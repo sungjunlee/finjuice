@@ -1,6 +1,6 @@
 ---
 milestone: SSOT M2 · SQLite 정본과 보존 마이그레이션
-status: active
+status: completed
 started: 2026-09-09
 due: TBD
 scope: ["**"]
@@ -18,27 +18,27 @@ scope: ["**"]
 
 ### Batch 2 — 원자 변경 경계
 
-- [~] #434 feat(storage): 원자적 변경·정정 이력·멱등 쓰기 경로 [branch:codex/ssot-m2-mutations]
+- [x] #434 feat(storage): 원자적 변경·정정 이력·멱등 쓰기 경로 [branch:codex/ssot-m2-mutations]
 
 ### Batch 3 — 보존 이전
 
-- [~] #435 feat(migrate): 동결 자료에서 별도 DB로 보존 이전
+- [x] #435 feat(migrate): 동결 자료에서 별도 DB로 보존 이전
 
 ### Batch 4 — 조회 호환
 
-- [~] #436 feat(query): SQLite 읽기와 기존 CLI·DuckDB 호환
+- [x] #436 feat(query): SQLite 읽기와 기존 CLI·DuckDB 호환
 
 ### Batch 5 — SQLite 복구
 
-- [~] #437 feat(backup): SQLite snapshot과 원본 참조의 일관된 복원
+- [x] #437 feat(backup): SQLite snapshot과 원본 참조의 일관된 복원
 
 ### Batch 6 — 실제 보존 수용 검증
 
-- [ ] #438 test(migrate): 실데이터 보존·재시도·복구 수용 검증
+- [x] #438 test(migrate): 실데이터 보존·재시도·복구 수용 검증
 
 ### Batch 7 — M2 완료
 
-- [ ] #427 epic: SQLite 정본·단일 쓰기 경로·보존 마이그레이션
+- [x] #427 epic: SQLite 정본·단일 쓰기 경로·보존 마이그레이션
 
 ## Running Context
 - GitHub Issues의 최신 본문과 AC가 작업 명세·상태의 정본이다. 실행 권한은 `goals/finjuice-ssot.md`, 저장·보존 계약은 ADR-0014와 `docs/development/ssot-migration-recovery-contract.md`를 따른다.
@@ -639,3 +639,8 @@ PR #520이 main `77dfc1a`에 머지됐고 해당 main CI가 성공했다. 운영
 새 캡처 마이그레이션 자체 재생성 검증이 exit0으로 끝났고 독립/consumer 비교는 각각 1,652,643/640,024 checks에서 차이 0이다. 별도 schema9 upgrade의 기존 53테이블·1,045,729행 보존 및 실제 분석 함수의 격리 입력 결과 일치를 확인했다. 미확인 참조/소유권/환율과 실제 활성화/첫 사용/전환 후 복구는 남아 있다. #521 CI 전체 PASS 뒤 사용자 승인으로 관리자 squash merge를 완료했다(main `16e4f82`). 별도 `codex/ssot-host-runtime`에서 독립 enrollment pin과 경로 제한을 실제 CLI에 연결했고, 설치6흐름/741파일 일치 및 관련 회귀·정적 검사를 통과했다. 공개 기록은 검증 범위만 담고 운영 경로와 상세 사본은 비공개 실행 원장에 남긴다.
 
 - 2026-09-15: #434의 모든 AC 검증과 PR #463 실제 merge `4ced76d`를 확인해 GitHub를 COMPLETED로 갱신했다. #522도 사용자 승인으로 merge `f011526` 완료(정확한 head CI34867296195 PASS). #523은 main 기반 `c1a10eb`으로 재배치해 CI34871798225를 시작했다. 기존 설치 검증 artifact의 package bytes는 재배치 전과 동일하다. 운영 전환·첫 실제 사용·전환 후 복원은 남아 있다.
+
+## 2026-09-15 M2 실행 기록 마감
+
+#433~#438 및 #427의 구현·머지·보존 수용은 완료됐으나 Plan에 과거 진행 상태가 남아 있어 live GitHub AC와 맞췄다. #438에는 #522/#523 머지와 최종 CI34872364225·설치 artifact·실제 writer 중지 기준선의 보존·장비 밖 복원 근거가 기록돼 있다. 최신 기능 요구별 근거는 `docs/development/ssot-functional-acceptance.md`에 모았다. 현재 #532의 추가 입력 연동 및 전체 M1~M5 기능 마감은 별도 최종 통합 작업이며, 실제 가족 사실·신규 실기록 이후 복원·미래 예약 실행은 운영 후속으로 유지한다.
+- 2026-09-15: Sprint closed. 7/7 tasks completed.
