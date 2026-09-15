@@ -1,15 +1,15 @@
 """Single atomic mutation boundary for the active authoritative repository.
 
 Derived-state write helpers live in
-:mod:`finjuice.pipeline.storage.sqlite.derived_writes` and are re-exported
-here so existing callers can keep importing from this module.
+:mod:`finjuice.pipeline.storage.sqlite.derived_writes` and canonical JSON
+encoding helpers live in :mod:`finjuice.pipeline.storage.sqlite.mutation_json`.
+Both clusters are re-exported here so existing callers can keep importing from
+this module.
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
-import math
 import re
 import sqlite3
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -47,10 +47,12 @@ from finjuice.pipeline.storage.sqlite.derived_writes import (
     _manual_transaction_view,
     _parse_preserved_string_array,
     _parse_string_array,
-    _reject_json_constant,
     _reject_stale_derived_before,
     _require_coverage_target,
     _resolve_manual_category,
+)
+from finjuice.pipeline.storage.sqlite.derived_writes import (
+    _reject_json_constant as _reject_json_constant,
 )
 from finjuice.pipeline.storage.sqlite.errors import (
     MutationAbortedError,
@@ -69,6 +71,15 @@ from finjuice.pipeline.storage.sqlite.generation_binding import (
     as_generation_binding,
 )
 from finjuice.pipeline.storage.sqlite.ids import new_entity_id, validate_entity_id
+from finjuice.pipeline.storage.sqlite.mutation_json import (
+    _canonical_request_json,
+    _canonical_result_json,
+    _digest,
+    _parse_receipt_envelope,
+)
+from finjuice.pipeline.storage.sqlite.mutation_json import (
+    _validate_json_tree as _validate_json_tree,
+)
 from finjuice.pipeline.storage.sqlite.objects import (
     SourceArtifact,
     SourceObjectStore,
@@ -2008,76 +2019,6 @@ def _store_receipt(
     )
     if updated.rowcount != 1:
         raise RepositoryIntegrityError("Idempotency receipt reservation was lost.")
-
-
-def _canonical_request_json(value: JSONValue) -> str:
-    _validate_json_tree(value, allow_float=False)
-    try:
-        return json.dumps(
-            value,
-            sort_keys=True,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            allow_nan=False,
-        )
-    except (TypeError, ValueError) as exc:
-        raise MutationValidationError("Authoritative values must be canonical JSON.") from exc
-
-
-def _canonical_result_json(value: JSONValue) -> str:
-    _validate_json_tree(value, allow_float=True)
-    try:
-        return json.dumps(
-            value,
-            sort_keys=True,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            allow_nan=False,
-        )
-    except (TypeError, ValueError) as exc:
-        raise MutationValidationError("Mutation result must be finite JSON.") from exc
-
-
-def _parse_receipt_envelope(value: str) -> dict[str, Any]:
-    try:
-        parsed = json.loads(value, parse_constant=_reject_json_constant)
-    except (TypeError, ValueError, json.JSONDecodeError) as exc:
-        raise RepositoryIntegrityError("Stored mutation receipt is invalid JSON.") from exc
-    if (
-        not isinstance(parsed, dict)
-        or set(parsed) != {"result", "retained_artifacts"}
-        or not isinstance(parsed["result"], dict)
-        or not isinstance(parsed["retained_artifacts"], list)
-        or any(not isinstance(item, str) or not item for item in parsed["retained_artifacts"])
-    ):
-        raise RepositoryIntegrityError("Stored mutation receipt envelope is invalid.")
-    return parsed
-
-
-def _validate_json_tree(value: JSONValue, *, allow_float: bool) -> None:
-    if value is None or isinstance(value, (str, bool, int)):
-        return
-    if isinstance(value, float):
-        if not allow_float or not math.isfinite(value):
-            raise MutationValidationError(
-                "Floating-point request/state values are not authoritative."
-            )
-        return
-    if isinstance(value, Mapping):
-        for key, item in value.items():
-            if not isinstance(key, str):
-                raise MutationValidationError("JSON object keys must be strings.")
-            _validate_json_tree(item, allow_float=allow_float)
-        return
-    if isinstance(value, (list, tuple)):
-        for item in value:
-            _validate_json_tree(item, allow_float=allow_float)
-        return
-    raise MutationValidationError("Value is outside the supported JSON contract.")
-
-
-def _digest(canonical_json: str) -> str:
-    return hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
 
 
 def _utc_now() -> str:
