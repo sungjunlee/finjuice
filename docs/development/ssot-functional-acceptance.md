@@ -4,7 +4,7 @@
 
 ## 통합 상태
 
-**최종 통합 진행 중이다.** #538의 목표 변경은 main에 머지됐다. #532의 최종 입력 연동 소스는 `3414a8d`다. 입력·진단 통합과 저장소 오류 경계의 설치본 검증을 완료했고, 교차 리뷰 판단을 마쳤고 전체 CI와 머지를 기다린다. 아래 AC 대조를 전체 통합 완료 선언으로 대신하지 않는다.
+**최종 통합 진행 중이다.** #538의 목표 변경은 main에 머지됐다. #532의 최종 입력 연동 소스는 `7786045`다. 입력·진단 통합과 저장소 오류 경계의 설치본 검증을 완료했고, 교차 리뷰와 후속 호환성·표시 통합 검토를 마쳤고 전체 CI·머지를 기다린다. 아래 AC 대조를 전체 통합 완료 선언으로 대신하지 않는다.
 
 ## 원래 기능 요구와 검증 경계
 
@@ -33,10 +33,15 @@
 
 ## 실행 증거
 
-- 최종 `3414a8d`: JSON 캡처는 descriptor 초기 크기와 읽는 도중 증가를 64MiB로 제한하며 디코딩 전에 거부한다. 단독 capture4건과 모든 진단 경로4건, 기존 백업 읽기 검증을 포함한 설치본104건 PASS(20.93초), 모듈548개 설치 경로·source/wheel/installed748파일 일치 및 CLI human/JSON smoke PASS. 제한 변경 교차 리뷰에서 새 P1/P2는 없었고, 단독 실행의 순환 import도 최소 이동으로 해결했다.
+- 최종 `7786045`: 혼합 inbox는 확정 JSON을 먼저 처리해 파일명에 따른 중복 생성을 제거했다. 변경 전 날짜·시각·UTC 3건 모두 중복 생성 실패를 재현했고, 수정 후 소스40건·실제 Python3.10 신규3건 PASS. 설치본40건 PASS(10.18초), 모듈547개 설치 경로·source/wheel/installed748파일 일치 및 CLI smoke PASS. Grok4.6 한정 교차 리뷰 no_findings와 해당 리뷰 thread 해결을 확인했다.
+
+- 앞 단계 `378ecd5`: Python3.10에서도 UTC `Z`를 overlap 직전에 정규화하며 원문을 유지한다. Refresh human 출력도 기존 pending 건수 안내를 재사용한다. 실제 Python3.10에서 UTC·혼합 입력·refresh human/JSON25건 PASS(7.37초), Python3.13 설치본 관련68건 PASS(12.01초), 모듈547개 설치 경로·source/wheel/installed748파일 일치 및 CLI human/JSON smoke PASS. 시각 비교 변경의 Grok4.6 교차 리뷰 no_findings와 후속 두 경계의 담당·통합 검토를 완료했다.
+- 앞 단계 `383b446`: 시각이 있는 JSON→XLSX 혼합 입력에서 중복 생성 회귀를 확인하고 수정했다. 관측 기준일은 보존하고 중복 판정만 원래 발생 타임스탬프를 사용하므로 기존 JSON 기록도 재작성하지 않는다. 미리보기/실제 처리의 날짜·시각 혼합6건 및 저장된 identity/미리보기의 날짜·분·초·소수초·UTC 일치5건 PASS. 설치본 JSON·XLSX·혼합 입력65건 PASS(59.08초), 모듈547개 설치 경로·source/wheel/installed748파일 일치와 CLI human/JSON smoke PASS.
+- 앞 단계 `21b5cc9`: 재귀 파서 실패도 기존 안전한 캡처 실패로 정규화한다. 작은 합성 입력·예외 주입의 단위1건과 진단4경로 회귀를 추가했고, 설치본 캡처·진단29건 PASS(20.68초), 모듈528개 설치 경로·source/wheel/installed748파일 일치 및 CLI human/JSON smoke PASS. 앞 단계 교차 리뷰 뒤 변경은 명시적 예외1개 추가이며 담당·통합 검토 및 영향 회귀로 확인했다.
+- 앞 단계 `3414a8d`: JSON 캡처는 descriptor 초기 크기와 읽는 도중 증가를 64MiB로 제한하며 디코딩 전에 거부한다. 단독 capture4건과 모든 진단 경로4건, 기존 백업 읽기 검증을 포함한 설치본104건 PASS(20.93초), 모듈548개 설치 경로·source/wheel/installed748파일 일치 및 CLI human/JSON smoke PASS. 제한 변경 교차 리뷰에서 새 P1/P2는 없었고, 단독 실행의 순환 import도 최소 이동으로 해결했다.
 - 앞 단계 `a7cdb48`: DB 누락·손상·미지원 버전의 기본 화면 안내와 원본 불변 회귀3건, 저장소22건 PASS. 설치 환경에서 진단·입력·저장소 오류 경계72건 PASS(22.42초), 모듈548개의 설치 경로·source/wheel/installed748파일 일치와 CLI human/JSON smoke를 확인했다. 공통 저장소 오류를 안내로 처리하고 SQLite 헤더 읽기 실패도 typed integrity 오류로 변환한다. 마지막 교차 리뷰의 오류 분류·업그레이드 안내 의견2건은 비차단 개선으로 판정했다. 실제 코드는 손상을 확정하거나 자동 복구하지 않으며, 버전 오류는 타 애플리케이션 DB도 포함해 일률적인 업그레이드 안내가 맞지 않는다.
 - 앞 단계 `250d35a`: 설치 환경에서 변경된 진단·입력·오류 경계 관련 47건 PASS(21.71초). 로드 모듈548개의 설치 경로와 source/wheel/installed748파일 일치 및 CLI human/JSON smoke를 확인했다. `54622f2..250d35a`의 제한 교차 리뷰에서 두 오류 처리 결함이 모두 해결됐고 새 P1/P2는 없었다.
-- 최종 전체 pytest/ruff/mypy·보안·패키지 검사는 [CI34958000220](https://github.com/sungjunlee/finjuice/actions/runs/34958000220)에서 수집 중이다. 이전 커밋의 CI 결과를 최종 소스 전체 통과로 표시하지 않는다.
+- 최종 전체 pytest/ruff/mypy·보안·패키지 검사는 [CI34962555616](https://github.com/sungjunlee/finjuice/actions/runs/34962555616)에서 수집 중이다. 이전 커밋의 CI 결과를 최종 소스 전체 통과로 표시하지 않는다.
 - `54622f2`: 입력 inventory 신규 10건, 기존 영향61건·staged12건·no-args1건과 Ruff/mypy·complexity PASS. 설치 환경 관련136건 PASS(64.67초), 모듈548개 설치 경로·source/wheel/installed748파일 일치. 후속 변경은 잘못된 UUID의 파일별 실패 처리와 미검증·누락·손상 저장소의 기본 화면 오류 경계다.
 - `febc5e6`: JSON→XLSX·XLSX→XLSX 중첩 및 같은 XLSX 반복의 preview/write 집계·read-only·재시도 회귀3건 PASS. 설치본69건 PASS(26.92초), 모듈546개 설치 경로·source/wheel/installed747파일 일치. [CI34950353000](https://github.com/sungjunlee/finjuice/actions/runs/34950353000) 전체 성공과 Ruff/mypy614소스 검사를 확인했다.
 - 앞 단계의 설치 근거도 보존한다. `b1bd806`은 입력·가족·대사·마감62건 PASS(98.52초), `d5f84c8`은 입력/history/archive39건 PASS(20.20초), `7ec024b`는 명시적 재시도 표시를 포함한40건 PASS(16초)였다. 각각 source/wheel/installed747파일 일치와 실제 설치 실행에 연결돼 있다. 이후 가족·대사·마감 구현은 변경하지 않았다.
