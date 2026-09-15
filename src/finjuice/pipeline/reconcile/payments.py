@@ -4,10 +4,20 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
+from typing import Any, Mapping
 
 from finjuice.pipeline.export.aggregations import load_transactions
 from finjuice.pipeline.reconcile.models import PaymentItem
 from finjuice.pipeline.reconcile.money import parse_money
+
+
+def payment_reference(row: Mapping[str, Any]) -> str | None:
+    """Use an explicit merchant or memo token; never invent a matching key."""
+    for key in ("merchant_raw", "memo_raw"):
+        value = row.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
 
 
 def _ledger_amount(value: object) -> object:
@@ -36,6 +46,7 @@ def payments_from_ledger(csv_base_dir: Path) -> list[PaymentItem]:
                 occurred_on=date.fromisoformat(raw_date[:10]),
                 amount=parse_money(_ledger_amount(row.get("amount") or "0")),
                 currency=str(row.get("currency") or "KRW"),
+                reference=payment_reference(row),
             )
         )
     return payments

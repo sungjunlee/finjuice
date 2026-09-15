@@ -10,6 +10,7 @@ from typing import Any
 from uuid import UUID
 
 from finjuice.pipeline.reconcile.models import PaymentItem
+from finjuice.pipeline.reconcile.payments import payment_reference
 from finjuice.pipeline.storage.authority import ActivationEvidenceProvider
 from finjuice.pipeline.storage.read_facade import read_transaction_snapshot, snapshot_metadata
 from finjuice.pipeline.storage.sqlite.exact import ExactValue
@@ -114,4 +115,4 @@ def _payment(row: dict[str, Any]) -> PaymentItem:
     displayed = Decimal(raw_amount)
     if not displayed.is_finite() or displayed != amount:
         raise ValueError("Payment amount evidence is inconsistent.")
-    return PaymentItem(identity, occurred_on, amount, currency)
+    return PaymentItem(identity, occurred_on, amount, currency, payment_reference(row))

@@ -11,6 +11,8 @@ import hashlib
 import io
 import json
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -286,6 +288,45 @@ def _sum(values: list[Decimal]) -> Decimal:
     return total
 
 
+def _evidence_order_id(item: Mapping[str, Any]) -> str | None:
+    detail = item.get("detail")
+    if isinstance(detail, Mapping):
+        reference = detail.get("reference")
+        if isinstance(reference, str) and reference.strip():
+            return reference.strip()
+    key = item.get("external_key")
+    return key.strip() if isinstance(key, str) and key.strip() else None
+
+
+def _manual_state(
+    connection: sqlite3.Connection, payment_ids: tuple[str, ...]
+) -> tuple[tuple[str, str, str | None, str | None], ...]:
+    rows: list[tuple[str, str, str | None, str | None]] = []
+    for identifier in payment_ids:
+        row = connection.execute(
+            "SELECT entity_id, tags_manual_json, notes_manual, category_manual "
+            "FROM transactions WHERE entity_id=?",
+            (identifier,),
+        ).fetchone()
+        if row is None:
+            raise MutationValidationError(
+                "Allocation payment must reference a canonical transaction."
+            )
+        rows.append((str(row[0]), str(row[1]), row[2], row[3]))
+    return tuple(rows)
+
+
+@contextmanager
+def _stable_manual_state(
+    connection: sqlite3.Connection, payment_ids: tuple[str, ...]
+) -> Iterator[None]:
+    """Refuse a settlement write that rewrites tags, notes, or category overrides."""
+    before = _manual_state(connection, payment_ids)
+    yield
+    if _manual_state(connection, payment_ids) != before:
+        raise RepositoryIntegrityError("Reconciliation must not rewrite manual transaction state.")
+
+
 def _selection(
     connection: sqlite3.Connection, evidence_ids: tuple[str, ...], payment_ids: tuple[str, ...]
 ) -> tuple[Decimal, str]:
@@ -380,21 +421,22 @@ def confirm_allocation(
         "confirmed_at": command.confirmed_at,
         "created_changeset_id": context.changeset_id,
     }
-    _insert(connection, context, "reconcile_allocations", record)
-    for evidence_id in command.evidence_ids:
-        _insert(
-            connection,
-            context,
-            "reconcile_allocation_evidence",
-            {"allocation_id": identifier, "evidence_id": evidence_id},
-        )
-    for payment_id in command.payment_ids:
-        _insert(
-            connection,
-            context,
-            "reconcile_allocation_payments",
-            {"allocation_id": identifier, "transaction_id": payment_id},
-        )
+    with _stable_manual_state(connection, command.payment_ids):
+        _insert(connection, context, "reconcile_allocations", record)
+        for evidence_id in command.evidence_ids:
+            _insert(
+                connection,
+                context,
+                "reconcile_allocation_evidence",
+                {"allocation_id": identifier, "evidence_id": evidence_id},
+            )
+        for payment_id in command.payment_ids:
+            _insert(
+                connection,
+                context,
+                "reconcile_allocation_payments",
+                {"allocation_id": identifier, "transaction_id": payment_id},
+            )
     return {
         "allocation_id": identifier,
         "status": record["status"],
@@ -422,18 +464,27 @@ def withdraw_allocation(
     ).fetchone():
         raise MutationConflictError("Allocation already has an immutable withdrawal.")
     identifier = new_entity_id()
-    _insert(
-        connection,
-        context,
-        "reconcile_withdrawals",
-        {
-            "withdrawal_id": identifier,
-            "allocation_id": command.allocation_id,
-            "reason": command.reason,
-            "withdrawn_at": command.withdrawn_at,
-            "created_changeset_id": context.changeset_id,
-        },
+    payment_ids = tuple(
+        str(row[0])
+        for row in connection.execute(
+            "SELECT transaction_id FROM reconcile_allocation_payments "
+            "WHERE allocation_id=? ORDER BY transaction_id",
+            (command.allocation_id,),
+        )
     )
+    with _stable_manual_state(connection, payment_ids):
+        _insert(
+            connection,
+            context,
+            "reconcile_withdrawals",
+            {
+                "withdrawal_id": identifier,
+                "allocation_id": command.allocation_id,
+                "reason": command.reason,
+                "withdrawn_at": command.withdrawn_at,
+                "created_changeset_id": context.changeset_id,
+            },
+        )
     return {
         "withdrawal_id": identifier,
         "allocation_id": command.allocation_id,
@@ -475,7 +526,7 @@ def reconcile_view(
                     amount,
                     currency,
                     "order",
-                    item["external_key"],
+                    _evidence_order_id(item),
                 )
             )
     for payment in payments:

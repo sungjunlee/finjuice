@@ -68,6 +68,14 @@ def _in_window(left: EvidenceItem, right: PaymentItem, window_days: int) -> bool
     )
 
 
+def _reference_hit(evidence: EvidenceItem, payment: PaymentItem) -> bool:
+    """Exact order/merchant token equality; empty tokens never rank a candidate."""
+    _charge_work()
+    left = (evidence.order_id or "").strip()
+    right = (payment.reference or "").strip()
+    return bool(left) and left == right
+
+
 def _match_one_to_one(
     evidence: Sequence[EvidenceItem],
     payments: Sequence[PaymentItem],
@@ -86,7 +94,13 @@ def _match_one_to_one(
             and _in_window(item, payment, window_days)
             and money_abs(payment.amount) == money_abs(item.amount)
         ]
-        matches.sort(key=lambda payment: (payment.occurred_on, payment.payment_id))
+        matches.sort(
+            key=lambda payment: (
+                0 if _reference_hit(item, payment) else 1,
+                payment.occurred_on,
+                payment.payment_id,
+            )
+        )
         if not matches:
             continue
         payment = matches[0]
