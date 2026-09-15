@@ -76,7 +76,12 @@ def collect_repository_checkup(
         if isinstance(authority, LegacyAuthority):
             return None
         staged = capture_staged_imports(config.import_dir, fast=fast)
-        snapshot = read_checkup_snapshot(config.data_dir, evidence_provider, digests=staged.digests)
+        snapshot = read_checkup_snapshot(
+            config.data_dir,
+            evidence_provider,
+            digests=staged.digests,
+            statements=() if fast else tuple(item.content for item in staged.statements),
+        )
         if snapshot is None:
             raise RepositoryCheckupError("Repository authority changed during checkup.")
         preview = summarize_staged_imports(staged, snapshot.imports)

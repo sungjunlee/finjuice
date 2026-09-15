@@ -76,10 +76,13 @@ def read_checkup_snapshot(
     evidence_provider: ActivationEvidenceProvider | None = None,
     *,
     digests: tuple[str, ...] = (),
+    statements: tuple[bytes, ...] = (),
 ) -> CheckupReadSnapshot | None:
     """Read all checkup domains with one authority selection and reader snapshot."""
     return _read_snapshot(
-        data_dir, evidence_provider, lambda reader: reader.checkup_snapshot(digests)
+        data_dir,
+        evidence_provider,
+        lambda reader: reader.checkup_snapshot(digests, statements=statements),
     )
 
 

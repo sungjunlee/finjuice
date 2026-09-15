@@ -49,7 +49,10 @@ def collect_repository_doctor(
         staged = None
     try:
         snapshot = read_checkup_snapshot(
-            config.data_dir, provider, digests=staged.digests if staged else ()
+            config.data_dir,
+            provider,
+            digests=staged.digests if staged else (),
+            statements=tuple(item.content for item in staged.statements) if staged else (),
         )
         if snapshot is None:
             return _unavailable("repository_read", "unavailable")

@@ -9,6 +9,13 @@ Typer app, global callback, and command registration stay in
 from __future__ import annotations
 
 from finjuice.pipeline.config import Config
+from finjuice.pipeline.statements.staged import capture_statement
+from finjuice.pipeline.storage.authority import (
+    ActivationEvidenceProvider,
+    RepositoryAuthority,
+    resolve_storage_authority,
+)
+from finjuice.pipeline.storage.sqlite.errors import SQLiteStorageError
 
 
 def _is_data_directory_initialized(config: Config) -> bool:
@@ -33,25 +40,39 @@ def _count_transaction_partitions(config: Config) -> int:
     return len(list(config.csv_base_dir.rglob("*.csv")))
 
 
-def _count_pending_imports(config: Config) -> int:
+def _count_pending_imports(config: Config, *, include_statements: bool = False) -> int:
     """Count pending XLSX files already staged in imports/."""
     if not config.import_dir.exists():
         return 0
-    return len(list(config.import_dir.glob("*.xlsx")))
+    count = len(list(config.import_dir.glob("*.xlsx")))
+    if include_statements:
+        count += sum(
+            capture_statement(path) is not None for path in config.import_dir.glob("*.json")
+        )
+    return count
 
 
-def _show_brief_status(config: Config) -> None:
+def _show_brief_status(
+    config: Config, evidence_provider: ActivationEvidenceProvider | None = None
+) -> None:
     """
     Show brief CLI-style status output.
 
     This is shown when finjuice is run without arguments (Issue #141).
     """
     from finjuice import get_version
-    from finjuice.pipeline.cli.output import console
+    from finjuice.pipeline.cli.output import console, warning
 
+    try:
+        authority = resolve_storage_authority(config.data_dir, evidence_provider).authority
+    except SQLiteStorageError:
+        warning("Repository authority could not be verified; run finjuice doctor")
+        return
     is_initialized = _is_data_directory_initialized(config)
     transaction_partitions = _count_transaction_partitions(config)
-    pending_imports = _count_pending_imports(config)
+    pending_imports = _count_pending_imports(
+        config, include_statements=isinstance(authority, RepositoryAuthority)
+    )
 
     console.print()
     console.print(f"[bold cyan]📊 finjuice[/bold cyan] [dim]v{get_version()}[/dim]")

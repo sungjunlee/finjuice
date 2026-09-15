@@ -7,6 +7,10 @@ from finjuice.pipeline.storage.sqlite.exact_import.mapping import map_captured_w
 from finjuice.pipeline.storage.sqlite.exact_import.models import ExactImportCommand
 from finjuice.pipeline.storage.sqlite.exact_import.persist import persist_new_import
 from finjuice.pipeline.storage.sqlite.exact_import.plan import build_import_plan
+from finjuice.pipeline.storage.sqlite.exact_import.preview import (
+    previewed_outcome,
+    remember_preview,
+)
 from finjuice.pipeline.storage.sqlite.mutations import MutationContext, MutationOutcome
 
 
@@ -16,10 +20,17 @@ def apply_exact_import(context: MutationContext, command: ExactImportCommand) ->
     completed = completed_outcome(command, existing)
     if completed is not None:
         return completed
+    if command.preview:
+        predicted = previewed_outcome(command)
+        if predicted is not None:
+            return predicted
     mappings = map_captured_workbook(command)
     overlap = context.load_transaction_identity_snapshot()
+    if command.preview and command.preview_state is not None:
+        overlap = (*overlap, *command.preview_state.transaction_identities)
     plan = build_import_plan(command.capture.evidence, mappings, overlap)
     if command.preview:
+        remember_preview(command, mappings, plan)
         return MutationOutcome(result=_preview_result(plan.counts.as_dict(), command))
     return persist_new_import(context, command, mappings, plan)
 

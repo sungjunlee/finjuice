@@ -159,6 +159,7 @@ def _render_repository_ingest(result: dict[str, Any]) -> None:
     output.info(f"  Files processed: {summary['files_processed']}")
     output.info(f"  New transactions: {summary['new_transactions']}")
     output.info(f"  Updated: {summary['updated']}")
+    _render_pending_statements(summary)
     if summary["failed"] > 0:
         output.error(f"  Failed: {summary['failed']}")
         for filename, err in summary.get("failed_files", []):
@@ -172,8 +173,16 @@ def _render_repository_ingest_dry_run(result: dict[str, Any]) -> None:
         output.warning("Preview unavailable: encrypted source requires credentials")
         output.warning("⚠️  No changes written (dry-run mode)")
         return
+    _render_pending_statements(result.get("summary", {}))
     for item in result.get("receipts", []):
         counts = item.get("result", {}).get("counts", {}).get("transactions", {})
         inserted = int(counts.get("inserted", 0) or 0)
         output.info(f"  {item.get('filename')}: +{inserted} rows")
     output.warning("⚠️  No changes written (dry-run mode)")
+
+
+def _render_pending_statements(summary: dict[str, Any]) -> None:
+    """Make preserved but unconfirmed statement records visible without private details."""
+    pending = int(summary.get("pending", 0) or 0)
+    if pending:
+        output.warning(f"  Pending statement records: {pending} (awaiting confirmation)")

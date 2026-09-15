@@ -44,9 +44,12 @@ _MANIFEST_SQL: Final = (
 _IDENTITY_SQL: Final = (
     "SELECT txn.entity_id, txn.type_norm, obs.effective_at, "
     "amount.coefficient, amount.scale, money.currency_code, money.currency_unknown, "
-    "txn.timezone_state, txn.time_raw, txn.date_raw "
+    "txn.timezone_state, txn.time_raw, txn.date_raw, "
+    "CASE WHEN source.occurrence_kind = 'canonical_json_statement' "
+    "THEN obs.observed_at END "
     "FROM transactions AS txn "
     "JOIN observations AS obs ON obs.entity_id = txn.observation_id "
+    "JOIN source_occurrences AS source ON source.entity_id = obs.source_occurrence_id "
     "JOIN exact_values AS amount ON amount.value_id = txn.amount_value_id "
     "JOIN money_values AS money ON money.value_id = txn.amount_value_id "
     "ORDER BY txn.entity_id"
@@ -274,7 +277,7 @@ def _nonnegative_int(value: object) -> int:
 
 
 def _identity_row(row: sqlite3.Row | tuple[Any, ...]) -> dict[str, JSONValue]:
-    return {
+    identity = {
         "coefficient": str(row[3]),
         "currency_code": None if row[5] is None else str(row[5]),
         "currency_unknown": bool(row[6]),
@@ -286,3 +289,10 @@ def _identity_row(row: sqlite3.Row | tuple[Any, ...]) -> dict[str, JSONValue]:
         "transaction_id": str(row[0]),
         "type_norm": str(row[1]),
     }
+    if row[10] is not None:
+        # Statements retain their event time separately from the effective calendar date.
+        # This also corrects overlap reads of earlier imports without rewriting evidence.
+        timestamp = str(row[10])
+        identity["effective_at"] = timestamp
+        identity["time_raw"] = timestamp[11:]
+    return identity
