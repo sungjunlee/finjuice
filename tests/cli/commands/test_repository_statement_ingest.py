@@ -647,3 +647,21 @@ def test_active_brief_status_counts_only_claimed_statement_inputs(active_root: _
     assert result.exit_code == ExitCode.SUCCESS, result.output
     assert "미처리 파일: 1개" in result.output
     assert _authority_state(active_root) == before
+
+
+def test_active_brief_status_without_evidence_warns_without_fallback_counts(
+    active_root: _ActiveRoot,
+) -> None:
+    from typer.testing import CliRunner
+
+    from finjuice.pipeline.cli.main import app
+
+    _stage(active_root, "statement.json", _envelope([_record("pending")]))
+    before = _authority_state(active_root)
+    result = CliRunner().invoke(app, ["--data-dir", str(active_root.root)])
+    assert result.exit_code == ExitCode.SUCCESS, result.output
+    assert "Repository authority could not be verified; run finjuice doctor" in result.output
+    assert "미처리 파일" not in result.output
+    assert "CSV" not in result.output
+    assert "Traceback" not in result.output
+    assert _authority_state(active_root) == before

@@ -14,7 +14,11 @@ from finjuice.pipeline.statements.canonical import (
     parse_document,
     plan_rows,
 )
-from finjuice.pipeline.storage.sqlite.errors import MutationConflictError, MutationValidationError
+from finjuice.pipeline.storage.sqlite.errors import (
+    IdentifierError,
+    MutationConflictError,
+    MutationValidationError,
+)
 from finjuice.pipeline.storage.sqlite.exact_import.lookup import (
     load_completed_exact_imports,
     load_transaction_identity_snapshot,
@@ -74,7 +78,7 @@ def _statement_preview(connection: sqlite3.Connection, content: bytes) -> dict[s
         )
     except MutationConflictError:
         return {"failure_code": "statement_conflict"}
-    except MutationValidationError:
+    except (MutationValidationError, IdentifierError):
         return {"failure_code": "statement_validation_failed"}
 
 

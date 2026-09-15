@@ -93,13 +93,23 @@ def test_recorded_pending_statement_becomes_actionable_after_account_confirmatio
 
 
 @pytest.mark.parametrize("command", ["doctor", "checkup", "automation"])
+@pytest.mark.parametrize(
+    "record",
+    [
+        pytest.param(_record("invalid-1", amount="not-money"), id="amount"),
+        pytest.param(
+            _record("invalid-1", decision={"action": "link", "transaction_id": "not-a-uuid"}),
+            id="link-id",
+        ),
+    ],
+)
 def test_claimed_but_invalid_statement_is_a_failed_staged_file(
-    active_root: _ActiveRoot, command: str
+    active_root: _ActiveRoot, command: str, record: dict[str, Any]
 ) -> None:
     _stage(
         active_root,
         "invalid-statement.json",
-        _envelope([_record("invalid-1", amount="not-money")]),
+        _envelope([record]),
     )
     before = _authority_state(active_root)
 

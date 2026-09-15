@@ -15,6 +15,7 @@ from finjuice.pipeline.storage.authority import (
     RepositoryAuthority,
     resolve_storage_authority,
 )
+from finjuice.pipeline.storage.sqlite.errors import AuthorityIntegrityError
 
 
 def _is_data_directory_initialized(config: Config) -> bool:
@@ -60,11 +61,15 @@ def _show_brief_status(
     This is shown when finjuice is run without arguments (Issue #141).
     """
     from finjuice import get_version
-    from finjuice.pipeline.cli.output import console
+    from finjuice.pipeline.cli.output import console, warning
 
+    try:
+        authority = resolve_storage_authority(config.data_dir, evidence_provider).authority
+    except AuthorityIntegrityError:
+        warning("Repository authority could not be verified; run finjuice doctor")
+        return
     is_initialized = _is_data_directory_initialized(config)
     transaction_partitions = _count_transaction_partitions(config)
-    authority = resolve_storage_authority(config.data_dir, evidence_provider).authority
     pending_imports = _count_pending_imports(
         config, include_statements=isinstance(authority, RepositoryAuthority)
     )
