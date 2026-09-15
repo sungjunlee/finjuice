@@ -15,7 +15,7 @@ from finjuice.pipeline.storage.authority import (
     RepositoryAuthority,
     resolve_storage_authority,
 )
-from finjuice.pipeline.storage.sqlite.errors import AuthorityIntegrityError
+from finjuice.pipeline.storage.sqlite.errors import SQLiteStorageError
 
 
 def _is_data_directory_initialized(config: Config) -> bool:
@@ -65,7 +65,7 @@ def _show_brief_status(
 
     try:
         authority = resolve_storage_authority(config.data_dir, evidence_provider).authority
-    except AuthorityIntegrityError:
+    except SQLiteStorageError:
         warning("Repository authority could not be verified; run finjuice doctor")
         return
     is_initialized = _is_data_directory_initialized(config)

@@ -145,3 +145,44 @@ def test_fast_checkup_counts_canonical_json_without_previewing_it(
     assert observation["pending_files"] == 1
     assert observation["fast"] is True
     assert _authority_state(active_root) == before
+
+
+@pytest.mark.parametrize("damage", ["missing", "corrupt", "future-version"])
+def test_brief_status_reports_unavailable_repository_without_mutating_it(
+    active_root: _ActiveRoot, damage: str
+) -> None:
+    import sqlite3
+
+    from typer.testing import CliRunner
+
+    from finjuice.pipeline.cli.main import app
+
+    if damage == "missing":
+        active_root.database.unlink()
+    elif damage == "corrupt":
+        active_root.database.write_bytes(b"synthetic invalid SQLite database")
+    else:
+        with sqlite3.connect(active_root.database) as connection:
+            connection.execute("PRAGMA user_version = 999")
+
+    def file_fingerprints() -> dict[str, bytes]:
+        return {
+            path.relative_to(active_root.root).as_posix(): path.read_bytes()
+            for path in active_root.root.rglob("*")
+            if path.is_file() and path != active_root.paths.coordination_lock
+        }
+
+    before = file_fingerprints()
+
+    result = CliRunner().invoke(
+        app,
+        ["--data-dir", str(active_root.root)],
+        obj={"activation_evidence_provider": active_root.provider},
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Repository authority could not be verified; run finjuice doctor" in result.output
+    assert "미처리 파일" not in result.output
+    assert "CSV" not in result.output
+    assert "Traceback" not in result.output
+    assert file_fingerprints() == before
